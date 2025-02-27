@@ -1,4 +1,5 @@
 import os
+import shutil
 import uuid
 from datetime import datetime
 from typing import Generator, List, Tuple
@@ -43,6 +44,11 @@ def walk_repo(repo: str) -> Generator[Tuple[str, List[str], List[str]], None, No
             dirnames.remove(".hoard")
 
         yield dirpath, dirnames, filenames
+
+
+def read_contents_toml(repo: str, remote: str):
+    with open(os.path.join(hoard_folder(repo), f"{remote}.contents"), "r", encoding="utf-8") as f:
+        return rtoml.load(f)
 
 
 class RepoCommand:
@@ -116,18 +122,49 @@ class RepoCommand:
         with open(os.path.join(hoard_folder(self.repo), "current.contents"), "w", encoding="utf-8") as f:
             rtoml.dump(doc, f)
 
+        if not os.path.isfile(os.path.join(hoard_folder(self.repo), f"{current_uuid}.contents")):
+            shutil.copy(
+                os.path.join(hoard_folder(self.repo), "current.contents"),
+                os.path.join(hoard_folder(self.repo), f"{current_uuid}.contents"))
+
         logging.info(f"Refresh done!")
 
-    def show(self):
+    def show(self, remote: str = "current"):
         logging.info(f"Reading repo {self.repo}...")
-        with open(os.path.join(hoard_folder(self.repo), "current.contents"), "r", encoding="utf-8") as f:
-            doc = rtoml.load(f)
+        doc = read_contents_toml(self.repo, remote=remote)
         logging.info(f"Read repo!")
 
         print(f"Updated on {datetime.fromisoformat(doc["config"]["updated"])}.")
         print(f"  # files = {len([f for f, data in doc['fsobjects'].items() if not data['isdir']])}"
               f" of size {format_size(sum(data['size'] for f, data in doc['fsobjects'].items() if not data['isdir']))}")
         print(f"  # dirs  = {len([f for f, data in doc['fsobjects'].items() if data['isdir']])}")
+
+    # def status(self):
+    #     if not os.path.isfile(os.path.join(hoard_folder(self.repo), "current.contents")):
+    #         print("Current content not refreshed!")
+    #         return
+    #
+    #     logging.info(f"Reading current contents of {self.repo}...")
+    #     current_contents_doc = read_contents_toml(self.repo, remote="current")
+
+    def remotes(self):
+        logging.info(f"Reading remotes in {self.repo}...")
+        remotes_doc = self._remotes()
+
+        print(f"{len(remotes_doc)} total remotes.")
+        for remote, props in remotes_doc.items():
+            print(f"  {remote}")
+
+    def _remotes(self):
+        remotes_file = os.path.join(hoard_folder(self.repo), "remotes")
+
+        if not os.path.isfile(remotes_file):
+            current_uuid = load_uuid(self.repo)
+            with open(remotes_file, "w", encoding="utf-8") as f:
+                rtoml.dump({current_uuid: {"local_path": self.repo}}, f)
+
+        with open(remotes_file, "r", encoding="utf-8") as f:
+            return rtoml.load(f)
 
 
 # Press the green button in the gutter to run the script.
