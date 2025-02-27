@@ -2,10 +2,11 @@ import hashlib
 import os
 import uuid
 from datetime import datetime
+from typing import Generator, List, Tuple
 
 import fire
 import logging
-import tomlkit
+import rtoml
 from alive_progress import alive_bar
 
 CURRENT_UUID_FILENAME = "current.uuid"
@@ -35,6 +36,13 @@ def load_uuid(repo):
         return f.readline()
 
 
+def walk_repo(repo: str) -> Generator[Tuple[str, List[str], List[str]], None, None]:
+    for dirpath, dirnames, filenames in os.walk(repo):
+        if dirpath.startswith(hoard_folder(repo)):
+            continue  # skip .hoard folder
+        yield dirpath, dirnames, filenames
+
+
 class RepoCommand:
     def __init__(self, repo: str = ".", verbose: bool = False):
         self.repo = os.path.abspath(repo)
@@ -43,7 +51,7 @@ class RepoCommand:
 
     def list_files(self, path: str):
         validate_repo(self.repo)
-        for dirpath, dirnames, filenames in os.walk(path):
+        for dirpath, dirnames, filenames in walk_repo(path):
             for filename in filenames:
                 fullpath = str(os.path.join(dirpath, filename))
                 print(fullpath)
@@ -67,44 +75,46 @@ class RepoCommand:
         current_uuid = load_uuid(self.repo)
         logging.info(f"Refreshing uuid {current_uuid}")
 
-        config = tomlkit.table()
-        config["updated"] = datetime.now().isoformat()
+        config = {"updated": datetime.now().isoformat()}
 
         logging.info("Counting files to add")
         nfiles, nfolders = 0, 0
         with alive_bar(0) as bar:
-            for dirpath, dirnames, filenames in os.walk(self.repo):
+            for dirpath, dirnames, filenames in walk_repo(self.repo):
                 nfiles += len(filenames)
                 nfolders += len(dirnames)
                 bar(len(filenames) + len(dirnames))
 
         logging.info(f"Reading all files in {self.repo}")
-        fsobjects = tomlkit.table()
+        fsobjects = {}
         with alive_bar(nfiles + nfolders) as bar:
-            for dirpath, dirnames, filenames in os.walk(self.repo):
+            for dirpath, dirnames, filenames in walk_repo(self.repo):
                 for filename in filenames:
                     fullpath = str(os.path.join(dirpath, filename))
-                    file_props = tomlkit.inline_table()
-                    file_props["size"] = os.path.getsize(fullpath)
-                    file_props["mtime"] = os.path.getmtime(fullpath)
-                    file_props["isdir"] = False
+                    file_props = {
+                        "size": os.path.getsize(fullpath),
+                        "mtime": os.path.getmtime(fullpath),
+                        "isdir": False}
                     fsobjects[fullpath] = file_props
                     bar()
                 for dirname in dirnames:
                     fullpath = str(os.path.join(dirpath, dirname))
-                    dir_props = tomlkit.inline_table()
-                    dir_props["isdir"] = True
+                    dir_props = {
+                        "isdir": True}
                     fsobjects[fullpath] = dir_props
                     bar()
 
         logging.info(f"Files read!")
 
-        doc = tomlkit.document()
-        doc.add("config", config)
-        doc.add("fsobjects", fsobjects)
+        doc = {
+            "config": config,
+            "fsobjects": fsobjects}
 
-        with open(os.path.join(hoard_folder(self.repo), "current.contents"), "w") as f:
-            tomlkit.dump(doc, f)
+        logging.info(f"Writing cache...")
+        with open(os.path.join(hoard_folder(self.repo), "current.contents"), "w", encoding="utf-8") as f:
+            rtoml.dump(doc, f)
+
+        logging.info(f"Refresh done!")
 
 
 def calc_file_md5(path: str) -> str:
