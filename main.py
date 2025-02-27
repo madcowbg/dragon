@@ -1,4 +1,3 @@
-import hashlib
 import os
 import uuid
 from datetime import datetime
@@ -8,6 +7,8 @@ import fire
 import logging
 import rtoml
 from alive_progress import alive_bar
+
+from util import format_size
 
 CURRENT_UUID_FILENAME = "current.uuid"
 NONE_TOML = "MISSING"
@@ -127,29 +128,6 @@ class RepoCommand:
         print(f"  # files = {len([f for f, data in doc['fsobjects'].items() if not data['isdir']])}"
               f" of size {format_size(sum(data['size'] for f, data in doc['fsobjects'].items() if not data['isdir']))}")
         print(f"  # dirs  = {len([f for f, data in doc['fsobjects'].items() if data['isdir']])}")
-
-
-def calc_file_md5(path: str) -> str:
-    hasher = hashlib.md5()
-    with open(path, 'rb') as f:
-        for chunk in iter(lambda: f.read(1 << 23), b''):
-            hasher.update(chunk)
-    return hasher.hexdigest()
-
-
-def format_size(size: int) -> str:
-    if size < 2 ** 10:
-        return f"{size}"
-    elif size < 2 ** 20:
-        return f"{size / 2 ** 10:.1f}KB"
-    elif size < 2 ** 30:
-        return f"{size / 2 ** 20:.1f}MB"
-    elif size < 2 ** 40:
-        return f"{size / 2 ** 30:.1f}GB"
-    elif size < 2 ** 50:
-        return f"{size / 2 ** 40:.1f}TB"
-    else:
-        return f"{size / 2 ** 50:.1f}PB"
 
 
 # Press the green button in the gutter to run the script.
