@@ -37,9 +37,10 @@ def load_uuid(repo):
 
 
 def walk_repo(repo: str) -> Generator[Tuple[str, List[str], List[str]], None, None]:
-    for dirpath, dirnames, filenames in os.walk(repo):
-        if dirpath.startswith(hoard_folder(repo)):
-            continue  # skip .hoard folder
+    for dirpath, dirnames, filenames in os.walk(repo, topdown=True):
+        if ".hoard" in dirnames:
+            dirnames.remove(".hoard")
+
         yield dirpath, dirnames, filenames
 
 
