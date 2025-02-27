@@ -11,6 +11,7 @@ from alive_progress import alive_bar
 
 from util import format_size
 
+CONFIG_FILE = "hoard.config"
 CURRENT_UUID_FILENAME = "current.uuid"
 NONE_TOML = "MISSING"
 
@@ -149,21 +150,21 @@ class RepoCommand:
 
     def remotes(self):
         logging.info(f"Reading remotes in {self.repo}...")
-        remotes_doc = self._remotes()
-
+        config_doc = self._config()
+        remotes_doc = config_doc["remotes"]
         print(f"{len(remotes_doc)} total remotes.")
         for remote, props in remotes_doc.items():
             print(f"  {remote}")
 
-    def _remotes(self):
-        remotes_file = os.path.join(hoard_folder(self.repo), "remotes")
+    def _config(self):
+        config_file = os.path.join(hoard_folder(self.repo), CONFIG_FILE)
 
-        if not os.path.isfile(remotes_file):
+        if not os.path.isfile(config_file):
             current_uuid = load_uuid(self.repo)
-            with open(remotes_file, "w", encoding="utf-8") as f:
-                rtoml.dump({current_uuid: {"local_path": self.repo}}, f)
+            with open(config_file, "w", encoding="utf-8") as f:
+                rtoml.dump({"remotes": {current_uuid: {"local_path": self.repo}}}, f)
 
-        with open(remotes_file, "r", encoding="utf-8") as f:
+        with open(config_file, "r", encoding="utf-8") as f:
             return rtoml.load(f)
 
 
