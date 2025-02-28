@@ -2,7 +2,7 @@ import os
 import shutil
 import uuid
 from datetime import datetime
-from typing import Generator, List, Tuple, Dict
+from typing import Generator, List, Tuple, Dict, Any
 
 import fire
 import logging
@@ -14,6 +14,7 @@ from util import format_size
 CONFIG_FILE = "hoard.config"
 CURRENT_UUID_FILENAME = "current.uuid"
 NONE_TOML = "MISSING"
+HOARD_CONTENTS_FILENAME = "hoard.contents"
 
 
 def validate_repo(repo: str):
@@ -34,7 +35,7 @@ def init_uuid(repo: str):
         f.write(str(uuid.uuid4()))
 
 
-def load_uuid(repo):
+def load_current_uuid(repo):
     with open(os.path.join(hoard_folder(repo), CURRENT_UUID_FILENAME), "r") as f:
         return f.readline()
 
@@ -81,7 +82,7 @@ class RepoCommand:
         """ Refreshes the cache of the current hoard folder """
         validate_repo(self.repo)
 
-        current_uuid = load_uuid(self.repo)
+        current_uuid = load_current_uuid(self.repo)
         logging.info(f"Refreshing uuid {current_uuid}")
 
         config = {"updated": datetime.now().isoformat()}
@@ -176,7 +177,7 @@ class RepoCommand:
         config_file = os.path.join(hoard_folder(self.repo), CONFIG_FILE)
 
         if not os.path.isfile(config_file):
-            current_uuid = load_uuid(self.repo)
+            current_uuid = load_current_uuid(self.repo)
             with open(config_file, "w", encoding="utf-8") as f:
                 rtoml.dump({
                     "paths": {
@@ -204,6 +205,40 @@ class RepoCommand:
         with open(os.path.join(hoard_folder(self.repo), CONFIG_FILE), "w", encoding="utf-8") as f:
             rtoml.dump(config_doc, f)
         logging.info(f"Config done!")
+
+    def _hoard_toml(self) -> Dict[str, Any]:
+        if not os.path.isfile(self._hoard_contents_filename()):
+            with open(self._hoard_contents_filename(), "w", encoding="utf-8") as f:
+                config = {"updated": datetime.now().isoformat()}
+                rtoml.dump({
+                    "config": config,
+                    "fsobjects": {},
+                }, f)
+        with open(self._hoard_contents_filename(), "r", encoding="utf-8") as f:
+            return rtoml.load(f)
+
+    def _hoard_contents_filename(self):
+        return os.path.join(hoard_folder(self.repo), HOARD_CONTENTS_FILENAME)
+
+    def commit_local(self):
+        logging.info(f"Loading hoard TOML...")
+        hoard_doc = self._hoard_toml()
+        logging.info(f"Loaded hoard TOML!")
+
+        current_doc = read_contents_toml(self.repo, remote="current")
+        current_uuid = load_current_uuid(self.repo)
+
+        logging.info("Merging local changes...")
+        hoard_fsobjects = hoard_doc["fsobjects"]
+        for current_fso, props in current_doc["fsobjects"].items():
+            if current_fso not in hoard_fsobjects.keys():
+                hoard_fsobjects[current_fso] = props
+                hoard_fsobjects[current_fso]["available"] = current_uuid
+
+        logging.info("Writing updated hoard contents...")
+        with open(self._hoard_contents_filename(), "w", encoding="utf-8") as f:
+            rtoml.dump(hoard_doc, f)
+        logging.info("Local commit DONE!")
 
 
 # Press the green button in the gutter to run the script.
