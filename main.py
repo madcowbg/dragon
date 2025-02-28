@@ -149,8 +149,9 @@ class RepoCommand:
     #     current_contents_doc = read_contents_toml(self.repo, remote="current")
 
     def remotes(self):
-        logging.info(f"Reading remotes in {self.repo}...")
+        logging.info(f"Reading config in {self.repo}...")
         config_doc = self._config()
+
         remotes_doc = config_doc["remotes"]
         print(f"{len(remotes_doc)} total remotes.")
         for remote, props in remotes_doc.items():
@@ -166,6 +167,21 @@ class RepoCommand:
 
         with open(config_file, "r", encoding="utf-8") as f:
             return rtoml.load(f)
+
+    def config_remote(self, remote: str, param: str, value: str):
+        logging.info(f"Reading config in {self.repo}...")
+        config_doc = self._config()
+
+        if remote not in config_doc["remotes"]:
+            raise ValueError(f"remote {remote} does not exist")
+
+        logging.info(f"Setting {param} to {value}")
+        config_doc["remotes"][remote][param] = value
+
+        logging.info(f"Writing config in {self.repo}...")
+        with open(os.path.join(hoard_folder(self.repo), CONFIG_FILE), "w", encoding="utf-8") as f:
+            rtoml.dump(config_doc, f)
+        logging.info(f"Config done!")
 
 
 # Press the green button in the gutter to run the script.
