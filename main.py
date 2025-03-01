@@ -274,14 +274,6 @@ class RepoCommand:
         remote_uuid = remotes[remote] if remote in remotes else remote
         return remote_uuid
 
-    # def status(self):
-    #     if not os.path.isfile(os.path.join(hoard_folder(self.repo), "current.contents")):
-    #         print("Current content not refreshed!")
-    #         return
-    #
-    #     logging.info(f"Reading current contents of {self.repo}...")
-    #     current_contents_doc = read_contents_toml(self.repo, remote="current")
-
     def remotes(self):
         logging.info(f"Reading config in {self.repo}...")
         config_doc = self._config()
@@ -362,6 +354,34 @@ class RepoCommand:
 
     def _contents_filename(self, remote_uuid):
         return os.path.join(hoard_folder(self.repo), f"{remote_uuid}.contents")
+
+    def status_hoard(self):
+        current_uuid = load_current_uuid(self.repo)
+
+        logging.info(f"Reading current contents of {current_uuid} at {self.repo}...")
+        current_contents = Contents.load(self._contents_filename(current_uuid))
+
+        logging.info(f"Loading hoard TOML...")
+        hoard = HoardContents.load(self._hoard_contents_filename())
+        logging.info(f"Loaded hoard TOML!")
+        logging.info(f"Computing status ...")
+
+        print(f"Status of {current_uuid} at {self.repo}...")
+        for curr_file, props in current_contents.fsobjects.files.items():
+            if curr_file not in hoard.fsobjects.files.keys():
+                print(f"A {curr_file}")
+            elif is_same_file(current_contents.fsobjects.files[curr_file], hoard.fsobjects.files[curr_file]):
+                pass  # logging.info(f"Skip adding {curr_file} as its contents are equal!")
+            else:
+                print(f"M {curr_file}")
+
+        for curr_dir, props in current_contents.fsobjects.dirs.items():
+            if curr_dir not in hoard.fsobjects.dirs.keys():
+                print(f"AD {curr_dir}")
+            else:
+                pass  # dir is there already
+
+        logging.info("Computing status done!")
 
 
 # Press the green button in the gutter to run the script.
