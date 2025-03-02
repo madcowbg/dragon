@@ -232,6 +232,10 @@ class HoardCommand(object):
         logging.info(f"Getting remote uuid")
         remote_uuid = repo_cmd.current_uuid()
 
+        resolved_uuid = self._resolve_remote_uuid(name)
+        if resolved_uuid is not None and resolved_uuid != remote_uuid and resolved_uuid != name:  # fixme ugly AF
+            raise ValueError(f"Remote uuid {name} already resolves to {resolved_uuid} and does not match {remote_uuid}")
+
         config.remotes.declare(remote_uuid, name)
         config.paths[remote_uuid] = remote_abs_path
         config.write()
