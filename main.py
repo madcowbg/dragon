@@ -1,7 +1,7 @@
 import os
 import pathlib
 import uuid
-from typing import Generator, List, Tuple, Dict
+from typing import Generator, List, Tuple, Dict, Any, Optional
 
 import fire
 import logging
@@ -56,6 +56,64 @@ def is_same_file(current: FileProps, hoard: HoardFileProps):
         return False  # files differ by mtime
 
     return True  # files are the same TODO implement hashing
+
+
+class HoardRemote:
+    def __init__(self, uuid: str, doc: Dict[str, Any]):
+        self.uuid = uuid
+        self.doc = doc
+
+    @property
+    def name(self):
+        return self.doc["name"] if "name" in self.doc else "INVALID"
+
+    @property
+    def mounted_at(self):
+        return self.doc["mounted_at"] if "mounted_at" in self.doc else None
+
+    def __setitem__(self, key: str, value: str):  # fixme make key an enum
+        if key not in ["uuid", "name", "mounted_at"]:
+            raise ValueError(f"Unrecognized param {key}!")
+        self.doc[key] = value
+
+    def mount_at(self, mount_at: str):
+        self.doc["mounted_at"] = mount_at
+
+
+class HoardRemotes:
+    def __init__(self, doc: Dict[str, Any]):
+        self.doc = doc
+
+    def declare(self, current_uuid: str, name: str):
+        self.doc[current_uuid] = {"name": name}
+
+    def names_map(self):
+        return dict((props["name"], remote) for remote, props in self.doc.items() if "name" in props)
+
+    def __getitem__(self, remote_uuid: str) -> Optional[HoardRemote]:
+        return HoardRemote(remote_uuid, self.doc[remote_uuid] if remote_uuid in self.doc else None)
+
+    def __len__(self):
+        return len(self.doc)
+
+
+class HoardConfig:
+    @staticmethod
+    def load(filename: str) -> "HoardConfig":
+        with open(filename, "r", encoding="utf-8") as f:
+            return HoardConfig(filename, rtoml.load(f))
+
+    def __init__(self, filepath: str, contents_doc: Dict[str, Any]):
+        self.filepath = filepath
+        self.paths = contents_doc["paths"] if "paths" in contents_doc else {}
+        self.remotes = HoardRemotes(contents_doc["remotes"] if "remotes" in contents_doc else {})
+
+    def write(self):
+        with open(self.filepath, "w", encoding="utf-8") as f:
+            rtoml.dump({
+                "paths": self.paths,
+                "remotes": self.remotes.doc
+            }, f)
 
 
 class RepoCommand:
@@ -125,7 +183,7 @@ class RepoCommand:
     def _remotes_names(self) -> Dict[str, str]:
         logging.info(f"Reading config...")
         config = self._config()
-        return dict((props["name"], remote) for remote, props in config["remotes"].items() if "name" in props)
+        return config.remotes.names_map()
 
     def show(self, remote: str = "current"):
         remote_uuid = self._resolve_remote_uuid(remote)
@@ -138,8 +196,10 @@ class RepoCommand:
 
         print(f"Result for [{remote}]")
         print(f"UUID: {remote_uuid}.")
-        print(f"name: {config["remotes"][remote_uuid]['name'] if 'name' in config["remotes"][remote_uuid] else 'UNDEFINED'}")
-        print(f"mount point: {config['remotes'][remote_uuid]['mounted_at'] if 'mounted_at' in config["remotes"][remote_uuid] else 'UNDEFINED'}")
+        print(
+            f"name: {config.remotes[remote_uuid].name}")
+        print(
+            f"mount point: {config.remotes[remote_uuid].mounted_at}")
         print(f"Last updated on {contents.config.updated}.")
         print(f"  # files = {len(contents.fsobjects.files)}"
               f" of size {sum(f.size for f in contents.fsobjects.files.values())}")
@@ -154,46 +214,40 @@ class RepoCommand:
 
     def remotes(self):
         logging.info(f"Reading config in {self.repo}...")
-        config_doc = self._config()
+        config = self._config()
 
-        remotes_doc = config_doc["remotes"]
+        remotes_doc = config.remotes
         print(f"{len(remotes_doc)} total remotes.")
-        for remote_uuid, props in remotes_doc.items():
-            name_prefix = f"[{props['name']}] " if "name" in props else ""
+        for remote in remotes_doc:
+            name_prefix = f"[{remote.name} " if remote.name != "INVALID" else ""
 
-            print(f"  {name_prefix}{remote_uuid}")
+            print(f"  {name_prefix}{remote.uuid}")
 
-    def _config(self):
+    def _config(self) -> HoardConfig:
         config_file = os.path.join(hoard_folder(self.repo), CONFIG_FILE)
+        config = HoardConfig.load(config_file)
+        current_uuid = load_current_uuid(self.repo)
 
-        if not os.path.isfile(config_file):
-            current_uuid = load_current_uuid(self.repo)
-            with open(config_file, "w", encoding="utf-8") as f:
-                rtoml.dump({
-                    "paths": {
-                        current_uuid: self.repo
-                    },
-                    "remotes": {
-                        current_uuid: {"name": "local-repo"}
-                    }}, f)
-
-        with open(config_file, "r", encoding="utf-8") as f:
-            return rtoml.load(f)
+        if current_uuid not in config.paths:
+            config.paths[current_uuid] = self.repo
+            config.remotes.declare(current_uuid, name="local-repo")
+            config.write()
+        return config
 
     def config_remote(self, remote: str, param: str, value: str):
         remote_uuid = self._resolve_remote_uuid(remote)
         logging.info(f"Reading config in {self.repo}...")
-        config_doc = self._config()
+        config = self._config()
 
-        if remote_uuid not in config_doc["remotes"]:
+        remote = config.remotes[remote_uuid]
+        if remote is None:
             raise ValueError(f"remote_uuid {remote_uuid} does not exist")
 
         logging.info(f"Setting {param} to {value}")
-        config_doc["remotes"][remote_uuid][param] = value
+        remote[param] = value
 
         logging.info(f"Writing config in {self.repo}...")
-        with open(os.path.join(hoard_folder(self.repo), CONFIG_FILE), "w", encoding="utf-8") as f:
-            rtoml.dump(config_doc, f)
+        config.write()
         logging.info(f"Config done!")
 
     def _hoard_contents_filename(self):
@@ -264,15 +318,15 @@ class RepoCommand:
     def mount_remote(self, remote: str, mount_point: str, force: bool = False):
         remote_uuid = self._resolve_remote_uuid(remote)
         logging.info(f"Reading config in {self.repo}...")
-        config_doc = self._config()
+        config = self._config()
 
-        if remote_uuid not in config_doc["remotes"]:
+        remote = config.remotes[remote_uuid]
+        if remote is None:
             raise ValueError(f"remote {remote_uuid} does not exist")
 
-        if "mounted_at" in config_doc["remotes"][remote_uuid] and not force:
+        if remote.mounted_at is not None and not force:
             print(
-                f"Remote {remote_uuid} already mounted in {config_doc["remotes"][remote_uuid]["mounted_at"]}, "
-                f"use --force to set.!")
+                f"Remote {remote_uuid} already mounted in {remote.mounted_at}, use --force to set.!")
             return
 
         mount_path = pathlib.Path(mount_point)
@@ -283,10 +337,8 @@ class RepoCommand:
 
         print(f"setting path to {mount_path.as_posix()}")
 
-        config_doc["remotes"][remote_uuid]["mounted_at"] = mount_path.as_posix()
-
-        with open(os.path.join(hoard_folder(self.repo), CONFIG_FILE), "w", encoding="utf-8") as f:
-            rtoml.dump(config_doc, f)
+        remote.mount_at(mount_path.as_posix())
+        config.write()
 
 
 # Press the green button in the gutter to run the script.
