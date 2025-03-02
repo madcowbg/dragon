@@ -85,6 +85,10 @@ class HoardFileProps:
         self.doc["size"] = props.size
         self.doc["mtime"] = props.mtime
 
+    def ensure_available(self, remote_uuid: str):
+        if remote_uuid not in self.doc["available"]:
+            self.doc["available"].append(remote_uuid)
+
 
 class HoardFSObjects:
     def __init__(self, doc: Dict[str, Any]):
@@ -97,7 +101,7 @@ class HoardFSObjects:
             "isdir": False,
             "size": props.size,
             "mtime": props.mtime,
-            "available": current_uuid
+            "available": [current_uuid]
         }
 
         self.files[curr_file] = HoardFileProps(self.doc[curr_file])

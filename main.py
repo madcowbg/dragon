@@ -100,6 +100,8 @@ class HoardRemotes:
 class HoardConfig:
     @staticmethod
     def load(filename: str) -> "HoardConfig":
+        if not os.path.isfile(filename):
+            rtoml.dump({}, pathlib.Path(filename))
         with open(filename, "r", encoding="utf-8") as f:
             return HoardConfig(filename, rtoml.load(f))
 
@@ -116,9 +118,14 @@ class HoardConfig:
             }, f)
 
 
+def path_in_hoard(current_file: str, remote: HoardRemote):
+    curr_file_hoard_path = pathlib.Path(os.path.join(remote.mounted_at, current_file)).as_posix()
+    return curr_file_hoard_path
+
+
 class RepoCommand:
     def __init__(self, repo: str = ".", verbose: bool = False):
-        self.repo = os.path.abspath(repo)
+        self.repo = pathlib.Path(repo).absolute().as_posix()
         if verbose:
             logging.basicConfig(level=logging.INFO)
 
@@ -164,13 +171,17 @@ class RepoCommand:
             for dirpath, dirnames, filenames in walk_repo(self.repo):
                 for filename in filenames:
                     fullpath = str(os.path.join(dirpath, filename))
+                    relpath = pathlib.Path(fullpath).relative_to(self.repo).as_posix()
+
                     contents.fsobjects.add_file(
-                        fullpath, size=os.path.getsize(fullpath),
+                        relpath, size=os.path.getsize(fullpath),
                         mtime=os.path.getmtime(fullpath))
                     bar()
+
                 for dirname in dirnames:
                     fullpath = str(os.path.join(dirpath, dirname))
-                    contents.fsobjects.add_dir(fullpath)
+                    relpath = pathlib.Path(fullpath).relative_to(self.repo).as_posix()
+                    contents.fsobjects.add_dir(relpath)
                     bar()
 
         logging.info(f"Files read!")
@@ -254,6 +265,9 @@ class RepoCommand:
         return os.path.join(hoard_folder(self.repo), HOARD_CONTENTS_FILENAME)
 
     def commit_local(self):
+        logging.info("Loading config")
+        config = self._config()
+
         logging.info(f"Loading hoard TOML...")
         hoard = HoardContents.load(self._hoard_contents_filename())
         logging.info(f"Loaded hoard TOML!")
@@ -261,22 +275,30 @@ class RepoCommand:
         current_uuid = load_current_uuid(self.repo)
         current_contents = Contents.load(self._contents_filename(current_uuid))
 
+        remote = config.remotes[current_uuid]
+        if remote is None or remote.mounted_at is None:
+            raise ValueError(f"remote {current_uuid} is not mounted!")
+
         logging.info("Merging local changes...")
-        for curr_file, props in current_contents.fsobjects.files.items():
-            if curr_file not in hoard.fsobjects.files.keys():
-                logging.info(f"new file found: {curr_file}")
-                hoard.fsobjects.add_available_file(curr_file, props, current_uuid)
-            elif is_same_file(current_contents.fsobjects.files[curr_file], hoard.fsobjects.files[curr_file]):
-                pass  # logging.info(f"Skip adding {curr_file} as its contents are equal!")
+        for current_file, props in current_contents.fsobjects.files.items():
+            curr_file_hoard_path = path_in_hoard(current_file, remote)
+
+            if curr_file_hoard_path not in hoard.fsobjects.files.keys():
+                logging.info(f"new file found: {curr_file_hoard_path}")
+                hoard.fsobjects.add_available_file(curr_file_hoard_path, props, current_uuid)
+            elif is_same_file(current_contents.fsobjects.files[current_file], hoard.fsobjects.files[curr_file_hoard_path]):
+                logging.info(f"mark {current_file} as available here!")
+                hoard.fsobjects.files[curr_file_hoard_path].ensure_available(current_uuid)
             else:
-                logging.info(f"updating existing file {curr_file}")
+                logging.info(f"updating existing file {current_file}")
 
-                hoard.fsobjects.update_file(curr_file, props)
+                hoard.fsobjects.update_file(curr_file_hoard_path, props)
 
-        for curr_dir, props in current_contents.fsobjects.dirs.items():
-            if curr_dir not in hoard.fsobjects.dirs.keys():
-                logging.info(f"new dir found: {curr_dir}")
-                hoard.fsobjects.add_dir(curr_dir)
+        for current_dir, props in current_contents.fsobjects.dirs.items():
+            curr_file_hoard_path = path_in_hoard(current_dir, remote)
+            if curr_file_hoard_path not in hoard.fsobjects.dirs.keys():
+                logging.info(f"new dir found: {current_dir}")
+                hoard.fsobjects.add_dir(curr_file_hoard_path)
             else:
                 pass  # dir is there already
 
