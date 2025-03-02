@@ -1,4 +1,5 @@
 import os
+import pathlib
 import uuid
 from typing import Generator, List, Tuple, Dict
 
@@ -133,13 +134,20 @@ class RepoCommand:
         contents = Contents.load(self._contents_filename(remote_uuid))
         logging.info(f"Read repo!")
 
-        print(f"Result for [{remote}] with UUID {remote_uuid}.")
+        config = self._config()
+
+        print(f"Result for [{remote}]")
+        print(f"UUID: {remote_uuid}.")
+        print(f"name: {config["remotes"][remote_uuid]['name'] if 'name' in config["remotes"][remote_uuid] else 'UNDEFINED'}")
+        print(f"mount point: {config['remotes'][remote_uuid]['mounted_at'] if 'mounted_at' in config["remotes"][remote_uuid] else 'UNDEFINED'}")
         print(f"Last updated on {contents.config.updated}.")
         print(f"  # files = {len(contents.fsobjects.files)}"
               f" of size {sum(f.size for f in contents.fsobjects.files.values())}")
         print(f"  # dirs  = {len(contents.fsobjects.dirs)}")
 
     def _resolve_remote_uuid(self, remote):
+        if remote == "current":
+            return load_current_uuid(self.repo)
         remotes = self._remotes_names()
         remote_uuid = remotes[remote] if remote in remotes else remote
         return remote_uuid
@@ -252,6 +260,33 @@ class RepoCommand:
                 pass  # dir is there already
 
         logging.info("Computing status done!")
+
+    def mount_remote(self, remote: str, mount_point: str, force: bool = False):
+        remote_uuid = self._resolve_remote_uuid(remote)
+        logging.info(f"Reading config in {self.repo}...")
+        config_doc = self._config()
+
+        if remote_uuid not in config_doc["remotes"]:
+            raise ValueError(f"remote {remote_uuid} does not exist")
+
+        if "mounted_at" in config_doc["remotes"][remote_uuid] and not force:
+            print(
+                f"Remote {remote_uuid} already mounted in {config_doc["remotes"][remote_uuid]["mounted_at"]}, "
+                f"use --force to set.!")
+            return
+
+        mount_path = pathlib.Path(mount_point)
+
+        if not mount_path.is_relative_to("/"):
+            print(f"Mount point {mount_point} is absolute, must use relative!")
+            return
+
+        print(f"setting path to {mount_path.as_posix()}")
+
+        config_doc["remotes"][remote_uuid]["mounted_at"] = mount_path.as_posix()
+
+        with open(os.path.join(hoard_folder(self.repo), CONFIG_FILE), "w", encoding="utf-8") as f:
+            rtoml.dump(config_doc, f)
 
 
 # Press the green button in the gutter to run the script.
