@@ -5,7 +5,7 @@ from typing import Dict, Any
 import rtoml
 
 
-class Config:
+class ContentsConfig:
     def __init__(self, config_doc: Dict[str, Any]):
         self.doc = config_doc
 
@@ -58,7 +58,7 @@ class Contents:
 
     def __init__(self, filepath: str, contents_doc: Dict[str, Any]):
         self.filepath = filepath
-        self.config = Config(contents_doc["config"] if "config" in contents_doc else {})
+        self.config = ContentsConfig(contents_doc["config"] if "config" in contents_doc else {})
         self.fsobjects = FSObjects(contents_doc["fsobjects"] if "fsobjects" in contents_doc else {})
 
     def write(self):
@@ -125,7 +125,7 @@ class HoardContents:
 
     def __init__(self, filepath: str, contents_doc: Dict[str, Any]):
         self.filepath = filepath
-        self.config = Config(contents_doc["config"] if "config" in contents_doc else {})
+        self.config = ContentsConfig(contents_doc["config"] if "config" in contents_doc else {})
         self.fsobjects = HoardFSObjects(contents_doc["fsobjects"] if "fsobjects" in contents_doc else {})
 
     def write(self):
