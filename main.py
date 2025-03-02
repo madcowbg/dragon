@@ -1,5 +1,6 @@
 import os
 import pathlib
+import shutil
 import uuid
 from typing import Generator, List, Tuple, Dict, Any, Optional
 
@@ -14,30 +15,6 @@ CONFIG_FILE = "hoard.config"
 CURRENT_UUID_FILENAME = "current.uuid"
 NONE_TOML = "MISSING"
 HOARD_CONTENTS_FILENAME = "hoard.contents"
-
-
-def validate_repo(repo: str):
-    logging.info(f"Validating {repo}")
-    if not os.path.isdir(repo):
-        raise ValueError(f"folder {repo} does not exist")
-    if not os.path.isdir(hoard_folder(repo)):
-        raise ValueError(f"no hoard folder in {repo}")
-    if not os.path.isfile(os.path.join(hoard_folder(repo), CURRENT_UUID_FILENAME)):
-        raise ValueError(f"no hoard guid in {repo}/.hoard/{CURRENT_UUID_FILENAME}")
-
-
-def hoard_folder(repo):
-    return os.path.join(repo, ".hoard")
-
-
-def init_uuid(repo: str):
-    with open(os.path.join(hoard_folder(repo), CURRENT_UUID_FILENAME), "w") as f:
-        f.write(str(uuid.uuid4()))
-
-
-def load_current_uuid(repo):
-    with open(os.path.join(hoard_folder(repo), CURRENT_UUID_FILENAME), "r") as f:
-        return f.readline()
 
 
 def walk_repo(repo: str) -> Generator[Tuple[str, List[str], List[str]], None, None]:
@@ -123,14 +100,32 @@ def path_in_hoard(current_file: str, remote: HoardRemote):
     return curr_file_hoard_path
 
 
-class RepoCommand:
-    def __init__(self, repo: str = ".", verbose: bool = False):
-        self.repo = pathlib.Path(repo).absolute().as_posix()
-        if verbose:
-            logging.basicConfig(level=logging.INFO)
+class RepoCommand(object):
+    def __init__(self, path: str = "."):
+        self.repo = pathlib.Path(path).absolute().as_posix()
+
+    def _hoard_folder(self):
+        return os.path.join(self.repo, ".hoard")
+
+    def current_uuid(self):
+        with open(os.path.join(self._hoard_folder(), CURRENT_UUID_FILENAME), "r") as f:
+            return f.readline()
+
+    def _init_uuid(self):
+        with open(os.path.join(self._hoard_folder(), CURRENT_UUID_FILENAME), "w") as f:
+            f.write(str(uuid.uuid4()))
+
+    def _validate_repo(self):
+        logging.info(f"Validating {self.repo}")
+        if not os.path.isdir(self.repo):
+            raise ValueError(f"folder {self.repo} does not exist")
+        if not os.path.isdir(self._hoard_folder()):
+            raise ValueError(f"no hoard folder in {self.repo}")
+        if not os.path.isfile(os.path.join(self._hoard_folder(), CURRENT_UUID_FILENAME)):
+            raise ValueError(f"no hoard guid in {self.repo}/.hoard/{CURRENT_UUID_FILENAME}")
 
     def list_files(self, path: str):
-        validate_repo(self.repo)
+        self._validate_repo()
         for dirpath, dirnames, filenames in walk_repo(path):
             for filename in filenames:
                 fullpath = str(os.path.join(dirpath, filename))
@@ -140,22 +135,22 @@ class RepoCommand:
         if not os.path.isdir(self.repo):
             raise ValueError(f"folder {self.repo} does not exist")
 
-        if not os.path.isdir(hoard_folder(self.repo)):
-            os.mkdir(hoard_folder(self.repo))
+        if not os.path.isdir(self._hoard_folder()):
+            os.mkdir(self._hoard_folder())
 
-        if not os.path.isfile(os.path.join(hoard_folder(self.repo), CURRENT_UUID_FILENAME)):
-            init_uuid(self.repo)
+        if not os.path.isfile(os.path.join(self._hoard_folder(), CURRENT_UUID_FILENAME)):
+            self._init_uuid()
 
-        validate_repo(self.repo)
+        self._validate_repo()
 
     def refresh(self):
         """ Refreshes the cache of the current hoard folder """
-        validate_repo(self.repo)
+        self._validate_repo()
 
-        current_uuid = load_current_uuid(self.repo)
+        current_uuid = self.current_uuid()
         logging.info(f"Refreshing uuid {current_uuid}")
 
-        contents = Contents(os.path.join(hoard_folder(self.repo), f"{current_uuid}.contents"), contents_doc={})
+        contents = Contents(os.path.join(self._hoard_folder(), f"{current_uuid}.contents"), contents_doc={})
         contents.config.touch_updated()
 
         logging.info("Counting files to add")
@@ -191,15 +186,75 @@ class RepoCommand:
 
         logging.info(f"Refresh done!")
 
+    def show(self):
+        remote_uuid = self.current_uuid()
+
+        logging.info(f"Reading repo {self.repo}...")
+        contents = Contents.load(self._contents_filename(remote_uuid))
+        logging.info(f"Read repo!")
+
+        print(f"Result for local]")
+        print(f"UUID: {remote_uuid}.")
+        print(f"Last updated on {contents.config.updated}.")
+        print(f"  # files = {len(contents.fsobjects.files)}"
+              f" of size {sum(f.size for f in contents.fsobjects.files.values())}")
+        print(f"  # dirs  = {len(contents.fsobjects.dirs)}")
+
+    def _contents_filename(self, remote_uuid):
+        return os.path.join(self._hoard_folder(), f"{remote_uuid}.contents")
+
+
+class HoardCommand(object):
+    def __init__(self, path: str):
+        self.hoardpath = path
+
+    def _contents_filename(self, remote_uuid):
+        return os.path.join(self.hoardpath, f"{remote_uuid}.contents")
+
     def _remotes_names(self) -> Dict[str, str]:
         logging.info(f"Reading config...")
         config = self._config()
         return config.remotes.names_map()
 
-    def show(self, remote: str = "current"):
+    def _config(self) -> HoardConfig:
+        config_file = os.path.join(self.hoardpath, CONFIG_FILE)
+        return HoardConfig.load(config_file)
+
+    def add_remote(self, remote_path: str, name: str):
+        config = self._config()
+
+        remote_abs_path = pathlib.Path(remote_path).absolute().as_posix()
+        logging.info(f"Adding remote {remote_abs_path} to config...")
+
+        logging.info("Loading remote from remote_path")
+        repo_cmd = RepoCommand(remote_abs_path)
+
+        logging.info(f"Getting remote uuid")
+        remote_uuid = repo_cmd.current_uuid()
+
+        config.remotes.declare(remote_uuid, name)
+        config.paths[remote_uuid] = remote_abs_path
+        config.write()
+
+        self.fetch(remote_uuid)
+
+    def fetch(self, remote: str):
+        remote_uuid = self._resolve_remote_uuid(remote)
+        config = self._config()
+
+        remote_path = config.paths[remote_uuid]
+
+        logging.info(f"Fetching repo contents {remote_uuid} in {remote_path}...")
+        repo_cmd = RepoCommand(remote_path)
+
+        logging.debug(f"Copying {repo_cmd._contents_filename(remote_uuid)} to {self._contents_filename(remote_uuid)}")
+        shutil.copy(repo_cmd._contents_filename(remote_uuid), self._contents_filename(remote_uuid))
+        logging.info(f"Fetching done!")
+
+    def show(self, remote: str):
         remote_uuid = self._resolve_remote_uuid(remote)
 
-        logging.info(f"Reading repo {self.repo}...")
+        logging.info(f"Reading repo {remote_uuid}...")
         contents = Contents.load(self._contents_filename(remote_uuid))
         logging.info(f"Read repo!")
 
@@ -216,38 +271,9 @@ class RepoCommand:
               f" of size {sum(f.size for f in contents.fsobjects.files.values())}")
         print(f"  # dirs  = {len(contents.fsobjects.dirs)}")
 
-    def _resolve_remote_uuid(self, remote):
-        if remote == "current":
-            return load_current_uuid(self.repo)
-        remotes = self._remotes_names()
-        remote_uuid = remotes[remote] if remote in remotes else remote
-        return remote_uuid
-
-    def remotes(self):
-        logging.info(f"Reading config in {self.repo}...")
-        config = self._config()
-
-        remotes_doc = config.remotes
-        print(f"{len(remotes_doc)} total remotes.")
-        for remote in remotes_doc:
-            name_prefix = f"[{remote.name} " if remote.name != "INVALID" else ""
-
-            print(f"  {name_prefix}{remote.uuid}")
-
-    def _config(self) -> HoardConfig:
-        config_file = os.path.join(hoard_folder(self.repo), CONFIG_FILE)
-        config = HoardConfig.load(config_file)
-        current_uuid = load_current_uuid(self.repo)
-
-        if current_uuid not in config.paths:
-            config.paths[current_uuid] = self.repo
-            config.remotes.declare(current_uuid, name="local-repo")
-            config.write()
-        return config
-
     def config_remote(self, remote: str, param: str, value: str):
         remote_uuid = self._resolve_remote_uuid(remote)
-        logging.info(f"Reading config in {self.repo}...")
+        logging.info(f"Reading config in {self.hoardpath}...")
         config = self._config()
 
         remote = config.remotes[remote_uuid]
@@ -257,70 +283,25 @@ class RepoCommand:
         logging.info(f"Setting {param} to {value}")
         remote[param] = value
 
-        logging.info(f"Writing config in {self.repo}...")
+        logging.info(f"Writing config in {self.hoardpath}...")
         config.write()
         logging.info(f"Config done!")
 
     def _hoard_contents_filename(self):
-        return os.path.join(hoard_folder(self.repo), HOARD_CONTENTS_FILENAME)
+        return os.path.join(self.hoardpath, HOARD_CONTENTS_FILENAME)
 
-    def commit_local(self):
-        logging.info("Loading config")
-        config = self._config()
+    def status(self, remote: str):
+        remote_uuid = self._resolve_remote_uuid(remote)
 
-        logging.info(f"Loading hoard TOML...")
-        hoard = HoardContents.load(self._hoard_contents_filename())
-        logging.info(f"Loaded hoard TOML!")
-
-        current_uuid = load_current_uuid(self.repo)
-        current_contents = Contents.load(self._contents_filename(current_uuid))
-
-        remote = config.remotes[current_uuid]
-        if remote is None or remote.mounted_at is None:
-            raise ValueError(f"remote {current_uuid} is not mounted!")
-
-        logging.info("Merging local changes...")
-        for current_file, props in current_contents.fsobjects.files.items():
-            curr_file_hoard_path = path_in_hoard(current_file, remote)
-
-            if curr_file_hoard_path not in hoard.fsobjects.files.keys():
-                logging.info(f"new file found: {curr_file_hoard_path}")
-                hoard.fsobjects.add_available_file(curr_file_hoard_path, props, current_uuid)
-            elif is_same_file(current_contents.fsobjects.files[current_file], hoard.fsobjects.files[curr_file_hoard_path]):
-                logging.info(f"mark {current_file} as available here!")
-                hoard.fsobjects.files[curr_file_hoard_path].ensure_available(current_uuid)
-            else:
-                logging.info(f"updating existing file {current_file}")
-
-                hoard.fsobjects.update_file(curr_file_hoard_path, props)
-
-        for current_dir, props in current_contents.fsobjects.dirs.items():
-            curr_file_hoard_path = path_in_hoard(current_dir, remote)
-            if curr_file_hoard_path not in hoard.fsobjects.dirs.keys():
-                logging.info(f"new dir found: {current_dir}")
-                hoard.fsobjects.add_dir(curr_file_hoard_path)
-            else:
-                pass  # dir is there already
-
-        logging.info("Writing updated hoard contents...")
-        hoard.write()
-        logging.info("Local commit DONE!")
-
-    def _contents_filename(self, remote_uuid):
-        return os.path.join(hoard_folder(self.repo), f"{remote_uuid}.contents")
-
-    def status_hoard(self):
-        current_uuid = load_current_uuid(self.repo)
-
-        logging.info(f"Reading current contents of {current_uuid} at {self.repo}...")
-        current_contents = Contents.load(self._contents_filename(current_uuid))
+        logging.info(f"Reading current contents of {remote_uuid}...")
+        current_contents = Contents.load(self._contents_filename(remote_uuid))
 
         logging.info(f"Loading hoard TOML...")
         hoard = HoardContents.load(self._hoard_contents_filename())
         logging.info(f"Loaded hoard TOML!")
         logging.info(f"Computing status ...")
 
-        print(f"Status of {current_uuid} at {self.repo}...")
+        print(f"Status of {remote_uuid}:")
         for curr_file, props in current_contents.fsobjects.files.items():
             if curr_file not in hoard.fsobjects.files.keys():
                 print(f"A {curr_file}")
@@ -339,7 +320,7 @@ class RepoCommand:
 
     def mount_remote(self, remote: str, mount_point: str, force: bool = False):
         remote_uuid = self._resolve_remote_uuid(remote)
-        logging.info(f"Reading config in {self.repo}...")
+        logging.info(f"Reading config in {self.hoardpath}...")
         config = self._config()
 
         remote = config.remotes[remote_uuid]
@@ -362,7 +343,79 @@ class RepoCommand:
         remote.mount_at(mount_path.as_posix())
         config.write()
 
+    def _resolve_remote_uuid(self, remote):
+        remotes = self._remotes_names()
+        remote_uuid = remotes[remote] if remote in remotes else remote
+        return remote_uuid
+
+    def remotes(self):
+        logging.info(f"Reading config in {self.hoardpath}...")
+        config = self._config()
+
+        remotes_doc = config.remotes
+        print(f"{len(remotes_doc)} total remotes.")
+        for remote in remotes_doc:
+            name_prefix = f"[{remote.name} " if remote.name != "INVALID" else ""
+
+            print(f"  {name_prefix}{remote.uuid}")
+
+    def sync(self, remote: str):
+        logging.info("Loading config")
+        config = self._config()
+
+        logging.info(f"Loading hoard TOML...")
+        hoard = HoardContents.load(self._hoard_contents_filename())
+        logging.info(f"Loaded hoard TOML!")
+
+        remote_uuid = self._resolve_remote_uuid(remote)
+        current_contents = Contents.load(self._contents_filename(remote_uuid))
+
+        remote = config.remotes[remote_uuid]
+        if remote is None or remote.mounted_at is None:
+            raise ValueError(f"remote {remote_uuid} is not mounted!")
+
+        logging.info("Merging local changes...")
+        for current_file, props in current_contents.fsobjects.files.items():
+            curr_file_hoard_path = path_in_hoard(current_file, remote)
+
+            if curr_file_hoard_path not in hoard.fsobjects.files.keys():
+                logging.info(f"new file found: {curr_file_hoard_path}")
+                hoard.fsobjects.add_available_file(curr_file_hoard_path, props, remote_uuid)
+            elif is_same_file(current_contents.fsobjects.files[current_file],
+                              hoard.fsobjects.files[curr_file_hoard_path]):
+                logging.info(f"mark {current_file} as available here!")
+                hoard.fsobjects.files[curr_file_hoard_path].ensure_available(remote_uuid)
+            else:
+                logging.info(f"updating existing file {current_file}")
+
+                hoard.fsobjects.update_file(curr_file_hoard_path, props)
+
+        for current_dir, props in current_contents.fsobjects.dirs.items():
+            curr_file_hoard_path = path_in_hoard(current_dir, remote)
+            if curr_file_hoard_path not in hoard.fsobjects.dirs.keys():
+                logging.info(f"new dir found: {current_dir}")
+                hoard.fsobjects.add_dir(curr_file_hoard_path)
+            else:
+                pass  # dir is there already
+
+        logging.info("Writing updated hoard contents...")
+        hoard.write()
+        logging.info("Local commit DONE!")
+
+
+class TotalCommand(object):
+    def __init__(self, verbose: bool = False, **kwargs):
+        if verbose:
+            logging.basicConfig(level=logging.INFO)
+        self.kwargs = kwargs
+
+    @property
+    def cave(self): return RepoCommand(**self.kwargs)
+
+    @property
+    def hoard(self): return HoardCommand(**self.kwargs)
+
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    fire.Fire(RepoCommand)
+    fire.Fire(TotalCommand)
