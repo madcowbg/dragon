@@ -61,6 +61,7 @@ class RepoCommand(object):
             self._init_uuid()
 
         self._validate_repo()
+        return f"Repo initialized at {self.repo}"
 
     def refresh(self):
         """ Refreshes the cache of the current hoard folder """
@@ -104,6 +105,7 @@ class RepoCommand(object):
         contents.write()
 
         logging.info(f"Refresh done!")
+        return f"Refresh done!"
 
     def show(self):
         remote_uuid = self.current_uuid()
