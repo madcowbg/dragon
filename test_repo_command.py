@@ -40,18 +40,29 @@ class TestRepoCommand(unittest.TestCase):
             ['test.me.different', 'test.me.once', 'test.me.twice'],
             os.listdir(join(self.tmpdir.name, 'repo', 'wat')))
 
-    def test_init_repo(self):
+    def test_init_refresh_repo(self):
         res = TotalCommand(path=join(self.tmpdir.name, "repo")).cave.init()
 
         posix_path = pathlib.Path(self.tmpdir.name).as_posix()
         self.assertEqual(f"Repo initialized at {posix_path}/repo", res)
         self.assertEqual(['current.uuid'], os.listdir(join(self.tmpdir.name, "repo", ".hoard")))
 
-        res = TotalCommand(path=join(self.tmpdir.name, "repo")).cave.refresh()
+        cave_cmd = TotalCommand(path=join(self.tmpdir.name, "repo")).cave
+        res = cave_cmd.refresh()
         self.assertEqual(f"Refresh done!", res)
-        with open(join(self.tmpdir.name, "repo", ".hoard", "current.uuid")) as f:
-            current_uuid = f.readline()  # read uuid
+
+        current_uuid = cave_cmd.current_uuid()
         self.assertEqual(
             [f"{current_uuid}.contents", 'current.uuid'],
             os.listdir(join(self.tmpdir.name, "repo", ".hoard")))
 
+    def test_show_repo(self):
+        cave_cmd = TotalCommand(path=join(self.tmpdir.name, "repo")).cave
+        cave_cmd.init()
+        cave_cmd.refresh()
+
+        current_uuid = cave_cmd.current_uuid()
+
+        res = TotalCommand(path=join(self.tmpdir.name, "repo")).cave.show().split("\n")
+        self.assertEqual('Result for local', res[0])
+        self.assertEqual(['  # files = 3 of size 19', '  # dirs  = 1', ''], res[3:])

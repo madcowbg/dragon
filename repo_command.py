@@ -2,6 +2,7 @@ import logging
 import os
 import pathlib
 import uuid
+from io import StringIO
 from typing import Generator, Tuple, List
 
 from alive_progress import alive_bar
@@ -43,7 +44,7 @@ class RepoCommand(object):
         if not os.path.isfile(os.path.join(self._hoard_folder(), CURRENT_UUID_FILENAME)):
             raise ValueError(f"no hoard guid in {self.repo}/.hoard/{CURRENT_UUID_FILENAME}")
 
-    def list_files(self, path: str):
+    def list_files(self, path: str):  # todo remove
         self._validate_repo()
         for dirpath, dirnames, filenames in walk_repo(path):
             for filename in filenames:
@@ -114,12 +115,14 @@ class RepoCommand(object):
         contents = Contents.load(self._contents_filename(remote_uuid))
         logging.info(f"Read repo!")
 
-        print(f"Result for local]")
-        print(f"UUID: {remote_uuid}.")
-        print(f"Last updated on {contents.config.updated}.")
-        print(f"  # files = {len(contents.fsobjects.files)}"
-              f" of size {sum(f.size for f in contents.fsobjects.files.values())}")
-        print(f"  # dirs  = {len(contents.fsobjects.dirs)}")
+        with StringIO() as out:
+            out.writelines([
+                f"Result for local\n",
+                f"UUID: {remote_uuid}\n",
+                f"Last updated on {contents.config.updated}\n",
+                f"  # files = {len(contents.fsobjects.files)} of size {sum(f.size for f in contents.fsobjects.files.values())}\n",
+                f"  # dirs  = {len(contents.fsobjects.dirs)}\n", ])
+            return out.getvalue()
 
     def _contents_filename(self, remote_uuid):
         return os.path.join(self._hoard_folder(), f"{remote_uuid}.contents")
