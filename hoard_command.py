@@ -2,6 +2,7 @@ import logging
 import os
 import pathlib
 import shutil
+from io import StringIO
 from typing import Dict
 
 from config import HoardRemote, HoardConfig
@@ -179,12 +180,13 @@ class HoardCommand(object):
         logging.info(f"Reading config in {self.hoardpath}...")
         config = self._config()
 
-        remotes_doc = config.remotes
-        print(f"{len(remotes_doc)} total remotes.")
-        for remote in remotes_doc:
-            name_prefix = f"[{remote.name} " if remote.name != "INVALID" else ""
+        with StringIO() as out:
+            out.write(f"{len(config.remotes)} total remotes.\n")
+            for remote in config.remotes.all():
+                name_prefix = f"[{remote.name} " if remote.name != "INVALID" else ""
 
-            print(f"  {name_prefix}{remote.uuid}")
+                out.write(f"  {name_prefix}{remote.uuid}\n")
+            return out.getvalue()
 
     def sync(self, remote: str):
         logging.info("Loading config")

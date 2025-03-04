@@ -38,10 +38,13 @@ class HoardRemotes:
         return dict((props["name"], remote) for remote, props in self.doc.items() if "name" in props)
 
     def __getitem__(self, remote_uuid: str) -> Optional[HoardRemote]:
-        return HoardRemote(remote_uuid, self.doc[remote_uuid] if remote_uuid in self.doc else None)
+        return HoardRemote(remote_uuid, self.doc[remote_uuid]) if remote_uuid in self.doc else None
 
     def __len__(self):
         return len(self.doc)
+
+    def all(self):
+        return (self[uuid] for uuid in self.doc)
 
 
 class HoardConfig:
