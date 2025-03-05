@@ -3,6 +3,7 @@ import tempfile
 import unittest
 from os.path import join
 
+from contents import HoardContents
 from main import TotalCommand
 from test_repo_command import populate
 
@@ -58,5 +59,14 @@ class TestRepoCommand(unittest.TestCase):
         res = hoard_cmd.sync("repo-in-local")
         self.assertEqual("Sync'ed repo-in-local to hoard!", res.strip())
 
-        res = hoard_cmd.status("repo-in-local")
-        self.assertEqual("asd", res.strip())
+        hoard_contents = HoardContents.load(hoard_cmd._hoard_contents_filename())
+        files = sorted((f, prop.size, len(prop.available_at)) for f, prop in hoard_contents.fsobjects.files.items())
+        dirs = sorted(f for f, _ in hoard_contents.fsobjects.dirs.items())
+        self.assertEqual(
+            [('/wat/test.me.different', 5, 1),
+             ('/wat/test.me.once', 8, 1),
+             ('/wat/test.me.twice', 6, 1)], files)
+        self.assertEqual(["/wat"], dirs)
+        #
+        # res = hoard_cmd.status("repo-in-local")
+        # self.assertEqual("asd", res.strip())

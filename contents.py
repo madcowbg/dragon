@@ -1,20 +1,29 @@
 import os
 from datetime import datetime
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 import rtoml
 
 
-class ContentsConfig:
+class HoardContentsConfig:
     def __init__(self, config_doc: Dict[str, Any]):
         self.doc = config_doc
 
-    def touch_updated(self):
+    def touch_updated(self) -> None:
         self.doc["updated"] = datetime.now().isoformat()
 
     @property
-    def updated(self):
+    def updated(self) -> datetime:
         return datetime.fromisoformat(self.doc["updated"])
+
+
+class ContentsConfig(HoardContentsConfig):
+    def __init__(self, config_doc: Dict[str, Any]):
+        super().__init__(config_doc)
+
+    @property
+    def uuid(self) -> str:
+        return self.doc["uuid"]
 
 
 class FileProps:
@@ -89,6 +98,10 @@ class HoardFileProps:
         if remote_uuid not in self.doc["available"]:
             self.doc["available"].append(remote_uuid)
 
+    @property
+    def available_at(self) -> List[str]:
+        return self.doc["available"] if "available" in self.doc else []
+
 
 class HoardFSObjects:
     def __init__(self, doc: Dict[str, Any]):
@@ -129,7 +142,7 @@ class HoardContents:
 
     def __init__(self, filepath: str, contents_doc: Dict[str, Any]):
         self.filepath = filepath
-        self.config = ContentsConfig(contents_doc["config"] if "config" in contents_doc else {})
+        self.config = HoardContentsConfig(contents_doc["config"] if "config" in contents_doc else {})
         self.fsobjects = HoardFSObjects(contents_doc["fsobjects"] if "fsobjects" in contents_doc else {})
 
     def write(self):

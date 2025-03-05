@@ -71,7 +71,9 @@ class RepoCommand(object):
         current_uuid = self.current_uuid()
         logging.info(f"Refreshing uuid {current_uuid}")
 
-        contents = Contents(os.path.join(self._hoard_folder(), f"{current_uuid}.contents"), contents_doc={})
+        contents = Contents(
+            os.path.join(self._hoard_folder(), f"{current_uuid}.contents"),
+            contents_doc={"config": {"uuid": current_uuid}})
         contents.config.touch_updated()
 
         logging.info("Counting files to add")
