@@ -135,19 +135,21 @@ class HoardCommand(object):
 
         with StringIO() as out:
             out.write(f"Status of {remote_uuid}:\n")
-            for curr_file, props in current_contents.fsobjects.files.items():
-                if curr_file not in hoard.fsobjects.files.keys():
-                    out.write(f"A {curr_file}\n")
-                elif is_same_file(current_contents.fsobjects.files[curr_file], hoard.fsobjects.files[curr_file]):
-                    pass  # logging.info(f"Skip adding {curr_file} as its contents are equal!")
-                else:
-                    out.write(f"M {curr_file}\n")
 
-            for curr_dir, props in current_contents.fsobjects.dirs.items():
-                if curr_dir not in hoard.fsobjects.dirs.keys():
-                    out.write(f"AD {curr_dir}\n")
+            for diff in compare_local_to_hoard(current_contents, hoard, self._config()):
+                if isinstance(diff, FileMissingInHoard):
+                    out.write(f"A {diff.hoard_file}\n")
+                elif isinstance(diff, FileContentsDiffer):
+                    out.write(f"M {diff.hoard_file}\n")
+                elif isinstance(diff, FileMissingInLocal):
+                    out.write(f"D {diff.hoard_file}\n")
+                elif isinstance(diff, DirMissingInHoard):
+                    out.write(f"AF {diff.hoard_dir}\n")
+                elif isinstance(diff, DirMissingInLocal):
+                    out.write(f"DF {diff.hoard_dir}\n")
                 else:
-                    pass  # dir is there already
+                    logging.info(f"Unused diff class: {type(diff)}")
+            out.write("DONE")
 
             logging.info("Computing status done!")
             return out.getvalue()
