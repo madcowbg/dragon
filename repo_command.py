@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import os
 import pathlib
@@ -18,6 +19,25 @@ def walk_repo(repo: str) -> Generator[Tuple[str, List[str], List[str]], None, No
             dirnames.remove(".hoard")
 
         yield dirpath, dirnames, filenames
+
+
+def fast_hash(fullpath: str, chunk_size: int = 1 << 16) -> str:
+    with open(fullpath, "rb") as f:
+        f.seek(0, os.SEEK_END)
+        size = f.tell()
+        file_data = str(size).encode("utf-8")
+
+        if size <= 3 * chunk_size:
+            f.seek(0)
+            file_data += f.read()
+        else:
+            f.seek(0)
+            file_data += f.read(chunk_size)
+            f.seek(size // 2 - chunk_size // 2)
+            file_data += f.read(chunk_size)
+            f.seek(size - chunk_size)
+            file_data += f.read(chunk_size)
+    return hashlib.md5(file_data).hexdigest()
 
 
 class RepoCommand(object):
@@ -93,7 +113,8 @@ class RepoCommand(object):
 
                     contents.fsobjects.add_file(
                         relpath, size=os.path.getsize(fullpath),
-                        mtime=os.path.getmtime(fullpath))
+                        mtime=os.path.getmtime(fullpath),
+                        fasthash=fast_hash(fullpath))
                     bar()
 
                 for dirname in dirnames:

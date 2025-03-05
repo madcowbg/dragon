@@ -38,6 +38,10 @@ class FileProps:
     def mtime(self):
         return self.doc["mtime"]
 
+    @property
+    def fasthash(self):
+        return self.doc["fasthash"]
+
 
 class DirProps:
     def __init__(self, doc: Dict[str, Any]):
@@ -50,8 +54,8 @@ class FSObjects:
         self.files = dict((f, FileProps(data)) for f, data in self.doc.items() if not data['isdir'])
         self.dirs = dict((f, DirProps(data)) for f, data in self.doc.items() if data['isdir'])
 
-    def add_file(self, fullpath: str, size: int, mtime: float):
-        self.doc[fullpath] = {"size": size, "mtime": mtime, "isdir": False}
+    def add_file(self, fullpath: str, size: int, mtime: float, fasthash: str) -> None:
+        self.doc[fullpath] = {"size": size, "mtime": mtime, "isdir": False, "fasthash": fasthash}
         self.files[fullpath] = FileProps(self.doc[fullpath])
 
     def add_dir(self, fullpath):
@@ -90,9 +94,14 @@ class HoardFileProps:
     def mtime(self):
         return self.doc["mtime"]
 
+    @property
+    def fasthash(self):
+        return self.doc["fasthash"]
+
     def update(self, props: FileProps):
         self.doc["size"] = props.size
         self.doc["mtime"] = props.mtime
+        self.doc["fasthash"] = props.fasthash
 
     def ensure_available(self, remote_uuid: str):
         if remote_uuid not in self.doc["available"]:
@@ -114,6 +123,7 @@ class HoardFSObjects:
             "isdir": False,
             "size": props.size,
             "mtime": props.mtime,
+            "fasthash": props.fasthash,
             "available": [current_uuid]
         }
 

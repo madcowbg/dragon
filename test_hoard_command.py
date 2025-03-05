@@ -5,7 +5,9 @@ from os.path import join
 
 from contents import HoardContents
 from main import TotalCommand
+from repo_command import fast_hash
 from test_repo_command import populate, write_contents
+from util import calc_file_md5
 
 
 def populate_hoard(tmpdir: str):
@@ -60,12 +62,13 @@ class TestRepoCommand(unittest.TestCase):
         self.assertEqual("Sync'ed repo-in-local to hoard!", res.strip())
 
         hoard_contents = HoardContents.load(hoard_cmd._hoard_contents_filename())
-        files = sorted((f, prop.size, len(prop.available_at)) for f, prop in hoard_contents.fsobjects.files.items())
+        files = sorted(
+            (f, prop.size, len(prop.available_at), prop.fasthash) for f, prop in hoard_contents.fsobjects.files.items())
         dirs = sorted(f for f, _ in hoard_contents.fsobjects.dirs.items())
         self.assertEqual(
-            [('/wat/test.me.different', 5, 1),
-             ('/wat/test.me.once', 8, 1),
-             ('/wat/test.me.twice', 6, 1)], files)
+            [('/wat/test.me.different', 5, 1, '5a818396160e4189911989d69d857bd2'),
+             ('/wat/test.me.once', 8, 1, '34fac39930874b0f6bc627c3b3fc4b5e'),
+             ('/wat/test.me.twice', 6, 1, '1881f6f9784fb08bf6690e9763b76ac3')], files)
         self.assertEqual(["/wat"], dirs)
 
         res = hoard_cmd.status("repo-in-local")
@@ -102,3 +105,27 @@ class TestRepoCommand(unittest.TestCase):
         self.assertEqual("Sync'ed repo-in-local to hoard!", res)
 
         self.assertEqual(f"Status of {repo_uuid}:\nDONE", hoard_cmd.status("repo-in-local").strip())
+
+    def test_fast_hash(self):
+        test_filename = join(self.tmpdir.name, "test_fasthash")
+        data = "".join([str(f * 12311831028 % 23129841) for f in range(1, 100000)])
+        write_contents(test_filename, data)
+
+        self.assertEqual("6f3aa4fb14b217b20aed6f98c137cf4c", fast_hash(test_filename))
+
+    def test_fast_hash_ignores_some(self):
+        test_filename = join(self.tmpdir.name, "test_fasthash")
+        data = "".join([str(f * 12311831028 % 23129841) for f in range(1, 100000)])
+        ld = list(data)
+        print(ld[33000])
+        ld[66000] = 'g'  # change one byte
+        d2 = "".join(ld)
+        write_contents(test_filename, d2)
+
+        self.assertEqual("6f3aa4fb14b217b20aed6f98c137cf4c", fast_hash(test_filename))
+
+    def test_md5(self):
+        test_filename = join(self.tmpdir.name, "test_fasthash")
+        write_contents(test_filename, "".join([str(f * 12311831028 % 23129841) for f in range(1, 100000)]))
+
+        self.assertEqual("26c465fd88266ccb913dabb5606572f9", calc_file_md5(test_filename))

@@ -20,7 +20,10 @@ def is_same_file(current: FileProps, hoard: HoardFileProps):
     if abs(current.mtime - hoard.mtime) > 1e-3:
         return False  # files differ by mtime
 
-    return True  # files are the same TODO implement hashing
+    if current.fasthash != hoard.fasthash:
+        return False  # fast hash is different
+
+    return True  # files are the same
 
 
 def path_in_hoard(current_file: str, mounted_at: str) -> str:
