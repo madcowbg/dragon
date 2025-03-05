@@ -5,7 +5,7 @@ from os.path import join
 
 from contents import HoardContents
 from main import TotalCommand
-from test_repo_command import populate
+from test_repo_command import populate, write_contents
 
 
 def populate_hoard(tmpdir: str):
@@ -70,3 +70,30 @@ class TestRepoCommand(unittest.TestCase):
 
         res = hoard_cmd.status("repo-in-local")
         self.assertEqual(f"Status of {repo_uuid}:\nDONE", res.strip())
+
+    def test_changing_data(self):
+        cave_cmd = TotalCommand(path=join(self.tmpdir.name, "repo")).cave
+        cave_cmd.init()
+        cave_cmd.refresh()
+
+        hoard_cmd = TotalCommand(path=join(self.tmpdir.name, "hoard")).hoard
+        hoard_cmd.add_remote(remote_path=join(self.tmpdir.name, "repo"), name="repo-in-local")
+
+        repo_uuid = cave_cmd.current_uuid()
+        hoard_cmd.mount_remote("repo-in-local", "/")
+        hoard_cmd.sync("repo-in-local")
+
+        self.assertEqual(f"Status of {repo_uuid}:\nDONE", hoard_cmd.status("repo-in-local").strip())
+
+        os.mkdir(join(self.tmpdir.name, "repo", "newdir"))
+        write_contents(join(self.tmpdir.name, "repo", "newdir", "newfile.is"), "lhiWFELHFE")
+        os.remove(join(self.tmpdir.name, "repo", "wat", 'test.me.different'))
+
+        # as is not refreshed, no change in status
+        self.assertEqual(f"Status of {repo_uuid}:\nDONE", hoard_cmd.status("repo-in-local").strip())
+
+        cave_cmd.refresh()
+        hoard_cmd.fetch("repo-in-local")
+        self.assertEqual(
+            f"Status of {repo_uuid}:\nA /newdir/newfile.is\nD /wat/test.me.different\nAF /newdir\nDONE",
+            hoard_cmd.status("repo-in-local").strip())
