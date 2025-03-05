@@ -153,25 +153,24 @@ class HoardCommand(object):
         logging.info(f"Reading config in {self.hoardpath}...")
         config = self._config()
 
-        remote = config.remotes[remote_uuid]
-        if remote is None:
+        remote_doc = config.remotes[remote_uuid]
+        if remote_doc is None:
             raise ValueError(f"remote {remote_uuid} does not exist")
 
-        if remote.mounted_at is not None and not force:
-            print(
-                f"Remote {remote_uuid} already mounted in {remote.mounted_at}, use --force to set.!")
-            return
+        if remote_doc.mounted_at is not None and not force:
+            return f"Remote {remote_uuid} already mounted in {remote_doc.mounted_at}, use --force to set.!"
 
         mount_path = pathlib.Path(mount_point)
 
         if not mount_path.is_relative_to("/"):
-            print(f"Mount point {mount_point} is absolute, must use relative!")
-            return
+            return f"Mount point {mount_point} is absolute, must use relative!"
 
-        print(f"setting path to {mount_path.as_posix()}")
+        logging.info(f"setting path to {mount_path.as_posix()}")
 
-        remote.mount_at(mount_path.as_posix())
+        remote_doc.mount_at(mount_path.as_posix())
         config.write()
+
+        return f"set path of {remote} to {mount_path.as_posix()}\n"
 
     def _resolve_remote_uuid(self, remote):
         remotes = self._remotes_names()
@@ -201,13 +200,13 @@ class HoardCommand(object):
         remote_uuid = self._resolve_remote_uuid(remote)
         current_contents = Contents.load(self._contents_filename(remote_uuid))
 
-        remote = config.remotes[remote_uuid]
-        if remote is None or remote.mounted_at is None:
-            raise ValueError(f"remote {remote_uuid} is not mounted!")
+        remote_doc = config.remotes[remote_uuid]
+        if remote_doc is None or remote_doc.mounted_at is None:
+            raise ValueError(f"remote_doc {remote_uuid} is not mounted!")
 
         logging.info("Merging local changes...")
         for current_file, props in current_contents.fsobjects.files.items():
-            curr_file_hoard_path = path_in_hoard(current_file, remote)
+            curr_file_hoard_path = path_in_hoard(current_file, remote_doc)
 
             if curr_file_hoard_path not in hoard.fsobjects.files.keys():
                 logging.info(f"new file found: {curr_file_hoard_path}")
@@ -222,7 +221,7 @@ class HoardCommand(object):
                 hoard.fsobjects.update_file(curr_file_hoard_path, props)
 
         for current_dir, props in current_contents.fsobjects.dirs.items():
-            curr_file_hoard_path = path_in_hoard(current_dir, remote)
+            curr_file_hoard_path = path_in_hoard(current_dir, remote_doc)
             if curr_file_hoard_path not in hoard.fsobjects.dirs.keys():
                 logging.info(f"new dir found: {current_dir}")
                 hoard.fsobjects.add_dir(curr_file_hoard_path)
@@ -232,3 +231,5 @@ class HoardCommand(object):
         logging.info("Writing updated hoard contents...")
         hoard.write()
         logging.info("Local commit DONE!")
+
+        return f"Sync'ed {remote} to hoard!"

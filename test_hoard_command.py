@@ -52,3 +52,11 @@ class TestRepoCommand(unittest.TestCase):
             f"Status of {repo_uuid}:\nA wat/test.me.different\nA wat/test.me.once\nA wat/test.me.twice\nAD wat",
             res.strip())
 
+        res = hoard_cmd.mount_remote("repo-in-local", "/")
+        self.assertEqual("set path of repo-in-local to /", res.strip())
+
+        res = hoard_cmd.sync("repo-in-local")
+        self.assertEqual("Sync'ed repo-in-local to hoard!", res.strip())
+
+        res = hoard_cmd.status("repo-in-local")
+        self.assertEqual("asd", res.strip())
