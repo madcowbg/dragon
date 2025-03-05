@@ -97,3 +97,8 @@ class TestRepoCommand(unittest.TestCase):
         self.assertEqual(
             f"Status of {repo_uuid}:\nA /newdir/newfile.is\nD /wat/test.me.different\nAF /newdir\nDONE",
             hoard_cmd.status("repo-in-local").strip())
+
+        res = hoard_cmd.sync("repo-in-local")
+        self.assertEqual("Sync'ed repo-in-local to hoard!", res)
+
+        self.assertEqual(f"Status of {repo_uuid}:\nDONE", hoard_cmd.status("repo-in-local").strip())

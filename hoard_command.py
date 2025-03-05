@@ -220,6 +220,9 @@ class HoardCommand(object):
             elif isinstance(diff, FileContentsDiffer):
                 logging.info(f"updating existing file {diff.local_file}")
                 hoard.fsobjects.update_file(diff.hoard_file, diff.local_props)
+            elif isinstance(diff, FileMissingInLocal):
+                logging.info(f"deleting file {diff.hoard_file} as is no longer in local")
+                hoard.fsobjects.delete_file(diff.hoard_file)
             elif isinstance(diff, DirMissingInHoard):
                 logging.info(f"new dir found: {diff.local_dir}")
                 hoard.fsobjects.add_dir(diff.hoard_dir)
@@ -286,7 +289,7 @@ class DirMissingInLocal(Diff):
 def compare_local_to_hoard(local: Contents, hoard: HoardContents, config: HoardConfig) -> Generator[Diff, None, None]:
     mounted_at = config.remotes[local.config.uuid].mounted_at
 
-    for current_file, props in local.fsobjects.files.items():
+    for current_file, props in local.fsobjects.files.copy().items():
         curr_file_hoard_path = path_in_hoard(current_file, mounted_at)
 
         if curr_file_hoard_path not in hoard.fsobjects.files.keys():
@@ -303,7 +306,7 @@ def compare_local_to_hoard(local: Contents, hoard: HoardContents, config: HoardC
                 current_file, curr_file_hoard_path,
                 props, hoard.fsobjects.files[curr_file_hoard_path])
 
-    for hoard_file, props in hoard.fsobjects.files.items():
+    for hoard_file, props in hoard.fsobjects.files.copy().items():
         if not hoard_file.startswith(mounted_at):
             continue  # hoard file is not in the mounted location
 
@@ -312,7 +315,7 @@ def compare_local_to_hoard(local: Contents, hoard: HoardContents, config: HoardC
             yield FileMissingInLocal(curr_file_path_in_local, hoard_file)
         # else file is there, which is handled above
 
-    for current_dir, props in local.fsobjects.dirs.items():
+    for current_dir, props in local.fsobjects.dirs.copy().items():
         curr_dir_hoard_path = path_in_hoard(current_dir, mounted_at)
         if curr_dir_hoard_path not in hoard.fsobjects.dirs.keys():
             logging.info(f"new dir found: {current_dir}")
@@ -320,7 +323,7 @@ def compare_local_to_hoard(local: Contents, hoard: HoardContents, config: HoardC
         else:
             yield DirIsSame(current_dir, curr_dir_hoard_path)
 
-    for hoard_dir, props in local.fsobjects.dirs.items():
+    for hoard_dir, props in local.fsobjects.dirs.copy().items():
         if not hoard_dir.startswith(mounted_at):
             continue  # hoard dir is not in the mounted location
 

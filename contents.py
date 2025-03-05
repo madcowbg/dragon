@@ -126,6 +126,10 @@ class HoardFSObjects:
     def update_file(self, curr_file: str, props: FileProps):
         self.files[curr_file].update(props)
 
+    def delete_file(self, curr_file: str):
+        self.files.pop(curr_file)
+        self.doc.pop(curr_file)
+
 
 class HoardContents:
     @staticmethod
