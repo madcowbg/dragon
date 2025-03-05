@@ -96,7 +96,7 @@ class RepoCommand(object):
             contents_doc={"config": {"uuid": current_uuid}})
         contents.config.touch_updated()
 
-        logging.info("Counting files to add")
+        print("Counting files to add")
         nfiles, nfolders = 0, 0
         with alive_bar(0) as bar:
             for dirpath, dirnames, filenames in walk_repo(self.repo):
@@ -104,7 +104,7 @@ class RepoCommand(object):
                 nfolders += len(dirnames)
                 bar(len(filenames) + len(dirnames))
 
-        logging.info(f"Reading all files in {self.repo}")
+        print(f"Reading all files in {self.repo}")
         with alive_bar(nfiles + nfolders) as bar:
             for dirpath, dirnames, filenames in walk_repo(self.repo):
                 for filename in filenames:
