@@ -1,11 +1,15 @@
+import asyncio
 import hashlib
 import logging
 import os
 import pathlib
 import uuid
+from asyncio import TaskGroup, Queue
 from io import StringIO
-from typing import Generator, Tuple, List
+from os.path import join
+from typing import Generator, Tuple, List, Dict, Set
 
+import aiofiles
 from alive_progress import alive_bar
 
 from contents import Contents
@@ -21,22 +25,22 @@ def walk_repo(repo: str) -> Generator[Tuple[str, List[str], List[str]], None, No
         yield dirpath, dirnames, filenames
 
 
-def fast_hash(fullpath: str, chunk_size: int = 1 << 16) -> str:
-    with open(fullpath, "rb") as f:
-        f.seek(0, os.SEEK_END)
-        size = f.tell()
+async def fast_hash(fullpath: str, chunk_size: int = 1 << 16) -> str:
+    async with aiofiles.open(fullpath, "rb") as f:
+        await f.seek(0, os.SEEK_END)
+        size = await f.tell()
         file_data = str(size).encode("utf-8")
 
         if size <= 3 * chunk_size:
-            f.seek(0)
-            file_data += f.read()
+            await f.seek(0)
+            file_data += await f.read()
         else:
-            f.seek(0)
-            file_data += f.read(chunk_size)
-            f.seek(size // 2 - chunk_size // 2)
-            file_data += f.read(chunk_size)
-            f.seek(size - chunk_size)
-            file_data += f.read(chunk_size)
+            await f.seek(0)
+            file_data += await f.read(chunk_size)
+            await f.seek(size // 2 - chunk_size // 2)
+            file_data += await f.read(chunk_size)
+            await f.seek(size - chunk_size)
+            file_data += await f.read(chunk_size)
     return hashlib.md5(file_data).hexdigest()
 
 
@@ -84,6 +88,29 @@ class RepoCommand(object):
         self._validate_repo()
         return f"Repo initialized at {self.repo}"
 
+    async def find_hashes(self, filenames: Set[str]) -> Dict[str, str]:
+        file_hashes: Dict[str, str] = dict()
+
+        queue: Queue[str] = asyncio.Queue()
+        for f in filenames:
+            queue.put_nowait(f)
+
+        with alive_bar(len(filenames)) as bar:
+            async def run_queue():
+                while not queue.empty():
+                    fullpath = await queue.get()
+                    file_hashes[fullpath] = await fast_hash(fullpath)
+                    queue.task_done()
+                    bar()
+
+            async with TaskGroup() as tg:
+                for _ in range(10):
+                    tg.create_task(run_queue())
+
+                await queue.join()
+
+        return file_hashes
+
     def refresh(self):
         """ Refreshes the cache of the current hoard folder """
         self._validate_repo()
@@ -98,11 +125,18 @@ class RepoCommand(object):
 
         print("Counting files to add")
         nfiles, nfolders = 0, 0
+        file_paths = set()
         with alive_bar(0) as bar:
             for dirpath, dirnames, filenames in walk_repo(self.repo):
                 nfiles += len(filenames)
                 nfolders += len(dirnames)
+                for filename in filenames:
+                    file_paths.add(join(dirpath, filename))
+
                 bar(len(filenames) + len(dirnames))
+
+        print("Hashing files to add:")
+        file_hashes = asyncio.run(self.find_hashes(file_paths))
 
         print(f"Reading all files in {self.repo}")
         with alive_bar(nfiles + nfolders) as bar:
@@ -114,7 +148,7 @@ class RepoCommand(object):
                     contents.fsobjects.add_file(
                         relpath, size=os.path.getsize(fullpath),
                         mtime=os.path.getmtime(fullpath),
-                        fasthash=fast_hash(fullpath))
+                        fasthash=file_hashes.get(fullpath, None))
                     bar()
 
                 for dirname in dirnames:
