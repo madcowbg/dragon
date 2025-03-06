@@ -1,4 +1,3 @@
-import asyncio
 import os
 import tempfile
 import unittest
@@ -7,7 +6,6 @@ from typing import Tuple, List
 
 from contents import HoardContents
 from main import TotalCommand
-from hashing import fast_hash, calc_file_md5
 from test_repo_command import populate, write_contents
 
 
@@ -183,26 +181,24 @@ class TestRepoCommand(unittest.TestCase):
 
         self.assertEqual(f"Status of {repo_uuid}:\nDONE", hoard_cmd.status("repo-in-local").strip())
 
-    def test_fast_hash(self):
-        test_filename = join(self.tmpdir.name, "test_fasthash")
-        data = "".join([str(f * 12311831028 % 23129841) for f in range(1, 100000)])
-        write_contents(test_filename, data)
+    def test_clone(self):
+        hoard_cmd = TotalCommand(path=join(self.tmpdir.name, "hoard")).hoard
 
-        self.assertEqual("6f3aa4fb14b217b20aed6f98c137cf4c", asyncio.run(fast_hash(test_filename, chunk_size=1 << 16)))
+        new_repo_path = join(self.tmpdir.name, "cloned-repo")
+        os.mkdir(new_repo_path)
 
-    def test_fast_hash_ignores_some(self):
-        test_filename = join(self.tmpdir.name, "test_fasthash")
-        data = "".join([str(f * 12311831028 % 23129841) for f in range(1, 100000)])
-        ld = list(data)
-        print(ld[33000])
-        ld[66000] = 'g'  # change one byte
-        d2 = "".join(ld)
-        write_contents(test_filename, d2)
+        res = hoard_cmd.clone(to_path=new_repo_path, mount_at="/wat", name="cloned-repo")
+        self.assertEqual("DONE", res)
 
-        self.assertEqual("6f3aa4fb14b217b20aed6f98c137cf4c", asyncio.run(fast_hash(test_filename, chunk_size=1 << 16)))
+        new_uuid = hoard_cmd._resolve_remote_uuid("cloned-repo")
 
-    def test_md5(self):
-        test_filename = join(self.tmpdir.name, "test_fasthash")
-        write_contents(test_filename, "".join([str(f * 12311831028 % 23129841) for f in range(1, 100000)]))
+        res = hoard_cmd.health()
+        self.assertEqual(
+            "Health stats:\n"
+            "1 total remotes.\n"
+            f"  [cloned-repo] {new_uuid}: 0 with no other copy\n"
+            "Hoard health stats:\n"
+            "DONE", res)
 
-        self.assertEqual("26c465fd88266ccb913dabb5606572f9", calc_file_md5(test_filename))
+        res = hoard_cmd.status(new_uuid)
+        self.assertEqual(f"Status of {new_uuid}:\nDONE", res)

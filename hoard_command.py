@@ -3,7 +3,7 @@ import os
 import pathlib
 import shutil
 from io import StringIO
-from typing import Dict, Generator, List
+from typing import Dict, Generator, List, Optional
 
 from config import HoardRemote, HoardConfig
 from contents import FileProps, HoardFileProps, Contents, HoardContents
@@ -271,13 +271,26 @@ class HoardCommand(object):
             out.write(f"{len(config.remotes)} total remotes.\n")
             for remote in config.remotes.all():
                 name_prefix = f"[{remote.name}] " if remote.name != "INVALID" else ""
-                out.write(f"  {name_prefix}{remote.uuid}: {repo_health.get(remote.uuid, {}).get(1, 0)} with no other copy\n")
+                out.write(
+                    f"  {name_prefix}{remote.uuid}: {repo_health.get(remote.uuid, {}).get(1, 0)} with no other copy\n")
 
             out.write("Hoard health stats:\n")
             for num, files in sorted(health_files.items()):
                 out.write(f"  {num} copies: {len(files)} files\n")
             out.write("DONE")
             return out.getvalue()
+
+    def clone(self, to_path: str, mount_at: str, name: str):
+        if not os.path.isdir(to_path):
+            return f"Cave dir {to_path} to create does not exist!"
+
+        cave_cmd = RepoCommand(path=to_path)
+        cave_cmd.init()
+        cave_cmd.refresh()
+
+        self.add_remote(to_path, name=name)
+        self.mount_remote(name, mount_point=mount_at)
+        return f"DONE"
 
 
 class Diff:

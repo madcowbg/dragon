@@ -55,6 +55,8 @@ class RepoCommand(object):
                 print(fullpath)
 
     def init(self):
+        logging.info(f"Creating repo in {self.repo}")
+
         if not os.path.isdir(self.repo):
             raise ValueError(f"folder {self.repo} does not exist")
 
