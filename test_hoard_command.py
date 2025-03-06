@@ -92,6 +92,7 @@ class TestRepoCommand(unittest.TestCase):
         cave_cmd2 = TotalCommand(path=join(self.tmpdir.name, "repo-2")).cave
         cave_cmd2.init()
         cave_cmd2.refresh()
+        repo_uuid2 = cave_cmd2.current_uuid()
 
         hoard_cmd = TotalCommand(path=join(self.tmpdir.name, "hoard")).hoard
         hoard_cmd.add_remote(remote_path=join(self.tmpdir.name, "repo"), name="repo-in-local")
@@ -127,6 +128,19 @@ class TestRepoCommand(unittest.TestCase):
                 ('/wat/test.me.once', 8, 1, '34fac39930874b0f6bc627c3b3fc4b5e'),
                 ('/wat/test.me.twice', 6, 2, '1881f6f9784fb08bf6690e9763b76ac3')],
             dirs_exp=["/wat"])
+
+        res = hoard_cmd.status("repo-in-local-2")
+        self.assertEqual(f"Status of {repo_uuid2}:\nD /wat/test.me.once\nDONE", res.strip())
+
+        res = hoard_cmd.status("repo-in-local")
+        self.assertEqual(f"Status of {repo_uuid}:\nM- /wat/test.me.different\nDONE", res.strip())
+
+        res = hoard_cmd.remotes()
+        self.assertEqual(
+            f"2 total remotes.\n"
+            f"  [repo-in-local] {repo_uuid}\n"
+            f"  [repo-in-local-2] {repo_uuid2}",
+            res.strip())
 
     def test_changing_data(self):
         cave_cmd = TotalCommand(path=join(self.tmpdir.name, "repo")).cave
