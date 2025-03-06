@@ -3,7 +3,7 @@ import os
 import pathlib
 import shutil
 from io import StringIO
-from typing import Dict, Generator
+from typing import Dict, Generator, List
 
 from config import HoardRemote, HoardConfig
 from contents import FileProps, HoardFileProps, Contents, HoardContents
@@ -241,6 +241,27 @@ class HoardCommand(object):
         logging.info("Local commit DONE!")
 
         return f"Sync'ed {remote} to hoard!"
+
+    def health(self):
+        logging.info("Loading config")
+        config = self._config()
+
+        logging.info(f"Loading hoard TOML...")
+        hoard = HoardContents.load(self._hoard_contents_filename())
+        logging.info(f"Loaded hoard TOML!")
+
+        health_files: Dict[int, List[str]] = dict()
+        for file, props in hoard.fsobjects.files.items():
+            num_copies = len(props.available_at)
+            if num_copies not in health_files:
+                health_files[num_copies] = []
+            health_files[num_copies].append(file)
+        with StringIO() as out:
+            out.write("Health stats:\n")
+            for num, files in sorted(health_files.items()):
+                out.write(f"{num} copies: {len(files)} files\n")
+            out.write("DONE")
+            return out.getvalue()
 
 
 class Diff:

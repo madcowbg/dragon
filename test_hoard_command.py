@@ -142,6 +142,9 @@ class TestRepoCommand(unittest.TestCase):
             f"  [repo-in-local-2] {repo_uuid2}",
             res.strip())
 
+        res = hoard_cmd.health()
+        self.assertEqual("Health stats:\n1 copies: 2 files\n2 copies: 1 files\nDONE", res)
+
     def test_changing_data(self):
         cave_cmd = TotalCommand(path=join(self.tmpdir.name, "repo")).cave
         cave_cmd.init()
