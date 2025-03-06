@@ -59,7 +59,7 @@ class TestRepoCommand(unittest.TestCase):
             f"Status of {repo_uuid}:\nA /wat/test.me.different\nA /wat/test.me.once\nA /wat/test.me.twice\nAF /wat\nDONE",
             res.strip())
 
-        res = hoard_cmd.sync("repo-in-local")
+        res = hoard_cmd.refresh("repo-in-local")
         self.assertEqual("Sync'ed repo-in-local to hoard!", res.strip())
 
         hoard_contents = HoardContents.load(hoard_cmd._hoard_contents_filename())
@@ -99,7 +99,7 @@ class TestRepoCommand(unittest.TestCase):
         hoard_cmd.add_remote(remote_path=join(self.tmpdir.name, "repo-2"), name="repo-in-local-2")
 
         hoard_cmd.mount_remote("repo-in-local", "/")
-        hoard_cmd.sync("repo-in-local")
+        hoard_cmd.refresh("repo-in-local")
 
         self._assert_hoard_contents(
             HoardContents.load(hoard_cmd._hoard_contents_filename()),
@@ -110,7 +110,7 @@ class TestRepoCommand(unittest.TestCase):
             dirs_exp=["/wat"])
 
         hoard_cmd.mount_remote("repo-in-local-2", "/wat")
-        res = hoard_cmd.sync("repo-in-local-2")
+        res = hoard_cmd.refresh("repo-in-local-2")
         self.assertEqual("Sync'ed repo-in-local-2 to hoard!", res.strip())
 
         self._assert_hoard_contents(
@@ -120,7 +120,7 @@ class TestRepoCommand(unittest.TestCase):
                 ('/wat/test.me.twice', 6, 2, '1881f6f9784fb08bf6690e9763b76ac3')],
             dirs_exp=["/wat"])
 
-        hoard_cmd.sync("repo-in-local")
+        hoard_cmd.refresh("repo-in-local")
         self._assert_hoard_contents(
             HoardContents.load(hoard_cmd._hoard_contents_filename()),
             files_exp=[
@@ -152,7 +152,7 @@ class TestRepoCommand(unittest.TestCase):
 
         repo_uuid = cave_cmd.current_uuid()
         hoard_cmd.mount_remote("repo-in-local", "/")
-        hoard_cmd.sync("repo-in-local")
+        hoard_cmd.refresh("repo-in-local")
 
         self.assertEqual(f"Status of {repo_uuid}:\nDONE", hoard_cmd.status("repo-in-local").strip())
 
@@ -169,7 +169,7 @@ class TestRepoCommand(unittest.TestCase):
             f"Status of {repo_uuid}:\nA /newdir/newfile.is\nD /wat/test.me.different\nAF /newdir\nDONE",
             hoard_cmd.status("repo-in-local").strip())
 
-        res = hoard_cmd.sync("repo-in-local")
+        res = hoard_cmd.refresh("repo-in-local")
         self.assertEqual("Sync'ed repo-in-local to hoard!", res)
 
         self.assertEqual(f"Status of {repo_uuid}:\nDONE", hoard_cmd.status("repo-in-local").strip())

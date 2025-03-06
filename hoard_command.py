@@ -198,7 +198,7 @@ class HoardCommand(object):
                 out.write(f"  {name_prefix}{remote.uuid}\n")
             return out.getvalue()
 
-    def sync(self, remote: str):
+    def refresh(self, remote: str):
         logging.info("Loading config")
         config = self._config()
 
