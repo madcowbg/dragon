@@ -3,6 +3,7 @@ import os
 import tempfile
 import unittest
 from os.path import join
+from typing import Tuple, List
 
 from contents import HoardContents
 from main import TotalCommand
@@ -62,17 +63,70 @@ class TestRepoCommand(unittest.TestCase):
         self.assertEqual("Sync'ed repo-in-local to hoard!", res.strip())
 
         hoard_contents = HoardContents.load(hoard_cmd._hoard_contents_filename())
-        files = sorted(
-            (f, prop.size, len(prop.available_at), prop.fasthash) for f, prop in hoard_contents.fsobjects.files.items())
-        dirs = sorted(f for f, _ in hoard_contents.fsobjects.dirs.items())
-        self.assertEqual(
-            [('/wat/test.me.different', 5, 1, '5a818396160e4189911989d69d857bd2'),
-             ('/wat/test.me.once', 8, 1, '34fac39930874b0f6bc627c3b3fc4b5e'),
-             ('/wat/test.me.twice', 6, 1, '1881f6f9784fb08bf6690e9763b76ac3')], files)
-        self.assertEqual(["/wat"], dirs)
+        self._assert_hoard_contents(
+            hoard_contents,
+            files_exp=[
+                ('/wat/test.me.different', 5, 1, '5a818396160e4189911989d69d857bd2'),
+                ('/wat/test.me.once', 8, 1, '34fac39930874b0f6bc627c3b3fc4b5e'),
+                ('/wat/test.me.twice', 6, 1, '1881f6f9784fb08bf6690e9763b76ac3')],
+            dirs_exp=["/wat"])
 
         res = hoard_cmd.status("repo-in-local")
         self.assertEqual(f"Status of {repo_uuid}:\nDONE", res.strip())
+
+    def _assert_hoard_contents(
+            self, hoard_contents: HoardContents, files_exp: List[Tuple[str, int, int, str]], dirs_exp: List[str]):
+        files = sorted(
+            (f, prop.size, len(prop.available_at), prop.fasthash) for f, prop in hoard_contents.fsobjects.files.items())
+        dirs = sorted(f for f, _ in hoard_contents.fsobjects.dirs.items())
+        self.assertEqual(sorted(files_exp), sorted(files))
+        self.assertEqual(sorted(dirs_exp), sorted(dirs))
+
+    def test_sync_two_repos(self):
+        cave_cmd = TotalCommand(path=join(self.tmpdir.name, "repo")).cave
+        cave_cmd.init()
+        cave_cmd.refresh()
+
+        repo_uuid = cave_cmd.current_uuid()
+
+        cave_cmd2 = TotalCommand(path=join(self.tmpdir.name, "repo-2")).cave
+        cave_cmd2.init()
+        cave_cmd2.refresh()
+
+        hoard_cmd = TotalCommand(path=join(self.tmpdir.name, "hoard")).hoard
+        hoard_cmd.add_remote(remote_path=join(self.tmpdir.name, "repo"), name="repo-in-local")
+        hoard_cmd.add_remote(remote_path=join(self.tmpdir.name, "repo-2"), name="repo-in-local-2")
+
+        hoard_cmd.mount_remote("repo-in-local", "/")
+        hoard_cmd.sync("repo-in-local")
+
+        self._assert_hoard_contents(
+            HoardContents.load(hoard_cmd._hoard_contents_filename()),
+            files_exp=[
+                ('/wat/test.me.different', 5, 1, '5a818396160e4189911989d69d857bd2'),
+                ('/wat/test.me.once', 8, 1, '34fac39930874b0f6bc627c3b3fc4b5e'),
+                ('/wat/test.me.twice', 6, 1, '1881f6f9784fb08bf6690e9763b76ac3')],
+            dirs_exp=["/wat"])
+
+        hoard_cmd.mount_remote("repo-in-local-2", "/wat")
+        res = hoard_cmd.sync("repo-in-local-2")
+        self.assertEqual("Sync'ed repo-in-local-2 to hoard!", res.strip())
+
+        self._assert_hoard_contents(
+            HoardContents.load(hoard_cmd._hoard_contents_filename()),
+            files_exp=[
+                ('/wat/test.me.different', 8, 1, 'd6dcdb1bc4677aab619798004537c4e3'),
+                ('/wat/test.me.twice', 6, 2, '1881f6f9784fb08bf6690e9763b76ac3')],
+            dirs_exp=["/wat"])
+
+        hoard_cmd.sync("repo-in-local")
+        self._assert_hoard_contents(
+            HoardContents.load(hoard_cmd._hoard_contents_filename()),
+            files_exp=[
+                ('/wat/test.me.different', 8, 1, 'd6dcdb1bc4677aab619798004537c4e3'),  # retained only from repo-2
+                ('/wat/test.me.once', 8, 1, '34fac39930874b0f6bc627c3b3fc4b5e'),
+                ('/wat/test.me.twice', 6, 2, '1881f6f9784fb08bf6690e9763b76ac3')],
+            dirs_exp=["/wat"])
 
     def test_changing_data(self):
         cave_cmd = TotalCommand(path=join(self.tmpdir.name, "repo")).cave

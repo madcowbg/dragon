@@ -17,9 +17,6 @@ def is_same_file(current: FileProps, hoard: HoardFileProps):
     if current.size != hoard.size:
         return False  # files differ by size
 
-    if abs(current.mtime - hoard.mtime) > 1e-3:
-        return False  # files differ by mtime
-
     if current.fasthash != hoard.fasthash:
         return False  # fast hash is different
 
@@ -143,7 +140,10 @@ class HoardCommand(object):
                 if isinstance(diff, FileMissingInHoard):
                     out.write(f"A {diff.hoard_file}\n")
                 elif isinstance(diff, FileContentsDiffer):
-                    out.write(f"M {diff.hoard_file}\n")
+                    if diff.local_is_newer:
+                        out.write(f"M {diff.hoard_file}\n")
+                    else:
+                        out.write(f"M- {diff.hoard_file}\n")
                 elif isinstance(diff, FileMissingInLocal):
                     out.write(f"D {diff.hoard_file}\n")
                 elif isinstance(diff, DirMissingInHoard):
@@ -221,9 +221,13 @@ class HoardCommand(object):
                 logging.info(f"mark {diff.hoard_file} as available here!")
                 hoard.fsobjects.files[diff.hoard_file].ensure_available(remote_uuid)
             elif isinstance(diff, FileContentsDiffer):
-                logging.info(f"updating existing file {diff.local_file}")
-                hoard.fsobjects.update_file(diff.hoard_file, diff.local_props)
+                if diff.local_is_newer:
+                    logging.info(f"recording existing file as update: {diff.local_file}")
+                    hoard.fsobjects.update_file(diff.hoard_file, diff.local_props)
+                else:
+                    logging.info(f"hoard file is newer, won't override: {diff.hoard_file}")
             elif isinstance(diff, FileMissingInLocal):
+                # fixme pretty aggressive
                 logging.info(f"deleting file {diff.hoard_file} as is no longer in local")
                 hoard.fsobjects.delete_file(diff.hoard_file)
             elif isinstance(diff, DirMissingInHoard):
@@ -257,12 +261,14 @@ class FileIsSame(Diff):
 
 
 class FileContentsDiffer(Diff):
-    def __init__(self, current_file: str, curr_file_hoard_path: str, local_props: FileProps,
-                 hoard_props: HoardFileProps):
+    def __init__(
+            self, current_file: str, curr_file_hoard_path: str,
+            local_props: FileProps, hoard_props: HoardFileProps):
         self.local_file = current_file
         self.hoard_file = curr_file_hoard_path
         self.local_props = local_props
         self.hoard_props = hoard_props
+        self.local_is_newer = local_props.mtime >= hoard_props.mtime
 
 
 class FileMissingInLocal(Diff):

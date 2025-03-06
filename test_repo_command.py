@@ -3,6 +3,7 @@ import pathlib
 import tempfile
 import unittest
 from os.path import join
+from time import sleep
 
 import fire
 
@@ -22,6 +23,7 @@ def populate(tmpdir: str):
     write_contents(join(tmpdir, 'repo', 'wat', 'test.me.different'), "gsadf")
 
     os.mkdir(join(tmpdir, 'repo-2'))
+    sleep(0.01)
     write_contents(join(tmpdir, 'repo-2', 'test.me.twice'), "gsadfs")
     write_contents(join(tmpdir, 'repo-2', 'test.me.different'), "gsadf3dq")
 
