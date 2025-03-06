@@ -250,16 +250,32 @@ class HoardCommand(object):
         hoard = HoardContents.load(self._hoard_contents_filename())
         logging.info(f"Loaded hoard TOML!")
 
+        repo_health: Dict[str, Dict[int, int]] = dict()
         health_files: Dict[int, List[str]] = dict()
         for file, props in hoard.fsobjects.files.items():
             num_copies = len(props.available_at)
             if num_copies not in health_files:
                 health_files[num_copies] = []
             health_files[num_copies].append(file)
+
+            # count how many files are uniquely stored here
+            for repo in props.available_at:
+                if repo not in repo_health:
+                    repo_health[repo] = dict()
+                if num_copies not in repo_health[repo]:
+                    repo_health[repo][num_copies] = 0
+                repo_health[repo][num_copies] += 1
+
         with StringIO() as out:
             out.write("Health stats:\n")
+            out.write(f"{len(config.remotes)} total remotes.\n")
+            for remote in config.remotes.all():
+                name_prefix = f"[{remote.name}] " if remote.name != "INVALID" else ""
+                out.write(f"  {name_prefix}{remote.uuid}: {repo_health.get(remote.uuid, {}).get(1, 0)} with no other copy\n")
+
+            out.write("Hoard health stats:\n")
             for num, files in sorted(health_files.items()):
-                out.write(f"{num} copies: {len(files)} files\n")
+                out.write(f"  {num} copies: {len(files)} files\n")
             out.write("DONE")
             return out.getvalue()
 
