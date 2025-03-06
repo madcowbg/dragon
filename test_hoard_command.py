@@ -1,3 +1,4 @@
+import asyncio
 import os
 import tempfile
 import unittest
@@ -5,9 +6,8 @@ from os.path import join
 
 from contents import HoardContents
 from main import TotalCommand
-from repo_command import fast_hash
+from hashing import fast_hash, calc_file_md5
 from test_repo_command import populate, write_contents
-from util import calc_file_md5
 
 
 def populate_hoard(tmpdir: str):
@@ -111,7 +111,7 @@ class TestRepoCommand(unittest.TestCase):
         data = "".join([str(f * 12311831028 % 23129841) for f in range(1, 100000)])
         write_contents(test_filename, data)
 
-        self.assertEqual("6f3aa4fb14b217b20aed6f98c137cf4c", fast_hash(test_filename, chunk_size=1 << 16))
+        self.assertEqual("6f3aa4fb14b217b20aed6f98c137cf4c", asyncio.run(fast_hash(test_filename, chunk_size=1 << 16)))
 
     def test_fast_hash_ignores_some(self):
         test_filename = join(self.tmpdir.name, "test_fasthash")
@@ -122,7 +122,7 @@ class TestRepoCommand(unittest.TestCase):
         d2 = "".join(ld)
         write_contents(test_filename, d2)
 
-        self.assertEqual("6f3aa4fb14b217b20aed6f98c137cf4c", fast_hash(test_filename, chunk_size=1 << 16))
+        self.assertEqual("6f3aa4fb14b217b20aed6f98c137cf4c", asyncio.run(fast_hash(test_filename, chunk_size=1 << 16)))
 
     def test_md5(self):
         test_filename = join(self.tmpdir.name, "test_fasthash")

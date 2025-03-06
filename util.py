@@ -1,6 +1,3 @@
-import hashlib
-
-
 def format_size(size: int) -> str:
     if size < 2 ** 10:
         return f"{size}"
@@ -14,11 +11,3 @@ def format_size(size: int) -> str:
         return f"{size / 2 ** 40:.1f}TB"
     else:
         return f"{size / 2 ** 50:.1f}PB"
-
-
-def calc_file_md5(path: str) -> str:
-    hasher = hashlib.md5()
-    with open(path, 'rb') as f:
-        for chunk in iter(lambda: f.read(1 << 23), b''):
-            hasher.update(chunk)
-    return hasher.hexdigest()
