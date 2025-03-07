@@ -202,3 +202,44 @@ class TestRepoCommand(unittest.TestCase):
 
         res = hoard_cmd.status(new_uuid)
         self.assertEqual(f"Status of {new_uuid}:\nDONE", res)
+
+    def test_populate_data_from_other_repo(self):
+        hoard_cmd = TotalCommand(path=join(self.tmpdir.name, "hoard")).hoard
+
+        new_repo_path = join(self.tmpdir.name, "cloned-repo")
+        os.mkdir(new_repo_path)
+
+        hoard_cmd.clone(to_path=new_repo_path, mount_at="/wat", name="cloned-repo")
+
+        orig_cave_cmd = TotalCommand(path=join(self.tmpdir.name, "repo")).cave
+        orig_cave_cmd.init()
+        orig_cave_cmd.refresh()
+
+        hoard_cmd.add_remote(remote_path=join(self.tmpdir.name, "repo"), name="repo-in-local")
+        hoard_cmd.mount_remote("repo-in-local", "/")
+
+        # status should be still empty hoard
+        new_uuid = hoard_cmd._resolve_remote_uuid("cloned-repo")
+        res = hoard_cmd.status(new_uuid)
+        self.assertEqual(f"Status of {new_uuid}:\nDONE", res)
+
+        hoard_cmd.refresh("repo-in-local")
+
+        # after population by other repo, it is now lacking files
+        res = hoard_cmd.status(new_uuid)
+        self.assertEqual(
+            f"Status of {new_uuid}:\n"
+            f"D /wat/test.me.different\n"
+            f"D /wat/test.me.once\n"
+            f"D /wat/test.me.twice\nDONE", res)
+
+        res = hoard_cmd.push(to_repo="cloned-repo")
+        self.assertEqual("errors: 0\nrestored: 3\nskipped: 0\nDONE", res.strip())
+
+        res = hoard_cmd.status(new_uuid)
+        self.assertEqual(
+            f"Status of {new_uuid}:\n"
+            f"DONE", res.strip())
+
+        res = hoard_cmd.push(to_repo="cloned-repo")
+        self.assertEqual("errors: 0\nrestored: 0\nskipped: 3\nDONE", res.strip())

@@ -54,13 +54,13 @@ class FSObjects:
         self.files = dict((f, FileProps(data)) for f, data in self.doc.items() if not data['isdir'])
         self.dirs = dict((f, DirProps(data)) for f, data in self.doc.items() if data['isdir'])
 
-    def add_file(self, fullpath: str, size: int, mtime: float, fasthash: str) -> None:
-        self.doc[fullpath] = {"size": size, "mtime": mtime, "isdir": False, "fasthash": fasthash}
-        self.files[fullpath] = FileProps(self.doc[fullpath])
+    def add_file(self, filepath: str, size: int, mtime: float, fasthash: str) -> None:
+        self.doc[filepath] = {"size": size, "mtime": mtime, "isdir": False, "fasthash": fasthash}
+        self.files[filepath] = FileProps(self.doc[filepath])
 
-    def add_dir(self, fullpath):
-        self.doc[fullpath] = {"isdir": True}
-        self.dirs[fullpath] = DirProps(self.doc[fullpath])
+    def add_dir(self, dirpath):
+        self.doc[dirpath] = {"isdir": True}
+        self.dirs[dirpath] = DirProps(self.doc[dirpath])
 
 
 class Contents:
