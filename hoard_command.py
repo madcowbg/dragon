@@ -8,7 +8,7 @@ from typing import Dict, Generator, List, Optional
 
 from config import HoardRemote, HoardConfig
 from contents import FileProps, HoardFileProps, Contents, HoardContents
-from hashing import fast_hash
+from hashing import fast_hash_async, fast_hash
 from repo_command import RepoCommand
 
 CONFIG_FILE = "hoard.config"
@@ -316,7 +316,7 @@ class HoardCommand(object):
                     d.local_file,
                     size=os.path.getsize(fullpath),
                     mtime=os.path.getmtime(fullpath),
-                    fasthash=asyncio.run(fast_hash(fullpath)))
+                    fasthash=fast_hash(fullpath))
             else:
                 print(f"error while restoring {d.hoard_file}")
 
@@ -373,7 +373,7 @@ def _restore(
             logging.error(f"File {file_fullpath} does not exist, but is needed for restore from {remote_uuid}!")
             continue
 
-        remote_hash = asyncio.run(fast_hash(file_fullpath))
+        remote_hash = fast_hash(file_fullpath)
         if hoard_props.fasthash != remote_hash:
             logging.error(
                 f"File {file_fullpath} with fast hash {remote_hash}!={hoard_props.fasthash} that was expected.")

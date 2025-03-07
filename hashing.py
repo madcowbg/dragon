@@ -7,8 +7,10 @@ from typing import Set, Dict
 import aiofiles
 from alive_progress import alive_bar
 
+def fast_hash(fullpath: str, chunk_size: int = 1 << 16) -> str:
+    return asyncio.run(fast_hash_async(fullpath, chunk_size))
 
-async def fast_hash(fullpath: str, chunk_size: int = 1 << 16) -> str:
+async def fast_hash_async(fullpath: str, chunk_size: int = 1 << 16) -> str:
     async with aiofiles.open(fullpath, "rb") as f:
         await f.seek(0, os.SEEK_END)
         size = await f.tell()
@@ -38,7 +40,7 @@ async def find_hashes(filenames: Set[str]) -> Dict[str, str]:
         async def run_queue():
             while not queue.empty():
                 fullpath = await queue.get()
-                file_hashes[fullpath] = await fast_hash(fullpath)
+                file_hashes[fullpath] = await fast_hash_async(fullpath)
                 queue.task_done()
                 bar()
 
