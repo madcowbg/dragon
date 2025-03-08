@@ -47,6 +47,45 @@ class HoardRemotes:
         return (self[uuid] for uuid in self.doc)
 
 
+class CavePath:
+    def __init__(self, doc: Dict[str, Any]):
+        self.doc = doc
+
+    def find(self) -> str:
+        if "exact" in self.doc:
+            return self.doc["exact"]
+
+    @classmethod
+    def exact(cls, remote_abs_path):
+        return CavePath({"exact": remote_abs_path})
+
+
+class HoardPaths:
+    def __init__(self, filepath: str, doc: Dict[str, Any]):
+        self.filepath = filepath
+        self.doc = doc
+
+    @staticmethod
+    def load(filename: str) -> "HoardPaths":
+        if not os.path.isfile(filename):
+            rtoml.dump({}, pathlib.Path(filename))
+        with open(filename, "r", encoding="utf-8") as f:
+            return HoardPaths(filename, rtoml.load(f))
+
+    def write(self):
+        with open(self.filepath, "w", encoding="utf-8") as f:
+            rtoml.dump(self.doc, f)
+
+    def __contains__(self, uuid: str) -> bool:
+        return uuid in self.doc
+
+    def __getitem__(self, uuid: str) -> CavePath:
+        return CavePath(self.doc[uuid]) if uuid in self.doc else None
+
+    def __setitem__(self, uuid: str, path: CavePath):
+        self.doc[uuid] = path.doc
+
+
 class HoardConfig:
     @staticmethod
     def load(filename: str) -> "HoardConfig":
@@ -57,12 +96,10 @@ class HoardConfig:
 
     def __init__(self, filepath: str, contents_doc: Dict[str, Any]):
         self.filepath = filepath
-        self.paths = contents_doc["paths"] if "paths" in contents_doc else {}
         self.remotes = HoardRemotes(contents_doc["remotes"] if "remotes" in contents_doc else {})
 
     def write(self):
         with open(self.filepath, "w", encoding="utf-8") as f:
             rtoml.dump({
-                "paths": self.paths,
                 "remotes": self.remotes.doc
             }, f)

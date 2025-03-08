@@ -55,8 +55,8 @@ class TestRepoCommand(unittest.TestCase):
 
         current_uuid = cave_cmd.current_uuid()
         self.assertEqual(
-            [f"{current_uuid}.contents", 'current.uuid'],
-            os.listdir(join(self.tmpdir.name, "repo", ".hoard")))
+            sorted([f"{current_uuid}.contents", 'current.uuid']),
+            sorted(os.listdir(join(self.tmpdir.name, "repo", ".hoard"))))
 
     def test_show_repo(self):
         cave_cmd = TotalCommand(path=join(self.tmpdir.name, "repo")).cave

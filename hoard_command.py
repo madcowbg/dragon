@@ -6,12 +6,13 @@ import shutil
 from io import StringIO
 from typing import Dict, Generator, List, Optional
 
-from config import HoardRemote, HoardConfig
+from config import HoardRemote, HoardConfig, CavePath, HoardPaths
 from contents import FileProps, HoardFileProps, Contents, HoardContents
 from hashing import fast_hash_async, fast_hash
 from repo_command import RepoCommand
 
 CONFIG_FILE = "hoard.config"
+PATHS_FILE = "hoard.paths"
 HOARD_CONTENTS_FILENAME = "hoard.contents"
 
 
@@ -50,8 +51,13 @@ class HoardCommand(object):
         config_file = os.path.join(self.hoardpath, CONFIG_FILE)
         return HoardConfig.load(config_file)
 
+    def paths(self) -> HoardPaths:
+        paths_file = os.path.join(self.hoardpath, PATHS_FILE)
+        return HoardPaths.load(paths_file)
+
     def add_remote(self, remote_path: str, name: str):
         config = self.config()
+        paths = self.paths()
 
         remote_abs_path = pathlib.Path(remote_path).absolute().as_posix()
         logging.info(f"Adding remote {remote_abs_path} to config...")
@@ -67,8 +73,10 @@ class HoardCommand(object):
             raise ValueError(f"Remote uuid {name} already resolves to {resolved_uuid} and does not match {remote_uuid}")
 
         config.remotes.declare(remote_uuid, name)
-        config.paths[remote_uuid] = remote_abs_path
         config.write()
+
+        paths[remote_uuid] = CavePath.exact(remote_abs_path)
+        paths.write()
 
         self.fetch(remote_uuid)
 
@@ -76,7 +84,7 @@ class HoardCommand(object):
         remote_uuid = self._resolve_remote_uuid(remote)
         config = self.config()
 
-        remote_path = config.paths[remote_uuid]
+        remote_path = self.paths()[remote_uuid].find()
 
         logging.info(f"Fetching repo contents {remote_uuid} in {remote_path}...")
         repo_cmd = RepoCommand(remote_path)
@@ -392,6 +400,7 @@ def _restore(
 class RestoreCache:
     def __init__(self, cmd: HoardCommand):
         self.config = cmd.config()
+        self.paths = cmd.paths()
         # self.remotes_contents = dict()
         #
         # for remote in self.config.remotes.all():
@@ -408,7 +417,7 @@ class RestoreCache:
         return self.config.remotes[repo_uuid].mounted_at
 
     def remote_path(self, repo_uuid: str) -> str:
-        return self.config.paths[repo_uuid]
+        return self.paths[repo_uuid].find()
 
 
 class Diff:
