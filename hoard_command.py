@@ -113,22 +113,6 @@ class HoardCommand(object):
               f" of size {sum(f.size for f in contents.fsobjects.files.values())}")
         print(f"  # dirs  = {len(contents.fsobjects.dirs)}")
 
-    def config_remote(self, remote: str, param: str, value: str):
-        remote_uuid = self._resolve_remote_uuid(remote)
-        logging.info(f"Reading config in {self.hoardpath}...")
-        config = self.config()
-
-        remote = config.remotes[remote_uuid]
-        if remote is None:
-            raise ValueError(f"remote_uuid {remote_uuid} does not exist")
-
-        logging.info(f"Setting {param} to {value}")
-        remote[param] = value
-
-        logging.info(f"Writing config in {self.hoardpath}...")
-        config.write()
-        logging.info(f"Config done!")
-
     def _hoard_contents_filename(self):
         return os.path.join(self.hoardpath, HOARD_CONTENTS_FILENAME)
 
