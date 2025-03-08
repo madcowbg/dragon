@@ -234,7 +234,7 @@ class TestRepoCommand(unittest.TestCase):
             f"D /wat/test.me.once\n"
             f"D /wat/test.me.twice\nDONE", res)
 
-        res = hoard_cmd.sync_content(to_repo="cloned-repo")
+        res = hoard_cmd.populate(to_repo="cloned-repo")
         self.assertEqual("errors: 0\nrestored: 3\nskipped: 0\nDONE", res.strip())
 
         res = hoard_cmd.status(new_uuid)
@@ -242,5 +242,5 @@ class TestRepoCommand(unittest.TestCase):
             f"Status of {new_uuid}:\n"
             f"DONE", res.strip())
 
-        res = hoard_cmd.sync_content(to_repo="cloned-repo")
+        res = hoard_cmd.populate(to_repo="cloned-repo")
         self.assertEqual("errors: 0\nrestored: 0\nskipped: 3\nDONE", res.strip())
