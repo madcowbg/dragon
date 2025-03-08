@@ -203,7 +203,7 @@ class TestRepoCommand(unittest.TestCase):
         res = hoard_cmd.status(new_uuid)
         self.assertEqual(f"Status of {new_uuid}:\nDONE", res)
 
-    def test_populate_data_from_other_repo(self):
+    def test_populate_one_repo_from_other_repo(self):
         hoard_cmd = TotalCommand(path=join(self.tmpdir.name, "hoard")).hoard
 
         new_repo_path = join(self.tmpdir.name, "cloned-repo")
@@ -233,7 +233,7 @@ class TestRepoCommand(unittest.TestCase):
             f"D /wat/test.me.once\n"
             f"D /wat/test.me.twice\nDONE", res)
 
-        res = hoard_cmd.push(to_repo="cloned-repo")
+        res = hoard_cmd.sync_content(to_repo="cloned-repo")
         self.assertEqual("errors: 0\nrestored: 3\nskipped: 0\nDONE", res.strip())
 
         res = hoard_cmd.status(new_uuid)
@@ -241,5 +241,5 @@ class TestRepoCommand(unittest.TestCase):
             f"Status of {new_uuid}:\n"
             f"DONE", res.strip())
 
-        res = hoard_cmd.push(to_repo="cloned-repo")
+        res = hoard_cmd.sync_content(to_repo="cloned-repo")
         self.assertEqual("errors: 0\nrestored: 0\nskipped: 3\nDONE", res.strip())

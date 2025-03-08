@@ -294,7 +294,7 @@ class HoardCommand(object):
         self.mount_remote(name, mount_point=mount_at)
         return f"DONE"
 
-    def push(self, to_repo: str):
+    def sync_content(self, to_repo: str):
         logging.info(f"Loading hoard TOML...")
         hoard = HoardContents.load(self._hoard_contents_filename())
 
