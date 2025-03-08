@@ -4,6 +4,7 @@ import unittest
 from os.path import join
 from typing import Tuple, List
 
+from config import CaveType
 from contents import HoardContents
 from main import TotalCommand
 from test_repo_command import populate, write_contents
@@ -37,7 +38,7 @@ class TestRepoCommand(unittest.TestCase):
 
         hoard_cmd.add_remote(remote_path=join(self.tmpdir.name, "repo"), name="repo-in-local")
         res = hoard_cmd.remotes()
-        self.assertEqual(f"1 total remotes.\n  [repo-in-local] {repo_uuid}", res.strip())
+        self.assertEqual(f"1 total remotes.\n  [repo-in-local] {repo_uuid} (partial)", res.strip())
 
     def test_sync_to_hoard(self):
         cave_cmd = TotalCommand(path=join(self.tmpdir.name, "repo")).cave
@@ -94,7 +95,7 @@ class TestRepoCommand(unittest.TestCase):
 
         hoard_cmd = TotalCommand(path=join(self.tmpdir.name, "hoard")).hoard
         hoard_cmd.add_remote(remote_path=join(self.tmpdir.name, "repo"), name="repo-in-local")
-        hoard_cmd.add_remote(remote_path=join(self.tmpdir.name, "repo-2"), name="repo-in-local-2")
+        hoard_cmd.add_remote(remote_path=join(self.tmpdir.name, "repo-2"), name="repo-in-local-2", type=CaveType.BACKUP)
 
         hoard_cmd.mount_remote("repo-in-local", "/")
         hoard_cmd.refresh("repo-in-local")
@@ -136,8 +137,8 @@ class TestRepoCommand(unittest.TestCase):
         res = hoard_cmd.remotes()
         self.assertEqual(
             f"2 total remotes.\n"
-            f"  [repo-in-local] {repo_uuid}\n"
-            f"  [repo-in-local-2] {repo_uuid2}",
+            f"  [repo-in-local] {repo_uuid} (partial)\n"
+            f"  [repo-in-local-2] {repo_uuid2} (backup)",
             res.strip())
 
         res = hoard_cmd.health()

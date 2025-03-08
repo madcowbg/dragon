@@ -6,7 +6,7 @@ import shutil
 from io import StringIO
 from typing import Dict, Generator, List, Optional
 
-from config import HoardRemote, HoardConfig, CavePath, HoardPaths
+from config import HoardRemote, HoardConfig, CavePath, HoardPaths, CaveType
 from contents import FileProps, HoardFileProps, Contents, HoardContents
 from hashing import fast_hash_async, fast_hash
 from repo_command import RepoCommand
@@ -55,7 +55,7 @@ class HoardCommand(object):
         paths_file = os.path.join(self.hoardpath, PATHS_FILE)
         return HoardPaths.load(paths_file)
 
-    def add_remote(self, remote_path: str, name: str):
+    def add_remote(self, remote_path: str, name: str, type: CaveType = CaveType.PARTIAL):
         config = self.config()
         paths = self.paths()
 
@@ -72,7 +72,7 @@ class HoardCommand(object):
         if resolved_uuid is not None and resolved_uuid != remote_uuid and resolved_uuid != name:  # fixme ugly AF
             raise ValueError(f"Remote uuid {name} already resolves to {resolved_uuid} and does not match {remote_uuid}")
 
-        config.remotes.declare(remote_uuid, name)
+        config.remotes.declare(remote_uuid, name, type)
         config.write()
 
         paths[remote_uuid] = CavePath.exact(remote_abs_path)
@@ -104,10 +104,9 @@ class HoardCommand(object):
 
         print(f"Result for [{remote}]")
         print(f"UUID: {remote_uuid}.")
-        print(
-            f"name: {config.remotes[remote_uuid].name}")
-        print(
-            f"mount point: {config.remotes[remote_uuid].mounted_at}")
+        print(f"name: {config.remotes[remote_uuid].name}")
+        print(f"mount point: {config.remotes[remote_uuid].mounted_at}")
+        print(f"type: {config.remotes[remote_uuid].type}")
         print(f"Last updated on {contents.config.updated}.")
         print(f"  # files = {len(contents.fsobjects.files)}"
               f" of size {sum(f.size for f in contents.fsobjects.files.values())}")
@@ -189,7 +188,7 @@ class HoardCommand(object):
             for remote in config.remotes.all():
                 name_prefix = f"[{remote.name}] " if remote.name != "INVALID" else ""
 
-                out.write(f"  {name_prefix}{remote.uuid}\n")
+                out.write(f"  {name_prefix}{remote.uuid} ({remote.type.value})\n")
             return out.getvalue()
 
     def refresh(self, remote: str):

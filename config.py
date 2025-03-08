@@ -1,8 +1,16 @@
+import enum
 import os
 import pathlib
 from typing import Dict, Any, Optional
 
 import rtoml
+
+
+class CaveType(enum.Enum):
+    INCOMING = "incoming"
+    PARTIAL = "partial"
+    FULL = "full"
+    BACKUP = "backup"
 
 
 class HoardRemote:
@@ -18,21 +26,26 @@ class HoardRemote:
     def mounted_at(self):
         return self.doc["mounted_at"] if "mounted_at" in self.doc else None
 
-    def __setitem__(self, key: str, value: str):  # fixme make key an enum
-        if key not in ["uuid", "name", "mounted_at"]:
-            raise ValueError(f"Unrecognized param {key}!")
-        self.doc[key] = value
-
     def mount_at(self, mount_at: str):
         self.doc["mounted_at"] = mount_at
+
+    @property
+    def type(self) -> CaveType:
+        return CaveType(self.doc["type"])
+
+    @type.setter
+    def type(self, value: CaveType):
+        self.doc["type"] = value.value
 
 
 class HoardRemotes:
     def __init__(self, doc: Dict[str, Any]):
         self.doc = doc
 
-    def declare(self, current_uuid: str, name: str):
-        self.doc[current_uuid] = {"name": name}
+    def declare(self, current_uuid: str, name: str, type: CaveType):
+        self.doc[current_uuid] = {
+            "name": name,
+            "type": type.value}
 
     def names_map(self):
         return dict((props["name"], remote) for remote, props in self.doc.items() if "name" in props)
