@@ -8,16 +8,11 @@ NONE_TOML = "MISSING"
 
 
 class TotalCommand(object):
-    def __init__(self, verbose: bool = False, **kwargs):
+    def __init__(self, verbose: bool = False, path: str = "."):
         if verbose:
             logging.basicConfig(level=logging.INFO)
-        self.kwargs = kwargs
-
-    @property
-    def cave(self): return RepoCommand(**self.kwargs)
-
-    @property
-    def hoard(self): return HoardCommand(**self.kwargs)
+        self.cave = RepoCommand(path=path)
+        self.hoard = HoardCommand(path=path)
 
 
 # Press the green button in the gutter to run the script.
