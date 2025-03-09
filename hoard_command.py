@@ -4,6 +4,7 @@ import os
 import pathlib
 import shutil
 from io import StringIO
+from itertools import groupby
 from typing import Dict, Generator, List, Optional
 
 from config import HoardRemote, HoardConfig, CavePath, HoardPaths, CaveType
@@ -189,6 +190,12 @@ class HoardCommand(object):
                 name_prefix = f"[{remote.name}] " if remote.name != "INVALID" else ""
 
                 out.write(f"  {name_prefix}{remote.uuid} ({remote.type.value})\n")
+            out.write("Mounts:\n")
+
+            mounts = dict((m, list(rs)) for m, rs in groupby(config.remotes.all(), lambda r: r.mounted_at))
+            for mount, remotes in mounts.items():
+                out.write(f"  {mount} -> {', '.join([remote.name for remote in remotes])}\n")
+            out.write("DONE\n")
             return out.getvalue()
 
     def refresh(self, remote: str):

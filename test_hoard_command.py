@@ -34,11 +34,16 @@ class TestRepoCommand(unittest.TestCase):
         hoard_cmd = TotalCommand(path=join(self.tmpdir.name, "hoard")).hoard
         res = hoard_cmd.remotes()
 
-        self.assertEqual("0 total remotes.", res.strip())
+        self.assertEqual("0 total remotes.\nMounts:\nDONE", res.strip())
 
         hoard_cmd.add_remote(remote_path=join(self.tmpdir.name, "repo"), name="repo-in-local")
         res = hoard_cmd.remotes()
-        self.assertEqual(f"1 total remotes.\n  [repo-in-local] {repo_uuid} (partial)", res.strip())
+        self.assertEqual(
+            f"1 total remotes.\n"
+            f"  [repo-in-local] {repo_uuid} (partial)\n"
+            f"Mounts:\n"
+            f"  None -> repo-in-local\n"
+            f"DONE", res.strip())
 
     def test_sync_to_hoard(self):
         cave_cmd = TotalCommand(path=join(self.tmpdir.name, "repo")).cave
@@ -138,7 +143,11 @@ class TestRepoCommand(unittest.TestCase):
         self.assertEqual(
             f"2 total remotes.\n"
             f"  [repo-in-local] {repo_uuid} (partial)\n"
-            f"  [repo-in-local-2] {repo_uuid2} (backup)",
+            f"  [repo-in-local-2] {repo_uuid2} (backup)\n"
+            f"Mounts:\n"
+            f"  / -> repo-in-local\n"
+            f"  /wat -> repo-in-local-2\n"
+            f"DONE",
             res.strip())
 
         res = hoard_cmd.health()
