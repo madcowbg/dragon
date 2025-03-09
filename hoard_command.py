@@ -56,7 +56,7 @@ class HoardCommand(object):
         paths_file = os.path.join(self.hoardpath, PATHS_FILE)
         return HoardPaths.load(paths_file)
 
-    def add_remote(self, remote_path: str, name: str, type: CaveType = CaveType.PARTIAL):
+    def add_remote(self, remote_path: str, name: str, mount_point: str, type: CaveType = CaveType.PARTIAL):
         config = self.config()
         paths = self.paths()
 
@@ -73,7 +73,7 @@ class HoardCommand(object):
         if resolved_uuid is not None and resolved_uuid != remote_uuid and resolved_uuid != name:  # fixme ugly AF
             raise ValueError(f"Remote uuid {name} already resolves to {resolved_uuid} and does not match {remote_uuid}")
 
-        config.remotes.declare(remote_uuid, name, type)
+        config.remotes.declare(remote_uuid, name, type, mount_point)
         config.write()
 
         paths[remote_uuid] = CavePath.exact(remote_abs_path)
@@ -288,8 +288,7 @@ class HoardCommand(object):
         cave_cmd.init()
         cave_cmd.refresh()
 
-        self.add_remote(to_path, name=name)
-        self.mount_remote(name, mount_point=mount_at)
+        self.add_remote(to_path, name=name, mount_point=mount_at)
         return f"DONE"
 
     def populate(self, to_repo: str):

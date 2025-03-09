@@ -42,10 +42,11 @@ class HoardRemotes:
     def __init__(self, doc: Dict[str, Any]):
         self.doc = doc
 
-    def declare(self, current_uuid: str, name: str, type: CaveType):
+    def declare(self, current_uuid: str, name: str, cave_type: CaveType, mount_point: str):
         self.doc[current_uuid] = {
             "name": name,
-            "type": type.value}
+            "type": cave_type.value,
+            "mounted_at": mount_point}
 
     def names_map(self):
         return dict((props["name"], remote) for remote, props in self.doc.items() if "name" in props)

@@ -36,13 +36,13 @@ class TestRepoCommand(unittest.TestCase):
 
         self.assertEqual("0 total remotes.\nMounts:\nDONE", res.strip())
 
-        hoard_cmd.add_remote(remote_path=join(self.tmpdir.name, "repo"), name="repo-in-local")
+        hoard_cmd.add_remote(remote_path=join(self.tmpdir.name, "repo"), name="repo-in-local", mount_point="/")
         res = hoard_cmd.remotes()
         self.assertEqual(
             f"1 total remotes.\n"
             f"  [repo-in-local] {repo_uuid} (partial)\n"
             f"Mounts:\n"
-            f"  None -> repo-in-local\n"
+            f"  / -> repo-in-local\n"
             f"DONE", res.strip())
 
     def test_sync_to_hoard(self):
@@ -51,12 +51,9 @@ class TestRepoCommand(unittest.TestCase):
         cave_cmd.refresh()
 
         hoard_cmd = TotalCommand(path=join(self.tmpdir.name, "hoard")).hoard
-        hoard_cmd.add_remote(remote_path=join(self.tmpdir.name, "repo"), name="repo-in-local")
+        hoard_cmd.add_remote(remote_path=join(self.tmpdir.name, "repo"), name="repo-in-local", mount_point="/")
 
         repo_uuid = cave_cmd.current_uuid()
-
-        res = hoard_cmd.mount_remote("repo-in-local", "/")
-        self.assertEqual("set path of repo-in-local to /", res.strip())
 
         res = hoard_cmd.status("repo-in-local")
         self.assertEqual(
@@ -99,10 +96,11 @@ class TestRepoCommand(unittest.TestCase):
         repo_uuid2 = cave_cmd2.current_uuid()
 
         hoard_cmd = TotalCommand(path=join(self.tmpdir.name, "hoard")).hoard
-        hoard_cmd.add_remote(remote_path=join(self.tmpdir.name, "repo"), name="repo-in-local")
-        hoard_cmd.add_remote(remote_path=join(self.tmpdir.name, "repo-2"), name="repo-in-local-2", type=CaveType.BACKUP)
+        hoard_cmd.add_remote(remote_path=join(self.tmpdir.name, "repo"), name="repo-in-local", mount_point="/")
+        hoard_cmd.add_remote(
+            remote_path=join(self.tmpdir.name, "repo-2"), name="repo-in-local-2", type=CaveType.BACKUP,
+            mount_point="/wat")
 
-        hoard_cmd.mount_remote("repo-in-local", "/")
         hoard_cmd.refresh("repo-in-local")
 
         self._assert_hoard_contents(
@@ -113,7 +111,6 @@ class TestRepoCommand(unittest.TestCase):
                 ('/wat/test.me.twice', 6, 1, '1881f6f9784fb08bf6690e9763b76ac3')],
             dirs_exp=["/wat"])
 
-        hoard_cmd.mount_remote("repo-in-local-2", "/wat")
         res = hoard_cmd.refresh("repo-in-local-2")
         self.assertEqual("Sync'ed repo-in-local-2 to hoard!", res.strip())
 
@@ -165,10 +162,9 @@ class TestRepoCommand(unittest.TestCase):
         cave_cmd.refresh()
 
         hoard_cmd = TotalCommand(path=join(self.tmpdir.name, "hoard")).hoard
-        hoard_cmd.add_remote(remote_path=join(self.tmpdir.name, "repo"), name="repo-in-local")
+        hoard_cmd.add_remote(remote_path=join(self.tmpdir.name, "repo"), name="repo-in-local", mount_point="/")
 
         repo_uuid = cave_cmd.current_uuid()
-        hoard_cmd.mount_remote("repo-in-local", "/")
         hoard_cmd.refresh("repo-in-local")
 
         self.assertEqual(f"Status of {repo_uuid}:\nDONE", hoard_cmd.status("repo-in-local").strip())
@@ -225,8 +221,7 @@ class TestRepoCommand(unittest.TestCase):
         orig_cave_cmd.init()
         orig_cave_cmd.refresh()
 
-        hoard_cmd.add_remote(remote_path=join(self.tmpdir.name, "repo"), name="repo-in-local")
-        hoard_cmd.mount_remote("repo-in-local", "/")
+        hoard_cmd.add_remote(remote_path=join(self.tmpdir.name, "repo"), name="repo-in-local", mount_point="/")
 
         # status should be still empty hoard
         new_uuid = hoard_cmd._resolve_remote_uuid("cloned-repo")
@@ -253,3 +248,6 @@ class TestRepoCommand(unittest.TestCase):
 
         res = hoard_cmd.populate(to_repo="cloned-repo")
         self.assertEqual("errors: 0\nrestored: 0\nskipped: 3\nDONE", res.strip())
+
+    def test_repo_types(self):
+        hoard_cmd = TotalCommand(path=join(self.tmpdir.name, "hoard")).hoard
