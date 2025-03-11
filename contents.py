@@ -1,3 +1,4 @@
+import enum
 import os
 from datetime import datetime
 from typing import Dict, Any, List
@@ -104,12 +105,17 @@ class HoardFileProps:
         self.doc["fasthash"] = props.fasthash
 
     def ensure_available(self, remote_uuid: str):
-        if remote_uuid not in self.doc["available"]:
-            self.doc["available"].append(remote_uuid)
+        self.doc["status"][remote_uuid] = FileStatus.AVAILABLE.value
 
     @property
     def available_at(self) -> List[str]:
-        return self.doc["available"] if "available" in self.doc else []
+        return [uuid for uuid, status in self.doc["status"].items() if status == FileStatus.AVAILABLE.value]
+
+
+class FileStatus(enum.Enum):
+    AVAILABLE = "available"
+    GET = "get"
+    CLEANUP = "cleanup"
 
 
 class HoardFSObjects:
@@ -124,7 +130,7 @@ class HoardFSObjects:
             "size": props.size,
             "mtime": props.mtime,
             "fasthash": props.fasthash,
-            "available": [current_uuid]
+            "status": {current_uuid: FileStatus.AVAILABLE.value}
         }
 
         self.files[curr_file] = HoardFileProps(self.doc[curr_file])
