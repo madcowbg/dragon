@@ -83,7 +83,6 @@ class HoardCommand(object):
 
     def fetch(self, remote: str):
         remote_uuid = self._resolve_remote_uuid(remote)
-        config = self.config()
 
         remote_path = self.paths()[remote_uuid].find()
 

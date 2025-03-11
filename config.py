@@ -9,7 +9,6 @@ import rtoml
 class CaveType(enum.Enum):
     INCOMING = "incoming"
     PARTIAL = "partial"
-    FULL = "full"
     BACKUP = "backup"
 
 
