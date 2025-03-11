@@ -1,7 +1,7 @@
 import enum
 import os
 import pathlib
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List, Generator
 
 import rtoml
 
@@ -36,6 +36,11 @@ class HoardRemote:
     def type(self, value: CaveType):
         self.doc["type"] = value.value
 
+    @property
+    def fetch_new(self) -> bool:
+        """ Marks whether this repo should auto-fetch all newly-added files."""
+        return self.doc.get("fetch_new", False)
+
 
 class HoardRemotes:
     def __init__(self, doc: Dict[str, Any]):
@@ -56,7 +61,7 @@ class HoardRemotes:
     def __len__(self):
         return len(self.doc)
 
-    def all(self):
+    def all(self) -> Generator[HoardRemote, None, None]:
         return (self[uuid] for uuid in self.doc)
 
 

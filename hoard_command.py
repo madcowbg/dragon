@@ -8,7 +8,7 @@ from itertools import groupby
 from typing import Dict, Generator, List, Optional
 
 from config import HoardRemote, HoardConfig, CavePath, HoardPaths, CaveType
-from contents import FileProps, HoardFileProps, Contents, HoardContents
+from contents import FileProps, HoardFileProps, Contents, HoardContents, FileStatus
 from hashing import fast_hash_async, fast_hash
 from repo_command import RepoCommand
 
@@ -192,6 +192,11 @@ class HoardCommand(object):
         logging.info(f"Loaded hoard TOML!")
 
         remote_uuid = self._resolve_remote_uuid(remote)
+        remote_type = config.remotes[remote_uuid].type
+
+        repos_to_add_new_files: List[HoardRemote] = [
+            r for r in config.remotes.all() if
+            (r.type == CaveType.PARTIAL and r.fetch_new) or r.type == CaveType.PARTIAL]
 
         current_contents = self._fetch_repo_contents(remote_uuid)
 
@@ -200,33 +205,68 @@ class HoardCommand(object):
             raise ValueError(f"remote_doc {remote_uuid} is not mounted!")
 
         logging.info("Merging local changes...")
-        for diff in compare_local_to_hoard(current_contents, hoard, config):
-            if isinstance(diff, FileMissingInHoard):
-                hoard.fsobjects.add_available_file(diff.hoard_file, diff.local_props, remote_uuid)
-            elif isinstance(diff, FileIsSame):
-                logging.info(f"mark {diff.hoard_file} as available here!")
-                hoard.fsobjects.files[diff.hoard_file].ensure_available(remote_uuid)
-            elif isinstance(diff, FileContentsDiffer):
-                if diff.local_is_newer:
-                    logging.info(f"recording existing file as update: {diff.local_file}")
-                    hoard.fsobjects.update_file(diff.hoard_file, diff.local_props)
+        with StringIO() as out:
+            for diff in compare_local_to_hoard(current_contents, hoard, config):
+                if isinstance(diff, FileMissingInHoard):
+                    if remote_type == CaveType.PARTIAL:
+                        out.write(f"+{diff.hoard_file}\n")
+                        hoard.fsobjects.add_new_file(
+                            diff.hoard_file, diff.local_props,
+                            current_uuid=remote_uuid, repos_to_add_new_files=repos_to_add_new_files)
+                    elif remote_type == CaveType.INCOMING:
+                        out.write(f"<+{diff.hoard_file}\n")
+                        hoard_file = hoard.fsobjects.add_new_file(
+                            diff.hoard_file, diff.local_props,
+                            current_uuid=remote_uuid, repos_to_add_new_files=repos_to_add_new_files)
+                        logging.info(f"marking {diff.hoard_file} for cleanup from {remote_uuid}")
+                        hoard_file.mark_for_cleanup(diff.hoard_file, repo_uuid=remote_uuid)
+                    elif remote_type == CaveType.BACKUP:
+                        logging.info(f"skipping obsolete file from backup: {diff.hoard_file}")
+                    else:
+                        raise ValueError(f"NOT IMPLEMENTED OP: TYPE={remote_type}")
+                elif isinstance(diff, FileIsSame):
+                    goal_status = hoard.fsobjects.files[diff.hoard_file].status(remote_uuid)
+                    if goal_status == FileStatus.CLEANUP:
+                        logging.info(f"skipping {diff.hoard_file} as is marked for deletion")
+                        out.write(f"?{diff.hoard_file}\n")
+                    elif goal_status == FileStatus.GET or goal_status == FileStatus.UNKNOWN:
+                        logging.info(f"mark {diff.hoard_file} as available here!")
+                        hoard.fsobjects.files[diff.hoard_file].ensure_available(remote_uuid)
+                        out.write(f"={diff.hoard_file}\n")
+                    elif goal_status == FileStatus.AVAILABLE:
+                        pass
+                    else:
+                        raise ValueError(f"unrecognized hoard state for {diff.hoard_file}: {goal_status}")
+                elif isinstance(diff, FileContentsDiffer):
+                    # FIXME add tests!
+                    goal_status = hoard.fsobjects.files[diff.hoard_file].status(remote_uuid)
+                    if diff.local_is_newer:
+                        logging.info(f"recording existing file as update: {diff.local_file}")
+                        hoard.fsobjects.update_file(diff.hoard_file, diff.local_props)
+                    else:
+                        if goal_status == FileStatus.CLEANUP:
+                            logging.info(f"file {diff.hoard_file} is marked for deletion")
+                            out.write(f"?{diff.hoard_file}\n")
+                        else:
+                            logging.info(f"current file is out of date, mark for restore: {diff.hoard_file}")
+                            out.write(f"g{diff.hoard_file}\n")
+                            diff.hoard_props.mark_to_get(remote_uuid)
+                elif isinstance(diff, FileMissingInLocal):
+                    # fixme pretty aggressive
+                    logging.info(f"deleting file {diff.hoard_file} as is no longer in local")
+                    hoard.fsobjects.delete_file(diff.hoard_file)
+                elif isinstance(diff, DirMissingInHoard):
+                    logging.info(f"new dir found: {diff.local_dir}")
+                    hoard.fsobjects.add_dir(diff.hoard_dir)
                 else:
-                    logging.info(f"hoard file is newer, won't override: {diff.hoard_file}")
-            elif isinstance(diff, FileMissingInLocal):
-                # fixme pretty aggressive
-                logging.info(f"deleting file {diff.hoard_file} as is no longer in local")
-                hoard.fsobjects.delete_file(diff.hoard_file)
-            elif isinstance(diff, DirMissingInHoard):
-                logging.info(f"new dir found: {diff.local_dir}")
-                hoard.fsobjects.add_dir(diff.hoard_dir)
-            else:
-                logging.info(f"skipping diff of type {type(diff)}")
+                    logging.info(f"skipping diff of type {type(diff)}")
 
-        logging.info("Writing updated hoard contents...")
-        hoard.write()
-        logging.info("Local commit DONE!")
+            logging.info("Writing updated hoard contents...")
+            hoard.write()
+            logging.info("Local commit DONE!")
 
-        return f"Sync'ed {remote} to hoard!"
+            out.write(f"Sync'ed {remote} to hoard!")
+            return out.getvalue()
 
     def _fetch_repo_contents(self, remote_uuid):
         remote_path = self.paths()[remote_uuid].find()

@@ -5,6 +5,8 @@ from typing import Dict, Any, List
 
 import rtoml
 
+from config import HoardRemote
+
 
 class HoardContentsConfig:
     def __init__(self, config_doc: Dict[str, Any]):
@@ -83,6 +85,13 @@ class Contents:
             }, f)
 
 
+class FileStatus(enum.Enum):
+    AVAILABLE = "available"
+    GET = "get"
+    CLEANUP = "cleanup"
+    UNKNOWN = "UNKNOWN"
+
+
 class HoardFileProps:
     def __init__(self, doc: Dict[str, Any]):
         self.doc = doc
@@ -111,11 +120,15 @@ class HoardFileProps:
     def available_at(self) -> List[str]:
         return [uuid for uuid, status in self.doc["status"].items() if status == FileStatus.AVAILABLE.value]
 
+    def mark_for_cleanup(self, repo_uuid: str):
+        self.doc["status"][repo_uuid] = FileStatus.CLEANUP.value
 
-class FileStatus(enum.Enum):
-    AVAILABLE = "available"
-    GET = "get"
-    CLEANUP = "cleanup"
+    def status(self, repo_uuid: str) -> FileStatus:
+        return FileStatus(self.doc["status"][repo_uuid]) if repo_uuid in self.doc["status"] else FileStatus.UNKNOWN
+
+    def mark_to_get(self, repo_uuid: str):
+
+        pass
 
 
 class HoardFSObjects:
@@ -124,16 +137,22 @@ class HoardFSObjects:
         self.files = dict((f, HoardFileProps(data)) for f, data in self.doc.items() if not data['isdir'])
         self.dirs = dict((f, DirProps(data)) for f, data in self.doc.items() if data['isdir'])
 
-    def add_available_file(self, curr_file: str, props: FileProps, current_uuid: str):
+    def add_new_file(
+            self, curr_file: str, props: FileProps,
+            current_uuid: str, repos_to_add_new_files: List[HoardRemote]) -> HoardFileProps:
         self.doc[curr_file] = {
             "isdir": False,
             "size": props.size,
             "mtime": props.mtime,
             "fasthash": props.fasthash,
-            "status": {current_uuid: FileStatus.AVAILABLE.value}
+            "status": dict((r.uuid, FileStatus.GET.value) for r in repos_to_add_new_files)
         }
 
+        # mark as present here
+        self.doc[curr_file]["status"][current_uuid] = FileStatus.AVAILABLE.value
+
         self.files[curr_file] = HoardFileProps(self.doc[curr_file])
+        return self.files[curr_file]
 
     def add_dir(self, curr_dir: str):
         self.doc[curr_dir] = {"isdir": True}

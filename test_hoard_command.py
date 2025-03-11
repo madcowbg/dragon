@@ -62,7 +62,11 @@ class TestRepoCommand(unittest.TestCase):
             res.strip())
 
         res = hoard_cmd.refresh("repo-in-local")
-        self.assertEqual("Sync'ed repo-in-local to hoard!", res.strip())
+        self.assertEqual(
+            "+/wat/test.me.different\n"
+            "+/wat/test.me.once\n"
+            "+/wat/test.me.twice\n"
+            "Sync'ed repo-in-local to hoard!", res.strip())
 
         hoard_contents = HoardContents.load(hoard_cmd._hoard_contents_filename())
         self._assert_hoard_contents(
@@ -113,7 +117,7 @@ class TestRepoCommand(unittest.TestCase):
             dirs_exp=["/wat"])
 
         res = hoard_cmd.refresh("repo-in-local-2")
-        self.assertEqual("Sync'ed repo-in-local-2 to hoard!", res.strip())
+        self.assertEqual("=/wat/test.me.twice\nSync'ed repo-in-local-2 to hoard!", res.strip())
 
         self._assert_hoard_contents(
             HoardContents.load(hoard_cmd._hoard_contents_filename()),
@@ -183,7 +187,7 @@ class TestRepoCommand(unittest.TestCase):
             hoard_cmd.status("repo-in-local").strip())
 
         res = hoard_cmd.refresh("repo-in-local")
-        self.assertEqual("Sync'ed repo-in-local to hoard!", res)
+        self.assertEqual("+/newdir/newfile.is\nSync'ed repo-in-local to hoard!", res)
 
         self.assertEqual(f"Status of {repo_uuid}:\nDONE", hoard_cmd.status("repo-in-local").strip())
 
@@ -249,9 +253,7 @@ class TestRepoCommand(unittest.TestCase):
         res = hoard_cmd.populate(to_repo="cloned-repo")
         self.assertEqual("errors: 0\nrestored: 0\nskipped: 3\nDONE", res.strip())
 
-    def test_repo_types(self):
-        populate_repotypes(self.tmpdir.name)
-
+    def _init_complex_hoard(self):
         partial_cave_cmd = TotalCommand(path=join(self.tmpdir.name, "repo-partial")).cave
         partial_cave_cmd.init()
         partial_cave_cmd.refresh()
@@ -296,6 +298,27 @@ class TestRepoCommand(unittest.TestCase):
             "\nMounts:"
             "\n  / -> repo-partial-name, repo-full-name, repo-backup-name, repo-incoming-name"
             "\nDONE", res.strip())
+
+        return hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd
+
+    def test_create_repo_types(self):
+        populate_repotypes(self.tmpdir.name)
+        hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = self._init_complex_hoard()
+
+    def test_sync_partial(self):
+        populate_repotypes(self.tmpdir.name)
+        hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = self._init_complex_hoard()
+
+        res = hoard_cmd.status("repo-partial-name")
+        self.assertEqual(
+            f"Status of {partial_cave_cmd.current_uuid()}:\n"
+            "A /test.me.1\n"
+            "A /wat/test.me.2\n"
+            "AF /wat\n"
+            "DONE", res.strip())
+
+        res = hoard_cmd.refresh("repo-partial-name")
+        self.assertEqual("+/test.me.1\n+/wat/test.me.2\nSync'ed repo-partial-name to hoard!", res.strip())
 
 
 def populate_repotypes(tmpdir: str):
