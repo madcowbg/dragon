@@ -79,20 +79,6 @@ class HoardCommand(object):
         paths[remote_uuid] = CavePath.exact(remote_abs_path)
         paths.write()
 
-        self.fetch(remote_uuid)
-
-    def fetch(self, remote: str):
-        remote_uuid = self._resolve_remote_uuid(remote)
-
-        remote_path = self.paths()[remote_uuid].find()
-
-        logging.info(f"Fetching repo contents {remote_uuid} in {remote_path}...")
-        repo_cmd = RepoCommand(remote_path)
-
-        logging.debug(f"Copying {repo_cmd._contents_filename(remote_uuid)} to {self._contents_filename(remote_uuid)}")
-        shutil.copy(repo_cmd._contents_filename(remote_uuid), self._contents_filename(remote_uuid))
-        logging.info(f"Fetching done!")
-
     def show(self, remote: str):
         remote_uuid = self._resolve_remote_uuid(remote)
 
@@ -119,7 +105,7 @@ class HoardCommand(object):
         remote_uuid = self._resolve_remote_uuid(remote)
 
         logging.info(f"Reading current contents of {remote_uuid}...")
-        current_contents = Contents.load(self._contents_filename(remote_uuid))
+        current_contents = self._fetch_repo_contents(remote_uuid)
 
         logging.info(f"Loading hoard TOML...")
         hoard = HoardContents.load(self._hoard_contents_filename())
@@ -206,7 +192,8 @@ class HoardCommand(object):
         logging.info(f"Loaded hoard TOML!")
 
         remote_uuid = self._resolve_remote_uuid(remote)
-        current_contents = Contents.load(self._contents_filename(remote_uuid))
+
+        current_contents = self._fetch_repo_contents(remote_uuid)
 
         remote_doc = config.remotes[remote_uuid]
         if remote_doc is None or remote_doc.mounted_at is None:
@@ -240,6 +227,13 @@ class HoardCommand(object):
         logging.info("Local commit DONE!")
 
         return f"Sync'ed {remote} to hoard!"
+
+    def _fetch_repo_contents(self, remote_uuid):
+        remote_path = self.paths()[remote_uuid].find()
+        logging.info(f"Using repo contents {remote_uuid} in {remote_path}...")
+        repo_cmd = RepoCommand(remote_path)
+        current_contents = Contents.load(repo_cmd._contents_filename(remote_uuid))
+        return current_contents
 
     def health(self):
         logging.info("Loading config")
@@ -296,7 +290,7 @@ class HoardCommand(object):
 
         logging.info(f"Loading current remote contents for {to_repo}...")
         to_repo_uuid = self._resolve_remote_uuid(to_repo)
-        current_contents = Contents.load(self._contents_filename(to_repo_uuid))
+        current_contents = self._fetch_repo_contents(to_repo_uuid)
 
         config = self.config()
         restore_cache = RestoreCache(self)

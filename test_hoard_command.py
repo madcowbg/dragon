@@ -2,6 +2,7 @@ import os
 import tempfile
 import unittest
 from os.path import join
+from time import sleep
 from typing import Tuple, List
 
 from config import CaveType
@@ -177,7 +178,6 @@ class TestRepoCommand(unittest.TestCase):
         self.assertEqual(f"Status of {repo_uuid}:\nDONE", hoard_cmd.status("repo-in-local").strip())
 
         cave_cmd.refresh()
-        hoard_cmd.fetch("repo-in-local")
         self.assertEqual(
             f"Status of {repo_uuid}:\nA /newdir/newfile.is\nD /wat/test.me.different\nAF /newdir\nDONE",
             hoard_cmd.status("repo-in-local").strip())
@@ -250,4 +250,83 @@ class TestRepoCommand(unittest.TestCase):
         self.assertEqual("errors: 0\nrestored: 0\nskipped: 3\nDONE", res.strip())
 
     def test_repo_types(self):
+        populate_repotypes(self.tmpdir.name)
+
+        partial_cave_cmd = TotalCommand(path=join(self.tmpdir.name, "repo-partial")).cave
+        partial_cave_cmd.init()
+        partial_cave_cmd.refresh()
+
+        full_cave_cmd = TotalCommand(path=join(self.tmpdir.name, "repo-full")).cave
+        full_cave_cmd.init()
+        full_cave_cmd.refresh()
+
+        backup_cave_cmd = TotalCommand(path=join(self.tmpdir.name, "repo-backup")).cave
+        backup_cave_cmd.init()
+        backup_cave_cmd.refresh()
+
+        incoming_cave_cmd = TotalCommand(path=join(self.tmpdir.name, "repo-incoming")).cave
+        incoming_cave_cmd.init()
+        incoming_cave_cmd.refresh()
+
         hoard_cmd = TotalCommand(path=join(self.tmpdir.name, "hoard")).hoard
+
+        hoard_cmd.add_remote(
+            remote_path=join(self.tmpdir.name, "repo-partial"), name="repo-partial-name", mount_point="/",
+            type=CaveType.PARTIAL)
+
+        hoard_cmd.add_remote(
+            remote_path=join(self.tmpdir.name, "repo-full"), name="repo-full-name", mount_point="/",
+            type=CaveType.PARTIAL)
+
+        hoard_cmd.add_remote(
+            remote_path=join(self.tmpdir.name, "repo-backup"), name="repo-backup-name", mount_point="/",
+            type=CaveType.BACKUP)
+
+        hoard_cmd.add_remote(
+            remote_path=join(self.tmpdir.name, "repo-incoming"), name="repo-incoming-name", mount_point="/",
+            type=CaveType.INCOMING)
+
+        res = hoard_cmd.remotes()
+        self.assertEqual(
+            "4 total remotes."
+            f"\n  [repo-partial-name] {partial_cave_cmd.current_uuid()} (partial)"
+            f"\n  [repo-full-name] {full_cave_cmd.current_uuid()} (partial)"
+            f"\n  [repo-backup-name] {backup_cave_cmd.current_uuid()} (backup)"
+            f"\n  [repo-incoming-name] {incoming_cave_cmd.current_uuid()} (incoming)"
+            "\nMounts:"
+            "\n  / -> repo-partial-name, repo-full-name, repo-backup-name, repo-incoming-name"
+            "\nDONE", res.strip())
+
+
+def populate_repotypes(tmpdir: str):
+    # f"D /wat/test.me.different\n"
+    # f"D /wat/test.me.once\n"
+    # f"D /wat/test.me.twice\nDONE"
+
+    sleep(0.01)
+    os.mkdir(join(tmpdir, 'repo-partial'))
+    os.mkdir(join(tmpdir, 'repo-partial', 'wat'))
+    write_contents(join(tmpdir, 'repo-partial', 'test.me.1'), "gsadfs")
+    write_contents(join(tmpdir, 'repo-partial', 'wat', 'test.me.2'), "gsadf3dq")
+
+    sleep(0.01)
+    os.mkdir(join(tmpdir, 'repo-full'))
+    os.mkdir(join(tmpdir, 'repo-full', 'wat'))
+    write_contents(join(tmpdir, 'repo-full', 'test.me.1'), "gsadfs")
+    write_contents(join(tmpdir, 'repo-full', 'wat', 'test.me.2'), "gsadf3dq")
+    write_contents(join(tmpdir, 'repo-full', 'wat', 'test.me.3'), "afaswewfas")
+    write_contents(join(tmpdir, 'repo-full', 'test.me.4'), "fwadeaewdsa")
+
+    sleep(0.01)
+    os.mkdir(join(tmpdir, 'repo-backup'))
+    os.mkdir(join(tmpdir, 'repo-backup', 'wat'))
+    write_contents(join(tmpdir, 'repo-backup', 'test.me.1'), "gsadfs")
+    write_contents(join(tmpdir, 'repo-backup', 'wat', 'test.me.3'), "afaswewfas")
+
+    sleep(0.01)
+    os.mkdir(join(tmpdir, 'repo-incoming'))
+    os.mkdir(join(tmpdir, 'repo-incoming', 'wat'))
+    write_contents(join(tmpdir, 'repo-incoming', 'wat', 'test.me.3'), "asdgvarfa")
+    write_contents(join(tmpdir, 'repo-incoming', 'test.me.4'), "fwadeaewdsa")
+    write_contents(join(tmpdir, 'repo-incoming', 'test.me.5'), "adsfg")
+    write_contents(join(tmpdir, 'repo-incoming', 'test.me.6'), "f2fwsdf")
