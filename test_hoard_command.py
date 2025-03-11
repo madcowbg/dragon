@@ -1,4 +1,5 @@
 import os
+import pathlib
 import tempfile
 import unittest
 from os.path import join
@@ -415,6 +416,12 @@ class TestRepoCommand(unittest.TestCase):
             "/wat/test.me.6 = g:2 c:1\n"
             "DONE", res)
 
+        self.assertEqual([
+            f'repo-partial/.hoard/{partial_cave_cmd.current_uuid()}.contents',
+            'repo-partial/.hoard/current.uuid',
+            'repo-partial/test.me.1',
+            'repo-partial/wat/test.me.2', ], _list_files(self.tmpdir.name, 'repo-partial'))
+
         res = hoard_cmd.sync_contents("repo-partial-name")
         self.assertEqual(
             "+ test.me.4\n"
@@ -422,6 +429,16 @@ class TestRepoCommand(unittest.TestCase):
             "+ wat/test.me.3\n"
             "+ wat/test.me.6\n"
             "DONE", res)
+
+        self.assertEqual([
+            f'repo-partial/.hoard/{partial_cave_cmd.current_uuid()}.contents',
+            'repo-partial/.hoard/current.uuid',
+            'repo-partial/test.me.1',
+            'repo-partial/test.me.4',
+            'repo-partial/test.me.5',
+            'repo-partial/wat/test.me.2',
+            'repo-partial/wat/test.me.3',
+            'repo-partial/wat/test.me.6'], _list_files(self.tmpdir.name, 'repo-partial'))
 
         res = hoard_cmd.list_files()
         self.assertEqual(
@@ -438,6 +455,13 @@ class TestRepoCommand(unittest.TestCase):
 
         res = hoard_cmd.status("repo-partial-name")
         self.assertEqual(f"Status of {partial_cave_cmd.current_uuid()}:\nDONE", res)
+
+
+def _list_files(tmpdir: str, path: str) -> List[str]:
+    return sorted([
+        pathlib.Path(join(dirpath, filename)).relative_to(tmpdir).as_posix()
+        for dirpath, dirnames, filenames in os.walk(join(tmpdir, path), topdown=True)
+        for filename in filenames])
 
 
 def pretty_file_writer(tmpdir: str) -> Callable[[str, str], None]:
