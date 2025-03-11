@@ -124,7 +124,10 @@ class HoardFileProps:
 
     @property
     def available_at(self) -> List[str]:
-        return [uuid for uuid, status in self.doc["status"].items() if status == FileStatus.AVAILABLE.value]
+        return self.by_status(FileStatus.AVAILABLE)
+
+    def by_status(self, selected_status: FileStatus):
+        return [uuid for uuid, status in self.doc["status"].items() if status == selected_status.value]
 
     def mark_for_cleanup(self, repo_uuid: str):
         self.doc["status"][repo_uuid] = FileStatus.CLEANUP.value

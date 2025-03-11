@@ -127,16 +127,27 @@ class IncomingDiffHandler(DiffHandler):
             diff.hoard_file, diff.local_props,
             current_uuid=self.remote_uuid, repos_to_add_new_files=self.repos_to_add_new_files)
         logging.info(f"marking {diff.hoard_file} for cleanup from {self.remote_uuid}")
-        hoard_file.mark_for_cleanup(diff.hoard_file, repo_uuid=self.remote_uuid)
+        hoard_file.mark_for_cleanup(repo_uuid=self.remote_uuid)
 
     def handle_file_is_same(self, diff: "FileIsSame", out: StringIO):
         logging.info(f"incoming file is already recorded in hoard.")
 
     def handle_file_contents_differ(self, diff: FileContentsDiffer, out: StringIO):
-        raise NotImplementedError()
+        goal_status = self.hoard.fsobjects.files[diff.hoard_file].status(self.remote_uuid)
+        if goal_status == FileStatus.CLEANUP:  # is already marked for deletion
+            logging.info(f"skipping {diff.hoard_file} as is marked for deletion")
+            out.write(f"?{diff.hoard_file}\n")
+        else:
+            if diff.local_is_newer:  # file was changed in-place
+                self.hoard.fsobjects.replace_file(diff.hoard_file, diff.local_props, self.remote_uuid)
+                out.write(f"u{diff.hoard_file}\n")
+            else:
+                logging.info(f"current file is out of date, mark for delete: {diff.hoard_file}")
+                out.write(f"-{diff.hoard_file}\n")
+                diff.hoard_props.mark_for_cleanup(self.remote_uuid)
 
     def handle_hoard_only(self, diff: FileMissingInLocal, out: StringIO):
-        raise NotImplementedError()
+        logging.info(f"skipping file not in local.")
 
 
 class BackupDiffHandler(DiffHandler):
@@ -482,6 +493,24 @@ class HoardCommand(object):
             for s, v in sorted(stats.items()):
                 out.write(f"{s}: {v}\n")
             out.write("DONE\n")
+            return out.getvalue()
+
+    def list_files(self):
+        logging.info(f"Loading hoard TOML...")
+        hoard = HoardContents.load(self._hoard_contents_filename())
+
+        logging.info(f"Listing files...")
+        with StringIO() as out:
+            for file, props in sorted(hoard.fsobjects.files.items()):
+                a = props.by_status(FileStatus.AVAILABLE)
+                g = props.by_status(FileStatus.GET)
+                c = props.by_status(FileStatus.CLEANUP)
+                stats = (
+                    f"{f'a:{len(a)} ' if len(a) > 0 else ''}"
+                    f"{f'g:{len(g)} ' if len(g) > 0 else ''}"
+                    f"{f'a:{len(c)}' if len(c) > 0 else ''}").strip()
+                out.write(f"{file} = {stats}\n")
+            out.write("DONE")
             return out.getvalue()
 
 

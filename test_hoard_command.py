@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from os.path import join
 from time import sleep
-from typing import Tuple, List
+from typing import Tuple, List, Callable
 
 from config import CaveType
 from contents import HoardContents
@@ -318,7 +318,7 @@ class TestRepoCommand(unittest.TestCase):
         populate_repotypes(self.tmpdir.name)
         hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = self._init_complex_hoard()
 
-    def test_sync_partial(self):
+    def test_sync_hoard_definitions(self):
         populate_repotypes(self.tmpdir.name)
         hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = self._init_complex_hoard()
 
@@ -333,36 +333,100 @@ class TestRepoCommand(unittest.TestCase):
         res = hoard_cmd.refresh("repo-partial-name")
         self.assertEqual("+/test.me.1\n+/wat/test.me.2\nSync'ed repo-partial-name to hoard!", res.strip())
 
+        res = hoard_cmd.list_files()
+        self.assertEqual(
+            "/test.me.1 = a:1 g:1\n"
+            "/wat/test.me.2 = a:1 g:1\n"
+            "DONE", res)
+
+        res = hoard_cmd.refresh("repo-partial-name")  # does noting...
+        self.assertEqual("Sync'ed repo-partial-name to hoard!", res.strip())
+
+        res = hoard_cmd.list_files()
+        self.assertEqual(
+            "/test.me.1 = a:1 g:1\n"
+            "/wat/test.me.2 = a:1 g:1\n"
+            "DONE", res)
+
+        res = hoard_cmd.refresh("repo-full-name")
+        self.assertEqual(
+            "=/test.me.1\n"
+            "+/test.me.4\n"
+            "=/wat/test.me.2\n"
+            "+/wat/test.me.3\n"
+            "Sync'ed repo-full-name to hoard!", res.strip())
+
+        res = hoard_cmd.refresh("repo-full-name")  # does nothing ...
+        self.assertEqual("Sync'ed repo-full-name to hoard!", res.strip())
+
+        res = hoard_cmd.refresh("repo-backup-name")  # just registers the files already in backup
+        self.assertEqual(
+            "=/test.me.1\n"
+            "=/wat/test.me.3\n"
+            "Sync'ed repo-backup-name to hoard!", res.strip())
+
+        res = hoard_cmd.refresh("repo-backup-name")  # does nothing
+        self.assertEqual("Sync'ed repo-backup-name to hoard!", res.strip())
+
+        res = hoard_cmd.list_files()
+        self.assertEqual(
+            "/test.me.1 = a:3\n"
+            "/test.me.4 = a:1 g:1\n"
+            "/wat/test.me.2 = a:2\n"
+            "/wat/test.me.3 = a:2 g:1\n"
+            "DONE", res)
+
+        res = hoard_cmd.refresh("repo-incoming-name")
+        self.assertEqual(
+            "<+/test.me.5\n"
+            "u/wat/test.me.3\n"
+            "<+/wat/test.me.6\n"
+            "Sync'ed repo-incoming-name to hoard!", res.strip())
+
+        res = hoard_cmd.refresh("repo-incoming-name")
+        self.assertEqual("Sync'ed repo-incoming-name to hoard!", res.strip())
+
+        res = hoard_cmd.list_files()
+        self.assertEqual(
+            "/test.me.1 = a:3\n"
+            "/test.me.4 = a:1 g:1\n"
+            "/test.me.5 = g:2 a:1\n"
+            "/wat/test.me.2 = a:2\n"
+            "/wat/test.me.3 = a:1 g:3\n"
+            "/wat/test.me.6 = g:2 a:1\n"
+            "DONE", res)
+
+
+def pretty_file_writer(tmpdir: str) -> Callable[[str, str], None]:
+    def pfw(path: str, contents: str):
+        folder, file = os.path.split(join(tmpdir, path))
+        os.makedirs(folder, exist_ok=True)
+        write_contents(join(tmpdir, path), contents)
+
+    return pfw
+
 
 def populate_repotypes(tmpdir: str):
     # f"D /wat/test.me.different\n"
     # f"D /wat/test.me.once\n"
     # f"D /wat/test.me.twice\nDONE"
+    pfw = pretty_file_writer(tmpdir)
+    sleep(0.01)
+    pfw('repo-partial/test.me.1', "gsadfs")
+    pfw('repo-partial/wat/test.me.2', "gsadf3dq")
 
     sleep(0.01)
-    os.mkdir(join(tmpdir, 'repo-partial'))
-    os.mkdir(join(tmpdir, 'repo-partial', 'wat'))
-    write_contents(join(tmpdir, 'repo-partial', 'test.me.1'), "gsadfs")
-    write_contents(join(tmpdir, 'repo-partial', 'wat', 'test.me.2'), "gsadf3dq")
+    pfw('repo-full/test.me.1', "gsadfs")
+    pfw('repo-full/test.me.4', "fwadeaewdsa")
+    pfw('repo-full/wat/test.me.2', "gsadf3dq")
+    pfw('repo-full/wat/test.me.3', "afaswewfas")
 
     sleep(0.01)
-    os.mkdir(join(tmpdir, 'repo-full'))
-    os.mkdir(join(tmpdir, 'repo-full', 'wat'))
-    write_contents(join(tmpdir, 'repo-full', 'test.me.1'), "gsadfs")
-    write_contents(join(tmpdir, 'repo-full', 'wat', 'test.me.2'), "gsadf3dq")
-    write_contents(join(tmpdir, 'repo-full', 'wat', 'test.me.3'), "afaswewfas")
-    write_contents(join(tmpdir, 'repo-full', 'test.me.4'), "fwadeaewdsa")
+    pfw('repo-backup/test.me.1', "gsadfs")
+    pfw('repo-backup/wat/test.me.3', "afaswewfas")
 
     sleep(0.01)
-    os.mkdir(join(tmpdir, 'repo-backup'))
-    os.mkdir(join(tmpdir, 'repo-backup', 'wat'))
-    write_contents(join(tmpdir, 'repo-backup', 'test.me.1'), "gsadfs")
-    write_contents(join(tmpdir, 'repo-backup', 'wat', 'test.me.3'), "afaswewfas")
-
-    sleep(0.01)
-    os.mkdir(join(tmpdir, 'repo-incoming'))
-    os.mkdir(join(tmpdir, 'repo-incoming', 'wat'))
-    write_contents(join(tmpdir, 'repo-incoming', 'wat', 'test.me.3'), "asdgvarfa")
-    write_contents(join(tmpdir, 'repo-incoming', 'test.me.4'), "fwadeaewdsa")
-    write_contents(join(tmpdir, 'repo-incoming', 'test.me.5'), "adsfg")
-    write_contents(join(tmpdir, 'repo-incoming', 'test.me.6'), "f2fwsdf")
+    pfw('repo-incoming/wat/test.me.3', "asdgvarfa")
+    pfw('repo-incoming/test.me.4', "fwadeaewdsa")
+    pfw('repo-incoming/test.me.5', "adsfg")
+    pfw('repo-incoming/wat/test.me.6', "f2fwsdf")
