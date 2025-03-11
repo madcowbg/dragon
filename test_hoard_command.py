@@ -117,7 +117,8 @@ class TestRepoCommand(unittest.TestCase):
             dirs_exp=["/wat"])
 
         res = hoard_cmd.refresh("repo-in-local-2")
-        self.assertEqual("=/wat/test.me.twice\nSync'ed repo-in-local-2 to hoard!", res.strip())
+        self.assertEqual(
+            "=/wat/test.me.twice\nSync'ed repo-in-local-2 to hoard!", res.strip())
 
         self._assert_hoard_contents(
             HoardContents.load(hoard_cmd._hoard_contents_filename()),

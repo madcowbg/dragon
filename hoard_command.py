@@ -1,4 +1,3 @@
-import asyncio
 import logging
 import os
 import pathlib
@@ -6,11 +5,11 @@ import shutil
 from abc import abstractmethod
 from io import StringIO
 from itertools import groupby
-from typing import Dict, Generator, List, Optional
+from typing import Dict, Generator, List
 
 from config import HoardRemote, HoardConfig, CavePath, HoardPaths, CaveType
 from contents import FileProps, HoardFileProps, Contents, HoardContents, FileStatus
-from hashing import fast_hash_async, fast_hash
+from hashing import fast_hash
 from repo_command import RepoCommand
 
 CONFIG_FILE = "hoard.config"
@@ -45,6 +44,9 @@ class DiffHandler:
     @abstractmethod
     def handle_local_only(self, diff: "FileMissingInHoard", out: StringIO): pass
 
+    @abstractmethod
+    def handle_file_is_same(self, diff, out): pass
+
 
 class PartialDiffHandler(DiffHandler):
     def __init__(
@@ -58,6 +60,20 @@ class PartialDiffHandler(DiffHandler):
         self.hoard.fsobjects.add_new_file(
             diff.hoard_file, diff.local_props,
             current_uuid=self.remote_uuid, repos_to_add_new_files=self.repos_to_add_new_files)
+
+    def handle_file_is_same(self, diff: "FileIsSame", out: StringIO):
+        goal_status = self.hoard.fsobjects.files[diff.hoard_file].status(self.remote_uuid)
+        if goal_status == FileStatus.CLEANUP:
+            logging.info(f"skipping {diff.hoard_file} as is marked for deletion")
+            out.write(f"?{diff.hoard_file}\n")
+        elif goal_status == FileStatus.GET or goal_status == FileStatus.UNKNOWN:
+            logging.info(f"mark {diff.hoard_file} as available here!")
+            self.hoard.fsobjects.files[diff.hoard_file].ensure_available(self.remote_uuid)
+            out.write(f"={diff.hoard_file}\n")
+        elif goal_status == FileStatus.AVAILABLE:
+            pass
+        else:
+            raise ValueError(f"unrecognized hoard state for {diff.hoard_file}: {goal_status}")
 
 
 class IncomingDiffHandler(DiffHandler):
@@ -73,10 +89,22 @@ class IncomingDiffHandler(DiffHandler):
         logging.info(f"marking {diff.hoard_file} for cleanup from {self.remote_uuid}")
         hoard_file.mark_for_cleanup(diff.hoard_file, repo_uuid=self.remote_uuid)
 
+    def handle_file_is_same(self, diff: "FileIsSame", out: StringIO):
+        logging.info(f"incoming file is already recorded in hoard.")
+
 
 class BackupDiffHandler(DiffHandler):
     def handle_local_only(self, diff: "FileMissingInHoard", out: StringIO):
         logging.info(f"skipping obsolete file from backup: {diff.hoard_file}")
+        out.write(f"?{diff.hoard_file}\n")
+
+    def handle_file_is_same(self, diff: "FileIsSame", out: StringIO):
+        logging.info(f"file already backed up ... skipping.")
+
+        goal_status = self.hoard.fsobjects.files[diff.hoard_file].status(self.remote_uuid)
+        if goal_status == FileStatus.GET or goal_status == FileStatus.UNKNOWN:
+            self.hoard.fsobjects.files[diff.hoard_file].ensure_available(self.remote_uuid)
+            out.write(f"={diff.hoard_file}\n")
 
 
 class HoardCommand(object):
@@ -266,18 +294,7 @@ class HoardCommand(object):
                 if isinstance(diff, FileMissingInHoard):
                     remote_op_handler.handle_local_only(diff, out)
                 elif isinstance(diff, FileIsSame):
-                    goal_status = hoard.fsobjects.files[diff.hoard_file].status(remote_uuid)
-                    if goal_status == FileStatus.CLEANUP:
-                        logging.info(f"skipping {diff.hoard_file} as is marked for deletion")
-                        out.write(f"?{diff.hoard_file}\n")
-                    elif goal_status == FileStatus.GET or goal_status == FileStatus.UNKNOWN:
-                        logging.info(f"mark {diff.hoard_file} as available here!")
-                        hoard.fsobjects.files[diff.hoard_file].ensure_available(remote_uuid)
-                        out.write(f"={diff.hoard_file}\n")
-                    elif goal_status == FileStatus.AVAILABLE:
-                        pass
-                    else:
-                        raise ValueError(f"unrecognized hoard state for {diff.hoard_file}: {goal_status}")
+                    remote_op_handler.handle_file_is_same(diff, out)
                 elif isinstance(diff, FileContentsDiffer):
                     # FIXME add tests!
                     goal_status = hoard.fsobjects.files[diff.hoard_file].status(remote_uuid)
