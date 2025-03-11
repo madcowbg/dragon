@@ -135,6 +135,11 @@ class HoardFileProps:
     def mark_to_get(self, repo_uuid: str):
         self.doc["status"][repo_uuid] = FileStatus.GET.value
 
+    def mark_to_delete(self):
+        for uuid, status in self.doc["status"].copy().items():
+            assert status != FileStatus.UNKNOWN.value
+            self.mark_for_cleanup(uuid)
+
 
 class HoardFSObjects:
     def __init__(self, doc: Dict[str, Any]):

@@ -52,6 +52,9 @@ class DiffHandler:
     @abstractmethod
     def handle_file_contents_differ(self, diff: FileContentsDiffer, out: StringIO): pass
 
+    @abstractmethod
+    def handle_hoard_only(self, diff: FileMissingInLocal, out: StringIO): pass
+
 
 class PartialDiffHandler(DiffHandler):
     def __init__(
@@ -97,6 +100,21 @@ class PartialDiffHandler(DiffHandler):
                 out.write(f"g{diff.hoard_file}\n")
                 diff.hoard_props.mark_to_get(self.remote_uuid)
 
+    def handle_hoard_only(self, diff: FileMissingInLocal, out: StringIO):
+        goal_status = self.hoard.fsobjects.files[diff.hoard_file].status(self.remote_uuid)
+        if goal_status == FileStatus.CLEANUP:
+            logging.info(f"file has been deleted.")
+        elif goal_status == FileStatus.AVAILABLE:  # file was here, is no longer
+            logging.info(f"deleting file {diff.hoard_file} as is no longer in local")
+            diff.hoard_props.mark_to_delete()
+            out.write(f"-{diff.hoard_file}\n")
+        elif goal_status == FileStatus.GET:
+            logging.info(f"file fetch had been scheduled already.")
+        elif goal_status == FileStatus.UNKNOWN:
+            logging.info(f"file not related to repo, skipping!")
+        else:
+            raise NotImplementedError(f"Unrecognized goal status {goal_status}")
+
 
 class IncomingDiffHandler(DiffHandler):
     def __init__(self, remote_uuid: str, hoard: HoardContents, repos_to_add_new_files: List[HoardRemote]):
@@ -117,6 +135,9 @@ class IncomingDiffHandler(DiffHandler):
     def handle_file_contents_differ(self, diff: FileContentsDiffer, out: StringIO):
         raise NotImplementedError()
 
+    def handle_hoard_only(self, diff: FileMissingInLocal, out: StringIO):
+        raise NotImplementedError()
+
 
 class BackupDiffHandler(DiffHandler):
     def handle_local_only(self, diff: "FileMissingInHoard", out: StringIO):
@@ -132,6 +153,12 @@ class BackupDiffHandler(DiffHandler):
             out.write(f"={diff.hoard_file}\n")
 
     def handle_file_contents_differ(self, diff: FileContentsDiffer, out: StringIO):
+        goal_status = self.hoard.fsobjects.files[diff.hoard_file].status(self.remote_uuid)
+        if goal_status == FileStatus.AVAILABLE:  # was backed-up here, get it again
+            out.write(f"g{diff.hoard_file}\n")
+            diff.hoard_props.mark_to_get(self.remote_uuid)
+
+    def handle_hoard_only(self, diff: FileMissingInLocal, out: StringIO):
         goal_status = self.hoard.fsobjects.files[diff.hoard_file].status(self.remote_uuid)
         if goal_status == FileStatus.AVAILABLE:  # was backed-up here, get it again
             out.write(f"g{diff.hoard_file}\n")
@@ -328,9 +355,7 @@ class HoardCommand(object):
                 elif isinstance(diff, FileContentsDiffer):
                     remote_op_handler.handle_file_contents_differ(diff, out)
                 elif isinstance(diff, FileMissingInLocal):
-                    # fixme pretty aggressive
-                    logging.info(f"deleting file {diff.hoard_file} as is no longer in local")
-                    hoard.fsobjects.delete_file(diff.hoard_file)
+                    remote_op_handler.handle_hoard_only(diff, out)
                 elif isinstance(diff, DirMissingInHoard):
                     logging.info(f"new dir found: {diff.local_dir}")
                     hoard.fsobjects.add_dir(diff.hoard_dir)
