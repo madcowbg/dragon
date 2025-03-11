@@ -390,10 +390,10 @@ class TestRepoCommand(unittest.TestCase):
         self.assertEqual(
             "/test.me.1 = a:3\n"
             "/test.me.4 = a:1 g:1\n"
-            "/test.me.5 = g:2 a:1\n"
+            "/test.me.5 = g:2 c:1\n"
             "/wat/test.me.2 = a:2\n"
             "/wat/test.me.3 = a:1 g:3\n"
-            "/wat/test.me.6 = g:2 a:1\n"
+            "/wat/test.me.6 = g:2 c:1\n"
             "DONE", res)
 
 

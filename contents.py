@@ -113,10 +113,15 @@ class HoardFileProps:
         self.doc["mtime"] = new_props.mtime
         self.doc["fasthash"] = new_props.fasthash
 
-        # mark for re-fetching everywhere it is alredy available
-        to_get_again = [uuid for uuid, status in self.doc["status"].items() if status == FileStatus.AVAILABLE.value]
-        for uuid in to_get_again:
-            self.doc["status"][uuid] = FileStatus.GET.value
+        # mark for re-fetching everywhere it is already available, cancel getting it
+        for uuid, status in self.doc["status"].copy().items():
+            if status == FileStatus.AVAILABLE.value:
+                self.mark_to_get(uuid)
+            elif status == FileStatus.GET.value or status == FileStatus.CLEANUP.value:
+                pass
+            else:
+                raise ValueError(f"Unknown status: {status}")
+
         self.doc["status"][available_uuid] = FileStatus.AVAILABLE.value
 
     def ensure_available(self, remote_uuid: str):
@@ -141,7 +146,18 @@ class HoardFileProps:
     def mark_to_delete(self):
         for uuid, status in self.doc["status"].copy().items():
             assert status != FileStatus.UNKNOWN.value
-            self.mark_for_cleanup(uuid)
+
+            if status == FileStatus.GET.value:
+                self.remove_status(uuid)
+            elif status == FileStatus.AVAILABLE.value:
+                self.mark_for_cleanup(uuid)
+            elif status == FileStatus.CLEANUP.value:
+                pass
+            else:
+                raise ValueError(f"Unknown status: {status}")
+
+    def remove_status(self, remote_uuid: str):
+        self.doc["status"].pop(remote_uuid)
 
 
 class HoardFSObjects:
@@ -170,9 +186,6 @@ class HoardFSObjects:
     def add_dir(self, curr_dir: str):
         self.doc[curr_dir] = {"isdir": True}
         self.dirs[curr_dir] = DirProps(self.doc[curr_dir])
-
-    def replace_file(self, curr_file: str, new_props: FileProps, available_uuid: str):
-        self.files[curr_file].replace_file(new_props, available_uuid)
 
     def delete_file(self, curr_file: str):
         self.files.pop(curr_file)
