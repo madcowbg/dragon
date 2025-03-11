@@ -3,6 +3,7 @@ import logging
 import os
 import pathlib
 import shutil
+from abc import abstractmethod
 from io import StringIO
 from itertools import groupby
 from typing import Dict, Generator, List, Optional
@@ -34,6 +35,48 @@ def path_in_hoard(current_file: str, mounted_at: str) -> str:
 
 def path_in_local(hoard_file: str, mounted_at: str) -> str:
     return pathlib.Path(hoard_file).relative_to(mounted_at).as_posix()
+
+
+class DiffHandler:
+    def __init__(self, remote_uuid: str, hoard: HoardContents):
+        self.remote_uuid = remote_uuid
+        self.hoard = hoard
+
+    @abstractmethod
+    def handle_local_only(self, diff: "FileMissingInHoard", out: StringIO): pass
+
+
+class PartialDiffHandler(DiffHandler):
+    def __init__(
+            self, remote_uuid: str, hoard: HoardContents, repos_to_add_new_files: List[HoardRemote], fetch_new: bool):
+        super().__init__(remote_uuid, hoard)
+        self.repos_to_add_new_files = repos_to_add_new_files
+        self.fetch_new = fetch_new
+
+    def handle_local_only(self, diff: "FileMissingInHoard", out: StringIO):
+        out.write(f"+{diff.hoard_file}\n")
+        self.hoard.fsobjects.add_new_file(
+            diff.hoard_file, diff.local_props,
+            current_uuid=self.remote_uuid, repos_to_add_new_files=self.repos_to_add_new_files)
+
+
+class IncomingDiffHandler(DiffHandler):
+    def __init__(self, remote_uuid: str, hoard: HoardContents, repos_to_add_new_files: List[HoardRemote]):
+        super().__init__(remote_uuid, hoard)
+        self.repos_to_add_new_files = repos_to_add_new_files
+
+    def handle_local_only(self, diff: "FileMissingInHoard", out: StringIO):
+        out.write(f"<+{diff.hoard_file}\n")
+        hoard_file = self.hoard.fsobjects.add_new_file(
+            diff.hoard_file, diff.local_props,
+            current_uuid=self.remote_uuid, repos_to_add_new_files=self.repos_to_add_new_files)
+        logging.info(f"marking {diff.hoard_file} for cleanup from {self.remote_uuid}")
+        hoard_file.mark_for_cleanup(diff.hoard_file, repo_uuid=self.remote_uuid)
+
+
+class BackupDiffHandler(DiffHandler):
+    def handle_local_only(self, diff: "FileMissingInHoard", out: StringIO):
+        logging.info(f"skipping obsolete file from backup: {diff.hoard_file}")
 
 
 class HoardCommand(object):
@@ -197,6 +240,18 @@ class HoardCommand(object):
         repos_to_add_new_files: List[HoardRemote] = [
             r for r in config.remotes.all() if
             (r.type == CaveType.PARTIAL and r.fetch_new) or r.type == CaveType.PARTIAL]
+        if remote_type == CaveType.PARTIAL:
+            remote_op_handler: DiffHandler = PartialDiffHandler(
+                remote_uuid, hoard,
+                repos_to_add_new_files, config.remotes[remote_uuid].fetch_new)
+        elif remote_type == CaveType.BACKUP:
+            remote_op_handler: DiffHandler = BackupDiffHandler(remote_uuid, hoard)
+        elif remote_type == CaveType.INCOMING:
+            remote_op_handler: DiffHandler = IncomingDiffHandler(
+                remote_uuid, hoard,
+                repos_to_add_new_files)
+        else:
+            raise ValueError(f"FIXME unsupported remote type: {remote_type}")
 
         current_contents = self._fetch_repo_contents(remote_uuid)
 
@@ -206,24 +261,10 @@ class HoardCommand(object):
 
         logging.info("Merging local changes...")
         with StringIO() as out:
+
             for diff in compare_local_to_hoard(current_contents, hoard, config):
                 if isinstance(diff, FileMissingInHoard):
-                    if remote_type == CaveType.PARTIAL:
-                        out.write(f"+{diff.hoard_file}\n")
-                        hoard.fsobjects.add_new_file(
-                            diff.hoard_file, diff.local_props,
-                            current_uuid=remote_uuid, repos_to_add_new_files=repos_to_add_new_files)
-                    elif remote_type == CaveType.INCOMING:
-                        out.write(f"<+{diff.hoard_file}\n")
-                        hoard_file = hoard.fsobjects.add_new_file(
-                            diff.hoard_file, diff.local_props,
-                            current_uuid=remote_uuid, repos_to_add_new_files=repos_to_add_new_files)
-                        logging.info(f"marking {diff.hoard_file} for cleanup from {remote_uuid}")
-                        hoard_file.mark_for_cleanup(diff.hoard_file, repo_uuid=remote_uuid)
-                    elif remote_type == CaveType.BACKUP:
-                        logging.info(f"skipping obsolete file from backup: {diff.hoard_file}")
-                    else:
-                        raise ValueError(f"NOT IMPLEMENTED OP: TYPE={remote_type}")
+                    remote_op_handler.handle_local_only(diff, out)
                 elif isinstance(diff, FileIsSame):
                     goal_status = hoard.fsobjects.files[diff.hoard_file].status(remote_uuid)
                     if goal_status == FileStatus.CLEANUP:
