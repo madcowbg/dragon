@@ -9,6 +9,8 @@ from typing import Dict, Generator, List
 
 from config import HoardRemote, HoardConfig, CavePath, HoardPaths, CaveType
 from contents import FileProps, HoardFileProps, Contents, HoardContents, FileStatus
+from contents_diff import Diff, FileMissingInHoard, FileIsSame, FileContentsDiffer, FileMissingInLocal, \
+    DirMissingInHoard, DirIsSame, DirMissingInLocal
 from hashing import fast_hash
 from repo_command import RepoCommand
 
@@ -481,76 +483,12 @@ class RestoreCache:
     def __init__(self, cmd: HoardCommand):
         self.config = cmd.config()
         self.paths = cmd.paths()
-        # self.remotes_contents = dict()
-        #
-        # for remote in self.config.remotes.all():
-        #     remote_path = self.config.paths[remote.uuid]
-        #     remote_cmd = RepoCommand(path=remote_path)
-        #     try:
-        #         remote_cmd._validate_repo()
-        #
-        #         self.remotes_contents[remote.uuid] = Contents.load(remote_path)
-        #     except ValueError as e:
-        #         logging.warning(f"Skipping invalid repo in {remote_path} due to {e}")
 
     def mounted_at(self, repo_uuid: str) -> str:
         return self.config.remotes[repo_uuid].mounted_at
 
     def remote_path(self, repo_uuid: str) -> str:
         return self.paths[repo_uuid].find()
-
-
-class Diff:
-    pass
-
-
-class FileMissingInHoard(Diff):
-    def __init__(self, current_file: str, curr_file_hoard_path: str, local_props: FileProps):
-        self.local_file = current_file
-        self.hoard_file = curr_file_hoard_path
-        self.local_props = local_props
-
-
-class FileIsSame(Diff):
-    def __init__(self, current_file: str, curr_file_hoard_path: str):
-        self.local_file = current_file
-        self.hoard_file = curr_file_hoard_path
-
-
-class FileContentsDiffer(Diff):
-    def __init__(
-            self, current_file: str, curr_file_hoard_path: str,
-            local_props: FileProps, hoard_props: HoardFileProps):
-        self.local_file = current_file
-        self.hoard_file = curr_file_hoard_path
-        self.local_props = local_props
-        self.hoard_props = hoard_props
-        self.local_is_newer = local_props.mtime >= hoard_props.mtime
-
-
-class FileMissingInLocal(Diff):
-    def __init__(self, current_file: str, curr_file_hoard_path: str, hoard_props: HoardFileProps):
-        self.local_file = current_file
-        self.hoard_file = curr_file_hoard_path
-        self.hoard_props = hoard_props
-
-
-class DirMissingInHoard(Diff):
-    def __init__(self, current_dir: str, curr_dir_hoard_path: str):
-        self.local_dir = current_dir
-        self.hoard_dir = curr_dir_hoard_path
-
-
-class DirIsSame(Diff):
-    def __init__(self, current_dir: str, curr_dir_hoard_path: str):
-        self.local_dir = current_dir
-        self.hoard_dir = curr_dir_hoard_path
-
-
-class DirMissingInLocal(Diff):
-    def __init__(self, current_dir: str, curr_dir_hoard_path: str):
-        self.local_dir = current_dir
-        self.hoard_dir = curr_dir_hoard_path
 
 
 def compare_local_to_hoard(local: Contents, hoard: HoardContents, config: HoardConfig) -> Generator[Diff, None, None]:
