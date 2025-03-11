@@ -47,7 +47,10 @@ class DiffHandler:
     def handle_local_only(self, diff: "FileMissingInHoard", out: StringIO): pass
 
     @abstractmethod
-    def handle_file_is_same(self, diff, out): pass
+    def handle_file_is_same(self, diff: "FileIsSame", out: StringIO): pass
+
+    @abstractmethod
+    def handle_file_contents_differ(self, diff: FileContentsDiffer, out: StringIO): pass
 
 
 class PartialDiffHandler(DiffHandler):
@@ -77,6 +80,23 @@ class PartialDiffHandler(DiffHandler):
         else:
             raise ValueError(f"unrecognized hoard state for {diff.hoard_file}: {goal_status}")
 
+    def handle_file_contents_differ(self, diff: FileContentsDiffer, out: StringIO):
+        goal_status = self.hoard.fsobjects.files[diff.hoard_file].status(self.remote_uuid)
+        if goal_status == FileStatus.CLEANUP:
+            logging.info(f"skipping {diff.hoard_file} as is marked for deletion")
+            out.write(f"?{diff.hoard_file}\n")
+        elif goal_status == FileStatus.GET:
+            logging.info(f"current file is out of date and was marked for restore: {diff.hoard_file}")
+            out.write(f"g{diff.hoard_file}\n")
+        elif goal_status == FileStatus.AVAILABLE:
+            if diff.local_is_newer:  # file was changed in-place
+                self.hoard.fsobjects.replace_file(diff.hoard_file, diff.local_props, self.remote_uuid)
+                out.write(f"u{diff.hoard_file}\n")
+            else:
+                logging.info(f"current file is out of date, mark for restore: {diff.hoard_file}")
+                out.write(f"g{diff.hoard_file}\n")
+                diff.hoard_props.mark_to_get(self.remote_uuid)
+
 
 class IncomingDiffHandler(DiffHandler):
     def __init__(self, remote_uuid: str, hoard: HoardContents, repos_to_add_new_files: List[HoardRemote]):
@@ -94,6 +114,9 @@ class IncomingDiffHandler(DiffHandler):
     def handle_file_is_same(self, diff: "FileIsSame", out: StringIO):
         logging.info(f"incoming file is already recorded in hoard.")
 
+    def handle_file_contents_differ(self, diff: FileContentsDiffer, out: StringIO):
+        raise NotImplementedError()
+
 
 class BackupDiffHandler(DiffHandler):
     def handle_local_only(self, diff: "FileMissingInHoard", out: StringIO):
@@ -107,6 +130,12 @@ class BackupDiffHandler(DiffHandler):
         if goal_status == FileStatus.GET or goal_status == FileStatus.UNKNOWN:
             self.hoard.fsobjects.files[diff.hoard_file].ensure_available(self.remote_uuid)
             out.write(f"={diff.hoard_file}\n")
+
+    def handle_file_contents_differ(self, diff: FileContentsDiffer, out: StringIO):
+        goal_status = self.hoard.fsobjects.files[diff.hoard_file].status(self.remote_uuid)
+        if goal_status == FileStatus.AVAILABLE:  # was backed-up here, get it again
+            out.write(f"g{diff.hoard_file}\n")
+            diff.hoard_props.mark_to_get(self.remote_uuid)
 
 
 class HoardCommand(object):
@@ -291,26 +320,13 @@ class HoardCommand(object):
 
         logging.info("Merging local changes...")
         with StringIO() as out:
-
             for diff in compare_local_to_hoard(current_contents, hoard, config):
                 if isinstance(diff, FileMissingInHoard):
                     remote_op_handler.handle_local_only(diff, out)
                 elif isinstance(diff, FileIsSame):
                     remote_op_handler.handle_file_is_same(diff, out)
                 elif isinstance(diff, FileContentsDiffer):
-                    # FIXME add tests!
-                    goal_status = hoard.fsobjects.files[diff.hoard_file].status(remote_uuid)
-                    if diff.local_is_newer:
-                        logging.info(f"recording existing file as update: {diff.local_file}")
-                        hoard.fsobjects.update_file(diff.hoard_file, diff.local_props)
-                    else:
-                        if goal_status == FileStatus.CLEANUP:
-                            logging.info(f"file {diff.hoard_file} is marked for deletion")
-                            out.write(f"?{diff.hoard_file}\n")
-                        else:
-                            logging.info(f"current file is out of date, mark for restore: {diff.hoard_file}")
-                            out.write(f"g{diff.hoard_file}\n")
-                            diff.hoard_props.mark_to_get(remote_uuid)
+                    remote_op_handler.handle_file_contents_differ(diff, out)
                 elif isinstance(diff, FileMissingInLocal):
                     # fixme pretty aggressive
                     logging.info(f"deleting file {diff.hoard_file} as is no longer in local")

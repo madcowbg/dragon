@@ -108,10 +108,16 @@ class HoardFileProps:
     def fasthash(self):
         return self.doc["fasthash"]
 
-    def update(self, props: FileProps):
-        self.doc["size"] = props.size
-        self.doc["mtime"] = props.mtime
-        self.doc["fasthash"] = props.fasthash
+    def replace_file(self, new_props: FileProps, available_uuid: str):
+        self.doc["size"] = new_props.size
+        self.doc["mtime"] = new_props.mtime
+        self.doc["fasthash"] = new_props.fasthash
+
+        # mark for re-fetching everywhere it is alredy available
+        to_get_again = [uuid for uuid, status in self.doc["status"].items() if status == FileStatus.AVAILABLE.value]
+        for uuid in to_get_again:
+            self.doc["status"][uuid] = FileStatus.GET.value
+        self.doc["status"][available_uuid] = FileStatus.AVAILABLE.value
 
     def ensure_available(self, remote_uuid: str):
         self.doc["status"][remote_uuid] = FileStatus.AVAILABLE.value
@@ -127,8 +133,7 @@ class HoardFileProps:
         return FileStatus(self.doc["status"][repo_uuid]) if repo_uuid in self.doc["status"] else FileStatus.UNKNOWN
 
     def mark_to_get(self, repo_uuid: str):
-
-        pass
+        self.doc["status"][repo_uuid] = FileStatus.GET.value
 
 
 class HoardFSObjects:
@@ -158,8 +163,8 @@ class HoardFSObjects:
         self.doc[curr_dir] = {"isdir": True}
         self.dirs[curr_dir] = DirProps(self.doc[curr_dir])
 
-    def update_file(self, curr_file: str, props: FileProps):
-        self.files[curr_file].update(props)
+    def replace_file(self, curr_file: str, new_props: FileProps, available_uuid: str):
+        self.files[curr_file].replace_file(new_props, available_uuid)
 
     def delete_file(self, curr_file: str):
         self.files.pop(curr_file)

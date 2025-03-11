@@ -123,24 +123,29 @@ class TestRepoCommand(unittest.TestCase):
         self._assert_hoard_contents(
             HoardContents.load(hoard_cmd._hoard_contents_filename()),
             files_exp=[
-                ('/wat/test.me.different', 8, 1, 'd6dcdb1bc4677aab619798004537c4e3'),
+                ('/wat/test.me.different', 5, 1, '5a818396160e4189911989d69d857bd2'),
                 ('/wat/test.me.twice', 6, 2, '1881f6f9784fb08bf6690e9763b76ac3')],
             dirs_exp=["/wat"])
 
-        hoard_cmd.refresh("repo-in-local")
+        res = hoard_cmd.refresh("repo-in-local")
+        self.assertEqual("+/wat/test.me.once\nSync'ed repo-in-local to hoard!", res)
         self._assert_hoard_contents(
             HoardContents.load(hoard_cmd._hoard_contents_filename()),
             files_exp=[
-                ('/wat/test.me.different', 8, 1, 'd6dcdb1bc4677aab619798004537c4e3'),  # retained only from repo-2
+                ('/wat/test.me.different', 5, 1, '5a818396160e4189911989d69d857bd2'),  # retained only from repo
                 ('/wat/test.me.once', 8, 1, '34fac39930874b0f6bc627c3b3fc4b5e'),
                 ('/wat/test.me.twice', 6, 2, '1881f6f9784fb08bf6690e9763b76ac3')],
             dirs_exp=["/wat"])
 
         res = hoard_cmd.status("repo-in-local-2")
-        self.assertEqual(f"Status of {repo_uuid2}:\nD /wat/test.me.once\nDONE", res.strip())
+        self.assertEqual(
+            f"Status of {repo_uuid2}:\n"
+            f"M /wat/test.me.different\n"
+            f"D /wat/test.me.once\n"
+            f"DONE", res.strip())
 
         res = hoard_cmd.status("repo-in-local")
-        self.assertEqual(f"Status of {repo_uuid}:\nM- /wat/test.me.different\nDONE", res.strip())
+        self.assertEqual(f"Status of {repo_uuid}:\nDONE", res.strip())
 
         res = hoard_cmd.remotes()
         self.assertEqual(
