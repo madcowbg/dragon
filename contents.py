@@ -124,7 +124,7 @@ class HoardFileProps:
 
         self.doc["status"][available_uuid] = FileStatus.AVAILABLE.value
 
-    def ensure_available(self, remote_uuid: str):
+    def mark_available(self, remote_uuid: str):
         self.doc["status"][remote_uuid] = FileStatus.AVAILABLE.value
 
     @property

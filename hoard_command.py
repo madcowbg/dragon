@@ -5,7 +5,7 @@ import shutil
 from abc import abstractmethod
 from io import StringIO
 from itertools import groupby
-from typing import Dict, Generator, List
+from typing import Dict, Generator, List, Optional
 
 from config import HoardRemote, HoardConfig, CavePath, HoardPaths, CaveType
 from contents import FileProps, HoardFileProps, Contents, HoardContents, FileStatus
@@ -76,7 +76,7 @@ class PartialDiffHandler(DiffHandler):
             out.write(f"?{diff.hoard_file}\n")
         elif goal_status == FileStatus.GET or goal_status == FileStatus.UNKNOWN:
             logging.info(f"mark {diff.hoard_file} as available here!")
-            self.hoard.fsobjects.files[diff.hoard_file].ensure_available(self.remote_uuid)
+            self.hoard.fsobjects.files[diff.hoard_file].mark_available(self.remote_uuid)
             out.write(f"={diff.hoard_file}\n")
         elif goal_status == FileStatus.AVAILABLE:
             pass
@@ -164,7 +164,7 @@ class BackupDiffHandler(DiffHandler):
 
         goal_status = self.hoard.fsobjects.files[diff.hoard_file].status(self.remote_uuid)
         if goal_status == FileStatus.GET or goal_status == FileStatus.UNKNOWN:
-            self.hoard.fsobjects.files[diff.hoard_file].ensure_available(self.remote_uuid)
+            self.hoard.fsobjects.files[diff.hoard_file].mark_available(self.remote_uuid)
             out.write(f"={diff.hoard_file}\n")
 
     def handle_file_contents_differ(self, diff: FileContentsDiffer, out: StringIO):
@@ -442,7 +442,7 @@ class HoardCommand(object):
         self.add_remote(to_path, name=name, mount_point=mount_at)
         return f"DONE"
 
-    def populate(self, to_repo: str):
+    def populate(self, to_repo: str):  # FIXME deprecate this in favor of sync-contents
         logging.info(f"Loading hoard TOML...")
         hoard = HoardContents.load(self._hoard_contents_filename())
 
@@ -519,14 +519,74 @@ class HoardCommand(object):
             out.write("DONE")
             return out.getvalue()
 
+    def sync_contents(self, repo: Optional[str] = None):
+        config = self.config()
+
+        logging.info(f"Loading hoard TOML...")
+        hoard = HoardContents.load(self._hoard_contents_filename())
+
+        repo_uuids: List[str] = \
+            [self._resolve_remote_uuid(repo)] if repo is not None else [r.uuid for r in config.remotes.all()]
+
+        restore_cache = RestoreCache(self)
+
+        with StringIO() as out:
+            logging.info("try getting all requested files, per repo")
+            for repo_uuid in repo_uuids:
+                repo_mounted_at = config.remotes[repo_uuid].mounted_at
+                logging.info(f"fetching for {config.remotes[repo_uuid].name} mounted at {repo_mounted_at}")
+
+                for hoard_file, hoard_props in sorted(hoard.fsobjects.files.items()):
+                    goal_status = hoard_props.status(repo_uuid)
+                    if goal_status == FileStatus.GET:
+                        local_file_to_restore = path_in_local(hoard_file, mounted_at=repo_mounted_at)
+                        logging.debug(f"restoring {hoard_file} to {local_file_to_restore}...")
+
+                        success, fullpath = _restore(
+                            hoard_file, local_file_to_restore, repo_uuid, hoard_props, restore_cache)
+                        if success:
+                            out.write(f"+ {local_file_to_restore}\n")
+                            hoard_props.mark_available(repo_uuid)
+                        else:
+                            out.write(f"E {local_file_to_restore}\n")
+                            logging.error("error restoring file!")
+
+            logging.info("Writing hoard file...")
+            hoard.write()
+
+            logging.info("try cleaning unneeded files, per repo")
+            for repo_uuid in repo_uuids:
+                logging.info(f"cleaning repo {config.remotes[repo_uuid].name}")
+
+                for hoard_file, hoard_props in sorted(hoard.fsobjects.files.items()):
+                    goal_status = hoard_props.status(repo_uuid)
+                    if goal_status == FileStatus.CLEANUP:
+                        to_be_got = hoard_props.by_status(FileStatus.GET)
+
+                        if len(to_be_got) == 0:
+                            logging.info("file doesn't need to be copied anymore, cleaning")
+                            hoard_props.remove_status(repo_uuid)
+                            out.write(f"c {local_file_to_restore}\n")
+                        else:
+                            logging.info(f"file needs to be copied in {len(to_be_got)} places, retaining")
+                            out.write(f"~ {local_file_to_restore}\n")
+
+            logging.info("Writing hoard file...")
+            hoard.write()
+
+            out.write("DONE")
+            return out.getvalue()
+
 
 def _restore(
-        hoard_file: str, local_file: str, local_uuid: str, hoard_props: HoardFileProps,
+        hoard_file: str, local_file_to_restore: str, local_uuid: str, hoard_props: HoardFileProps,
         restore_cache: "RestoreCache") -> (bool, str):
-    fullpath_to_restore = os.path.join(restore_cache.remote_path(local_uuid), local_file)
+    fullpath_to_restore = os.path.join(restore_cache.remote_path(local_uuid), local_file_to_restore)
     logging.info(f"Restoring hoard file {hoard_file} to {fullpath_to_restore}.")
 
-    for remote_uuid in hoard_props.available_at:
+    candidates = hoard_props.by_status(FileStatus.AVAILABLE) + hoard_props.by_status(FileStatus.CLEANUP)
+
+    for remote_uuid in candidates:
         if restore_cache.config.remotes[remote_uuid] is None:
             logging.warning(f"remote {remote_uuid} is invalid, won't try to restore")
             continue
@@ -552,6 +612,7 @@ def _restore(
         except shutil.SameFileError as e:
             logging.error(f"Are same file: {e}")
 
+    logging.error(f"Did not find any available for {hoard_file}!")
     return False, fullpath_to_restore
 
 

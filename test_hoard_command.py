@@ -396,6 +396,49 @@ class TestRepoCommand(unittest.TestCase):
             "/wat/test.me.6 = g:2 c:1\n"
             "DONE", res)
 
+    def test_sync_hoard_file_contents(self):
+        populate_repotypes(self.tmpdir.name)
+        hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = self._init_complex_hoard()
+
+        hoard_cmd.refresh("repo-partial-name")
+        hoard_cmd.refresh("repo-full-name")
+        hoard_cmd.refresh("repo-backup-name")  # just registers the files already in backup
+        hoard_cmd.refresh("repo-incoming-name")
+
+        res = hoard_cmd.list_files()
+        self.assertEqual(
+            "/test.me.1 = a:3\n"
+            "/test.me.4 = a:1 g:1\n"
+            "/test.me.5 = g:2 c:1\n"
+            "/wat/test.me.2 = a:2\n"
+            "/wat/test.me.3 = a:1 g:3\n"
+            "/wat/test.me.6 = g:2 c:1\n"
+            "DONE", res)
+
+        res = hoard_cmd.sync_contents("repo-partial-name")
+        self.assertEqual(
+            "+ test.me.4\n"
+            "+ test.me.5\n"
+            "+ wat/test.me.3\n"
+            "+ wat/test.me.6\n"
+            "DONE", res)
+
+        res = hoard_cmd.list_files()
+        self.assertEqual(
+            "/test.me.1 = a:3\n"
+            "/test.me.4 = a:2\n"
+            "/test.me.5 = a:1 g:1 c:1\n"
+            "/wat/test.me.2 = a:2\n"
+            "/wat/test.me.3 = a:2 g:2\n"
+            "/wat/test.me.6 = a:1 g:1 c:1\n"
+            "DONE", res)
+
+        res = partial_cave_cmd.refresh()
+        self.assertEqual("Refresh done!", res)
+
+        res = hoard_cmd.status("repo-partial-name")
+        self.assertEqual(f"Status of {partial_cave_cmd.current_uuid()}:\nDONE", res)
+
 
 def pretty_file_writer(tmpdir: str) -> Callable[[str, str], None]:
     def pfw(path: str, contents: str):
