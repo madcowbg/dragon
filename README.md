@@ -1,3 +1,5 @@
+<p align="center"><img src="doc/dragon.png" width="250px" /></p>
+
 # Motivation
 
 Through no fault of my own I have found myself tending to a hoarding forest that has been growing for some years now.
@@ -10,14 +12,14 @@ close ... for now), but also each device contains some of the data in the hoard,
 
 Keeping all of that in sync is a small nightmare.
 
-Alternatives, that turned out to be insufficient:
+Alternatives that turned out to be insufficient:
 
 - Sure, a bunch of [rsync](https://linux.die.net/man/1/rsync) scripts could handle it ... for now, at least. That is not
   scalable, however, and a peculiar
   problem presents itself with the set of backups. I don't want to necessarily manage 10 or more HDDs/SSDs that contain
   the backups of all the data, and manually split where each sub-folder goes.
-- [git-annex](https://git-annex.branchable.com/) is powerful but inflexible ... and slow for large repositories on
-  Windows ... and utterly confusing as to
+- [git-annex](https://git-annex.branchable.com/) is magical and powerful but inflexible ... and slow for large repositories on
+  Windows with >100k files... and utterly confusing as to
   what exactly is happening at each instant in time, making it frustrating to deal with on a daily basis. Even with
   partial checkouts, its insistence to put everything in the same hierarchy and touching the actual files to convert to
   symlinks is very inconsiderate and incompatible with many workflows, e.g. if you rely on modification times for
@@ -33,7 +35,7 @@ There has got to be a better way, and [**Dragon**](https://github.com/madcowbg/d
 
 ## Promises
 
-- future-proof - all data is in plain filesystems, no recovery solutions needed to get it out.
+- future-proof - all data is in plain filesystems, no recovery solutions needed to get it out should you choose to.
 - ubiquitous - all of your data is merged logically into a single hierarchy, yet can manifest partially in separate
   locations, so it is compatible with basically any usage of that data.
 - powerful - one-click sync, and backup with multiple copies.
