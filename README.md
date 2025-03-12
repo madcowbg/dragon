@@ -8,7 +8,7 @@ I have a bunch of storage devices (shown on the right) that I want to keep in sy
 logically belong. Needless to say, none of the devices are large enough to contain everything (although the NAS comes
 close ... for now), but also each device contains some of the data in the hoard, and has a purpose.
 
-![Hoarding a forest](./doc/Hoard Graph.png?raw=true)
+<img src="doc/Hoard Graph.png"/>
 
 Keeping all of that in sync is a small nightmare.
 
