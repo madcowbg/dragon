@@ -507,7 +507,6 @@ class HoardCommand(object):
         repo_uuids: List[str] = \
             [self._resolve_remote_uuid(repo)] if repo is not None else [r.uuid for r in config.remotes.all()]
 
-        restore_cache = RestoreCache(self)
         pathing = HoardPathing(config, self.paths())
 
         with StringIO() as out:
@@ -518,16 +517,15 @@ class HoardCommand(object):
                 for hoard_file, hoard_props in sorted(hoard.fsobjects.files.items()):
                     goal_status = hoard_props.status(repo_uuid)
                     if goal_status == FileStatus.GET:
-                        local_file_to_restore = pathing.in_hoard(hoard_file).at_local(repo_uuid).as_posix()
-                        logging.debug(f"restoring {hoard_file} to {local_file_to_restore}...")
+                        hoard_filepath = pathing.in_hoard(hoard_file)
+                        logging.debug(f"restoring {hoard_file} to {hoard_filepath.at_local(repo_uuid).as_posix()}...")
 
-                        success, fullpath = _restore(
-                            hoard_file, local_file_to_restore, repo_uuid, hoard_props, restore_cache)
+                        success, fullpath = _restore(hoard_filepath, repo_uuid, hoard_props, config)
                         if success:
-                            out.write(f"+ {local_file_to_restore}\n")
+                            out.write(f"+ {hoard_filepath.at_local(repo_uuid).as_posix()}\n")
                             hoard_props.mark_available(repo_uuid)
                         else:
-                            out.write(f"E {local_file_to_restore}\n")
+                            out.write(f"E {hoard_filepath.at_local(repo_uuid).as_posix()}\n")
                             logging.error("error restoring file!")
 
             logging.info("Writing hoard file...")
@@ -598,20 +596,20 @@ class HoardCommand(object):
             return out.getvalue()
 
 
-def _restore(  # TODO replace with HoardPath
-        hoard_file: str, local_file_to_restore: str, local_uuid: str, hoard_props: HoardFileProps,
-        restore_cache: "RestoreCache") -> (bool, str):
-    fullpath_to_restore = restore_cache.pathing.in_local(local_file_to_restore, local_uuid).on_device_path()
+def _restore(
+        hoard_file: HoardPathing.HoardPath, local_uuid: str, hoard_props: HoardFileProps,
+        config: HoardConfig) -> (bool, str):
+    fullpath_to_restore = hoard_file.at_local(local_uuid).on_device_path()
     logging.info(f"Restoring hoard file {hoard_file} to {fullpath_to_restore}.")
 
     candidates = hoard_props.by_status(FileStatus.AVAILABLE) + hoard_props.by_status(FileStatus.CLEANUP)
 
     for remote_uuid in candidates:
-        if restore_cache.config.remotes[remote_uuid] is None:
+        if config.remotes[remote_uuid] is None:
             logging.warning(f"remote {remote_uuid} is invalid, won't try to restore")
             continue
 
-        file_fullpath = restore_cache.pathing.in_hoard(hoard_file).at_local(remote_uuid).on_device_path()
+        file_fullpath = hoard_file.at_local(remote_uuid).on_device_path()
 
         if not os.path.isfile(file_fullpath):
             logging.error(f"File {file_fullpath} does not exist, but is needed for restore from {remote_uuid}!")
@@ -638,20 +636,8 @@ def _restore(  # TODO replace with HoardPath
     return False, fullpath_to_restore
 
 
-class RestoreCache:  # TODO replace with HoardPathing
-    def __init__(self, cmd: HoardCommand):
-        self.config = cmd.config()
-        self.paths = cmd.paths()
-        self.pathing = HoardPathing(self.config, self.paths)
-
-    def mounted_at(self, repo_uuid: str) -> str:
-        return self.config.remotes[repo_uuid].mounted_at
-
-    def remote_path(self, repo_uuid: str) -> str:
-        return self.paths[repo_uuid].find()
-
-
-def compare_local_to_hoard(local: Contents, hoard: HoardContents, config: HoardConfig, paths: HoardPaths) -> Generator[Diff, None, None]:
+def compare_local_to_hoard(local: Contents, hoard: HoardContents, config: HoardConfig, paths: HoardPaths) -> Generator[
+    Diff, None, None]:
     pathing = HoardPathing(config, paths)
 
     print("Comparing current files to hoard:")
