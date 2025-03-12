@@ -533,6 +533,33 @@ class HoardCommand(object):
             out.write("DONE")
             return out.getvalue()
 
+    def enable_content(self, repo: str, path: str = ""):
+        config = self.config()
+
+        logging.info(f"Loading hoard TOML...")
+        hoard = HoardContents.load(self._hoard_contents_filename())
+
+        repo_uuid = self._resolve_remote_uuid(repo)
+        repo_mounted_at = config.remotes[repo_uuid].mounted_at
+        logging.info(f"repo {repo} mounted at {repo_mounted_at}")
+        path_to_enable_in_hoard = pathlib.Path(os.path.join(repo_mounted_at, path)).as_posix()
+        logging.info(f"enabling content at {path_to_enable_in_hoard}")
+
+        with StringIO() as out:
+            for hoard_file, hoard_props in hoard.fsobjects.files.items():
+                if hoard_file.startswith(path_to_enable_in_hoard) \
+                        and hoard_props.status(repo_uuid) != FileStatus.AVAILABLE \
+                        and hoard_props.status(repo_uuid) != FileStatus.GET:
+                    logging.info(f"enabling file {hoard_file} on {repo_uuid}")
+                    hoard_props.mark_to_get(repo_uuid)
+                    out.write(f"+{hoard_file}\n")
+
+            logging.info("Writing hoard file...")
+            hoard.write()
+
+            out.write("DONE")
+            return out.getvalue()
+
 
 def _restore(
         hoard_file: str, local_file_to_restore: str, local_uuid: str, hoard_props: HoardFileProps,
@@ -560,6 +587,10 @@ def _restore(
             logging.error(
                 f"File {file_fullpath} with fast hash {remote_hash}!={hoard_props.fasthash} that was expected.")
             continue
+
+        dirpath, _ = os.path.split(fullpath_to_restore)
+        print(f"making necessary folders to restore: {dirpath}")
+        os.makedirs(dirpath, exist_ok=True)
 
         logging.info(f"Copying {file_fullpath} to {fullpath_to_restore}")
         try:

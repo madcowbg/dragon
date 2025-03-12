@@ -544,6 +544,82 @@ class TestRepoCommand(unittest.TestCase):
 
         self.assertEqual([], dump_file_list(self.tmpdir.name, 'repo-incoming'))
 
+    def test_partial_cloning(self):
+        populate_repotypes(self.tmpdir.name)
+        pfw = pretty_file_writer(self.tmpdir.name)
+        pfw("repo-full/wat/inner/another.file", "asdafaqw")
+
+        full_cave_cmd = TotalCommand(path=join(self.tmpdir.name, "repo-full")).cave
+        full_cave_cmd.init()
+        full_cave_cmd.refresh()
+
+        hoard_cmd = TotalCommand(path=join(self.tmpdir.name, "hoard")).hoard
+
+        hoard_cmd.add_remote(
+            remote_path=join(self.tmpdir.name, "repo-full"), name="repo-full-name", mount_point="/",
+            type=CaveType.PARTIAL, fetch_new=True)
+
+        res = hoard_cmd.refresh("repo-full-name")
+        self.assertEqual(
+            "+/test.me.1\n"
+            "+/test.me.4\n"
+            "+/wat/test.me.2\n"
+            "+/wat/test.me.3\n"
+            "+/wat/inner/another.file\n"
+            "Sync'ed repo-full-name to hoard!", res)
+
+        os.mkdir(join(self.tmpdir.name, "repo-cloned-wat"))
+        res = hoard_cmd.clone(
+            to_path=join(self.tmpdir.name, "repo-cloned-wat"), mount_at="/wat", name="repo-cloned-wat", fetch_new=True)
+        self.assertEqual("DONE", res)
+
+        cloned_cave_cmd = TotalCommand(path=join(self.tmpdir.name, "repo-cloned-wat")).cave
+
+        res = hoard_cmd.enable_content(repo="repo-cloned-wat", path="inner")
+        self.assertEqual("+/wat/inner/another.file\nDONE", res)
+
+        res = hoard_cmd.list_files()
+        self.assertEqual(
+            "/test.me.1 = a:1\n"
+            "/test.me.4 = a:1\n"
+            "/wat/inner/another.file = a:1 g:1\n"
+            "/wat/test.me.2 = a:1\n"
+            "/wat/test.me.3 = a:1\n"
+            "DONE", res)
+
+        self.assertEqual([], dump_file_list(self.tmpdir.name, "repo-cloned-wat/"))  # no files yet
+
+        res = hoard_cmd.sync_contents("repo-cloned-wat")
+        self.assertEqual(
+            f"{cloned_cave_cmd.current_uuid()}:\n"
+            "+ inner/another.file\n"
+            f"{cloned_cave_cmd.current_uuid()}:\n"
+            "DONE", res)
+
+        self.assertEqual(
+            ['repo-cloned-wat/inner/another.file'],
+            dump_file_list(self.tmpdir.name, "repo-cloned-wat/"))
+
+        res = cloned_cave_cmd.refresh()
+        self.assertEqual("Refresh done!", res)
+
+        res = hoard_cmd.enable_content(repo="repo-cloned-wat")
+        self.assertEqual("+/wat/test.me.2\n+/wat/test.me.3\nDONE", res)
+
+        res = hoard_cmd.sync_contents("repo-cloned-wat")
+        self.assertEqual(
+            f"{cloned_cave_cmd.current_uuid()}:\n"
+            "+ test.me.2\n"
+            "+ test.me.3\n"
+            f"{cloned_cave_cmd.current_uuid()}:\n"
+            "DONE", res)
+
+        self.assertEqual([
+            'repo-cloned-wat/inner/another.file',
+            'repo-cloned-wat/test.me.2',
+            'repo-cloned-wat/test.me.3'],
+            dump_file_list(self.tmpdir.name, "repo-cloned-wat/"))
+
 
 def dump_file_list(tmpdir: str, path: str) -> List[str]:
     return sorted([
