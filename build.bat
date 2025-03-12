@@ -1,0 +1,1 @@
+pyinstaller --onefile dragon.py -i .\doc\dragon.ico
