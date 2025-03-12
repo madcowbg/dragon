@@ -41,16 +41,21 @@ class HoardRemote:
         """ Marks whether this repo should auto-fetch all newly-added files."""
         return self.doc.get("fetch_new", False)
 
+    @fetch_new.setter
+    def fetch_new(self, value: bool):
+        self.doc["fetch_new"] = value
+
 
 class HoardRemotes:
     def __init__(self, doc: Dict[str, Any]):
         self.doc = doc
 
-    def declare(self, current_uuid: str, name: str, cave_type: CaveType, mount_point: str):
+    def declare(self, current_uuid: str, name: str, cave_type: CaveType, mount_point: str, fetch_new: bool):
         self.doc[current_uuid] = {
             "name": name,
             "type": cave_type.value,
-            "mounted_at": mount_point}
+            "mounted_at": mount_point,
+            "fetch_new": fetch_new}
 
     def names_map(self):
         return dict((props["name"], remote) for remote, props in self.doc.items() if "name" in props)

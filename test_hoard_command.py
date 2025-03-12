@@ -292,7 +292,7 @@ class TestRepoCommand(unittest.TestCase):
 
         hoard_cmd.add_remote(
             remote_path=join(self.tmpdir.name, "repo-full"), name="repo-full-name", mount_point="/",
-            type=CaveType.PARTIAL)
+            type=CaveType.PARTIAL, fetch_new=True)
 
         hoard_cmd.add_remote(
             remote_path=join(self.tmpdir.name, "repo-backup"), name="repo-backup-name", mount_point="/",
@@ -336,8 +336,8 @@ class TestRepoCommand(unittest.TestCase):
 
         res = hoard_cmd.list_files()
         self.assertEqual(
-            "/test.me.1 = a:1 g:1\n"
-            "/wat/test.me.2 = a:1 g:1\n"
+            "/test.me.1 = a:1 g:2\n"
+            "/wat/test.me.2 = a:1 g:2\n"
             "DONE", res)
 
         res = hoard_cmd.refresh("repo-partial-name")  # does noting...
@@ -345,8 +345,8 @@ class TestRepoCommand(unittest.TestCase):
 
         res = hoard_cmd.list_files()
         self.assertEqual(
-            "/test.me.1 = a:1 g:1\n"
-            "/wat/test.me.2 = a:1 g:1\n"
+            "/test.me.1 = a:1 g:2\n"
+            "/wat/test.me.2 = a:1 g:2\n"
             "DONE", res)
 
         res = hoard_cmd.refresh("repo-full-name")
@@ -373,31 +373,37 @@ class TestRepoCommand(unittest.TestCase):
         self.assertEqual(
             "/test.me.1 = a:3\n"
             "/test.me.4 = a:1 g:1\n"
-            "/wat/test.me.2 = a:2\n"
-            "/wat/test.me.3 = a:2 g:1\n"
+            "/wat/test.me.2 = a:2 g:1\n"
+            "/wat/test.me.3 = a:2\n"
             "DONE", res)
 
         res = hoard_cmd.refresh("repo-incoming-name")
         self.assertEqual(
+            "-/test.me.4\n"
             "<+/test.me.5\n"
             "u/wat/test.me.3\n"
             "<+/wat/test.me.6\n"
             "Sync'ed repo-incoming-name to hoard!", res.strip())
 
         res = hoard_cmd.refresh("repo-incoming-name")
-        self.assertEqual("Sync'ed repo-incoming-name to hoard!", res.strip())
+        self.assertEqual(
+            "-/test.me.4\n"
+            "-/test.me.5\n"
+            "-/wat/test.me.3\n"
+            "-/wat/test.me.6\n"
+            "Sync'ed repo-incoming-name to hoard!", res.strip())
 
         res = hoard_cmd.list_files()
         self.assertEqual(
             "/test.me.1 = a:3\n"
-            "/test.me.4 = a:1 g:1\n"
+            "/test.me.4 = a:1 g:1 c:1\n"
             "/test.me.5 = g:2 c:1\n"
-            "/wat/test.me.2 = a:2\n"
-            "/wat/test.me.3 = a:1 g:3\n"
+            "/wat/test.me.2 = a:2 g:1\n"
+            "/wat/test.me.3 = g:2 c:1\n"
             "/wat/test.me.6 = g:2 c:1\n"
             "DONE", res)
 
-    def test_sync_hoard_file_contents(self):
+    def test_sync_hoard_file_contents_one(self):
         populate_repotypes(self.tmpdir.name)
         hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = self._init_complex_hoard()
 
@@ -409,59 +415,121 @@ class TestRepoCommand(unittest.TestCase):
         res = hoard_cmd.list_files()
         self.assertEqual(
             "/test.me.1 = a:3\n"
-            "/test.me.4 = a:1 g:1\n"
+            "/test.me.4 = a:1 g:1 c:1\n"
             "/test.me.5 = g:2 c:1\n"
-            "/wat/test.me.2 = a:2\n"
-            "/wat/test.me.3 = a:1 g:3\n"
+            "/wat/test.me.2 = a:2 g:1\n"
+            "/wat/test.me.3 = a:1 g:2\n"
             "/wat/test.me.6 = g:2 c:1\n"
             "DONE", res)
 
         self.assertEqual([
-            f'repo-partial/.hoard/{partial_cave_cmd.current_uuid()}.contents',
-            'repo-partial/.hoard/current.uuid',
             'repo-partial/test.me.1',
             'repo-partial/wat/test.me.2', ], _list_files(self.tmpdir.name, 'repo-partial'))
 
-        res = hoard_cmd.sync_contents("repo-partial-name")
+        res = hoard_cmd.sync_contents("repo-full-name")
         self.assertEqual(
-            "+ test.me.4\n"
+            f"{full_cave_cmd.current_uuid()}:\n"
             "+ test.me.5\n"
             "+ wat/test.me.3\n"
             "+ wat/test.me.6\n"
+            f"{full_cave_cmd.current_uuid()}:\n"
             "DONE", res)
 
         self.assertEqual([
-            f'repo-partial/.hoard/{partial_cave_cmd.current_uuid()}.contents',
-            'repo-partial/.hoard/current.uuid',
+            'repo-full/test.me.1',
+            'repo-full/test.me.4',
+            'repo-full/test.me.5',
+            'repo-full/wat/test.me.2',
+            'repo-full/wat/test.me.3',
+            'repo-full/wat/test.me.6'], _list_files(self.tmpdir.name, 'repo-full'))
+
+        res = hoard_cmd.list_files()
+        self.assertEqual(
+            "/test.me.1 = a:3\n"
+            "/test.me.4 = a:1 g:1 c:1\n"
+            "/test.me.5 = a:1 g:1 c:1\n"
+            "/wat/test.me.2 = a:2 g:1\n"
+            "/wat/test.me.3 = a:2 g:1\n"
+            "/wat/test.me.6 = a:1 g:1 c:1\n"
+            "DONE", res)
+
+        res = full_cave_cmd.refresh()
+        self.assertEqual("Refresh done!", res)
+
+        res = hoard_cmd.status("repo-full-name")
+        self.assertEqual(f"Status of {full_cave_cmd.current_uuid()}:\nDONE", res)
+
+    def test_sync_hoard_file_contents_all(self):
+        populate_repotypes(self.tmpdir.name)
+        hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = self._init_complex_hoard()
+
+        hoard_cmd.refresh("repo-partial-name")
+        hoard_cmd.refresh("repo-full-name")
+        hoard_cmd.refresh("repo-backup-name")  # just registers the files already in backup
+        hoard_cmd.refresh("repo-incoming-name")
+
+        res = hoard_cmd.sync_contents()
+        self.assertEqual(
+            f"{partial_cave_cmd.current_uuid()}:\n"
+            f"{full_cave_cmd.current_uuid()}:\n"
+            "+ test.me.5\n"
+            "+ wat/test.me.3\n"
+            "+ wat/test.me.6\n"
+            f"{backup_cave_cmd.current_uuid()}:\n"
+            "+ test.me.4\n"
+            "+ test.me.5\n"
+            "+ wat/test.me.2\n"
+            "+ wat/test.me.3\n"
+            "+ wat/test.me.6\n"
+            f"{incoming_cave_cmd.current_uuid()}:\n"
+            f"{partial_cave_cmd.current_uuid()}:\n"
+            f"{full_cave_cmd.current_uuid()}:\n"
+            f"{backup_cave_cmd.current_uuid()}:\n"
+            f"{incoming_cave_cmd.current_uuid()}:\n"
+            "c test.me.4\n"
+            "c test.me.5\n"
+            "c wat/test.me.6\n"
+            "DONE", res)
+
+        self.assertEqual([
             'repo-partial/test.me.1',
-            'repo-partial/test.me.4',
-            'repo-partial/test.me.5',
-            'repo-partial/wat/test.me.2',
-            'repo-partial/wat/test.me.3',
-            'repo-partial/wat/test.me.6'], _list_files(self.tmpdir.name, 'repo-partial'))
+            'repo-partial/wat/test.me.2'],
+            _list_files(self.tmpdir.name, 'repo-partial'))
 
         res = hoard_cmd.list_files()
         self.assertEqual(
             "/test.me.1 = a:3\n"
             "/test.me.4 = a:2\n"
-            "/test.me.5 = a:1 g:1 c:1\n"
-            "/wat/test.me.2 = a:2\n"
-            "/wat/test.me.3 = a:2 g:2\n"
-            "/wat/test.me.6 = a:1 g:1 c:1\n"
+            "/test.me.5 = a:2\n"
+            "/wat/test.me.2 = a:3\n"
+            "/wat/test.me.3 = a:3\n"
+            "/wat/test.me.6 = a:2\n"
             "DONE", res)
 
-        res = partial_cave_cmd.refresh()
-        self.assertEqual("Refresh done!", res)
+        self.assertEqual([
+            'repo-full/test.me.1',
+            'repo-full/test.me.4',
+            'repo-full/test.me.5',
+            'repo-full/wat/test.me.2',
+            'repo-full/wat/test.me.3',
+            'repo-full/wat/test.me.6'], _list_files(self.tmpdir.name, 'repo-full'))
 
-        res = hoard_cmd.status("repo-partial-name")
-        self.assertEqual(f"Status of {partial_cave_cmd.current_uuid()}:\nDONE", res)
+        self.assertEqual([
+            'repo-backup/test.me.1',
+            'repo-backup/test.me.4',
+            'repo-backup/test.me.5',
+            'repo-backup/wat/test.me.2',
+            'repo-backup/wat/test.me.3',
+            'repo-backup/wat/test.me.6'], _list_files(self.tmpdir.name, 'repo-backup'))
+
+        self.assertEqual(['repo-incoming/wat/test.me.3'], _list_files(self.tmpdir.name, 'repo-incoming'))
 
 
 def _list_files(tmpdir: str, path: str) -> List[str]:
     return sorted([
         pathlib.Path(join(dirpath, filename)).relative_to(tmpdir).as_posix()
         for dirpath, dirnames, filenames in os.walk(join(tmpdir, path), topdown=True)
-        for filename in filenames])
+        for filename in filenames if dirpath.find(".hoard") == -1])
 
 
 def pretty_file_writer(tmpdir: str) -> Callable[[str, str], None]:

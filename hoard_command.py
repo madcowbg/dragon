@@ -123,7 +123,7 @@ class IncomingDiffHandler(DiffHandler):
         super().__init__(remote_uuid, hoard)
         self.repos_to_add_new_files = repos_to_add_new_files
 
-    def handle_local_only(self, diff: "FileMissingInHoard", out: StringIO):
+    def handle_local_only(self, diff: FileMissingInHoard, out: StringIO):
         out.write(f"<+{diff.hoard_file}\n")
         hoard_file = self.hoard.fsobjects.add_new_file(
             diff.hoard_file, diff.local_props,
@@ -131,8 +131,11 @@ class IncomingDiffHandler(DiffHandler):
         logging.info(f"marking {diff.hoard_file} for cleanup from {self.remote_uuid}")
         hoard_file.mark_for_cleanup(repo_uuid=self.remote_uuid)
 
-    def handle_file_is_same(self, diff: "FileIsSame", out: StringIO):
+    def handle_file_is_same(self, diff: FileIsSame, out: StringIO):
         logging.info(f"incoming file is already recorded in hoard.")
+        logging.info(f"marking {diff.hoard_file} for cleanup from {self.remote_uuid}")
+        out.write(f"-{diff.hoard_file}\n")
+        diff.hoard_props.mark_for_cleanup(repo_uuid=self.remote_uuid)
 
     def handle_file_contents_differ(self, diff: FileContentsDiffer, out: StringIO):
         goal_status = self.hoard.fsobjects.files[diff.hoard_file].status(self.remote_uuid)
@@ -155,31 +158,37 @@ class IncomingDiffHandler(DiffHandler):
 
 
 class BackupDiffHandler(DiffHandler):
-    def handle_local_only(self, diff: "FileMissingInHoard", out: StringIO):
+    def handle_local_only(self, diff: FileMissingInHoard, out: StringIO):
         logging.info(f"skipping obsolete file from backup: {diff.hoard_file}")
         out.write(f"?{diff.hoard_file}\n")
 
-    def handle_file_is_same(self, diff: "FileIsSame", out: StringIO):
+    def handle_file_is_same(self, diff: FileIsSame, out: StringIO):
         logging.info(f"file already backed up ... skipping.")
 
-        goal_status = self.hoard.fsobjects.files[diff.hoard_file].status(self.remote_uuid)
+        goal_status = diff.hoard_props.status(self.remote_uuid)
         if goal_status == FileStatus.GET or goal_status == FileStatus.UNKNOWN:
-            self.hoard.fsobjects.files[diff.hoard_file].mark_available(self.remote_uuid)
+            diff.hoard_props.mark_available(self.remote_uuid)
             out.write(f"={diff.hoard_file}\n")
 
     def handle_file_contents_differ(self, diff: FileContentsDiffer, out: StringIO):
-        goal_status = self.hoard.fsobjects.files[diff.hoard_file].status(self.remote_uuid)
+        goal_status = diff.hoard_props.status(self.remote_uuid)
         if goal_status == FileStatus.AVAILABLE:  # was backed-up here, get it again
             out.write(f"g{diff.hoard_file}\n")
             diff.hoard_props.mark_to_get(self.remote_uuid)
 
     def handle_hoard_only(self, diff: FileMissingInLocal, out: StringIO):
-        goal_status = self.hoard.fsobjects.files[diff.hoard_file].status(self.remote_uuid)
+        goal_status = diff.hoard_props.status(self.remote_uuid)
         if goal_status == FileStatus.AVAILABLE:  # was backed-up here, get it again
             out.write(f"g{diff.hoard_file}\n")
             diff.hoard_props.mark_to_get(self.remote_uuid)
         elif goal_status == FileStatus.CLEANUP:  # file already deleted
             diff.hoard_props.remove_status(self.remote_uuid)
+        elif goal_status == FileStatus.GET:
+            pass
+        elif goal_status == FileStatus.UNKNOWN:
+            diff.hoard_props.mark_to_get(self.remote_uuid)  # fixme make into a backup set
+        else:
+            raise NotImplementedError(f"Unrecognized goal status {goal_status}")
 
 
 class HoardCommand(object):
@@ -202,7 +211,9 @@ class HoardCommand(object):
         paths_file = os.path.join(self.hoardpath, PATHS_FILE)
         return HoardPaths.load(paths_file)
 
-    def add_remote(self, remote_path: str, name: str, mount_point: str, type: CaveType = CaveType.PARTIAL):
+    def add_remote(
+            self, remote_path: str, name: str, mount_point: str,
+            type: CaveType = CaveType.PARTIAL, fetch_new: bool = False):
         config = self.config()
         paths = self.paths()
 
@@ -219,7 +230,7 @@ class HoardCommand(object):
         if resolved_uuid is not None and resolved_uuid != remote_uuid and resolved_uuid != name:  # fixme ugly AF
             raise ValueError(f"Remote uuid {name} already resolves to {resolved_uuid} and does not match {remote_uuid}")
 
-        config.remotes.declare(remote_uuid, name, type, mount_point)
+        config.remotes.declare(remote_uuid, name, type, mount_point, fetch_new)
         config.write()
 
         paths[remote_uuid] = CavePath.exact(remote_abs_path)
@@ -342,7 +353,7 @@ class HoardCommand(object):
 
         repos_to_add_new_files: List[HoardRemote] = [
             r for r in config.remotes.all() if
-            (r.type == CaveType.PARTIAL and r.fetch_new) or r.type == CaveType.PARTIAL]
+            (r.type == CaveType.PARTIAL and r.fetch_new) or r.type == CaveType.BACKUP]
         if remote_type == CaveType.PARTIAL:
             remote_op_handler: DiffHandler = PartialDiffHandler(
                 remote_uuid, hoard,
@@ -535,7 +546,7 @@ class HoardCommand(object):
             for repo_uuid in repo_uuids:
                 repo_mounted_at = config.remotes[repo_uuid].mounted_at
                 logging.info(f"fetching for {config.remotes[repo_uuid].name} mounted at {repo_mounted_at}")
-
+                out.write(f"{repo_uuid}:\n")
                 for hoard_file, hoard_props in sorted(hoard.fsobjects.files.items()):
                     goal_status = hoard_props.status(repo_uuid)
                     if goal_status == FileStatus.GET:
@@ -556,7 +567,9 @@ class HoardCommand(object):
 
             logging.info("try cleaning unneeded files, per repo")
             for repo_uuid in repo_uuids:
-                logging.info(f"cleaning repo {config.remotes[repo_uuid].name}")
+                repo_mounted_at = config.remotes[repo_uuid].mounted_at
+                logging.info(f"cleaning repo {config.remotes[repo_uuid].name} at {repo_mounted_at}")
+                out.write(f"{repo_uuid}:\n")
 
                 for hoard_file, hoard_props in sorted(hoard.fsobjects.files.items()):
                     goal_status = hoard_props.status(repo_uuid)
@@ -566,7 +579,17 @@ class HoardCommand(object):
                         if len(to_be_got) == 0:
                             logging.info("file doesn't need to be copied anymore, cleaning")
                             hoard_props.remove_status(repo_uuid)
-                            out.write(f"c {local_file_to_restore}\n")
+                            local_file_to_restore = path_in_local(hoard_file, mounted_at=repo_mounted_at)
+                            file_to_delete = os.path.join(restore_cache.remote_path(repo_uuid), local_file_to_restore)
+                            logging.info(f"deleting {file_to_delete}...")
+
+                            try:
+                                os.remove(file_to_delete)
+                                out.write(f"c {local_file_to_restore}\n")
+                                logging.info("file deleted!")
+                            except FileNotFoundError as e:
+                                out.write(f"E {local_file_to_restore}\n")
+                                logging.error(e)
                         else:
                             logging.info(f"file needs to be copied in {len(to_be_got)} places, retaining")
                             out.write(f"~ {local_file_to_restore}\n")
@@ -637,16 +660,13 @@ def compare_local_to_hoard(local: Contents, hoard: HoardContents, config: HoardC
         if curr_file_hoard_path not in hoard.fsobjects.files.keys():
             logging.info(f"local file not in hoard: {curr_file_hoard_path}")
             yield FileMissingInHoard(current_file, curr_file_hoard_path, props)
-        elif is_same_file(
-                local.fsobjects.files[current_file],
-                hoard.fsobjects.files[curr_file_hoard_path]):
+        elif is_same_file(local.fsobjects.files[current_file], hoard.fsobjects.files[curr_file_hoard_path]):
             logging.info(f"same in hoard {current_file}!")
-            yield FileIsSame(current_file, curr_file_hoard_path)
+            yield FileIsSame(current_file, curr_file_hoard_path, props, hoard.fsobjects.files[curr_file_hoard_path])
         else:
             logging.info(f"file changes {current_file}")
             yield FileContentsDiffer(
-                current_file, curr_file_hoard_path,
-                props, hoard.fsobjects.files[curr_file_hoard_path])
+                current_file, curr_file_hoard_path, props, hoard.fsobjects.files[curr_file_hoard_path])
 
     for hoard_file, props in hoard.fsobjects.files.copy().items():
         if not hoard_file.startswith(mounted_at):
