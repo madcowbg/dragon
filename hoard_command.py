@@ -268,10 +268,7 @@ class HoardCommand(object):
                 if isinstance(diff, FileMissingInHoard):
                     out.write(f"A {diff.hoard_file}\n")
                 elif isinstance(diff, FileContentsDiffer):
-                    if diff.local_props.mtime >= diff.hoard_props.mtime:
-                        out.write(f"M {diff.hoard_file}\n")
-                    else:
-                        out.write(f"M- {diff.hoard_file}\n")
+                    out.write(f"M {diff.hoard_file}\n")
                 elif isinstance(diff, FileMissingInLocal):
                     out.write(f"D {diff.hoard_file}\n")
                 elif isinstance(diff, DirMissingInHoard):

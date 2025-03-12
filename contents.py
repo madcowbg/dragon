@@ -101,16 +101,11 @@ class HoardFileProps:
         return self.doc["size"]
 
     @property
-    def mtime(self):
-        return self.doc["mtime"]
-
-    @property
     def fasthash(self):
         return self.doc["fasthash"]
 
     def replace_file(self, new_props: FileProps, available_uuid: str):
         self.doc["size"] = new_props.size
-        self.doc["mtime"] = new_props.mtime
         self.doc["fasthash"] = new_props.fasthash
 
         # mark for re-fetching everywhere it is already available, cancel getting it
@@ -172,7 +167,6 @@ class HoardFSObjects:
         self.doc[curr_file] = {
             "isdir": False,
             "size": props.size,
-            "mtime": props.mtime,
             "fasthash": props.fasthash,
             "status": dict((r.uuid, FileStatus.GET.value) for r in repos_to_add_new_files)
         }
