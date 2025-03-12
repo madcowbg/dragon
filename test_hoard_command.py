@@ -79,7 +79,7 @@ class TestRepoCommand(unittest.TestCase):
             dirs_exp=["/wat"])
 
         res = hoard_cmd.status("repo-in-local")
-        self.assertEqual(f"Status of {repo_uuid}:\nDONE", res.strip())
+        self.assertEqual(f"Status of {repo_uuid}:\nDF /wat\nDONE", res.strip())
 
     def _assert_hoard_contents(
             self, hoard_contents: HoardContents, files_exp: List[Tuple[str, int, int, str]], dirs_exp: List[str]):
@@ -144,10 +144,11 @@ class TestRepoCommand(unittest.TestCase):
             f"Status of {repo_uuid2}:\n"
             f"M /wat/test.me.different\n"
             f"D /wat/test.me.once\n"
+            "DF /wat\n"
             f"DONE", res.strip())
 
         res = hoard_cmd.status("repo-in-local")
-        self.assertEqual(f"Status of {repo_uuid}:\nDONE", res.strip())
+        self.assertEqual(f"Status of {repo_uuid}:\nDF /wat\nDONE", res.strip())
 
         res = hoard_cmd.remotes()
         self.assertEqual(
@@ -180,18 +181,18 @@ class TestRepoCommand(unittest.TestCase):
         repo_uuid = cave_cmd.current_uuid()
         hoard_cmd.refresh("repo-in-local")
 
-        self.assertEqual(f"Status of {repo_uuid}:\nDONE", hoard_cmd.status("repo-in-local").strip())
+        self.assertEqual(f"Status of {repo_uuid}:\nDF /wat\nDONE", hoard_cmd.status("repo-in-local").strip())
 
         os.mkdir(join(self.tmpdir.name, "repo", "newdir"))
         write_contents(join(self.tmpdir.name, "repo", "newdir", "newfile.is"), "lhiWFELHFE")
         os.remove(join(self.tmpdir.name, "repo", "wat", 'test.me.different'))
 
         # as is not refreshed, no change in status
-        self.assertEqual(f"Status of {repo_uuid}:\nDONE", hoard_cmd.status("repo-in-local").strip())
+        self.assertEqual(f"Status of {repo_uuid}:\nDF /wat\nDONE", hoard_cmd.status("repo-in-local").strip())
 
         cave_cmd.refresh()
         self.assertEqual(
-            f"Status of {repo_uuid}:\nA /newdir/newfile.is\nD /wat/test.me.different\nAF /newdir\nDONE",
+            f"Status of {repo_uuid}:\nA /newdir/newfile.is\nD /wat/test.me.different\nAF /newdir\nDF /wat\nDONE",
             hoard_cmd.status("repo-in-local").strip())
 
         res = hoard_cmd.refresh("repo-in-local")
@@ -203,6 +204,8 @@ class TestRepoCommand(unittest.TestCase):
         self.assertEqual(
             f"Status of {repo_uuid}:\n"
             f"D /wat/test.me.different\n"
+            "DF /wat\n"
+            "DF /newdir\n"
             f"DONE", hoard_cmd.status("repo-in-local").strip())
 
     def test_clone(self):
@@ -254,9 +257,11 @@ class TestRepoCommand(unittest.TestCase):
         res = hoard_cmd.status(new_uuid)
         self.assertEqual(
             f"Status of {new_uuid}:\n"
-            f"D /wat/test.me.different\n"
-            f"D /wat/test.me.once\n"
-            f"D /wat/test.me.twice\nDONE", res)
+            "D /wat/test.me.different\n"
+            "D /wat/test.me.once\n"
+            "D /wat/test.me.twice\n"
+            "DF /wat\n"
+            f"DONE", res)
 
         res = hoard_cmd.sync_contents(repo="cloned-repo")
         self.assertEqual(
@@ -273,6 +278,7 @@ class TestRepoCommand(unittest.TestCase):
         res = hoard_cmd.status(new_uuid)
         self.assertEqual(
             f"Status of {new_uuid}:\n"
+            "DF /wat\n"
             f"DONE", res.strip())
 
         res = hoard_cmd.sync_contents(repo="cloned-repo")
@@ -476,7 +482,10 @@ class TestRepoCommand(unittest.TestCase):
         self.assertEqual("Refresh done!", res)
 
         res = hoard_cmd.status("repo-full-name")
-        self.assertEqual(f"Status of {full_cave_cmd.current_uuid()}:\nDONE", res)
+        self.assertEqual(
+            f"Status of {full_cave_cmd.current_uuid()}:\n"
+            f"DF /wat\n"
+            f"DONE", res)
 
     def test_sync_hoard_file_contents_all(self):
         populate_repotypes(self.tmpdir.name)

@@ -32,9 +32,44 @@ def is_same_file(current: FileProps, hoard: HoardFileProps):
     return True  # files are the same
 
 
-def path_in_hoard(current_file: str, mounted_at: str) -> str:
-    curr_file_hoard_path = pathlib.Path(os.path.join(mounted_at, current_file)).as_posix()
-    return curr_file_hoard_path
+class HoardPathing:
+    def __init__(self, config: HoardConfig, paths: HoardPaths):
+        self._config = config
+        self._paths = paths
+
+    class HoardPath:
+        def __init__(self, path: str, pathing: "HoardPathing"):
+            self._path = pathlib.Path(path)
+            self._pathing = pathing
+
+        def as_posix(self) -> str: return self._path.as_posix()
+
+        def is_relative(self, repo_uuid: str) -> bool:
+            mounted_at = self._pathing._config.remotes[repo_uuid].mounted_at
+            return self._path.is_relative_to(mounted_at)
+
+        def at_local(self, repo_uuid: str) -> "HoardPathing.LocalPath":
+            mounted_at = self._pathing._config.remotes[repo_uuid].mounted_at
+            return HoardPathing.LocalPath(self._path.relative_to(mounted_at).as_posix(), repo_uuid, self._pathing)
+
+    class LocalPath:
+        def __init__(self, path: str, repo_uuid: str, pathing: "HoardPathing"):
+            self._path = pathlib.Path(path)
+            self._repo_uuid = repo_uuid
+            self._pathing = pathing
+
+        def as_posix(self) -> str: return self._path.as_posix()
+
+        def on_device_path(self) -> str:
+            return pathlib.Path(self._pathing._paths[self._repo_uuid].find()).joinpath(self._path).as_posix()
+
+        def at_hoard(self) -> "HoardPathing.HoardPath":
+            joined_path = pathlib.Path(self._pathing._config.remotes[self._repo_uuid].mounted_at).joinpath(self._path)
+            return HoardPathing.HoardPath(joined_path.as_posix(), self._pathing)
+
+    def in_hoard(self, path: str) -> HoardPath: return self.HoardPath(path, self)
+
+    def in_local(self, path: str, repo_uuid: str) -> LocalPath: return HoardPathing.LocalPath(path, repo_uuid, self)
 
 
 def path_in_local(hoard_file: str, mounted_at: str) -> str:
@@ -267,7 +302,7 @@ class HoardCommand(object):
         with StringIO() as out:
             out.write(f"Status of {remote_uuid}:\n")
 
-            for diff in compare_local_to_hoard(current_contents, hoard, self.config()):
+            for diff in compare_local_to_hoard(current_contents, hoard, self.config(), self.paths()):
                 if isinstance(diff, FileMissingInHoard):
                     out.write(f"A {diff.hoard_file}\n")
                 elif isinstance(diff, FileContentsDiffer):
@@ -367,7 +402,7 @@ class HoardCommand(object):
 
         logging.info("Merging local changes...")
         with StringIO() as out:
-            for diff in compare_local_to_hoard(current_contents, hoard, config):
+            for diff in compare_local_to_hoard(current_contents, hoard, config, self.paths()):
                 if isinstance(diff, FileMissingInHoard):
                     remote_op_handler.handle_local_only(diff, out)
                 elif isinstance(diff, FileIsSame):
@@ -473,17 +508,17 @@ class HoardCommand(object):
             [self._resolve_remote_uuid(repo)] if repo is not None else [r.uuid for r in config.remotes.all()]
 
         restore_cache = RestoreCache(self)
+        pathing = HoardPathing(config, self.paths())
 
         with StringIO() as out:
             logging.info("try getting all requested files, per repo")
             for repo_uuid in repo_uuids:
-                repo_mounted_at = config.remotes[repo_uuid].mounted_at
-                logging.info(f"fetching for {config.remotes[repo_uuid].name} mounted at {repo_mounted_at}")
+                logging.info(f"fetching for {config.remotes[repo_uuid].name}")
                 out.write(f"{repo_uuid}:\n")
                 for hoard_file, hoard_props in sorted(hoard.fsobjects.files.items()):
                     goal_status = hoard_props.status(repo_uuid)
                     if goal_status == FileStatus.GET:
-                        local_file_to_restore = path_in_local(hoard_file, mounted_at=repo_mounted_at)
+                        local_file_to_restore = pathing.in_hoard(hoard_file).at_local(repo_uuid).as_posix()
                         logging.debug(f"restoring {hoard_file} to {local_file_to_restore}...")
 
                         success, fullpath = _restore(
@@ -500,32 +535,34 @@ class HoardCommand(object):
 
             logging.info("try cleaning unneeded files, per repo")
             for repo_uuid in repo_uuids:
-                repo_mounted_at = config.remotes[repo_uuid].mounted_at
-                logging.info(f"cleaning repo {config.remotes[repo_uuid].name} at {repo_mounted_at}")
+                logging.info(f"cleaning repo {config.remotes[repo_uuid].name}")
                 out.write(f"{repo_uuid}:\n")
 
                 for hoard_file, hoard_props in sorted(hoard.fsobjects.files.items()):
                     goal_status = hoard_props.status(repo_uuid)
+
                     if goal_status == FileStatus.CLEANUP:
                         to_be_got = hoard_props.by_status(FileStatus.GET)
+
+                        local_path = pathing.in_hoard(hoard_file).at_local(repo_uuid)
+                        local_file_to_delete = local_path.as_posix()
 
                         if len(to_be_got) == 0:
                             logging.info("file doesn't need to be copied anymore, cleaning")
                             hoard_props.remove_status(repo_uuid)
-                            local_file_to_restore = path_in_local(hoard_file, mounted_at=repo_mounted_at)
-                            file_to_delete = os.path.join(restore_cache.remote_path(repo_uuid), local_file_to_restore)
-                            logging.info(f"deleting {file_to_delete}...")
+
+                            logging.info(f"deleting {local_path.on_device_path()}...")
 
                             try:
-                                os.remove(file_to_delete)
-                                out.write(f"c {local_file_to_restore}\n")
+                                os.remove(local_path.on_device_path())
+                                out.write(f"c {local_file_to_delete}\n")
                                 logging.info("file deleted!")
                             except FileNotFoundError as e:
-                                out.write(f"E {local_file_to_restore}\n")
+                                out.write(f"E {local_file_to_delete}\n")
                                 logging.error(e)
                         else:
                             logging.info(f"file needs to be copied in {len(to_be_got)} places, retaining")
-                            out.write(f"~ {local_file_to_restore}\n")
+                            out.write(f"~ {local_file_to_delete}\n")
 
             logging.info("Writing hoard file...")
             hoard.write()
@@ -547,7 +584,7 @@ class HoardCommand(object):
 
         with StringIO() as out:
             for hoard_file, hoard_props in hoard.fsobjects.files.items():
-                if hoard_file.startswith(path_to_enable_in_hoard) \
+                if pathlib.Path(hoard_file).is_relative_to(path_to_enable_in_hoard) \
                         and hoard_props.status(repo_uuid) != FileStatus.AVAILABLE \
                         and hoard_props.status(repo_uuid) != FileStatus.GET:
                     logging.info(f"enabling file {hoard_file} on {repo_uuid}")
@@ -561,10 +598,10 @@ class HoardCommand(object):
             return out.getvalue()
 
 
-def _restore(
+def _restore(  # TODO replace with HoardPath
         hoard_file: str, local_file_to_restore: str, local_uuid: str, hoard_props: HoardFileProps,
         restore_cache: "RestoreCache") -> (bool, str):
-    fullpath_to_restore = os.path.join(restore_cache.remote_path(local_uuid), local_file_to_restore)
+    fullpath_to_restore = restore_cache.pathing.in_local(local_file_to_restore, local_uuid).on_device_path()
     logging.info(f"Restoring hoard file {hoard_file} to {fullpath_to_restore}.")
 
     candidates = hoard_props.by_status(FileStatus.AVAILABLE) + hoard_props.by_status(FileStatus.CLEANUP)
@@ -574,10 +611,8 @@ def _restore(
             logging.warning(f"remote {remote_uuid} is invalid, won't try to restore")
             continue
 
-        path_in_source = path_in_local(hoard_file, mounted_at=restore_cache.mounted_at(remote_uuid))
-        source_cave_path = restore_cache.remote_path(remote_uuid)
+        file_fullpath = restore_cache.pathing.in_hoard(hoard_file).at_local(remote_uuid).on_device_path()
 
-        file_fullpath = os.path.join(source_cave_path, path_in_source)
         if not os.path.isfile(file_fullpath):
             logging.error(f"File {file_fullpath} does not exist, but is needed for restore from {remote_uuid}!")
             continue
@@ -603,10 +638,11 @@ def _restore(
     return False, fullpath_to_restore
 
 
-class RestoreCache:
+class RestoreCache:  # TODO replace with HoardPathing
     def __init__(self, cmd: HoardCommand):
         self.config = cmd.config()
         self.paths = cmd.paths()
+        self.pathing = HoardPathing(self.config, self.paths)
 
     def mounted_at(self, repo_uuid: str) -> str:
         return self.config.remotes[repo_uuid].mounted_at
@@ -615,15 +651,15 @@ class RestoreCache:
         return self.paths[repo_uuid].find()
 
 
-def compare_local_to_hoard(local: Contents, hoard: HoardContents, config: HoardConfig) -> Generator[Diff, None, None]:
-    mounted_at = config.remotes[local.config.uuid].mounted_at
+def compare_local_to_hoard(local: Contents, hoard: HoardContents, config: HoardConfig, paths: HoardPaths) -> Generator[Diff, None, None]:
+    pathing = HoardPathing(config, paths)
 
     print("Comparing current files to hoard:")
     with alive_bar(len(local.fsobjects.files)) as bar:
         for current_file, props in local.fsobjects.files.copy().items():
             bar()
-            curr_file_hoard_path = path_in_hoard(current_file, mounted_at)
 
+            curr_file_hoard_path = pathing.in_local(current_file, local.config.uuid).at_hoard().as_posix()
             if curr_file_hoard_path not in hoard.fsobjects.files.keys():
                 logging.info(f"local file not in hoard: {curr_file_hoard_path}")
                 yield FileMissingInHoard(current_file, curr_file_hoard_path, props)
@@ -639,27 +675,29 @@ def compare_local_to_hoard(local: Contents, hoard: HoardContents, config: HoardC
     with alive_bar(len(hoard.fsobjects.files)) as bar:
         for hoard_file, props in hoard.fsobjects.files.copy().items():
             bar()
-            if not hoard_file.startswith(mounted_at):
+            hoard_filepath = pathing.in_hoard(hoard_file)
+            if not hoard_filepath.is_relative(local.config.uuid):
                 continue  # hoard file is not in the mounted location
 
-            curr_file_path_in_local = path_in_local(hoard_file, mounted_at)
+            curr_file_path_in_local = hoard_filepath.at_local(local.config.uuid).as_posix()
             if curr_file_path_in_local not in local.fsobjects.files.keys():
                 yield FileMissingInLocal(curr_file_path_in_local, hoard_file, props)
             # else file is there, which is handled above
 
     for current_dir, props in local.fsobjects.dirs.copy().items():
-        curr_dir_hoard_path = path_in_hoard(current_dir, mounted_at)
+        curr_dir_hoard_path = pathing.in_local(current_dir, local.config.uuid).at_hoard().as_posix()
         if curr_dir_hoard_path not in hoard.fsobjects.dirs.keys():
             logging.info(f"new dir found: {current_dir}")
             yield DirMissingInHoard(current_dir, curr_dir_hoard_path)
         else:
             yield DirIsSame(current_dir, curr_dir_hoard_path)
 
-    for hoard_dir, props in local.fsobjects.dirs.copy().items():
-        if not hoard_dir.startswith(mounted_at):
+    for hoard_dir, props in hoard.fsobjects.dirs.copy().items():
+        hoard_dirpath = pathing.in_hoard(hoard_file)
+        if not hoard_dirpath.is_relative(local.config.uuid):
             continue  # hoard dir is not in the mounted location
 
-        curr_dir_path_in_local = path_in_local(hoard_dir, mounted_at)
+        curr_dir_path_in_local = hoard_dirpath.at_local(local.config.uuid).as_posix()
         if curr_dir_path_in_local not in hoard.fsobjects.dirs.keys():
             logging.info(f"missing dir found in hoard: {hoard_dir}")
             yield DirMissingInLocal(curr_dir_path_in_local, hoard_dir)
