@@ -7,6 +7,8 @@ from io import StringIO
 from itertools import groupby
 from typing import Dict, Generator, List, Optional
 
+from alive_progress import alive_bar
+
 from config import HoardRemote, HoardConfig, CavePath, HoardPaths, CaveType
 from contents import FileProps, HoardFileProps, Contents, HoardContents, FileStatus
 from contents_diff import Diff, FileMissingInHoard, FileIsSame, FileContentsDiffer, FileMissingInLocal, \
@@ -584,28 +586,34 @@ class RestoreCache:
 def compare_local_to_hoard(local: Contents, hoard: HoardContents, config: HoardConfig) -> Generator[Diff, None, None]:
     mounted_at = config.remotes[local.config.uuid].mounted_at
 
-    for current_file, props in local.fsobjects.files.copy().items():
-        curr_file_hoard_path = path_in_hoard(current_file, mounted_at)
+    print("Comparing current files to hoard:")
+    with alive_bar(len(local.fsobjects.files)) as bar:
+        for current_file, props in local.fsobjects.files.copy().items():
+            bar()
+            curr_file_hoard_path = path_in_hoard(current_file, mounted_at)
 
-        if curr_file_hoard_path not in hoard.fsobjects.files.keys():
-            logging.info(f"local file not in hoard: {curr_file_hoard_path}")
-            yield FileMissingInHoard(current_file, curr_file_hoard_path, props)
-        elif is_same_file(local.fsobjects.files[current_file], hoard.fsobjects.files[curr_file_hoard_path]):
-            logging.info(f"same in hoard {current_file}!")
-            yield FileIsSame(current_file, curr_file_hoard_path, props, hoard.fsobjects.files[curr_file_hoard_path])
-        else:
-            logging.info(f"file changes {current_file}")
-            yield FileContentsDiffer(
-                current_file, curr_file_hoard_path, props, hoard.fsobjects.files[curr_file_hoard_path])
+            if curr_file_hoard_path not in hoard.fsobjects.files.keys():
+                logging.info(f"local file not in hoard: {curr_file_hoard_path}")
+                yield FileMissingInHoard(current_file, curr_file_hoard_path, props)
+            elif is_same_file(local.fsobjects.files[current_file], hoard.fsobjects.files[curr_file_hoard_path]):
+                logging.info(f"same in hoard {current_file}!")
+                yield FileIsSame(current_file, curr_file_hoard_path, props, hoard.fsobjects.files[curr_file_hoard_path])
+            else:
+                logging.info(f"file changes {current_file}")
+                yield FileContentsDiffer(
+                    current_file, curr_file_hoard_path, props, hoard.fsobjects.files[curr_file_hoard_path])
 
-    for hoard_file, props in hoard.fsobjects.files.copy().items():
-        if not hoard_file.startswith(mounted_at):
-            continue  # hoard file is not in the mounted location
+    print("Comparing hoard to current files")
+    with alive_bar(len(local.fsobjects.files)) as bar:
+        for hoard_file, props in hoard.fsobjects.files.copy().items():
+            bar()
+            if not hoard_file.startswith(mounted_at):
+                continue  # hoard file is not in the mounted location
 
-        curr_file_path_in_local = path_in_local(hoard_file, mounted_at)
-        if curr_file_path_in_local not in local.fsobjects.files.keys():
-            yield FileMissingInLocal(curr_file_path_in_local, hoard_file, props)
-        # else file is there, which is handled above
+            curr_file_path_in_local = path_in_local(hoard_file, mounted_at)
+            if curr_file_path_in_local not in local.fsobjects.files.keys():
+                yield FileMissingInLocal(curr_file_path_in_local, hoard_file, props)
+            # else file is there, which is handled above
 
     for current_dir, props in local.fsobjects.dirs.copy().items():
         curr_dir_hoard_path = path_in_hoard(current_dir, mounted_at)
