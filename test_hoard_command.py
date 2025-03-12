@@ -233,7 +233,9 @@ class TestRepoCommand(unittest.TestCase):
         new_repo_path = join(self.tmpdir.name, "cloned-repo")
         os.mkdir(new_repo_path)
 
-        hoard_cmd.clone(to_path=new_repo_path, mount_at="/wat", name="cloned-repo")
+        hoard_cmd.clone(to_path=new_repo_path, mount_at="/wat", name="cloned-repo", fetch_new=True)
+
+        cloned_cave_cmd = TotalCommand(path=join(self.tmpdir.name, "cloned-repo")).cave
 
         orig_cave_cmd = TotalCommand(path=join(self.tmpdir.name, "repo")).cave
         orig_cave_cmd.init()
@@ -256,16 +258,33 @@ class TestRepoCommand(unittest.TestCase):
             f"D /wat/test.me.once\n"
             f"D /wat/test.me.twice\nDONE", res)
 
-        res = hoard_cmd.populate(to_repo="cloned-repo")
-        self.assertEqual("errors: 0\nrestored: 3\nskipped: 0\nDONE", res.strip())
+        res = hoard_cmd.sync_contents(repo="cloned-repo")
+        self.assertEqual(
+            f"{cloned_cave_cmd.current_uuid()}:\n"
+            "+ test.me.different\n"
+            "+ test.me.once\n"
+            "+ test.me.twice\n"
+            f"{cloned_cave_cmd.current_uuid()}:\n"
+            "DONE", res.strip())
+
+        res = cloned_cave_cmd.refresh()
+        self.assertEqual("Refresh done!", res)
 
         res = hoard_cmd.status(new_uuid)
         self.assertEqual(
             f"Status of {new_uuid}:\n"
             f"DONE", res.strip())
 
-        res = hoard_cmd.populate(to_repo="cloned-repo")
-        self.assertEqual("errors: 0\nrestored: 0\nskipped: 3\nDONE", res.strip())
+        res = hoard_cmd.sync_contents(repo="cloned-repo")
+        self.assertEqual(
+            f"{cloned_cave_cmd.current_uuid()}:\n"
+            f"{cloned_cave_cmd.current_uuid()}:\n"
+            "DONE", res.strip())
+
+        self.assertEqual([
+            'cloned-repo/test.me.different',
+            'cloned-repo/test.me.once',
+            'cloned-repo/test.me.twice'], dump_file_list(self.tmpdir.name, "cloned-repo"))
 
     def _init_complex_hoard(self):
         partial_cave_cmd = TotalCommand(path=join(self.tmpdir.name, "repo-partial")).cave

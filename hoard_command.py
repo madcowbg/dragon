@@ -434,7 +434,7 @@ class HoardCommand(object):
             out.write("DONE")
             return out.getvalue()
 
-    def clone(self, to_path: str, mount_at: str, name: str):
+    def clone(self, to_path: str, mount_at: str, name: str, fetch_new: bool = False):
         if not os.path.isdir(to_path):
             return f"Cave dir {to_path} to create does not exist!"
 
@@ -442,67 +442,8 @@ class HoardCommand(object):
         cave_cmd.init()
         cave_cmd.refresh()
 
-        self.add_remote(to_path, name=name, mount_point=mount_at)
+        self.add_remote(to_path, name=name, mount_point=mount_at, fetch_new=fetch_new)
         return f"DONE"
-
-    def populate(self, to_repo: str):  # FIXME deprecate this in favor of sync-contents
-        logging.info(f"Loading hoard TOML...")
-        hoard = HoardContents.load(self._hoard_contents_filename())
-
-        logging.info(f"Loading current remote contents for {to_repo}...")
-        to_repo_uuid = self._resolve_remote_uuid(to_repo)
-        current_contents = self._fetch_repo_contents(to_repo_uuid)
-
-        config = self.config()
-        restore_cache = RestoreCache(self)
-
-        stats = {"skipped": 0, "restored": 0, "errors": 0}
-
-        def method_name(d: FileMissingInLocal | FileContentsDiffer):
-            success, fullpath = _restore(
-                d.hoard_file, d.local_file, to_repo_uuid, d.hoard_props, restore_cache)
-            stats["restored" if success else "errors"] += 1
-            if success:
-                current_contents.fsobjects.add_file(
-                    d.local_file,
-                    size=os.path.getsize(fullpath),
-                    mtime=os.path.getmtime(fullpath),
-                    fasthash=fast_hash(fullpath))
-            else:
-                print(f"error while restoring {d.hoard_file}")
-
-        logging.info("Iterating over hoard contents...")
-        for diff in compare_local_to_hoard(current_contents, hoard, config):
-            if isinstance(diff, FileMissingInHoard):
-                logging.info(f"skipping file {diff.local_file} as it is only in local!")
-                stats["skipped"] += 1
-            elif isinstance(diff, FileIsSame):
-                logging.info(f"skipping same file as {diff.hoard_file}.")
-                stats["skipped"] += 1
-            elif isinstance(diff, FileContentsDiffer):
-                if diff.local_props.mtime >= diff.hoard_props.mtime:
-                    logging.info(f"skipping restore as local of {diff.hoard_file} is newer.")
-                    stats["skipped"] += 1
-                else:
-                    print(f"restoring {diff.hoard_file} as hoard is newer...")
-                    method_name(diff)
-            elif isinstance(diff, FileMissingInLocal):
-                print(f"restoring {diff.hoard_file} that is missing.")
-                method_name(diff)
-            elif isinstance(diff, DirMissingInHoard):
-                logging.info(f"skipping dir {diff.local_dir} as it is only in local!")
-            else:
-                logging.info(f"skipping diff of type {type(diff)}")
-
-        logging.info("Writing updated local contents...")
-        current_contents.write()
-        logging.info("Done writing.")
-
-        with StringIO() as out:
-            for s, v in sorted(stats.items()):
-                out.write(f"{s}: {v}\n")
-            out.write("DONE\n")
-            return out.getvalue()
 
     def list_files(self):
         logging.info(f"Loading hoard TOML...")
