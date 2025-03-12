@@ -4,12 +4,12 @@ import tempfile
 import unittest
 from os.path import join
 from time import sleep
-from typing import Tuple, List, Callable
+from typing import Tuple, List
 
 from config import CaveType
 from contents import HoardContents
 from main import TotalCommand
-from test_repo_command import populate, write_contents
+from test_repo_command import populate, write_contents, pretty_file_writer
 
 
 def populate_hoard(tmpdir: str):
@@ -424,7 +424,7 @@ class TestRepoCommand(unittest.TestCase):
 
         self.assertEqual([
             'repo-partial/test.me.1',
-            'repo-partial/wat/test.me.2', ], _list_files(self.tmpdir.name, 'repo-partial'))
+            'repo-partial/wat/test.me.2', ], dump_file_list(self.tmpdir.name, 'repo-partial'))
 
         res = hoard_cmd.sync_contents("repo-full-name")
         self.assertEqual(
@@ -441,7 +441,7 @@ class TestRepoCommand(unittest.TestCase):
             'repo-full/test.me.5',
             'repo-full/wat/test.me.2',
             'repo-full/wat/test.me.3',
-            'repo-full/wat/test.me.6'], _list_files(self.tmpdir.name, 'repo-full'))
+            'repo-full/wat/test.me.6'], dump_file_list(self.tmpdir.name, 'repo-full'))
 
         res = hoard_cmd.list_files()
         self.assertEqual(
@@ -495,7 +495,7 @@ class TestRepoCommand(unittest.TestCase):
         self.assertEqual([
             'repo-partial/test.me.1',
             'repo-partial/wat/test.me.2'],
-            _list_files(self.tmpdir.name, 'repo-partial'))
+            dump_file_list(self.tmpdir.name, 'repo-partial'))
 
         res = hoard_cmd.list_files()
         self.assertEqual(
@@ -513,7 +513,7 @@ class TestRepoCommand(unittest.TestCase):
             'repo-full/test.me.5',
             'repo-full/wat/test.me.2',
             'repo-full/wat/test.me.3',
-            'repo-full/wat/test.me.6'], _list_files(self.tmpdir.name, 'repo-full'))
+            'repo-full/wat/test.me.6'], dump_file_list(self.tmpdir.name, 'repo-full'))
 
         self.assertEqual([
             'repo-backup/test.me.1',
@@ -521,25 +521,16 @@ class TestRepoCommand(unittest.TestCase):
             'repo-backup/test.me.5',
             'repo-backup/wat/test.me.2',
             'repo-backup/wat/test.me.3',
-            'repo-backup/wat/test.me.6'], _list_files(self.tmpdir.name, 'repo-backup'))
+            'repo-backup/wat/test.me.6'], dump_file_list(self.tmpdir.name, 'repo-backup'))
 
-        self.assertEqual([], _list_files(self.tmpdir.name, 'repo-incoming'))
+        self.assertEqual([], dump_file_list(self.tmpdir.name, 'repo-incoming'))
 
 
-def _list_files(tmpdir: str, path: str) -> List[str]:
+def dump_file_list(tmpdir: str, path: str) -> List[str]:
     return sorted([
         pathlib.Path(join(dirpath, filename)).relative_to(tmpdir).as_posix()
         for dirpath, dirnames, filenames in os.walk(join(tmpdir, path), topdown=True)
         for filename in filenames if dirpath.find(".hoard") == -1])
-
-
-def pretty_file_writer(tmpdir: str) -> Callable[[str, str], None]:
-    def pfw(path: str, contents: str):
-        folder, file = os.path.split(join(tmpdir, path))
-        os.makedirs(folder, exist_ok=True)
-        write_contents(join(tmpdir, path), contents)
-
-    return pfw
 
 
 def populate_repotypes(tmpdir: str):

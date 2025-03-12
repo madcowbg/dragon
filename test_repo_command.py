@@ -4,6 +4,7 @@ import tempfile
 import unittest
 from os.path import join
 from time import sleep
+from typing import Callable
 
 import fire
 
@@ -15,17 +16,24 @@ def write_contents(path: str, contents: str) -> None:
         f.write(contents)
 
 
-def populate(tmpdir: str):
-    os.mkdir(join(tmpdir, 'repo'))
-    os.mkdir(join(tmpdir, 'repo', 'wat'))
-    write_contents(join(tmpdir, 'repo', 'wat', 'test.me.twice'), "gsadfs")
-    write_contents(join(tmpdir, 'repo', 'wat', 'test.me.once'), "gsadfasd")
-    write_contents(join(tmpdir, 'repo', 'wat', 'test.me.different'), "gsadf")
+def pretty_file_writer(tmpdir: str) -> Callable[[str, str], None]:
+    def pfw(path: str, contents: str):
+        folder, file = os.path.split(join(tmpdir, path))
+        os.makedirs(folder, exist_ok=True)
+        write_contents(join(tmpdir, path), contents)
 
-    os.mkdir(join(tmpdir, 'repo-2'))
+    return pfw
+
+
+def populate(tmpdir: str):
+    pfw = pretty_file_writer(tmpdir)
+    pfw('repo/wat/test.me.twice', "gsadfs")
+    pfw('repo/wat/test.me.once', "gsadfasd")
+    pfw('repo/wat/test.me.different', "gsadf")
+
     sleep(0.01)
-    write_contents(join(tmpdir, 'repo-2', 'test.me.twice'), "gsadfs")
-    write_contents(join(tmpdir, 'repo-2', 'test.me.different'), "gsadf3dq")
+    pfw('repo-2/test.me.twice', "gsadfs")
+    pfw('repo-2/test.me.different', "gsadf3dq")
 
 
 class TestRepoCommand(unittest.TestCase):
