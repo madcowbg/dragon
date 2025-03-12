@@ -605,7 +605,7 @@ def compare_local_to_hoard(local: Contents, hoard: HoardContents, config: HoardC
                     current_file, curr_file_hoard_path, props, hoard.fsobjects.files[curr_file_hoard_path])
 
     print("Comparing hoard to current files")
-    with alive_bar(len(local.fsobjects.files)) as bar:
+    with alive_bar(len(hoard.fsobjects.files)) as bar:
         for hoard_file, props in hoard.fsobjects.files.copy().items():
             bar()
             if not hoard_file.startswith(mounted_at):
