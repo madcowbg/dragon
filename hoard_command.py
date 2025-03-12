@@ -15,6 +15,7 @@ from contents_diff import Diff, FileMissingInHoard, FileIsSame, FileContentsDiff
     DirMissingInHoard, DirIsSame, DirMissingInLocal
 from hashing import fast_hash
 from repo_command import RepoCommand
+from util import format_size
 
 CONFIG_FILE = "hoard.config"
 PATHS_FILE = "hoard.paths"
@@ -234,7 +235,7 @@ class HoardCommand(object):
         remote_uuid = self._resolve_remote_uuid(remote)
 
         logging.info(f"Reading repo {remote_uuid}...")
-        contents = Contents.load(self._contents_filename(remote_uuid))
+        contents = self._fetch_repo_contents(remote_uuid)
         logging.info(f"Read repo!")
 
         config = self.config()
@@ -243,10 +244,10 @@ class HoardCommand(object):
         print(f"UUID: {remote_uuid}.")
         print(f"name: {config.remotes[remote_uuid].name}")
         print(f"mount point: {config.remotes[remote_uuid].mounted_at}")
-        print(f"type: {config.remotes[remote_uuid].type}")
+        print(f"type: {config.remotes[remote_uuid].type.value}")
         print(f"Last updated on {contents.config.updated}.")
         print(f"  # files = {len(contents.fsobjects.files)}"
-              f" of size {sum(f.size for f in contents.fsobjects.files.values())}")
+              f" of size {format_size(sum(f.size for f in contents.fsobjects.files.values()))}")
         print(f"  # dirs  = {len(contents.fsobjects.dirs)}")
 
     def _hoard_contents_filename(self):
