@@ -418,7 +418,7 @@ class TestRepoCommand(unittest.TestCase):
             "/test.me.4 = a:1 g:1 c:1\n"
             "/test.me.5 = g:2 c:1\n"
             "/wat/test.me.2 = a:2 g:1\n"
-            "/wat/test.me.3 = a:1 g:2\n"
+            "/wat/test.me.3 = g:2 c:1\n"
             "/wat/test.me.6 = g:2 c:1\n"
             "DONE", res)
 
@@ -449,7 +449,7 @@ class TestRepoCommand(unittest.TestCase):
             "/test.me.4 = a:1 g:1 c:1\n"
             "/test.me.5 = a:1 g:1 c:1\n"
             "/wat/test.me.2 = a:2 g:1\n"
-            "/wat/test.me.3 = a:2 g:1\n"
+            "/wat/test.me.3 = a:1 g:1 c:1\n"
             "/wat/test.me.6 = a:1 g:1 c:1\n"
             "DONE", res)
 
@@ -488,6 +488,7 @@ class TestRepoCommand(unittest.TestCase):
             f"{incoming_cave_cmd.current_uuid()}:\n"
             "c test.me.4\n"
             "c test.me.5\n"
+            "c wat/test.me.3\n"
             "c wat/test.me.6\n"
             "DONE", res)
 
@@ -502,7 +503,7 @@ class TestRepoCommand(unittest.TestCase):
             "/test.me.4 = a:2\n"
             "/test.me.5 = a:2\n"
             "/wat/test.me.2 = a:3\n"
-            "/wat/test.me.3 = a:3\n"
+            "/wat/test.me.3 = a:2\n"
             "/wat/test.me.6 = a:2\n"
             "DONE", res)
 
@@ -522,7 +523,7 @@ class TestRepoCommand(unittest.TestCase):
             'repo-backup/wat/test.me.3',
             'repo-backup/wat/test.me.6'], _list_files(self.tmpdir.name, 'repo-backup'))
 
-        self.assertEqual(['repo-incoming/wat/test.me.3'], _list_files(self.tmpdir.name, 'repo-incoming'))
+        self.assertEqual([], _list_files(self.tmpdir.name, 'repo-incoming'))
 
 
 def _list_files(tmpdir: str, path: str) -> List[str]:

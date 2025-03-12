@@ -149,7 +149,7 @@ class IncomingDiffHandler(DiffHandler):
             else:
                 logging.info(f"current file is out of date, mark for delete: {diff.hoard_file}")
                 out.write(f"-{diff.hoard_file}\n")
-                diff.hoard_props.mark_for_cleanup(self.remote_uuid)
+            diff.hoard_props.mark_for_cleanup(self.remote_uuid)
 
     def handle_hoard_only(self, diff: FileMissingInLocal, out: StringIO):
         logging.info(f"skipping file not in local.")
