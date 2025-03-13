@@ -712,7 +712,7 @@ def compare_local_to_hoard(local: Contents, hoard: HoardContents, config: HoardC
             yield DirIsSame(current_dir, curr_dir_hoard_path.as_posix())
 
     for hoard_dir, props in hoard.fsobjects.dirs.copy().items():
-        curr_dir_path_in_local = pathing.in_hoard(hoard_file).at_local(local.config.uuid)
+        curr_dir_path_in_local = pathing.in_hoard(hoard_dir).at_local(local.config.uuid)
         if curr_dir_path_in_local is None:
             continue  # hoard dir is not in the mounted location
         if curr_dir_path_in_local.as_posix() not in hoard.fsobjects.dirs.keys():
