@@ -24,12 +24,12 @@ Alternatives that turned out to be insufficient:
   partial checkouts, its insistence to put everything in the same hierarchy and touching the actual files to convert to
   symlinks is very inconsiderate and incompatible with many workflows, e.g. if you rely on modification times for
   anything.
-- [AnyBackup](https://anybackup.sourceforge.net/) is the closest I have found to my requirements, but again is
-  inflexible in requiring the folder structure to be fixed, as well as not supporting some QoL features as incoming
-  repositories (e.g. SD cards from cameras).
 - [bup](https://bup.github.io/) and other backup solutions would solve the incremental backup problem, but not the
   i-can't-fit-all-my-data-in-one-place problem, and the fact that backups are written in a custom format, rather than in
   folders, is locking it into relying on a piece of software that may or may not last.
+- [AnyBackup](https://anybackup.sourceforge.net/) is the closest I have found to my requirements, but again is
+  inflexible in requiring the folder structure to be fixed, as well as not supporting some QoL features as incoming
+  repositories (e.g. SD cards from cameras).
 
 There has got to be a better way, and [**Dragon**](https://github.com/madcowbg/dragon) is that way.
 
