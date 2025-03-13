@@ -76,12 +76,27 @@ class RepoCommand(object):
         current_uuid = self.current_uuid()
         logging.info(f"Refreshing uuid {current_uuid}")
 
-        contents = Contents(
-            os.path.join(self._hoard_folder(), f"{current_uuid}.contents"),
-            contents_doc={"config": {"uuid": current_uuid}})
+        contents = Contents.load(self._contents_filename(current_uuid), create_for_uuid=current_uuid)
         contents.config.touch_updated()
 
-        print("Counting files to add")
+        print(f"Removing old files and folders.")
+        with alive_bar(len(contents.fsobjects.files)) as bar:
+            for file, _ in contents.fsobjects.files.copy().items():
+                bar()
+                fullpath = str(os.path.join(self.repo, file))
+                if not os.path.isfile(fullpath):
+                    logging.info(f"Removing file {file}")
+                    contents.fsobjects.remove_file(file)
+
+        with alive_bar(len(contents.fsobjects.dirs)) as bar:
+            for dirname, _ in contents.fsobjects.dirs.copy().items():
+                bar()
+                fullpath = str(os.path.join(self.repo, dirname))
+                if not os.path.isdir(fullpath):
+                    logging.info(f"Removing dir {dirname}")
+                    contents.fsobjects.remove_dir(dirname)
+
+        print("Counting files to add or update...")
         nfiles, nfolders = 0, 0
         file_paths = set()
         with alive_bar(0) as bar:
@@ -139,5 +154,5 @@ class RepoCommand(object):
                 f"  # dirs  = {len(contents.fsobjects.dirs)}\n", ])
             return out.getvalue()
 
-    def _contents_filename(self, remote_uuid):
-        return os.path.join(self._hoard_folder(), f"{remote_uuid}.contents")
+    def _contents_filename(self, current_uuid):
+        return os.path.join(self._hoard_folder(), f"{current_uuid}.contents")

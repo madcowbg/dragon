@@ -1,7 +1,7 @@
 import enum
 import os
 from datetime import datetime
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 import rtoml
 
@@ -27,6 +27,13 @@ class ContentsConfig(HoardContentsConfig):
     @property
     def uuid(self) -> str:
         return self.doc["uuid"]
+
+    @property
+    def epoch(self) -> int:
+        return int(self.doc["epoch"]) if "epoch" in self.doc else 0
+
+    def bump_epoch(self):
+        self.doc["epoch"] = self.epoch + 1
 
 
 class FileProps:
@@ -65,10 +72,24 @@ class FSObjects:
         self.doc[dirpath] = {"isdir": True}
         self.dirs[dirpath] = DirProps(self.doc[dirpath])
 
+    def remove_file(self, filepath: str):
+        self.doc.pop(filepath)
+        self.files.pop(filepath)
+
+    def remove_dir(self, dirpath: str):
+        self.doc.pop(dirpath)
+        self.dirs.pop(dirpath)
+
 
 class Contents:
     @staticmethod
-    def load(filepath: str):
+    def load(filepath: str, create_for_uuid: Optional[str] = None):
+        if not os.path.isfile(filepath):
+            if create_for_uuid is not None:
+                with open(filepath, "w", encoding="utf-8") as f:
+                    f.write(rtoml.dumps({"config": {"uuid": create_for_uuid}, "epoch": 0}))
+            else:
+                raise ValueError(f"File {filepath} does not exist, need to pass create=True to create.")
         with open(filepath, "r", encoding="utf-8") as f:
             return Contents(filepath, rtoml.load(f))
 
