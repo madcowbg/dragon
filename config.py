@@ -111,9 +111,12 @@ class HoardPaths:
 
 class HoardConfig:
     @staticmethod
-    def load(filename: str) -> "HoardConfig":
+    def load(filename: str, create: bool) -> "HoardConfig":
         if not os.path.isfile(filename):
-            rtoml.dump({}, pathlib.Path(filename))
+            if create:
+                rtoml.dump({}, pathlib.Path(filename))
+            else:
+                raise ValueError("Config file does not exist!")
         with open(filename, "r", encoding="utf-8") as f:
             return HoardConfig(filename, rtoml.load(f))
 

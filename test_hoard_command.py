@@ -8,7 +8,7 @@ from typing import Tuple, List
 
 from config import CaveType
 from contents import HoardContents
-from main import TotalCommand
+from dragon import TotalCommand
 from test_repo_command import populate, write_contents, pretty_file_writer
 
 
@@ -34,6 +34,7 @@ class TestRepoCommand(unittest.TestCase):
         repo_uuid = cave_cmd.current_uuid()
 
         hoard_cmd = TotalCommand(path=join(self.tmpdir.name, "hoard")).hoard
+        hoard_cmd.init()
         res = hoard_cmd.remotes()
 
         self.assertEqual("0 total remotes.\nMounts:\nDONE", res.strip())
@@ -53,6 +54,7 @@ class TestRepoCommand(unittest.TestCase):
         cave_cmd.refresh()
 
         hoard_cmd = TotalCommand(path=join(self.tmpdir.name, "hoard")).hoard
+        hoard_cmd.init()
         hoard_cmd.add_remote(remote_path=join(self.tmpdir.name, "repo"), name="repo-in-local", mount_point="/")
 
         repo_uuid = cave_cmd.current_uuid()
@@ -102,6 +104,7 @@ class TestRepoCommand(unittest.TestCase):
         repo_uuid2 = cave_cmd2.current_uuid()
 
         hoard_cmd = TotalCommand(path=join(self.tmpdir.name, "hoard")).hoard
+        hoard_cmd.init()
         hoard_cmd.add_remote(remote_path=join(self.tmpdir.name, "repo"), name="repo-in-local", mount_point="/")
         hoard_cmd.add_remote(
             remote_path=join(self.tmpdir.name, "repo-2"), name="repo-in-local-2", type=CaveType.BACKUP,
@@ -176,6 +179,7 @@ class TestRepoCommand(unittest.TestCase):
         cave_cmd.refresh()
 
         hoard_cmd = TotalCommand(path=join(self.tmpdir.name, "hoard")).hoard
+        hoard_cmd.init()
         hoard_cmd.add_remote(remote_path=join(self.tmpdir.name, "repo"), name="repo-in-local", mount_point="/")
 
         repo_uuid = cave_cmd.current_uuid()
@@ -210,6 +214,7 @@ class TestRepoCommand(unittest.TestCase):
 
     def test_clone(self):
         hoard_cmd = TotalCommand(path=join(self.tmpdir.name, "hoard")).hoard
+        hoard_cmd.init()
 
         new_repo_path = join(self.tmpdir.name, "cloned-repo")
         os.mkdir(new_repo_path)
@@ -232,6 +237,7 @@ class TestRepoCommand(unittest.TestCase):
 
     def test_populate_one_repo_from_other_repo(self):
         hoard_cmd = TotalCommand(path=join(self.tmpdir.name, "hoard")).hoard
+        hoard_cmd.init()
 
         new_repo_path = join(self.tmpdir.name, "cloned-repo")
         os.mkdir(new_repo_path)
@@ -310,6 +316,7 @@ class TestRepoCommand(unittest.TestCase):
         incoming_cave_cmd.refresh()
 
         hoard_cmd = TotalCommand(path=join(self.tmpdir.name, "hoard")).hoard
+        hoard_cmd.init()
 
         hoard_cmd.add_remote(
             remote_path=join(self.tmpdir.name, "repo-partial"), name="repo-partial-name", mount_point="/",
@@ -563,6 +570,7 @@ class TestRepoCommand(unittest.TestCase):
         full_cave_cmd.refresh()
 
         hoard_cmd = TotalCommand(path=join(self.tmpdir.name, "hoard")).hoard
+        hoard_cmd.init()
 
         hoard_cmd.add_remote(
             remote_path=join(self.tmpdir.name, "repo-full"), name="repo-full-name", mount_point="/",

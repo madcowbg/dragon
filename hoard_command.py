@@ -246,13 +246,18 @@ class HoardCommand(object):
         config = self.config()
         return config.remotes.names_map()
 
-    def config(self) -> HoardConfig:
+    def config(self, create: bool = False) -> HoardConfig:
         config_file = os.path.join(self.hoardpath, CONFIG_FILE)
-        return HoardConfig.load(config_file)
+        return HoardConfig.load(config_file, create)
 
     def paths(self) -> HoardPaths:
         paths_file = os.path.join(self.hoardpath, PATHS_FILE)
         return HoardPaths.load(paths_file)
+
+    def init(self):
+        logging.info(f"Reading or creating config...")
+        self.config(True)
+        return "DONE"
 
     def add_remote(
             self, remote_path: str, name: str, mount_point: str,
@@ -483,6 +488,8 @@ class HoardCommand(object):
             return out.getvalue()
 
     def clone(self, to_path: str, mount_at: str, name: str, fetch_new: bool = False):
+        config = self.config()  # validate hoard is available
+
         if not os.path.isdir(to_path):
             return f"Cave dir {to_path} to create does not exist!"
 

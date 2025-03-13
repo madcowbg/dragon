@@ -8,7 +8,7 @@ from typing import Callable
 
 import fire
 
-from main import TotalCommand
+from dragon import TotalCommand
 
 
 def write_contents(path: str, contents: str) -> None:
