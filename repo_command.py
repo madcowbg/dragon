@@ -69,7 +69,7 @@ class RepoCommand(object):
         self._validate_repo()
         return f"Repo initialized at {self.repo}"
 
-    def refresh(self):
+    def refresh(self, fast_refresh: bool = False):
         """ Refreshes the cache of the current hoard folder """
         self._validate_repo()
 
@@ -97,38 +97,52 @@ class RepoCommand(object):
                     contents.fsobjects.remove_dir(dirname)
 
         print("Counting files to add or update...")
-        nfiles, nfolders = 0, 0
-        file_paths = set()
+        files_to_update: List[str] = []
+        folders_to_add: List[str] = []
         with alive_bar(0) as bar:
-            for dirpath, dirnames, filenames in walk_repo(self.repo):
-                nfiles += len(filenames)
-                nfolders += len(dirnames)
+            for dirpath_s, dirnames, filenames in walk_repo(self.repo):
+                dirpath = pathlib.Path(dirpath_s)
                 for filename in filenames:
-                    file_paths.add(join(dirpath, filename))
+                    file_path_full = dirpath.joinpath(filename)
+                    if fast_refresh:
+                        file_path_local = file_path_full.relative_to(self.repo).as_posix()
+                        logging.info(f"Checking {file_path_local} for existence...")
+                        if file_path_local in contents.fsobjects.files.keys():  # file is already in index
+                            logging.info(f"File is in contents, checking size and mtime.")
+                            props = contents.fsobjects.files[file_path_local]
+                            if props.mtime == os.path.getmtime(file_path_full.as_posix()) \
+                                    and props.size == os.path.getsize(file_path_full.as_posix()):
+                                logging.info("Skipping file as size and mtime is the same!!!")
+                                continue
+
+                    files_to_update.append(file_path_full.as_posix())
+                for dirname in dirnames:
+                    dir_path_full = dirpath.joinpath(dirname)
+                    dir_path_in_local = dir_path_full.relative_to(self.repo).as_posix()
+                    if fast_refresh and dir_path_in_local in contents.fsobjects.dirs.keys():
+                        continue
+                    folders_to_add.append(dir_path_full.as_posix())
 
                 bar(len(filenames) + len(dirnames))
 
-        print("Hashing files to add:")
-        file_hashes = asyncio.run(find_hashes(file_paths))
+        print(f"Hashing {files_to_update} files to add:")
+        file_hashes = asyncio.run(find_hashes(files_to_update))
 
         print(f"Reading all files in {self.repo}")
-        with alive_bar(nfiles + nfolders) as bar:
-            for dirpath, dirnames, filenames in walk_repo(self.repo):
-                for filename in filenames:
-                    fullpath = str(os.path.join(dirpath, filename))
-                    relpath = pathlib.Path(fullpath).relative_to(self.repo).as_posix()
+        with alive_bar(len(files_to_update) + len(folders_to_add)) as bar:
+            for fullpath in files_to_update:
+                relpath = pathlib.Path(fullpath).relative_to(self.repo).as_posix()
 
-                    contents.fsobjects.add_file(
-                        relpath, size=os.path.getsize(fullpath),
-                        mtime=os.path.getmtime(fullpath),
-                        fasthash=file_hashes.get(fullpath, None))
-                    bar()
+                contents.fsobjects.add_file(
+                    relpath, size=os.path.getsize(fullpath),
+                    mtime=os.path.getmtime(fullpath),
+                    fasthash=file_hashes.get(fullpath, None))
+                bar()
 
-                for dirname in dirnames:
-                    fullpath = str(os.path.join(dirpath, dirname))
-                    relpath = pathlib.Path(fullpath).relative_to(self.repo).as_posix()
-                    contents.fsobjects.add_dir(relpath)
-                    bar()
+            for fullpath in folders_to_add:
+                relpath = pathlib.Path(fullpath).relative_to(self.repo).as_posix()
+                contents.fsobjects.add_dir(relpath)
+                bar()
 
         logging.info(f"Files read!")
 

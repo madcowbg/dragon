@@ -2,7 +2,7 @@ import asyncio
 import hashlib
 import os
 from asyncio import Queue, TaskGroup
-from typing import Set, Dict
+from typing import Set, Dict, List
 
 import aiofiles
 from alive_progress import alive_bar
@@ -29,7 +29,7 @@ async def fast_hash_async(fullpath: str, chunk_size: int = 1 << 16) -> str:
     return hashlib.md5(file_data).hexdigest()
 
 
-async def find_hashes(filenames: Set[str]) -> Dict[str, str]:
+async def find_hashes(filenames: List[str]) -> Dict[str, str]:
     file_hashes: Dict[str, str] = dict()
 
     queue: Queue[str] = asyncio.Queue()

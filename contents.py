@@ -41,15 +41,15 @@ class FileProps:
         self.doc = doc
 
     @property
-    def size(self):
+    def size(self) -> float:
         return self.doc["size"]
 
     @property
-    def mtime(self):
+    def mtime(self) -> float:
         return self.doc["mtime"]
 
     @property
-    def fasthash(self):
+    def fasthash(self) -> str:
         return self.doc["fasthash"]
 
 
