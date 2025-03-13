@@ -367,7 +367,7 @@ class HoardCommand(object):
         remote_uuid = remotes[remote] if remote in remotes else remote
         return remote_uuid
 
-    def remotes(self):
+    def remotes(self, show_paths: bool = False):
         logging.info(f"Reading config in {self.hoardpath}...")
         config = self.config()
 
@@ -375,8 +375,9 @@ class HoardCommand(object):
             out.write(f"{len(config.remotes)} total remotes.\n")
             for remote in config.remotes.all():
                 name_prefix = f"[{remote.name}] " if remote.name != "INVALID" else ""
+                exact_path = f" in {self.paths()[remote.uuid].find()}" if show_paths else ""
 
-                out.write(f"  {name_prefix}{remote.uuid} ({remote.type.value})\n")
+                out.write(f"  {name_prefix}{remote.uuid} ({remote.type.value}){exact_path}\n")
             out.write("Mounts:\n")
 
             mounts = dict((m, list(rs)) for m, rs in groupby(config.remotes.all(), lambda r: r.mounted_at))
@@ -385,7 +386,7 @@ class HoardCommand(object):
             out.write("DONE\n")
             return out.getvalue()
 
-    def refresh(self, remote: str):
+    def refresh(self, remote: str, ignore_epoch: bool = False):
         logging.info("Loading config")
         config = self.config()
 
@@ -414,6 +415,11 @@ class HoardCommand(object):
 
         current_contents = self._fetch_repo_contents(remote_uuid)
 
+        if not ignore_epoch and hoard.epoch(remote_uuid) >= current_contents.config.epoch:
+            return (
+                f"Skipping update as past epoch {current_contents.config.epoch} "
+                f"is not after hoard epoch {hoard.epoch(remote_uuid)}")
+
         remote_doc = config.remotes[remote_uuid]
         if remote_doc is None or remote_doc.mounted_at is None:
             raise ValueError(f"remote_doc {remote_uuid} is not mounted!")
@@ -434,6 +440,9 @@ class HoardCommand(object):
                     hoard.fsobjects.add_dir(diff.hoard_dir)
                 else:
                     logging.info(f"skipping diff of type {type(diff)}")
+
+            logging.info(f"Updating epoch of {remote_uuid} to {current_contents.config.epoch}")
+            hoard.set_epoch(remote_uuid, current_contents.config.epoch)
 
             logging.info("Writing updated hoard contents...")
             hoard.write()

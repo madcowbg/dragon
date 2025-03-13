@@ -120,6 +120,9 @@ class TestRepoCommand(unittest.TestCase):
                 ('/wat/test.me.twice', 6, 1, '1881f6f9784fb08bf6690e9763b76ac3')],
             dirs_exp=["/wat"])
 
+        res = hoard_cmd.refresh("repo-in-local")
+        self.assertEqual("Skipping update as past epoch 1 is not after hoard epoch 1", res)
+
         res = hoard_cmd.refresh("repo-in-local-2")
         self.assertEqual(
             "=/wat/test.me.twice\nSync'ed repo-in-local-2 to hoard!", res.strip())
@@ -132,7 +135,7 @@ class TestRepoCommand(unittest.TestCase):
                 ('/wat/test.me.twice', 6, 2, '1881f6f9784fb08bf6690e9763b76ac3')],
             dirs_exp=["/wat"])
 
-        res = hoard_cmd.refresh("repo-in-local")
+        res = hoard_cmd.refresh("repo-in-local", ignore_epoch=True)
         self.assertEqual("Sync'ed repo-in-local to hoard!", res)
         self._assert_hoard_contents(
             HoardContents.load(hoard_cmd._hoard_contents_filename()),
@@ -372,7 +375,7 @@ class TestRepoCommand(unittest.TestCase):
             "/wat/test.me.2 = a:1 g:2\n"
             "DONE", res)
 
-        res = hoard_cmd.refresh("repo-partial-name")  # does noting...
+        res = hoard_cmd.refresh("repo-partial-name", ignore_epoch=True)  # does noting...
         self.assertEqual("Sync'ed repo-partial-name to hoard!", res.strip())
 
         res = hoard_cmd.list_files()
@@ -389,7 +392,7 @@ class TestRepoCommand(unittest.TestCase):
             "+/wat/test.me.3\n"
             "Sync'ed repo-full-name to hoard!", res.strip())
 
-        res = hoard_cmd.refresh("repo-full-name")  # does nothing ...
+        res = hoard_cmd.refresh("repo-full-name", ignore_epoch=True)  # does nothing ...
         self.assertEqual("Sync'ed repo-full-name to hoard!", res.strip())
 
         res = hoard_cmd.refresh("repo-backup-name")  # just registers the files already in backup
@@ -399,7 +402,7 @@ class TestRepoCommand(unittest.TestCase):
             "Sync'ed repo-backup-name to hoard!", res.strip())
 
         res = hoard_cmd.refresh("repo-backup-name")  # does nothing
-        self.assertEqual("Sync'ed repo-backup-name to hoard!", res.strip())
+        self.assertEqual("Skipping update as past epoch 1 is not after hoard epoch 1", res.strip())
 
         res = hoard_cmd.list_files()
         self.assertEqual(
@@ -416,6 +419,9 @@ class TestRepoCommand(unittest.TestCase):
             "u/wat/test.me.3\n"
             "<+/wat/test.me.6\n"
             "Sync'ed repo-incoming-name to hoard!", res.strip())
+
+        res = incoming_cave_cmd.refresh()
+        self.assertEqual("Refresh done!", res)
 
         res = hoard_cmd.refresh("repo-incoming-name")
         self.assertEqual(

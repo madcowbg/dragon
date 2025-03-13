@@ -132,6 +132,9 @@ class RepoCommand(object):
 
         logging.info(f"Files read!")
 
+        contents.config.bump_epoch()
+        logging.info(f"Bumped epoch to {contents.config.epoch}")
+
         logging.info(f"Writing cache...")
         contents.write()
 

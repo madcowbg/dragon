@@ -215,6 +215,7 @@ class HoardContents:
                 config = {"updated": datetime.now().isoformat()}
                 rtoml.dump({
                     "config": config,
+                    "epochs": {},
                     "fsobjects": {},
                 }, f)
         with open(filename, "r", encoding="utf-8") as f:
@@ -224,10 +225,18 @@ class HoardContents:
         self.filepath = filepath
         self.config = HoardContentsConfig(contents_doc["config"] if "config" in contents_doc else {})
         self.fsobjects = HoardFSObjects(contents_doc["fsobjects"] if "fsobjects" in contents_doc else {})
+        self.epochs = contents_doc["epochs"] if "epochs" in contents_doc else {}
 
     def write(self):
         with open(self.filepath, "w", encoding="utf-8") as f:
             rtoml.dump({
                 "config": self.config.doc,
+                "epochs": self.epochs,
                 "fsobjects": self.fsobjects.doc
             }, f)
+
+    def epoch(self, remote_uuid: str) -> int:
+        return self.epochs.get(remote_uuid, -1)
+
+    def set_epoch(self, remote_uuid: str, epoch: int):
+        self.epochs[remote_uuid] = epoch
