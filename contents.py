@@ -1,6 +1,7 @@
 import enum
 import os
 import pathlib
+import sys
 from datetime import datetime
 from os.path import join
 from typing import Dict, Any, List, Optional, Tuple, Generator
@@ -196,7 +197,8 @@ class HoardTree:
             for folder in pathlib.Path(dirpath).parts[1:]:
                 current = current.get_or_create_dir(folder)
 
-    def walk(self, from_path: str = "/") -> Generator[Tuple[Optional["HoardDir"], Optional["HoardFile"]], None, None]:
+    def walk(self, from_path: str = "/", depth: int = sys.maxsize) -> \
+            Generator[Tuple[Optional["HoardDir"], Optional["HoardFile"]], None, None]:
         assert os.path.isabs(from_path)
         current = self.root
         for folder in pathlib.Path(from_path).parts[1:]:
@@ -204,7 +206,7 @@ class HoardTree:
             if current is None:
                 return
 
-        yield from current.walk()
+        yield from current.walk(depth)
 
 
 class HoardFile:
@@ -252,13 +254,16 @@ class HoardDir:
         assert filename not in self.files
         self.files[filename] = HoardFile(self, filename, props)
 
-    def walk(self) -> Generator[Tuple[Optional["HoardDir"], Optional["HoardFile"]], None, None]:
+    def walk(self, depth: int) -> Generator[Tuple[Optional["HoardDir"], Optional["HoardFile"]], None, None]:
+        if depth <= 0:
+            return
+
         for hoard_file in self.files.values():
             yield None, hoard_file
         for hoard_dir in self.dirs.values():
             yield hoard_dir, None
         for hoard_dir in self.dirs.values():
-            yield from hoard_dir.walk()
+            yield from hoard_dir.walk(depth - 1)
 
 
 class HoardFSObjects:

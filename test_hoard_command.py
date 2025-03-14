@@ -605,10 +605,10 @@ class TestRepoCommand(unittest.TestCase):
         self.assertEqual(
             "/test.me.1 = a:1\n"
             "/test.me.4 = a:1\n"
-            "/wat @ repo-cloned-wat:., repo-full-name:wat\n"
+            "/wat => (repo-cloned-wat:.), (repo-full-name:wat)\n"
             "/wat/test.me.2 = a:1\n"
             "/wat/test.me.3 = a:1\n"
-            "/wat/inner @ repo-cloned-wat:inner, repo-full-name:wat/inner\n"
+            "/wat/inner => (repo-cloned-wat:inner), (repo-full-name:wat/inner)\n"
             "/wat/inner/another.file = a:1 g:1\n"
             "DONE", res)
 

@@ -2,6 +2,7 @@ import logging
 import os
 import pathlib
 import shutil
+import sys
 from abc import abstractmethod
 from io import StringIO
 from itertools import groupby
@@ -531,9 +532,15 @@ class HoardCommand(object):
         self.add_remote(to_path, name=name, mount_point=mount_at, fetch_new=fetch_new)
         return f"DONE"
 
-    def ls(self, selected_path: Optional[str] = None, skip_folders: bool = False, show_remotes: bool = False):
+    def ls(
+            self, selected_path: Optional[str] = None, depth: int = None,
+            skip_folders: bool = False, show_remotes: bool = False):
         logging.info(f"Loading hoard TOML...")
         hoard = HoardContents.load(self._hoard_contents_filename())
+
+        if depth is None:
+            depth = sys.maxsize if selected_path is None else 1
+
         if selected_path is None:
             selected_path = "/"
 
@@ -543,7 +550,7 @@ class HoardCommand(object):
         with StringIO() as out:
             file: Optional[HoardFile]
             folder: Optional[HoardDir]
-            for folder, file in hoard.fsobjects.tree.walk(selected_path):
+            for folder, file in hoard.fsobjects.tree.walk(selected_path, depth=depth):
                 if file is not None:
                     stats = _file_stats(file.props)
                     out.write(f"{file.fullname} = {stats}\n")
@@ -553,9 +560,9 @@ class HoardCommand(object):
                         repos_availability = sorted(
                             pathing.repos_availability(folder.fullname).items(),
                             key=lambda v: v[0].name)  # sort by repo name
-                        remotes_stats = ", ".join([f"{repo.name}:{path}" for repo, path in repos_availability])
+                        remotes_stats = ", ".join([f"({repo.name}:{path})" for repo, path in repos_availability])
 
-                        appendix = f' @ {remotes_stats}' if remotes_stats != '' else ''
+                        appendix = f' => {remotes_stats}' if remotes_stats != '' else ''
                         out.write(f"{folder.fullname}{appendix}\n")
                     else:
                         out.write(f"{folder.fullname}\n")
