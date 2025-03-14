@@ -10,7 +10,7 @@ from typing import Dict, Generator, List, Optional
 from alive_progress import alive_bar
 
 from config import HoardRemote, HoardConfig, CavePath, HoardPaths, CaveType
-from contents import FileProps, HoardFileProps, Contents, HoardContents, FileStatus
+from contents import FileProps, HoardFileProps, Contents, HoardContents, FileStatus, HoardFile, HoardDir
 from contents_diff import Diff, FileMissingInHoard, FileIsSame, FileContentsDiffer, FileMissingInLocal, \
     DirMissingInHoard, DirIsSame, DirMissingInLocal
 from hashing import fast_hash
@@ -534,16 +534,17 @@ class HoardCommand(object):
 
         logging.info(f"Listing files...")
         with StringIO() as out:
-            if selected_path is not None:  # fixme remove that if, for tests compatibility
-                for dirname, props in sorted(hoard.fsobjects.dirs.items()):
-                    if not is_selected(dirname):
-                        continue
-                    out.write(f"{dirname}\n")
-            for file, props in sorted(hoard.fsobjects.files.items()):
-                if not is_selected(file):
-                    continue
-                stats = _file_stats(props)
-                out.write(f"{file} = {stats}\n")
+            file: Optional[HoardFile]
+            folder: Optional[HoardDir]
+            for folder, file in hoard.fsobjects.tree.walk(selected_path if selected_path is not None else "/"):
+                if file is not None:
+                    stats = _file_stats(file.props)
+                    out.write(f"{file.fullname} = {stats}\n")
+
+                if selected_path is not None:  # fixme remove that if, for tests compatibility
+                    if folder is not None:
+                        out.write(f"{folder.fullname}\n")
+
             out.write("DONE")
             return out.getvalue()
 

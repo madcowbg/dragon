@@ -1,7 +1,9 @@
 import enum
 import os
+import pathlib
 from datetime import datetime
-from typing import Dict, Any, List, Optional
+from os.path import join
+from typing import Dict, Any, List, Optional, Tuple, Generator
 
 import rtoml
 
@@ -176,11 +178,97 @@ class HoardFileProps:
         self.doc["status"].pop(remote_uuid)
 
 
+class HoardTree:
+    def __init__(self, files: Dict[str, HoardFileProps], dirs: Dict[str, DirProps]):
+        self.root = HoardDir(None, "", self)
+
+        for filepath, fileprops in files.items():
+            assert os.path.isabs(filepath)
+            current = self.root
+            parts = pathlib.Path(filepath).parts
+            for folder in parts[1:-1]:
+                current = current.get_or_create_dir(folder)
+            current.create_file(parts[-1], fileprops)
+
+        for dirpath, _ in dirs.items():
+            assert os.path.isabs(dirpath)
+            current = self.root
+            for folder in pathlib.Path(dirpath).parts[1:]:
+                current = current.get_or_create_dir(folder)
+
+    def walk(self, from_path: str = "/") -> Generator[Tuple[Optional["HoardDir"], Optional["HoardFile"]], None, None]:
+        assert os.path.isabs(from_path)
+        current = self.root
+        for folder in pathlib.Path(from_path).parts[1:]:
+            current = current.get_dir(folder)
+            if current is None:
+                return
+
+        yield from current.walk()
+
+
+class HoardFile:
+    def __init__(self, parent: "HoardDir", name: str, props: HoardFileProps):
+        self.parent = parent
+        self.name = name
+        self.props = props
+
+        self._fullname: Optional[pathlib.Path] = None
+
+    @property
+    def fullname(self):
+        if self._fullname is None:
+            self._fullname = pathlib.Path(self.parent.fullname).joinpath(self.name)
+        return self._fullname.as_posix()
+
+
+class HoardDir:
+    @property
+    def fullname(self):
+        if self._fullname is None:
+            parent_path = pathlib.Path(self.parent.fullname) if self.parent is not None else pathlib.Path("/")
+            self._fullname = parent_path.joinpath(self.name)
+        return self._fullname.as_posix()
+
+    def __init__(self, parent: Optional["HoardDir"], name: str, tree: HoardTree):
+        self.tree = tree
+        self.name = name
+        self.parent = parent
+
+        self.dirs: Dict[str, HoardDir] = {}
+        self.files: Dict[str, HoardFile] = {}
+
+        self._fullname: Optional[str] = None
+
+    def get_or_create_dir(self, subname: str) -> "HoardDir":
+        if subname not in self.dirs:
+            self.dirs[subname] = HoardDir(self, subname, self.tree)
+        return self.dirs[subname]
+
+    def get_dir(self, subname: str) -> Optional["HoardDir"]:
+        return self.dirs.get(subname, None)
+
+    def create_file(self, filename: str, props: HoardFileProps):
+        assert filename not in self.files
+        self.files[filename] = HoardFile(self, filename, props)
+
+    def walk(self) -> Generator[Tuple[Optional["HoardDir"], Optional["HoardFile"]], None, None]:
+        for hoard_file in self.files.values():
+            yield None, hoard_file
+        for hoard_dir in self.dirs.values():
+            yield hoard_dir, None
+        for hoard_dir in self.dirs.values():
+            yield from hoard_dir.walk()
+
+
 class HoardFSObjects:
+    tree: HoardTree
+
     def __init__(self, doc: Dict[str, Any]):
         self.doc = doc
         self.files = dict((f, HoardFileProps(data)) for f, data in self.doc.items() if not data['isdir'])
         self.dirs = dict((f, DirProps(data)) for f, data in self.doc.items() if data['isdir'])
+        self.tree = HoardTree(self.files, self.dirs)
 
     def add_new_file(
             self, curr_file: str, props: FileProps,

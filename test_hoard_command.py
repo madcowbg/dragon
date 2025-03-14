@@ -605,9 +605,9 @@ class TestRepoCommand(unittest.TestCase):
         self.assertEqual(
             "/test.me.1 = a:1\n"
             "/test.me.4 = a:1\n"
-            "/wat/inner/another.file = a:1 g:1\n"
             "/wat/test.me.2 = a:1\n"
             "/wat/test.me.3 = a:1\n"
+            "/wat/inner/another.file = a:1 g:1\n"
             "DONE", res)
 
         self.assertEqual([], dump_file_list(self.tmpdir.name, "repo-cloned-wat/"))  # no files yet
