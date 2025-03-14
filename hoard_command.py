@@ -234,6 +234,20 @@ class BackupDiffHandler(DiffHandler):
             raise NotImplementedError(f"Unrecognized goal status {goal_status}")
 
 
+def _file_stats(props: HoardFileProps) -> str:
+    a = props.by_status(FileStatus.AVAILABLE)
+    g = props.by_status(FileStatus.GET)
+    c = props.by_status(FileStatus.CLEANUP)
+    res: List[str] = []
+    if len(a) > 0:
+        res.append(f'a:{len(a)}')
+    if len(g) > 0:
+        res.append(f'g:{len(g)}')
+    if len(c) > 0:
+        res.append(f'c:{len(c)}')
+    return " ".join(res)
+
+
 class HoardCommand(object):
     def __init__(self, path: str):
         self.hoardpath = path
@@ -509,20 +523,26 @@ class HoardCommand(object):
         self.add_remote(to_path, name=name, mount_point=mount_at, fetch_new=fetch_new)
         return f"DONE"
 
-    def list_files(self):
+    def ls(self, selected_path: Optional[str] = None):
         logging.info(f"Loading hoard TOML...")
         hoard = HoardContents.load(self._hoard_contents_filename())
 
+        def is_selected(item: str):
+            folder, name = os.path.split(item)
+            logging.info(f"{folder} ?= {selected_path}")
+            return selected_path is None or folder == selected_path
+
         logging.info(f"Listing files...")
         with StringIO() as out:
+            if selected_path is not None:  # fixme remove that if, for tests compatibility
+                for dirname, props in sorted(hoard.fsobjects.dirs.items()):
+                    if not is_selected(dirname):
+                        continue
+                    out.write(f"{dirname}\n")
             for file, props in sorted(hoard.fsobjects.files.items()):
-                a = props.by_status(FileStatus.AVAILABLE)
-                g = props.by_status(FileStatus.GET)
-                c = props.by_status(FileStatus.CLEANUP)
-                stats = (
-                    f"{f'a:{len(a)} ' if len(a) > 0 else ''}"
-                    f"{f'g:{len(g)} ' if len(g) > 0 else ''}"
-                    f"{f'c:{len(c)}' if len(c) > 0 else ''}").strip()
+                if not is_selected(file):
+                    continue
+                stats = _file_stats(props)
                 out.write(f"{file} = {stats}\n")
             out.write("DONE")
             return out.getvalue()

@@ -47,13 +47,6 @@ class RepoCommand(object):
         if not os.path.isfile(os.path.join(self._hoard_folder(), CURRENT_UUID_FILENAME)):
             raise ValueError(f"no hoard guid in {self.repo}/.hoard/{CURRENT_UUID_FILENAME}")
 
-    def list_files(self, path: str):  # todo remove
-        self._validate_repo()
-        for dirpath, dirnames, filenames in walk_repo(path):
-            for filename in filenames:
-                fullpath = str(os.path.join(dirpath, filename))
-                print(fullpath)
-
     def init(self):
         logging.info(f"Creating repo in {self.repo}")
 
