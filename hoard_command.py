@@ -73,6 +73,14 @@ class HoardPathing:
     def in_local(self, path: str, repo_uuid: str) -> LocalPath:
         return HoardPathing.LocalPath(path, repo_uuid, self)
 
+    def repos_availability(self, folder: str) -> Dict[HoardRemote, str]:
+        paths: Dict[HoardRemote, str] = {}
+        for remote in self._config.remotes.all():
+            relative_local_path = self.in_hoard(folder).at_local(remote.uuid)
+            if relative_local_path is not None:
+                paths[remote] = relative_local_path.as_posix()
+        return paths
+
 
 def path_in_local(hoard_file: str, mounted_at: str) -> str:
     return pathlib.Path(hoard_file).relative_to(mounted_at).as_posix()
@@ -511,7 +519,7 @@ class HoardCommand(object):
             return out.getvalue()
 
     def clone(self, to_path: str, mount_at: str, name: str, fetch_new: bool = False):
-        config = self.config()  # validate hoard is available
+        _ = self.config()  # validate hoard is available
 
         if not os.path.isdir(to_path):
             return f"Cave dir {to_path} to create does not exist!"
@@ -523,11 +531,13 @@ class HoardCommand(object):
         self.add_remote(to_path, name=name, mount_point=mount_at, fetch_new=fetch_new)
         return f"DONE"
 
-    def ls(self, selected_path: Optional[str] = None, skip_folders: bool = False):
+    def ls(self, selected_path: Optional[str] = None, skip_folders: bool = False, show_remotes: bool = False):
         logging.info(f"Loading hoard TOML...")
         hoard = HoardContents.load(self._hoard_contents_filename())
         if selected_path is None:
             selected_path = "/"
+
+        pathing = HoardPathing(self.config(), self.paths())
 
         logging.info(f"Listing files...")
         with StringIO() as out:
@@ -539,7 +549,16 @@ class HoardCommand(object):
                     out.write(f"{file.fullname} = {stats}\n")
 
                 if not skip_folders and folder is not None:
-                    out.write(f"{folder.fullname}\n")
+                    if show_remotes:
+                        repos_availability = sorted(
+                            pathing.repos_availability(folder.fullname).items(),
+                            key=lambda v: v[0].name)  # sort by repo name
+                        remotes_stats = ", ".join([f"{repo.name}:{path}" for repo, path in repos_availability])
+
+                        appendix = f' @ {remotes_stats}' if remotes_stats != '' else ''
+                        out.write(f"{folder.fullname}{appendix}\n")
+                    else:
+                        out.write(f"{folder.fullname}\n")
 
             out.write("DONE")
             return out.getvalue()
