@@ -255,13 +255,11 @@ class HoardDir:
         self.files[filename] = HoardFile(self, filename, props)
 
     def walk(self, depth: int) -> Generator[Tuple[Optional["HoardDir"], Optional["HoardFile"]], None, None]:
+        yield self, None
         if depth <= 0:
             return
-
         for hoard_file in self.files.values():
             yield None, hoard_file
-        for hoard_dir in self.dirs.values():
-            yield hoard_dir, None
         for hoard_dir in self.dirs.values():
             yield from hoard_dir.walk(depth - 1)
 

@@ -603,6 +603,7 @@ class TestRepoCommand(unittest.TestCase):
 
         res = hoard_cmd.ls(show_remotes=True)
         self.assertEqual(
+            "/ => (repo-full-name:.)\n"
             "/test.me.1 = a:1\n"
             "/test.me.4 = a:1\n"
             "/wat => (repo-cloned-wat:.), (repo-full-name:wat)\n"
