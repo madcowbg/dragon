@@ -369,7 +369,7 @@ class TestRepoCommand(unittest.TestCase):
         res = hoard_cmd.refresh("repo-partial-name")
         self.assertEqual("+/test.me.1\n+/wat/test.me.2\nSync'ed repo-partial-name to hoard!", res.strip())
 
-        res = hoard_cmd.ls()
+        res = hoard_cmd.ls(skip_folders=True)
         self.assertEqual(
             "/test.me.1 = a:1 g:2\n"
             "/wat/test.me.2 = a:1 g:2\n"
@@ -378,7 +378,7 @@ class TestRepoCommand(unittest.TestCase):
         res = hoard_cmd.refresh("repo-partial-name", ignore_epoch=True)  # does noting...
         self.assertEqual("Sync'ed repo-partial-name to hoard!", res.strip())
 
-        res = hoard_cmd.ls()
+        res = hoard_cmd.ls(skip_folders=True)
         self.assertEqual(
             "/test.me.1 = a:1 g:2\n"
             "/wat/test.me.2 = a:1 g:2\n"
@@ -404,7 +404,7 @@ class TestRepoCommand(unittest.TestCase):
         res = hoard_cmd.refresh("repo-backup-name")  # does nothing
         self.assertEqual("Skipping update as past epoch 1 is not after hoard epoch 1", res.strip())
 
-        res = hoard_cmd.ls()
+        res = hoard_cmd.ls(skip_folders=True)
         self.assertEqual(
             "/test.me.1 = a:3\n"
             "/test.me.4 = a:1 g:1\n"
@@ -431,7 +431,7 @@ class TestRepoCommand(unittest.TestCase):
             "-/wat/test.me.6\n"
             "Sync'ed repo-incoming-name to hoard!", res.strip())
 
-        res = hoard_cmd.ls()
+        res = hoard_cmd.ls(skip_folders=True)
         self.assertEqual(
             "/test.me.1 = a:3\n"
             "/test.me.4 = a:1 g:1 c:1\n"
@@ -450,7 +450,7 @@ class TestRepoCommand(unittest.TestCase):
         hoard_cmd.refresh("repo-backup-name")  # just registers the files already in backup
         hoard_cmd.refresh("repo-incoming-name")
 
-        res = hoard_cmd.ls()
+        res = hoard_cmd.ls(skip_folders=True)
         self.assertEqual(
             "/test.me.1 = a:3\n"
             "/test.me.4 = a:1 g:1 c:1\n"
@@ -481,7 +481,7 @@ class TestRepoCommand(unittest.TestCase):
             'repo-full/wat/test.me.3',
             'repo-full/wat/test.me.6'], dump_file_list(self.tmpdir.name, 'repo-full'))
 
-        res = hoard_cmd.ls()
+        res = hoard_cmd.ls(skip_folders=True)
         self.assertEqual(
             "/test.me.1 = a:3\n"
             "/test.me.4 = a:1 g:1 c:1\n"
@@ -538,7 +538,7 @@ class TestRepoCommand(unittest.TestCase):
             'repo-partial/wat/test.me.2'],
             dump_file_list(self.tmpdir.name, 'repo-partial'))
 
-        res = hoard_cmd.ls()
+        res = hoard_cmd.ls(skip_folders=True)
         self.assertEqual(
             "/test.me.1 = a:3\n"
             "/test.me.4 = a:2\n"
@@ -605,8 +605,10 @@ class TestRepoCommand(unittest.TestCase):
         self.assertEqual(
             "/test.me.1 = a:1\n"
             "/test.me.4 = a:1\n"
+            "/wat\n"
             "/wat/test.me.2 = a:1\n"
             "/wat/test.me.3 = a:1\n"
+            "/wat/inner\n"
             "/wat/inner/another.file = a:1 g:1\n"
             "DONE", res)
 

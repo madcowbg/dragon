@@ -523,27 +523,23 @@ class HoardCommand(object):
         self.add_remote(to_path, name=name, mount_point=mount_at, fetch_new=fetch_new)
         return f"DONE"
 
-    def ls(self, selected_path: Optional[str] = None):
+    def ls(self, selected_path: Optional[str] = None, skip_folders: bool = False):
         logging.info(f"Loading hoard TOML...")
         hoard = HoardContents.load(self._hoard_contents_filename())
-
-        def is_selected(item: str):
-            folder, name = os.path.split(item)
-            logging.info(f"{folder} ?= {selected_path}")
-            return selected_path is None or folder == selected_path
+        if selected_path is None:
+            selected_path = "/"
 
         logging.info(f"Listing files...")
         with StringIO() as out:
             file: Optional[HoardFile]
             folder: Optional[HoardDir]
-            for folder, file in hoard.fsobjects.tree.walk(selected_path if selected_path is not None else "/"):
+            for folder, file in hoard.fsobjects.tree.walk(selected_path):
                 if file is not None:
                     stats = _file_stats(file.props)
                     out.write(f"{file.fullname} = {stats}\n")
 
-                if selected_path is not None:  # fixme remove that if, for tests compatibility
-                    if folder is not None:
-                        out.write(f"{folder.fullname}\n")
+                if not skip_folders and folder is not None:
+                    out.write(f"{folder.fullname}\n")
 
             out.write("DONE")
             return out.getvalue()
