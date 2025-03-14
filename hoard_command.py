@@ -534,7 +534,7 @@ class HoardCommand(object):
 
     def ls(
             self, selected_path: Optional[str] = None, depth: int = None,
-            skip_folders: bool = False, show_remotes: bool = False):
+            skip_folders: bool = False, show_remotes: int = False):
         logging.info(f"Loading hoard TOML...")
         hoard = HoardContents.load(self._hoard_contents_filename())
 
