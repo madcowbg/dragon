@@ -202,22 +202,26 @@ class HoardFileProps(FSObjectProps):
 
 
 class HoardTree:
-    def __init__(self, files: Dict[str, HoardFileProps], dirs: Dict[str, DirProps]):
+    def __init__(self, objects: Dict[str, FSObjectProps]):
         self.root = HoardDir(None, "", self)
 
-        for filepath, fileprops in files.items():
-            assert os.path.isabs(filepath)
-            current = self.root
-            parts = pathlib.Path(filepath).parts
-            for folder in parts[1:-1]:
-                current = current.get_or_create_dir(folder)
-            current.create_file(parts[-1], fileprops)
-
-        for dirpath, _ in dirs.items():
-            assert os.path.isabs(dirpath)
-            current = self.root
-            for folder in pathlib.Path(dirpath).parts[1:]:
-                current = current.get_or_create_dir(folder)
+        for path, props in objects.items():
+            if isinstance(props, HoardFileProps):
+                filepath = path
+                assert os.path.isabs(filepath)
+                current = self.root
+                parts = pathlib.Path(filepath).parts
+                for folder in parts[1:-1]:
+                    current = current.get_or_create_dir(folder)
+                current.create_file(parts[-1], props)
+            elif isinstance(props, DirProps):
+                dirpath = path
+                assert os.path.isabs(dirpath)
+                current = self.root
+                for folder in pathlib.Path(dirpath).parts[1:]:
+                    current = current.get_or_create_dir(folder)
+            else:
+                raise ValueError(f"Invalid props type: {type(props)}")
 
     def walk(self, from_path: str = "/", depth: int = sys.maxsize) -> \
             Generator[Tuple[Optional["HoardDir"], Optional["HoardFile"]], None, None]:
@@ -291,26 +295,18 @@ class HoardFSObjects:
 
     def __init__(self, doc: Dict[str, Any]):
         self._doc = doc
-        self._files = dict((f, HoardFileProps(data)) for f, data in self._doc.items() if not data['isdir'])
-        self._dirs = dict((f, DirProps(data)) for f, data in self._doc.items() if data['isdir'])
-        self.tree = HoardTree(self._files, self._dirs)
+        self._objects = dict(
+            (f, HoardFileProps(data) if not data['isdir'] else DirProps(data)) for f, data in self._doc.items())
+        self.tree = HoardTree(self._objects)
 
     def __len__(self):
-        return len(self._files) + len(self._dirs)
+        return len(self._objects)
 
-    def __getitem__(self, key: str) -> FSObjectProps:
-        if key in self._files:
-            return self._files[key]
-        if key in self._dirs:
-            return self._dirs[key]
-        raise ValueError(f"Unknown file or dir: {key}")
+    def __getitem__(self, key: str) -> FSObjectProps: return self._objects[key]
 
-    def __iter__(self) -> Generator[Tuple[str, FSObjectProps], None, None]:
-        yield from self._files.copy().items()
-        yield from self._dirs.copy().items()
+    def __iter__(self) -> Generator[Tuple[str, FSObjectProps], None, None]: yield from self._objects.copy().items()
 
-    def __contains__(self, item: str) -> bool:
-        return item in self._files or item in self._dirs
+    def __contains__(self, item: str) -> bool: return item in self._objects
 
     def add_new_file(
             self, curr_file: str, props: FileProps,
@@ -325,36 +321,32 @@ class HoardFSObjects:
         # mark as present here
         self._doc[curr_file]["status"][current_uuid] = FileStatus.AVAILABLE.value
 
-        self._files[curr_file] = HoardFileProps(self._doc[curr_file])
-        return self._files[curr_file]
+        self._objects[curr_file] = HoardFileProps(self._doc[curr_file])
+        return self._objects[curr_file]
 
     def add_dir(self, curr_dir: str):
         self._doc[curr_dir] = {"isdir": True}
-        self._dirs[curr_dir] = DirProps(self._doc[curr_dir])
+        self._objects[curr_dir] = DirProps(self._doc[curr_dir])
 
-    def delete_file(self, curr_file: str):
-        self._files.pop(curr_file)
+    def delete(self, curr_file: str):
+        self._objects.pop(curr_file)
         self._doc.pop(curr_file)
-
-    def delete_dir(self, curr_dir: str):
-        self._dirs.pop(curr_dir)
-        self._doc.pop(curr_dir)
 
     def move_file(self, orig_file: str, new_path: str, props: HoardFileProps):
         assert orig_file != new_path
 
         self._doc[new_path] = props.doc
-        self._files[new_path] = props
+        self._objects[new_path] = props
 
-        self.delete_file(orig_file)
+        self.delete(orig_file)
 
     def move_dir(self, curr_dir: str, new_path: str, props: DirProps):
         assert curr_dir != new_path
 
         self._doc[new_path] = props.doc
-        self._dirs[new_path] = props
+        self._objects[new_path] = props
 
-        self.delete_dir(curr_dir)
+        self.delete(curr_dir)
 
     @property
     def num_files(self):
