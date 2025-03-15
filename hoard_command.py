@@ -611,28 +611,15 @@ class HoardCommand(object):
         with StringIO() as out:
             out.write("Moving files and folders:\n")
             for orig_path, props in hoard.fsobjects:
-                if isinstance(props, HoardFileProps):
-                    orig_file = orig_path
-                    file_path = pathlib.Path(orig_file)
-                    if file_path.is_relative_to(from_path):
-                        rel_path = file_path.relative_to(from_path)
-                        logging.info(f"Relative file path to move: {rel_path}")
-                        new_path = pathlib.Path(to_path).joinpath(rel_path).as_posix()
+                assert isinstance(props, HoardFileProps) or isinstance(props, DirProps), f"Unsupported props type: {type(props)}"
+                current_path = pathlib.Path(orig_path)
+                if current_path.is_relative_to(from_path):
+                    rel_path = current_path.relative_to(from_path)
+                    logging.info(f"Relative file path to move: {rel_path}")
+                    new_path = pathlib.Path(to_path).joinpath(rel_path).as_posix()
 
-                        out.write(f"{orig_file}=>{new_path}\n")
-                        hoard.fsobjects.move_file(orig_file, new_path, props)
-                elif isinstance(props, DirProps):
-                    orig_dir = orig_path
-                    dir_path = pathlib.Path(orig_dir)
-                    if dir_path.is_relative_to(from_path):
-                        rel_path = dir_path.relative_to(from_path)
-                        logging.info(f"Relative dir path to move: {rel_path}")
-                        new_path = pathlib.Path(to_path).joinpath(rel_path).as_posix()
-
-                        out.write(f"{orig_dir}=>{new_path}\n")
-                        hoard.fsobjects.move_dir(orig_dir, new_path, props)
-                else:
-                    raise ValueError(f"Unsupported props type: {type(props)}")
+                    out.write(f"{orig_path}=>{new_path}\n")
+                    hoard.fsobjects.move(orig_path, new_path, props)
 
             logging.info(f"Moving {', '.join(r.name for r in repos_to_move)}.")
             out.write(f"Moving {len(repos_to_move)} repos:\n")
