@@ -71,14 +71,14 @@ class TestRepoCommand(unittest.TestCase):
             "+/wat/test.me.twice\n"
             "Sync'ed repo-in-local to hoard!", res.strip())
 
-        hoard_contents = HoardContents.load(hoard_cmd._hoard_contents_filename())
-        self._assert_hoard_contents(
-            hoard_contents,
-            files_exp=[
-                ('/wat/test.me.different', 5, 1, '5a818396160e4189911989d69d857bd2'),
-                ('/wat/test.me.once', 8, 1, '34fac39930874b0f6bc627c3b3fc4b5e'),
-                ('/wat/test.me.twice', 6, 1, '1881f6f9784fb08bf6690e9763b76ac3')],
-            dirs_exp=["/wat"])
+        with HoardContents.load(hoard_cmd._hoard_contents_filename(), write_on_close=False) as hoard_contents:
+            self._assert_hoard_contents(
+                hoard_contents,
+                files_exp=[
+                    ('/wat/test.me.different', 5, 1, '5a818396160e4189911989d69d857bd2'),
+                    ('/wat/test.me.once', 8, 1, '34fac39930874b0f6bc627c3b3fc4b5e'),
+                    ('/wat/test.me.twice', 6, 1, '1881f6f9784fb08bf6690e9763b76ac3')],
+                dirs_exp=["/wat"])
 
         res = hoard_cmd.status("repo-in-local")
         self.assertEqual(f"Status of {repo_uuid}:\nDF /wat\nDONE", res.strip())
@@ -113,13 +113,14 @@ class TestRepoCommand(unittest.TestCase):
 
         hoard_cmd.refresh("repo-in-local")
 
-        self._assert_hoard_contents(
-            HoardContents.load(hoard_cmd._hoard_contents_filename()),
-            files_exp=[
-                ('/wat/test.me.different', 5, 1, '5a818396160e4189911989d69d857bd2'),
-                ('/wat/test.me.once', 8, 1, '34fac39930874b0f6bc627c3b3fc4b5e'),
-                ('/wat/test.me.twice', 6, 1, '1881f6f9784fb08bf6690e9763b76ac3')],
-            dirs_exp=["/wat"])
+        with HoardContents.load(hoard_cmd._hoard_contents_filename(), write_on_close=False) as hc:
+            self._assert_hoard_contents(
+                hc,
+                files_exp=[
+                    ('/wat/test.me.different', 5, 1, '5a818396160e4189911989d69d857bd2'),
+                    ('/wat/test.me.once', 8, 1, '34fac39930874b0f6bc627c3b3fc4b5e'),
+                    ('/wat/test.me.twice', 6, 1, '1881f6f9784fb08bf6690e9763b76ac3')],
+                dirs_exp=["/wat"])
 
         res = hoard_cmd.refresh("repo-in-local")
         self.assertEqual("Skipping update as past epoch 1 is not after hoard epoch 1", res)
@@ -128,23 +129,26 @@ class TestRepoCommand(unittest.TestCase):
         self.assertEqual(
             "=/wat/test.me.twice\nSync'ed repo-in-local-2 to hoard!", res.strip())
 
-        self._assert_hoard_contents(
-            HoardContents.load(hoard_cmd._hoard_contents_filename()),
-            files_exp=[
-                ('/wat/test.me.different', 5, 1, '5a818396160e4189911989d69d857bd2'),
-                ('/wat/test.me.once', 8, 1, '34fac39930874b0f6bc627c3b3fc4b5e'),
-                ('/wat/test.me.twice', 6, 2, '1881f6f9784fb08bf6690e9763b76ac3')],
-            dirs_exp=["/wat"])
+        with HoardContents.load(hoard_cmd._hoard_contents_filename(), write_on_close=False) as hc:
+            self._assert_hoard_contents(
+                hc,
+                files_exp=[
+                    ('/wat/test.me.different', 5, 1, '5a818396160e4189911989d69d857bd2'),
+                    ('/wat/test.me.once', 8, 1, '34fac39930874b0f6bc627c3b3fc4b5e'),
+                    ('/wat/test.me.twice', 6, 2, '1881f6f9784fb08bf6690e9763b76ac3')],
+                dirs_exp=["/wat"])
 
         res = hoard_cmd.refresh("repo-in-local", ignore_epoch=True)
         self.assertEqual("Sync'ed repo-in-local to hoard!", res)
-        self._assert_hoard_contents(
-            HoardContents.load(hoard_cmd._hoard_contents_filename()),
-            files_exp=[
-                ('/wat/test.me.different', 5, 1, '5a818396160e4189911989d69d857bd2'),  # retained only from repo
-                ('/wat/test.me.once', 8, 1, '34fac39930874b0f6bc627c3b3fc4b5e'),
-                ('/wat/test.me.twice', 6, 2, '1881f6f9784fb08bf6690e9763b76ac3')],
-            dirs_exp=["/wat"])
+
+        with HoardContents.load(hoard_cmd._hoard_contents_filename(), write_on_close=False) as hc:
+            self._assert_hoard_contents(
+                hc,
+                files_exp=[
+                    ('/wat/test.me.different', 5, 1, '5a818396160e4189911989d69d857bd2'),  # retained only from repo
+                    ('/wat/test.me.once', 8, 1, '34fac39930874b0f6bc627c3b3fc4b5e'),
+                    ('/wat/test.me.twice', 6, 2, '1881f6f9784fb08bf6690e9763b76ac3')],
+                dirs_exp=["/wat"])
 
         res = hoard_cmd.status("repo-in-local-2")
         self.assertEqual(

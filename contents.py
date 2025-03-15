@@ -1,4 +1,5 @@
 import enum
+import logging
 import os
 import pathlib
 import sys
@@ -356,7 +357,7 @@ class HoardFSObjects:
 
 class HoardContents:
     @staticmethod
-    def load(filename: str) -> "HoardContents":
+    def load(filename: str, write_on_close: bool = True) -> "HoardContents":
         if not os.path.isfile(filename):
             with open(filename, "w", encoding="utf-8") as f:
                 config = {"updated": datetime.now().isoformat()}
@@ -365,16 +366,37 @@ class HoardContents:
                     "epochs": {},
                     "fsobjects": {},
                 }, f)
-        with open(filename, "r", encoding="utf-8") as f:
-            return HoardContents(filename, rtoml.load(f))
+        return HoardContents(filename, write_on_close)
 
-    def __init__(self, filepath: str, contents_doc: Dict[str, Any]):
+    def __init__(self, filepath: str, write_on_close: bool):
         self.filepath = filepath
+        self.write_on_close = write_on_close
+
+        self.config = None
+        self.fsobjects = None
+        self.epochs = None
+
+    def __enter__(self):
+        with open(self.filepath, "r", encoding="utf-8") as f:
+            contents_doc = rtoml.load(f)
+
         self.config = HoardContentsConfig(contents_doc["config"] if "config" in contents_doc else {})
         self.fsobjects = HoardFSObjects(contents_doc["fsobjects"] if "fsobjects" in contents_doc else {})
         self.epochs = contents_doc["epochs"] if "epochs" in contents_doc else {}
 
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.write_on_close:
+            self.write()
+        self.config = None
+        self.fsobjects = None
+        self.epochs = None
+
+        return False
+
     def write(self):
+        logging.info(f"Writing contents to file: {self.filepath}")
         with open(self.filepath, "w", encoding="utf-8") as f:
             rtoml.dump({
                 "config": self.config.doc,
