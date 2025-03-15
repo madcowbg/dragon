@@ -3,7 +3,6 @@ import os
 import pathlib
 import sys
 from datetime import datetime
-from os.path import join
 from typing import Dict, Any, List, Optional, Tuple, Generator
 
 import rtoml
@@ -39,7 +38,11 @@ class ContentsConfig(HoardContentsConfig):
         self.doc["epoch"] = self.epoch + 1
 
 
-class FileProps:
+class FSObjectProps:
+    pass
+
+
+class FileProps(FSObjectProps):
     def __init__(self, doc: Dict[str, Any]):
         self.doc = doc
 
@@ -56,11 +59,7 @@ class FileProps:
         return self.doc["fasthash"]
 
 
-class HoardFSObjectProps:
-    pass
-
-
-class DirProps(HoardFSObjectProps):
+class DirProps(FSObjectProps):
     def __init__(self, doc: Dict[str, Any]):
         self.doc = doc
 
@@ -68,24 +67,49 @@ class DirProps(HoardFSObjectProps):
 class FSObjects:
     def __init__(self, fsobjects_doc: Dict[str, Any]):
         self.doc = fsobjects_doc
-        self.files = dict((f, FileProps(data)) for f, data in self.doc.items() if not data['isdir'])
-        self.dirs = dict((f, DirProps(data)) for f, data in self.doc.items() if data['isdir'])
+        self._files = dict((f, FileProps(data)) for f, data in self.doc.items() if not data['isdir'])
+        self._dirs = dict((f, DirProps(data)) for f, data in self.doc.items() if data['isdir'])
+
+    @property
+    def files(self):
+        return self._files
+
+    @property
+    def dirs(self):
+        return self._dirs
+
+    def __len__(self):
+        return len(self._files) + len(self._dirs)
+
+    def __getitem__(self, key: str) -> FSObjectProps:
+        if key in self._files:
+            return self._files[key]
+        if key in self._dirs:
+            return self._dirs[key]
+        raise ValueError(f"Unknown file or dir: {key}")
+
+    def __iter__(self) -> Generator[Tuple[str, FSObjectProps], None, None]:
+        yield from self._files.copy().items()
+        yield from self._dirs.copy().items()
+
+    def __contains__(self, item: str) -> bool:
+        return item in self._files or item in self._dirs
 
     def add_file(self, filepath: str, size: int, mtime: float, fasthash: str) -> None:
         self.doc[filepath] = {"size": size, "mtime": mtime, "isdir": False, "fasthash": fasthash}
-        self.files[filepath] = FileProps(self.doc[filepath])
+        self._files[filepath] = FileProps(self.doc[filepath])
 
     def add_dir(self, dirpath):
         self.doc[dirpath] = {"isdir": True}
-        self.dirs[dirpath] = DirProps(self.doc[dirpath])
+        self._dirs[dirpath] = DirProps(self.doc[dirpath])
 
     def remove_file(self, filepath: str):
         self.doc.pop(filepath)
-        self.files.pop(filepath)
+        self._files.pop(filepath)
 
     def remove_dir(self, dirpath: str):
         self.doc.pop(dirpath)
-        self.dirs.pop(dirpath)
+        self._dirs.pop(dirpath)
 
 
 class Contents:
@@ -120,7 +144,7 @@ class FileStatus(enum.Enum):
     UNKNOWN = "UNKNOWN"
 
 
-class HoardFileProps(HoardFSObjectProps):
+class HoardFileProps(FSObjectProps):
     def __init__(self, doc: Dict[str, Any]):
         self.doc = doc
 
@@ -280,14 +304,14 @@ class HoardFSObjects:
     def __len__(self):
         return len(self._files) + len(self._dirs)
 
-    def __getitem__(self, key: str) -> HoardFSObjectProps:
+    def __getitem__(self, key: str) -> FSObjectProps:
         if key in self._files:
             return self._files[key]
         if key in self._dirs:
             return self._dirs[key]
         raise ValueError(f"Unknown file or dir: {key}")
 
-    def __iter__(self) -> Generator[Tuple[str, HoardFSObjectProps], None, None]:
+    def __iter__(self) -> Generator[Tuple[str, FSObjectProps], None, None]:
         yield from self._files.copy().items()
         yield from self._dirs.copy().items()
 
