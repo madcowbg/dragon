@@ -67,25 +67,19 @@ class DirProps(FSObjectProps):
 class FSObjects:
     def __init__(self, fsobjects_doc: Dict[str, Any]):
         self._doc = fsobjects_doc
-        self._files = dict((f, FileProps(data)) for f, data in self._doc.items() if not data['isdir'])
-        self._dirs = dict((f, DirProps(data)) for f, data in self._doc.items() if data['isdir'])
+        self._objects = dict(
+            (f, FileProps(data) if not data['isdir'] else DirProps(data))
+            for f, data in self._doc.items())
 
-    def __len__(self):
-        return len(self._files) + len(self._dirs)
+    def __len__(self) -> int: return len(self._objects)
 
-    def __getitem__(self, key: str) -> FSObjectProps:
-        if key in self._files:
-            return self._files[key]
-        if key in self._dirs:
-            return self._dirs[key]
-        raise ValueError(f"Unknown file or dir: {key}")
+    def __getitem__(self, key: str) -> FSObjectProps: return self._objects[key]
 
     def __iter__(self) -> Generator[Tuple[str, FSObjectProps], None, None]:
-        yield from self._files.copy().items()
-        yield from self._dirs.copy().items()
+        yield from self._objects.copy().items()
 
     def __contains__(self, item: str) -> bool:
-        return item in self._files or item in self._dirs
+        return item in self._objects
 
     @property
     def num_files(self):
@@ -101,19 +95,15 @@ class FSObjects:
 
     def add_file(self, filepath: str, size: int, mtime: float, fasthash: str) -> None:
         self._doc[filepath] = {"size": size, "mtime": mtime, "isdir": False, "fasthash": fasthash}
-        self._files[filepath] = FileProps(self._doc[filepath])
+        self._objects[filepath] = FileProps(self._doc[filepath])
 
     def add_dir(self, dirpath):
         self._doc[dirpath] = {"isdir": True}
-        self._dirs[dirpath] = DirProps(self._doc[dirpath])
+        self._objects[dirpath] = DirProps(self._doc[dirpath])
 
-    def remove_file(self, filepath: str):
-        self._doc.pop(filepath)
-        self._files.pop(filepath)
-
-    def remove_dir(self, dirpath: str):
-        self._doc.pop(dirpath)
-        self._dirs.pop(dirpath)
+    def remove(self, path: str):
+        self._doc.pop(path)
+        self._objects.pop(path)
 
 
 class Contents:

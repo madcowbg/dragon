@@ -81,13 +81,13 @@ class RepoCommand(object):
                     fullpath = str(os.path.join(self.repo, file))
                     if not os.path.isfile(fullpath):
                         logging.info(f"Removing file {file}")
-                        contents.fsobjects.remove_file(file)
+                        contents.fsobjects.remove(file)
                 elif isinstance(props, DirProps):
                     dirname = file
                     fullpath = str(os.path.join(self.repo, dirname))
                     if not os.path.isdir(fullpath):
                         logging.info(f"Removing dir {dirname}")
-                        contents.fsobjects.remove_dir(dirname)
+                        contents.fsobjects.remove(dirname)
                 else:
                     raise ValueError(f"invalid props type: {type(props)}")
 
