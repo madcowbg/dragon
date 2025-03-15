@@ -723,7 +723,7 @@ class HoardCommand(object):
             out.write("DONE")
             return out.getvalue()
 
-    def enable_content(self, repo: str, path: str = ""):
+    def enable_contents(self, repo: str, path: str = ""):
         config = self.config()
 
         logging.info(f"Loading hoard TOML...")

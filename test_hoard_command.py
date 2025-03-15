@@ -604,7 +604,7 @@ class TestRepoCommand(unittest.TestCase):
 
         cloned_cave_cmd = TotalCommand(path=join(self.tmpdir.name, "repo-cloned-wat")).cave
 
-        res = hoard_cmd.enable_content(repo="repo-cloned-wat", path="inner")
+        res = hoard_cmd.enable_contents(repo="repo-cloned-wat", path="inner")
         self.assertEqual("+/wat/inner/another.file\nDONE", res)
 
         res = hoard_cmd.ls(show_remotes=True)
@@ -635,7 +635,7 @@ class TestRepoCommand(unittest.TestCase):
         res = cloned_cave_cmd.refresh()
         self.assertEqual("Refresh done!", res)
 
-        res = hoard_cmd.enable_content(repo="repo-cloned-wat")
+        res = hoard_cmd.enable_contents(repo="repo-cloned-wat")
         self.assertEqual("+/wat/test.me.2\n+/wat/test.me.3\nDONE", res)
 
         res = hoard_cmd.sync_contents("repo-cloned-wat")
