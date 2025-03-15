@@ -70,14 +70,6 @@ class FSObjects:
         self._files = dict((f, FileProps(data)) for f, data in self.doc.items() if not data['isdir'])
         self._dirs = dict((f, DirProps(data)) for f, data in self.doc.items() if data['isdir'])
 
-    @property
-    def files(self):
-        return self._files
-
-    @property
-    def dirs(self):
-        return self._dirs
-
     def __len__(self):
         return len(self._files) + len(self._dirs)
 
@@ -94,6 +86,18 @@ class FSObjects:
 
     def __contains__(self, item: str) -> bool:
         return item in self._files or item in self._dirs
+
+    @property
+    def num_files(self):
+        return len([f for f, p in self if isinstance(p, FileProps)])
+
+    @property
+    def num_dirs(self):
+        return len([f for f, p in self if isinstance(p, DirProps)])
+
+    @property
+    def total_size(self) -> int:
+        return sum(p.size for _, p in self if isinstance(p, FileProps))
 
     def add_file(self, filepath: str, size: int, mtime: float, fasthash: str) -> None:
         self.doc[filepath] = {"size": size, "mtime": mtime, "isdir": False, "fasthash": fasthash}

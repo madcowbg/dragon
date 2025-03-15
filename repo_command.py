@@ -9,8 +9,9 @@ from typing import Generator, Tuple, List
 
 from alive_progress import alive_bar
 
-from contents import Contents
+from contents import Contents, FileProps, DirProps
 from hashing import find_hashes
+from util import format_size
 
 CURRENT_UUID_FILENAME = "current.uuid"
 
@@ -73,21 +74,22 @@ class RepoCommand(object):
         contents.config.touch_updated()
 
         print(f"Removing old files and folders.")
-        with alive_bar(len(contents.fsobjects.files)) as bar:
-            for file, _ in contents.fsobjects.files.copy().items():
+        with alive_bar(len(contents.fsobjects)) as bar:
+            for file, props in contents.fsobjects:
                 bar()
-                fullpath = str(os.path.join(self.repo, file))
-                if not os.path.isfile(fullpath):
-                    logging.info(f"Removing file {file}")
-                    contents.fsobjects.remove_file(file)
-
-        with alive_bar(len(contents.fsobjects.dirs)) as bar:
-            for dirname, _ in contents.fsobjects.dirs.copy().items():
-                bar()
-                fullpath = str(os.path.join(self.repo, dirname))
-                if not os.path.isdir(fullpath):
-                    logging.info(f"Removing dir {dirname}")
-                    contents.fsobjects.remove_dir(dirname)
+                if isinstance(props, FileProps):
+                    fullpath = str(os.path.join(self.repo, file))
+                    if not os.path.isfile(fullpath):
+                        logging.info(f"Removing file {file}")
+                        contents.fsobjects.remove_file(file)
+                elif isinstance(props, DirProps):
+                    dirname = file
+                    fullpath = str(os.path.join(self.repo, dirname))
+                    if not os.path.isdir(fullpath):
+                        logging.info(f"Removing dir {dirname}")
+                        contents.fsobjects.remove_dir(dirname)
+                else:
+                    raise ValueError(f"invalid props type: {type(props)}")
 
         print("Counting files to add or update...")
         files_to_update: List[str] = []
@@ -100,9 +102,10 @@ class RepoCommand(object):
                     if fast_refresh:
                         file_path_local = file_path_full.relative_to(self.repo).as_posix()
                         logging.info(f"Checking {file_path_local} for existence...")
-                        if file_path_local in contents.fsobjects.files.keys():  # file is already in index
+                        if file_path_local in contents.fsobjects:  # file is already in index
                             logging.info(f"File is in contents, checking size and mtime.")
-                            props = contents.fsobjects.files[file_path_local]
+                            props = contents.fsobjects[file_path_local]
+                            assert isinstance(props, FileProps)
                             if props.mtime == os.path.getmtime(file_path_full.as_posix()) \
                                     and props.size == os.path.getsize(file_path_full.as_posix()):
                                 logging.info("Skipping file as size and mtime is the same!!!")
@@ -112,7 +115,8 @@ class RepoCommand(object):
                 for dirname in dirnames:
                     dir_path_full = dirpath.joinpath(dirname)
                     dir_path_in_local = dir_path_full.relative_to(self.repo).as_posix()
-                    if fast_refresh and dir_path_in_local in contents.fsobjects.dirs.keys():
+                    if fast_refresh and dir_path_in_local in contents.fsobjects:
+                        assert isinstance(contents.fsobjects[dir_path_in_local], DirProps)
                         continue
                     folders_to_add.append(dir_path_full.as_posix())
 
@@ -160,8 +164,8 @@ class RepoCommand(object):
                 f"Result for local\n",
                 f"UUID: {remote_uuid}\n",
                 f"Last updated on {contents.config.updated}\n",
-                f"  # files = {len(contents.fsobjects.files)} of size {sum(f.size for f in contents.fsobjects.files.values())}\n",
-                f"  # dirs  = {len(contents.fsobjects.dirs)}\n", ])
+                f"  # files = {contents.fsobjects.num_files} of size {format_size(contents.fsobjects.total_size)}\n",
+                f"  # dirs  = {contents.fsobjects.num_dirs}\n", ])
             return out.getvalue()
 
     def _contents_filename(self, current_uuid):

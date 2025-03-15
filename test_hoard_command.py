@@ -202,9 +202,9 @@ class TestRepoCommand(unittest.TestCase):
         self.assertEqual(
             f"Status of {repo_uuid}:\n"
             f"A /newdir/newfile.is\n"
+            f"AF /newdir\n"
             f"D /wat/test.me.different\n"
             f"DF /wat\n"
-            f"AF /newdir\n"
             f"DONE",
             hoard_cmd.status("repo-in-local").strip())
 

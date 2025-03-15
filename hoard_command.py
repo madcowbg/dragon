@@ -817,25 +817,37 @@ def compare_local_to_hoard(local: Contents, hoard: HoardContents, config: HoardC
     pathing = HoardPathing(config, paths)
 
     print("Comparing current files to hoard:")
-    with alive_bar(len(local.fsobjects.files)) as bar:
-        for current_file, props in local.fsobjects.files.copy().items():
+    with alive_bar(len(local.fsobjects)) as bar:
+        for current_path, props in local.fsobjects:
             bar()
+            if isinstance(props, FileProps):
+                current_file = current_path
+                curr_file_hoard_path = pathing.in_local(current_file, local.config.uuid).at_hoard()
+                if curr_file_hoard_path.as_posix() not in hoard.fsobjects:
+                    logging.info(f"local file not in hoard: {curr_file_hoard_path.as_posix()}")
+                    yield FileMissingInHoard(current_file, curr_file_hoard_path.as_posix(), props)
+                elif is_same_file(
+                        local.fsobjects[current_file],
+                        hoard.fsobjects[curr_file_hoard_path.as_posix()]):
+                    logging.info(f"same in hoard {current_file}!")
+                    yield FileIsSame(current_file, curr_file_hoard_path.as_posix(), props, hoard.fsobjects[
+                        curr_file_hoard_path.as_posix()])
+                else:
+                    logging.info(f"file changes {current_file}")
+                    yield FileContentsDiffer(
+                        current_file,
+                        curr_file_hoard_path.as_posix(), props, hoard.fsobjects[curr_file_hoard_path.as_posix()])
 
-            curr_file_hoard_path = pathing.in_local(current_file, local.config.uuid).at_hoard()
-            if curr_file_hoard_path.as_posix() not in hoard.fsobjects:
-                logging.info(f"local file not in hoard: {curr_file_hoard_path.as_posix()}")
-                yield FileMissingInHoard(current_file, curr_file_hoard_path.as_posix(), props)
-            elif is_same_file(
-                    local.fsobjects.files[current_file],
-                    hoard.fsobjects[curr_file_hoard_path.as_posix()]):
-                logging.info(f"same in hoard {current_file}!")
-                yield FileIsSame(current_file, curr_file_hoard_path.as_posix(), props, hoard.fsobjects[
-                    curr_file_hoard_path.as_posix()])
+            elif isinstance(props, DirProps):
+                current_dir = current_path
+                curr_dir_hoard_path = pathing.in_local(current_dir, local.config.uuid).at_hoard()
+                if curr_dir_hoard_path.as_posix() not in hoard.fsobjects:
+                    logging.info(f"new dir found: {current_dir}")
+                    yield DirMissingInHoard(current_dir, curr_dir_hoard_path.as_posix())
+                else:
+                    yield DirIsSame(current_dir, curr_dir_hoard_path.as_posix())
             else:
-                logging.info(f"file changes {current_file}")
-                yield FileContentsDiffer(
-                    current_file,
-                    curr_file_hoard_path.as_posix(), props, hoard.fsobjects[curr_file_hoard_path.as_posix()])
+                raise ValueError(f"unknown props type: {type(props)}")
 
     print("Comparing hoard to current files")
     with alive_bar(len(hoard.fsobjects)) as bar:
@@ -846,7 +858,7 @@ def compare_local_to_hoard(local: Contents, hoard: HoardContents, config: HoardC
                 if curr_file_path_in_local is None:
                     continue  # hoard file is not in the mounted location
 
-                if curr_file_path_in_local.as_posix() not in local.fsobjects.files.keys():
+                if curr_file_path_in_local.as_posix() not in local.fsobjects:
                     yield FileMissingInLocal(curr_file_path_in_local.as_posix(), hoard_file, props)
                 # else file is there, which is handled above
             elif isinstance(props, DirProps):
@@ -859,12 +871,5 @@ def compare_local_to_hoard(local: Contents, hoard: HoardContents, config: HoardC
                     yield DirMissingInLocal(curr_dir_path_in_local.as_posix(), hoard_dir)
                 else:
                     pass  # existing dirs are handled above
-
-    for current_dir, props in local.fsobjects.dirs.copy().items():
-        curr_dir_hoard_path = pathing.in_local(current_dir, local.config.uuid).at_hoard()
-        if curr_dir_hoard_path.as_posix() not in hoard.fsobjects:
-            logging.info(f"new dir found: {current_dir}")
-            yield DirMissingInHoard(current_dir, curr_dir_hoard_path.as_posix())
-        else:
-            yield DirIsSame(current_dir, curr_dir_hoard_path.as_posix())
-
+            else:
+                raise ValueError(f"unknown props type: {type(props)}")
