@@ -7,7 +7,7 @@ from time import sleep
 from typing import Tuple, List
 
 from config import CaveType
-from contents import HoardContents
+from contents import HoardContents, HoardFileProps, DirProps
 from dragon import TotalCommand
 from test_repo_command import populate, write_contents, pretty_file_writer
 
@@ -86,8 +86,9 @@ class TestRepoCommand(unittest.TestCase):
     def _assert_hoard_contents(
             self, hoard_contents: HoardContents, files_exp: List[Tuple[str, int, int, str]], dirs_exp: List[str]):
         files = sorted(
-            (f, prop.size, len(prop.available_at), prop.fasthash) for f, prop in hoard_contents.fsobjects.files.items())
-        dirs = sorted(f for f, _ in hoard_contents.fsobjects.dirs.items())
+            (f, prop.size, len(prop.available_at), prop.fasthash)
+            for f, prop in hoard_contents.fsobjects if isinstance(prop, HoardFileProps))
+        dirs = sorted(f for f, prop in hoard_contents.fsobjects if isinstance(prop, DirProps))
         self.assertEqual(sorted(files_exp), sorted(files))
         self.assertEqual(sorted(dirs_exp), sorted(dirs))
 
@@ -199,7 +200,12 @@ class TestRepoCommand(unittest.TestCase):
 
         cave_cmd.refresh()
         self.assertEqual(
-            f"Status of {repo_uuid}:\nA /newdir/newfile.is\nD /wat/test.me.different\nAF /newdir\nDF /wat\nDONE",
+            f"Status of {repo_uuid}:\n"
+            f"A /newdir/newfile.is\n"
+            f"D /wat/test.me.different\n"
+            f"DF /wat\n"
+            f"AF /newdir\n"
+            f"DONE",
             hoard_cmd.status("repo-in-local").strip())
 
         res = hoard_cmd.refresh("repo-in-local")

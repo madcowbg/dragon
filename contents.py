@@ -277,14 +277,6 @@ class HoardFSObjects:
         self._dirs = dict((f, DirProps(data)) for f, data in self.doc.items() if data['isdir'])
         self.tree = HoardTree(self._files, self._dirs)
 
-    @property
-    def files(self):
-        return self._files
-
-    @property
-    def dirs(self):
-        return self._dirs
-
     def __len__(self):
         return len(self._files) + len(self._dirs)
 
@@ -298,6 +290,9 @@ class HoardFSObjects:
     def __iter__(self) -> Generator[Tuple[str, HoardFSObjectProps], None, None]:
         yield from self._files.copy().items()
         yield from self._dirs.copy().items()
+
+    def __contains__(self, item: str) -> bool:
+        return item in self._files or item in self._dirs
 
     def add_new_file(
             self, curr_file: str, props: FileProps,
