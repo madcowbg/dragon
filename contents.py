@@ -66,9 +66,9 @@ class DirProps(FSObjectProps):
 
 class FSObjects:
     def __init__(self, fsobjects_doc: Dict[str, Any]):
-        self.doc = fsobjects_doc
-        self._files = dict((f, FileProps(data)) for f, data in self.doc.items() if not data['isdir'])
-        self._dirs = dict((f, DirProps(data)) for f, data in self.doc.items() if data['isdir'])
+        self._doc = fsobjects_doc
+        self._files = dict((f, FileProps(data)) for f, data in self._doc.items() if not data['isdir'])
+        self._dirs = dict((f, DirProps(data)) for f, data in self._doc.items() if data['isdir'])
 
     def __len__(self):
         return len(self._files) + len(self._dirs)
@@ -100,19 +100,19 @@ class FSObjects:
         return sum(p.size for _, p in self if isinstance(p, FileProps))
 
     def add_file(self, filepath: str, size: int, mtime: float, fasthash: str) -> None:
-        self.doc[filepath] = {"size": size, "mtime": mtime, "isdir": False, "fasthash": fasthash}
-        self._files[filepath] = FileProps(self.doc[filepath])
+        self._doc[filepath] = {"size": size, "mtime": mtime, "isdir": False, "fasthash": fasthash}
+        self._files[filepath] = FileProps(self._doc[filepath])
 
     def add_dir(self, dirpath):
-        self.doc[dirpath] = {"isdir": True}
-        self._dirs[dirpath] = DirProps(self.doc[dirpath])
+        self._doc[dirpath] = {"isdir": True}
+        self._dirs[dirpath] = DirProps(self._doc[dirpath])
 
     def remove_file(self, filepath: str):
-        self.doc.pop(filepath)
+        self._doc.pop(filepath)
         self._files.pop(filepath)
 
     def remove_dir(self, dirpath: str):
-        self.doc.pop(dirpath)
+        self._doc.pop(dirpath)
         self._dirs.pop(dirpath)
 
 
@@ -137,7 +137,7 @@ class Contents:
         with open(self.filepath, "w", encoding="utf-8") as f:
             rtoml.dump({
                 "config": self.config.doc,
-                "fsobjects": self.fsobjects.doc
+                "fsobjects": self.fsobjects._doc
             }, f)
 
 
@@ -300,9 +300,9 @@ class HoardFSObjects:
     tree: HoardTree
 
     def __init__(self, doc: Dict[str, Any]):
-        self.doc = doc
-        self._files = dict((f, HoardFileProps(data)) for f, data in self.doc.items() if not data['isdir'])
-        self._dirs = dict((f, DirProps(data)) for f, data in self.doc.items() if data['isdir'])
+        self._doc = doc
+        self._files = dict((f, HoardFileProps(data)) for f, data in self._doc.items() if not data['isdir'])
+        self._dirs = dict((f, DirProps(data)) for f, data in self._doc.items() if data['isdir'])
         self.tree = HoardTree(self._files, self._dirs)
 
     def __len__(self):
@@ -325,7 +325,7 @@ class HoardFSObjects:
     def add_new_file(
             self, curr_file: str, props: FileProps,
             current_uuid: str, repos_to_add_new_files: List[HoardRemote]) -> HoardFileProps:
-        self.doc[curr_file] = {
+        self._doc[curr_file] = {
             "isdir": False,
             "size": props.size,
             "fasthash": props.fasthash,
@@ -333,27 +333,27 @@ class HoardFSObjects:
         }
 
         # mark as present here
-        self.doc[curr_file]["status"][current_uuid] = FileStatus.AVAILABLE.value
+        self._doc[curr_file]["status"][current_uuid] = FileStatus.AVAILABLE.value
 
-        self._files[curr_file] = HoardFileProps(self.doc[curr_file])
+        self._files[curr_file] = HoardFileProps(self._doc[curr_file])
         return self._files[curr_file]
 
     def add_dir(self, curr_dir: str):
-        self.doc[curr_dir] = {"isdir": True}
-        self._dirs[curr_dir] = DirProps(self.doc[curr_dir])
+        self._doc[curr_dir] = {"isdir": True}
+        self._dirs[curr_dir] = DirProps(self._doc[curr_dir])
 
     def delete_file(self, curr_file: str):
         self._files.pop(curr_file)
-        self.doc.pop(curr_file)
+        self._doc.pop(curr_file)
 
     def delete_dir(self, curr_dir: str):
         self._dirs.pop(curr_dir)
-        self.doc.pop(curr_dir)
+        self._doc.pop(curr_dir)
 
     def move_file(self, orig_file: str, new_path: str, props: HoardFileProps):
         assert orig_file != new_path
 
-        self.doc[new_path] = props.doc
+        self._doc[new_path] = props.doc
         self._files[new_path] = props
 
         self.delete_file(orig_file)
@@ -361,7 +361,7 @@ class HoardFSObjects:
     def move_dir(self, curr_dir: str, new_path: str, props: DirProps):
         assert curr_dir != new_path
 
-        self.doc[new_path] = props.doc
+        self._doc[new_path] = props.doc
         self._dirs[new_path] = props
 
         self.delete_dir(curr_dir)
@@ -404,7 +404,7 @@ class HoardContents:
             rtoml.dump({
                 "config": self.config.doc,
                 "epochs": self.epochs,
-                "fsobjects": self.fsobjects.doc
+                "fsobjects": self.fsobjects._doc
             }, f)
 
     def epoch(self, remote_uuid: str) -> int:
