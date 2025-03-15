@@ -11,7 +11,7 @@ from typing import Dict, Generator, List, Optional
 from alive_progress import alive_bar
 
 from config import HoardRemote, HoardConfig, CavePath, HoardPaths, CaveType
-from contents import FileProps, HoardFileProps, Contents, HoardContents, FileStatus, HoardFile, HoardDir
+from contents import FileProps, HoardFileProps, Contents, HoardContents, FileStatus, HoardFile, HoardDir, DirProps
 from contents_diff import Diff, FileMissingInHoard, FileIsSame, FileContentsDiffer, FileMissingInLocal, \
     DirMissingInHoard, DirIsSame, DirMissingInLocal
 from hashing import fast_hash
@@ -126,13 +126,13 @@ class PartialDiffHandler(DiffHandler):
             repos_to_add_new_files=filter_accessible(self.pathing, self.repos_to_add_new_files, diff.hoard_file))
 
     def handle_file_is_same(self, diff: "FileIsSame", out: StringIO):
-        goal_status = self.hoard.fsobjects.files[diff.hoard_file].status(self.remote_uuid)
+        goal_status = diff.hoard_props.status(self.remote_uuid)
         if goal_status == FileStatus.CLEANUP:
             logging.info(f"skipping {diff.hoard_file} as is marked for deletion")
             out.write(f"?{diff.hoard_file}\n")
         elif goal_status == FileStatus.GET or goal_status == FileStatus.UNKNOWN:
             logging.info(f"mark {diff.hoard_file} as available here!")
-            self.hoard.fsobjects.files[diff.hoard_file].mark_available(self.remote_uuid)
+            diff.hoard_props.mark_available(self.remote_uuid)
             out.write(f"={diff.hoard_file}\n")
         elif goal_status == FileStatus.AVAILABLE:
             pass
@@ -140,7 +140,7 @@ class PartialDiffHandler(DiffHandler):
             raise ValueError(f"unrecognized hoard state for {diff.hoard_file}: {goal_status}")
 
     def handle_file_contents_differ(self, diff: FileContentsDiffer, out: StringIO):
-        goal_status = self.hoard.fsobjects.files[diff.hoard_file].status(self.remote_uuid)
+        goal_status = diff.hoard_props.status(self.remote_uuid)
         if goal_status == FileStatus.CLEANUP:
             logging.info(f"skipping {diff.hoard_file} as is marked for deletion")
             out.write(f"?{diff.hoard_file}\n")
@@ -194,7 +194,7 @@ class IncomingDiffHandler(DiffHandler):
         diff.hoard_props.mark_for_cleanup(repo_uuid=self.remote_uuid)
 
     def handle_file_contents_differ(self, diff: FileContentsDiffer, out: StringIO):
-        goal_status = self.hoard.fsobjects.files[diff.hoard_file].status(self.remote_uuid)
+        goal_status = diff.hoard_props.status(self.remote_uuid)
         if goal_status == FileStatus.CLEANUP:  # is already marked for deletion
             logging.info(f"skipping {diff.hoard_file} as is marked for deletion")
             out.write(f"?{diff.hoard_file}\n")
@@ -322,9 +322,9 @@ class HoardCommand(object):
         print(f"mount point: {config.remotes[remote_uuid].mounted_at}")
         print(f"type: {config.remotes[remote_uuid].type.value}")
         print(f"Last updated on {contents.config.updated}.")
-        print(f"  # files = {len(contents.fsobjects.files)}"
-              f" of size {format_size(sum(f.size for f in contents.fsobjects.files.values()))}")
-        print(f"  # dirs  = {len(contents.fsobjects.dirs)}")
+        print(f"  # files = {contents.fsobjects.num_files}"
+              f" of size {format_size(contents.fsobjects.total_size)}")
+        print(f"  # dirs  = {contents.fsobjects.num_dirs}")
 
     def _hoard_contents_filename(self):
         return os.path.join(self.hoardpath, HOARD_CONTENTS_FILENAME)
@@ -491,7 +491,10 @@ class HoardCommand(object):
 
         repo_health: Dict[str, Dict[int, int]] = dict()
         health_files: Dict[int, List[str]] = dict()
-        for file, props in hoard.fsobjects.files.items():
+        for file, props in hoard.fsobjects:
+            if not isinstance(props, HoardFileProps):
+                continue  # fixme what about folders?
+
             num_copies = len(props.available_at)
             if num_copies not in health_files:
                 health_files[num_copies] = []
@@ -607,25 +610,29 @@ class HoardCommand(object):
 
         with StringIO() as out:
             out.write("Moving files and folders:\n")
-            for orig_file, props in hoard.fsobjects.files.copy().items():
-                file_path = pathlib.Path(orig_file)
-                if file_path.is_relative_to(from_path):
-                    rel_path = file_path.relative_to(from_path)
-                    logging.info(f"Relative file path to move: {rel_path}")
-                    new_path = pathlib.Path(to_path).joinpath(rel_path).as_posix()
+            for orig_path, props in hoard.fsobjects:
+                if isinstance(props, HoardFileProps):
+                    orig_file = orig_path
+                    file_path = pathlib.Path(orig_file)
+                    if file_path.is_relative_to(from_path):
+                        rel_path = file_path.relative_to(from_path)
+                        logging.info(f"Relative file path to move: {rel_path}")
+                        new_path = pathlib.Path(to_path).joinpath(rel_path).as_posix()
 
-                    out.write(f"{orig_file}=>{new_path}\n")
-                    hoard.fsobjects.move_file(orig_file, new_path, props)
+                        out.write(f"{orig_file}=>{new_path}\n")
+                        hoard.fsobjects.move_file(orig_file, new_path, props)
+                elif isinstance(props, DirProps):
+                    orig_dir = orig_path
+                    dir_path = pathlib.Path(orig_dir)
+                    if dir_path.is_relative_to(from_path):
+                        rel_path = dir_path.relative_to(from_path)
+                        logging.info(f"Relative dir path to move: {rel_path}")
+                        new_path = pathlib.Path(to_path).joinpath(rel_path).as_posix()
 
-            for orig_dir, props in hoard.fsobjects.dirs.copy().items():
-                dir_path = pathlib.Path(orig_dir)
-                if dir_path.is_relative_to(from_path):
-                    rel_path = dir_path.relative_to(from_path)
-                    logging.info(f"Relative dir path to move: {rel_path}")
-                    new_path = pathlib.Path(to_path).joinpath(rel_path).as_posix()
-
-                    out.write(f"{orig_dir}=>{new_path}\n")
-                    hoard.fsobjects.move_dir(orig_dir, new_path, props)
+                        out.write(f"{orig_dir}=>{new_path}\n")
+                        hoard.fsobjects.move_dir(orig_dir, new_path, props)
+                else:
+                    raise ValueError(f"Unsupported props type: {type(props)}")
 
             logging.info(f"Moving {', '.join(r.name for r in repos_to_move)}.")
             out.write(f"Moving {len(repos_to_move)} repos:\n")
@@ -663,9 +670,12 @@ class HoardCommand(object):
             for repo_uuid in repo_uuids:
                 print(f"fetching for {config.remotes[repo_uuid].name}")
                 out.write(f"{repo_uuid}:\n")
-                with alive_bar(len(hoard.fsobjects.files)) as bar:  # fixme do it over only files to copy!
-                    for hoard_file, hoard_props in sorted(hoard.fsobjects.files.items()):
+                with alive_bar(len(hoard.fsobjects)) as bar:  # fixme do it over only files to copy!
+                    for hoard_file, hoard_props in sorted(hoard.fsobjects):
                         bar()
+                        if not isinstance(hoard_props, HoardFileProps):
+                            continue
+
                         goal_status = hoard_props.status(repo_uuid)
                         if goal_status == FileStatus.GET:
                             hoard_filepath = pathing.in_hoard(hoard_file)
@@ -688,9 +698,13 @@ class HoardCommand(object):
                 print(f"cleaning repo {config.remotes[repo_uuid].name}")
                 out.write(f"{repo_uuid}:\n")
 
-                with alive_bar(len(hoard.fsobjects.files)) as bar:  # fixme do it over only files to cleanup!
-                    for hoard_file, hoard_props in sorted(hoard.fsobjects.files.items()):
+                with alive_bar(len(hoard.fsobjects)) as bar:  # fixme do it over only files to cleanup!
+                    for hoard_file, hoard_props in sorted(hoard.fsobjects):
                         bar()
+
+                        if not isinstance(hoard_props, HoardFileProps):
+                            continue
+
                         goal_status = hoard_props.status(repo_uuid)
 
                         if goal_status == FileStatus.CLEANUP:
@@ -736,7 +750,10 @@ class HoardCommand(object):
 
         already_enabled = [FileStatus.AVAILABLE, FileStatus.GET]
         with StringIO() as out:
-            for hoard_file, hoard_props in hoard.fsobjects.files.items():
+            for hoard_file, hoard_props in hoard.fsobjects:
+                if not isinstance(hoard_props, HoardFileProps):
+                    continue
+
                 local_file = pathing.in_hoard(hoard_file).at_local(repo_uuid)
                 if local_file is None:
                     continue
