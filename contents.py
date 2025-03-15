@@ -293,9 +293,30 @@ class HoardFSObjects:
         self.doc[curr_dir] = {"isdir": True}
         self.dirs[curr_dir] = DirProps(self.doc[curr_dir])
 
+
     def delete_file(self, curr_file: str):
         self.files.pop(curr_file)
         self.doc.pop(curr_file)
+
+    def delete_dir(self, curr_dir: str):
+        self.dirs.pop(curr_dir)
+        self.doc.pop(curr_dir)
+
+    def move_file(self, orig_file: str, new_path: str, props: HoardFileProps):
+        assert orig_file != new_path
+
+        self.doc[new_path] = props.doc
+        self.files[new_path] = props
+
+        self.delete_file(orig_file)
+
+    def move_dir(self, curr_dir: str, new_path: str, props: DirProps):
+        assert curr_dir != new_path
+
+        self.doc[new_path] = props.doc
+        self.dirs[new_path] = props
+
+        self.delete_dir(curr_dir)
 
 
 class HoardContents:

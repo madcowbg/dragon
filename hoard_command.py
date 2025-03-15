@@ -570,6 +570,83 @@ class HoardCommand(object):
             out.write("DONE")
             return out.getvalue()
 
+    def move(self, from_path: str, to_path: str, no_files: bool = True):
+        assert no_files, "NOT IMPLEMENTED"
+        config = self.config()
+        pathing = HoardPathing(config, self.paths())
+
+        from_path_in_hoard = pathing.in_hoard(from_path)
+        to_path_in_hoard = pathing.in_hoard(to_path)
+
+        repos_to_move: List[HoardRemote] = []
+        for remote in config.remotes.all():
+            if pathlib.Path(remote.mounted_at).is_relative_to(from_path):
+                # mounted_at is a subfolder of from_path
+                logging.info(f"{remote.name} will be moved as {remote.mounted_at} is subfolder of {from_path}")
+                repos_to_move.append(remote)
+                continue
+
+            path_in_remote = from_path_in_hoard.at_local(remote.uuid)
+            if path_in_remote is None:
+                logging.info(f"Remote {remote.uuid} does not map path {from_path_in_hoard.as_posix()} ... skipping")
+                continue
+
+            assert path_in_remote.as_posix() != "."
+
+            logging.warning(
+                f"Remote {remote.uuid} contains path {from_path_in_hoard.as_posix()}"
+                f" as inner {path_in_remote}, which requires moving files.")
+            return f"Can't move {from_path} to {to_path}, requires moving files in {remote.name}:{path_in_remote.as_posix()}.\n"
+
+        if len(repos_to_move) == 0:
+            return f"No repos to move!"
+
+        logging.info(f"Loading hoard TOML...")
+        hoard = HoardContents.load(self._hoard_contents_filename())
+        logging.info(f"Loaded hoard TOML.")
+
+        with StringIO() as out:
+            out.write("Moving files and folders:\n")
+            for orig_file, props in hoard.fsobjects.files.copy().items():
+                file_path = pathlib.Path(orig_file)
+                if file_path.is_relative_to(from_path):
+                    rel_path = file_path.relative_to(from_path)
+                    logging.info(f"Relative file path to move: {rel_path}")
+                    new_path = pathlib.Path(to_path).joinpath(rel_path).as_posix()
+
+                    out.write(f"{orig_file}=>{new_path}\n")
+                    hoard.fsobjects.move_file(orig_file, new_path, props)
+
+            for orig_dir, props in hoard.fsobjects.dirs.copy().items():
+                dir_path = pathlib.Path(orig_dir)
+                if dir_path.is_relative_to(from_path):
+                    rel_path = dir_path.relative_to(from_path)
+                    logging.info(f"Relative dir path to move: {rel_path}")
+                    new_path = pathlib.Path(to_path).joinpath(rel_path).as_posix()
+
+                    out.write(f"{orig_dir}=>{new_path}\n")
+                    hoard.fsobjects.move_dir(orig_dir, new_path, props)
+
+            logging.info(f"Moving {', '.join(r.name for r in repos_to_move)}.")
+            out.write(f"Moving {len(repos_to_move)} repos:\n")
+            for remote in repos_to_move:
+                relative_repo_mounted_at = pathlib.Path(remote.mounted_at).relative_to(from_path)
+                logging.info(f"[{remote.name} is mounted {relative_repo_mounted_at.as_posix()} rel. to {from_path}]")
+                final_mount_path = pathlib.Path(to_path_in_hoard.as_posix()).joinpath(relative_repo_mounted_at)
+                logging.info(f"re-mounting it to {final_mount_path}")
+
+                out.write(f"[{remote.name}] {remote.mounted_at} => {final_mount_path.as_posix()}\n")
+                remote.mount_at(final_mount_path.as_posix())
+
+            logging.info(f"Writing hoard...")
+            hoard.write()
+
+            logging.info("Writing config...")
+            config.write()
+
+            out.write("DONE")
+            return out.getvalue()
+
     def sync_contents(self, repo: Optional[str] = None):
         config = self.config()
 
