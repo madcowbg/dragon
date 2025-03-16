@@ -9,7 +9,8 @@ from typing import Generator, Tuple, List
 
 from alive_progress import alive_bar
 
-from contents import RepoContents, FileProps, DirProps
+from contents import FileProps, DirProps
+from contents_repo import RepoContents
 from hashing import find_hashes
 from util import format_size
 

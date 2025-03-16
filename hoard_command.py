@@ -11,7 +11,8 @@ from typing import Dict, Generator, List, Optional
 from alive_progress import alive_bar
 
 from config import HoardRemote, HoardConfig, CavePath, HoardPaths, CaveType
-from contents import FileProps, HoardFileProps, RepoContents, HoardContents, FileStatus, HoardFile, HoardDir, DirProps
+from contents import FileProps, HoardFileProps, HoardContents, FileStatus, HoardFile, HoardDir, DirProps
+from contents_repo import RepoContents
 from contents_diff import Diff, FileMissingInHoard, FileIsSame, FileContentsDiffer, FileMissingInLocal, \
     DirMissingInHoard, DirIsSame, DirMissingInLocal
 from hashing import fast_hash
