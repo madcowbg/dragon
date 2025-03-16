@@ -9,7 +9,7 @@ from typing import Generator, Tuple, List
 
 from alive_progress import alive_bar
 
-from contents import FileProps, DirProps
+from contents import RepoFileProps, DirProps
 from contents_repo import RepoContents
 from hashing import find_hashes
 from util import format_size
@@ -80,7 +80,7 @@ class RepoCommand(object):
             with alive_bar(len(contents.fsobjects)) as bar:
                 for file, props in contents.fsobjects:
                     bar()
-                    if isinstance(props, FileProps):
+                    if isinstance(props, RepoFileProps):
                         fullpath = str(os.path.join(self.repo, file))
                         if not os.path.isfile(fullpath):
                             logging.info(f"Removing file {file}")
@@ -108,7 +108,7 @@ class RepoCommand(object):
                             if file_path_local in contents.fsobjects:  # file is already in index
                                 logging.info(f"File is in contents, checking size and mtime.")
                                 props = contents.fsobjects[file_path_local]
-                                assert isinstance(props, FileProps)
+                                assert isinstance(props, RepoFileProps)
                                 if props.mtime == os.path.getmtime(file_path_full.as_posix()) \
                                         and props.size == os.path.getsize(file_path_full.as_posix()):
                                     logging.info("Skipping file as size and mtime is the same!!!")

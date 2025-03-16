@@ -1,4 +1,4 @@
-from contents import FileProps, HoardFileProps
+from contents import RepoFileProps, HoardFileProps
 
 
 class Diff:
@@ -6,14 +6,14 @@ class Diff:
 
 
 class FileMissingInHoard(Diff):
-    def __init__(self, current_file: str, curr_file_hoard_path: str, local_props: FileProps):
+    def __init__(self, current_file: str, curr_file_hoard_path: str, local_props: RepoFileProps):
         self.local_file = current_file
         self.hoard_file = curr_file_hoard_path
         self.local_props = local_props
 
 
 class FileIsSame(Diff):
-    def __init__(self, current_file: str, curr_file_hoard_path: str, local_props: FileProps,
+    def __init__(self, current_file: str, curr_file_hoard_path: str, local_props: RepoFileProps,
                  hoard_props: HoardFileProps):
         self.local_file = current_file
         self.hoard_file = curr_file_hoard_path
@@ -24,7 +24,7 @@ class FileIsSame(Diff):
 class FileContentsDiffer(Diff):
     def __init__(
             self, current_file: str, curr_file_hoard_path: str,
-            local_props: FileProps, hoard_props: HoardFileProps):
+            local_props: RepoFileProps, hoard_props: HoardFileProps):
         self.local_file = current_file
         self.hoard_file = curr_file_hoard_path
         self.local_props = local_props

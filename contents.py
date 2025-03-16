@@ -22,11 +22,10 @@ class HoardContentsConfig:
         return datetime.fromisoformat(self.doc["updated"])
 
 
-class FSObjectProps:
-    pass
+type FSObjectProps = RepoFileProps | HoardFileProps | DirProps
 
 
-class FileProps(FSObjectProps):
+class RepoFileProps:
     def __init__(self, doc: Dict[str, Any]):
         self.doc = doc
 
@@ -43,7 +42,7 @@ class FileProps(FSObjectProps):
         return self.doc["fasthash"]
 
 
-class DirProps(FSObjectProps):
+class DirProps:  # fixme split in twain (or just remove...)
     def __init__(self, doc: Dict[str, Any]):
         self.doc = doc
 
@@ -83,7 +82,7 @@ class FileStatus(enum.Enum):
     UNKNOWN = "UNKNOWN"
 
 
-class HoardFileProps(FSObjectProps):
+class HoardFileProps:
     def __init__(self, doc: Dict[str, Any]):
         self.doc = doc
 
@@ -95,7 +94,7 @@ class HoardFileProps(FSObjectProps):
     def fasthash(self):
         return self.doc["fasthash"]
 
-    def replace_file(self, new_props: FileProps, available_uuid: str):
+    def replace_file(self, new_props: RepoFileProps, available_uuid: str):
         self.doc["size"] = new_props.size
         self.doc["fasthash"] = new_props.fasthash
 
@@ -267,7 +266,7 @@ class HoardFSObjects:
         return item in self._objects
 
     def add_new_file(
-            self, filepath: str, props: FileProps,
+            self, filepath: str, props: RepoFileProps,
             current_uuid: str, repos_to_add_new_files: List[str]) -> HoardFileProps:
         self._doc[filepath] = {
             "isdir": False,

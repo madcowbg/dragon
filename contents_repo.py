@@ -5,7 +5,7 @@ from typing import Dict, Any, Generator, Tuple, Optional
 
 import rtoml
 
-from contents import FSObjects, FileProps, DirProps, FSObjectProps
+from contents import FSObjects, RepoFileProps, DirProps, FSObjectProps
 
 
 class RepoContentsConfig(abc.ABC):
@@ -43,7 +43,7 @@ class TOMLFSObjects(FSObjects):
     def __init__(self, fsobjects_doc: Dict[str, Any]):
         self._doc = fsobjects_doc
         self._objects = dict(
-            (f, FileProps(data) if not data['isdir'] else DirProps(data))
+            (f, RepoFileProps(data) if not data['isdir'] else DirProps(data))
             for f, data in self._doc.items())
 
     def __len__(self) -> int: return len(self._objects)
@@ -58,7 +58,7 @@ class TOMLFSObjects(FSObjects):
 
     @property
     def num_files(self):
-        return len([f for f, p in self if isinstance(p, FileProps)])
+        return len([f for f, p in self if isinstance(p, RepoFileProps)])
 
     @property
     def num_dirs(self):
@@ -66,11 +66,11 @@ class TOMLFSObjects(FSObjects):
 
     @property
     def total_size(self) -> int:
-        return sum(p.size for _, p in self if isinstance(p, FileProps))
+        return sum(p.size for _, p in self if isinstance(p, RepoFileProps))
 
     def add_file(self, filepath: str, size: int, mtime: float, fasthash: str) -> None:
         self._doc[filepath] = {"size": size, "mtime": mtime, "isdir": False, "fasthash": fasthash}
-        self._objects[filepath] = FileProps(self._doc[filepath])
+        self._objects[filepath] = RepoFileProps(self._doc[filepath])
 
     def add_dir(self, dirpath):
         self._doc[dirpath] = {"isdir": True}

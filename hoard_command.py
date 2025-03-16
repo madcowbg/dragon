@@ -11,7 +11,7 @@ from typing import Dict, Generator, List, Optional
 from alive_progress import alive_bar
 
 from config import HoardRemote, HoardConfig, CavePath, HoardPaths, CaveType
-from contents import FileProps, HoardFileProps, HoardContents, FileStatus, HoardFile, HoardDir, DirProps
+from contents import RepoFileProps, HoardFileProps, HoardContents, FileStatus, HoardFile, HoardDir, DirProps
 from contents_repo import RepoContents
 from contents_diff import Diff, FileMissingInHoard, FileIsSame, FileContentsDiffer, FileMissingInLocal, \
     DirMissingInHoard, DirIsSame, DirMissingInLocal
@@ -24,7 +24,7 @@ PATHS_FILE = "hoard.paths"
 HOARD_CONTENTS_FILENAME = "hoard.contents"
 
 
-def is_same_file(current: FileProps, hoard: HoardFileProps):
+def is_same_file(current: RepoFileProps, hoard: HoardFileProps):
     if current.size != hoard.size:
         return False  # files differ by size
 
@@ -905,7 +905,7 @@ def compare_local_to_hoard(local: RepoContents, hoard: HoardContents, config: Ho
     with alive_bar(len(local.fsobjects)) as bar:
         for current_path, props in local.fsobjects:
             bar()
-            if isinstance(props, FileProps):
+            if isinstance(props, RepoFileProps):
                 current_file = current_path
                 curr_file_hoard_path = pathing.in_local(current_file, local.config.uuid).at_hoard()
                 if curr_file_hoard_path.as_posix() not in hoard.fsobjects:
