@@ -109,20 +109,39 @@ class FSObjects:
 
 class RepoContents:
     @staticmethod
-    def load(filepath: str, create_for_uuid: Optional[str] = None):
+    def load(filepath: str, create_for_uuid: Optional[str] = None, write_on_exit: bool = True):
         if not os.path.isfile(filepath):
             if create_for_uuid is not None:
                 with open(filepath, "w", encoding="utf-8") as f:
                     f.write(rtoml.dumps({"config": {"uuid": create_for_uuid}, "epoch": 0}))
             else:
                 raise ValueError(f"File {filepath} does not exist, need to pass create=True to create.")
-        with open(filepath, "r", encoding="utf-8") as f:
-            return RepoContents(filepath, rtoml.load(f))
 
-    def __init__(self, filepath: str, contents_doc: Dict[str, Any]):
+        return RepoContents(filepath, write_on_exit)
+
+    def __init__(self, filepath: str, write_on_exit: bool):
         self.filepath = filepath
+        self.write_on_exit = write_on_exit
+
+        self.config = None
+        self.fsobjects = None
+
+    def __enter__(self):
+        with open(self.filepath, "r", encoding="utf-8") as f:
+            contents_doc = rtoml.load(f)
+
         self.config = ContentsConfig(contents_doc["config"] if "config" in contents_doc else {})
         self.fsobjects = FSObjects(contents_doc["fsobjects"] if "fsobjects" in contents_doc else {})
+
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.write_on_exit:
+            self.write()
+        self.config = None
+        self.fsobjects = None
+
+        return False
 
     def write(self):
         with open(self.filepath, "w", encoding="utf-8") as f:

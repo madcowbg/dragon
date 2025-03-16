@@ -314,20 +314,20 @@ class HoardCommand(object):
         remote_uuid = self._resolve_remote_uuid(remote)
 
         logging.info(f"Reading repo {remote_uuid}...")
-        contents = self._fetch_repo_contents(remote_uuid)
-        logging.info(f"Read repo!")
+        with self._fetch_repo_contents(remote_uuid, write_on_exit=False) as contents:
+            logging.info(f"Read repo!")
 
-        config = self.config()
+            config = self.config()
 
-        print(f"Result for [{remote}]")
-        print(f"UUID: {remote_uuid}.")
-        print(f"name: {config.remotes[remote_uuid].name}")
-        print(f"mount point: {config.remotes[remote_uuid].mounted_at}")
-        print(f"type: {config.remotes[remote_uuid].type.value}")
-        print(f"Last updated on {contents.config.updated}.")
-        print(f"  # files = {contents.fsobjects.num_files}"
-              f" of size {format_size(contents.fsobjects.total_size)}")
-        print(f"  # dirs  = {contents.fsobjects.num_dirs}")
+            print(f"Result for [{remote}]")
+            print(f"UUID: {remote_uuid}.")
+            print(f"name: {config.remotes[remote_uuid].name}")
+            print(f"mount point: {config.remotes[remote_uuid].mounted_at}")
+            print(f"type: {config.remotes[remote_uuid].type.value}")
+            print(f"Last updated on {contents.config.updated}.")
+            print(f"  # files = {contents.fsobjects.num_files}"
+                  f" of size {format_size(contents.fsobjects.total_size)}")
+            print(f"  # dirs  = {contents.fsobjects.num_dirs}")
 
     def _hoard_contents_filename(self):
         return os.path.join(self.hoardpath, HOARD_CONTENTS_FILENAME)
@@ -336,33 +336,32 @@ class HoardCommand(object):
         remote_uuid = self._resolve_remote_uuid(remote)
 
         logging.info(f"Reading current contents of {remote_uuid}...")
-        current_contents = self._fetch_repo_contents(remote_uuid)
+        with self._fetch_repo_contents(remote_uuid, write_on_exit=False) as current_contents:
+            logging.info(f"Loading hoard TOML...")
+            with HoardContents.load(self._hoard_contents_filename(), write_on_close=False) as hoard:
+                logging.info(f"Loaded hoard TOML!")
+                logging.info(f"Computing status ...")
 
-        logging.info(f"Loading hoard TOML...")
-        with HoardContents.load(self._hoard_contents_filename(), write_on_close=False) as hoard:
-            logging.info(f"Loaded hoard TOML!")
-            logging.info(f"Computing status ...")
+                with StringIO() as out:
+                    out.write(f"Status of {remote_uuid}:\n")
 
-            with StringIO() as out:
-                out.write(f"Status of {remote_uuid}:\n")
+                    for diff in compare_local_to_hoard(current_contents, hoard, self.config(), self.paths()):
+                        if isinstance(diff, FileMissingInHoard):
+                            out.write(f"A {diff.hoard_file}\n")
+                        elif isinstance(diff, FileContentsDiffer):
+                            out.write(f"M {diff.hoard_file}\n")
+                        elif isinstance(diff, FileMissingInLocal):
+                            out.write(f"D {diff.hoard_file}\n")
+                        elif isinstance(diff, DirMissingInHoard):
+                            out.write(f"AF {diff.hoard_dir}\n")
+                        elif isinstance(diff, DirMissingInLocal):
+                            out.write(f"DF {diff.hoard_dir}\n")
+                        else:
+                            logging.info(f"Unused diff class: {type(diff)}")
+                    out.write("DONE")
 
-                for diff in compare_local_to_hoard(current_contents, hoard, self.config(), self.paths()):
-                    if isinstance(diff, FileMissingInHoard):
-                        out.write(f"A {diff.hoard_file}\n")
-                    elif isinstance(diff, FileContentsDiffer):
-                        out.write(f"M {diff.hoard_file}\n")
-                    elif isinstance(diff, FileMissingInLocal):
-                        out.write(f"D {diff.hoard_file}\n")
-                    elif isinstance(diff, DirMissingInHoard):
-                        out.write(f"AF {diff.hoard_dir}\n")
-                    elif isinstance(diff, DirMissingInLocal):
-                        out.write(f"DF {diff.hoard_dir}\n")
-                    else:
-                        logging.info(f"Unused diff class: {type(diff)}")
-                out.write("DONE")
-
-                logging.info("Computing status done!")
-                return out.getvalue()
+                    logging.info("Computing status done!")
+                    return out.getvalue()
 
     def mount_remote(self, remote: str, mount_point: str, force: bool = False):
         remote_uuid = self._resolve_remote_uuid(remote)
@@ -439,49 +438,49 @@ class HoardCommand(object):
             else:
                 raise ValueError(f"FIXME unsupported remote type: {remote_type}")
 
-            current_contents = self._fetch_repo_contents(remote_uuid)
+            with self._fetch_repo_contents(remote_uuid, write_on_exit=False) as current_contents:
 
-            if not ignore_epoch and hoard.epoch(remote_uuid) >= current_contents.config.epoch:
-                return (
-                    f"Skipping update as past epoch {current_contents.config.epoch} "
-                    f"is not after hoard epoch {hoard.epoch(remote_uuid)}")
+                if not ignore_epoch and hoard.epoch(remote_uuid) >= current_contents.config.epoch:
+                    return (
+                        f"Skipping update as past epoch {current_contents.config.epoch} "
+                        f"is not after hoard epoch {hoard.epoch(remote_uuid)}")
 
-            remote_doc = config.remotes[remote_uuid]
-            if remote_doc is None or remote_doc.mounted_at is None:
-                raise ValueError(f"remote_doc {remote_uuid} is not mounted!")
+                remote_doc = config.remotes[remote_uuid]
+                if remote_doc is None or remote_doc.mounted_at is None:
+                    raise ValueError(f"remote_doc {remote_uuid} is not mounted!")
 
-            logging.info("Merging local changes...")
-            with StringIO() as out:
-                for diff in compare_local_to_hoard(current_contents, hoard, config, self.paths()):
-                    if isinstance(diff, FileMissingInHoard):
-                        remote_op_handler.handle_local_only(diff, out)
-                    elif isinstance(diff, FileIsSame):
-                        remote_op_handler.handle_file_is_same(diff, out)
-                    elif isinstance(diff, FileContentsDiffer):
-                        remote_op_handler.handle_file_contents_differ(diff, out)
-                    elif isinstance(diff, FileMissingInLocal):
-                        remote_op_handler.handle_hoard_only(diff, out)
-                    elif isinstance(diff, DirMissingInHoard):
-                        logging.info(f"new dir found: {diff.local_dir}")
-                        hoard.fsobjects.add_dir(diff.hoard_dir)
-                    else:
-                        logging.info(f"skipping diff of type {type(diff)}")
+                logging.info("Merging local changes...")
+                with StringIO() as out:
+                    for diff in compare_local_to_hoard(current_contents, hoard, config, self.paths()):
+                        if isinstance(diff, FileMissingInHoard):
+                            remote_op_handler.handle_local_only(diff, out)
+                        elif isinstance(diff, FileIsSame):
+                            remote_op_handler.handle_file_is_same(diff, out)
+                        elif isinstance(diff, FileContentsDiffer):
+                            remote_op_handler.handle_file_contents_differ(diff, out)
+                        elif isinstance(diff, FileMissingInLocal):
+                            remote_op_handler.handle_hoard_only(diff, out)
+                        elif isinstance(diff, DirMissingInHoard):
+                            logging.info(f"new dir found: {diff.local_dir}")
+                            hoard.fsobjects.add_dir(diff.hoard_dir)
+                        else:
+                            logging.info(f"skipping diff of type {type(diff)}")
 
-                logging.info(f"Updating epoch of {remote_uuid} to {current_contents.config.epoch}")
-                hoard.set_epoch(remote_uuid, current_contents.config.epoch)
+                    logging.info(f"Updating epoch of {remote_uuid} to {current_contents.config.epoch}")
+                    hoard.set_epoch(remote_uuid, current_contents.config.epoch)
 
-                logging.info("Writing updated hoard contents...")
-                hoard.write()
-                logging.info("Local commit DONE!")
+                    logging.info("Writing updated hoard contents...")
+                    hoard.write()
+                    logging.info("Local commit DONE!")
 
-                out.write(f"Sync'ed {remote} to hoard!")
-                return out.getvalue()
+                    out.write(f"Sync'ed {remote} to hoard!")
+                    return out.getvalue()
 
-    def _fetch_repo_contents(self, remote_uuid):
+    def _fetch_repo_contents(self, remote_uuid: str, write_on_exit: bool = True):
         remote_path = self.paths()[remote_uuid].find()
         logging.info(f"Using repo contents {remote_uuid} in {remote_path}...")
         repo_cmd = RepoCommand(remote_path)
-        current_contents = RepoContents.load(repo_cmd._contents_filename(remote_uuid))
+        current_contents = RepoContents.load(repo_cmd._contents_filename(remote_uuid), write_on_exit=write_on_exit)
         return current_contents
 
     def health(self):
