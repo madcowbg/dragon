@@ -11,7 +11,7 @@ from typing import Dict, Generator, List, Optional
 from alive_progress import alive_bar
 
 from config import HoardRemote, HoardConfig, CavePath, HoardPaths, CaveType
-from contents import FileProps, HoardFileProps, Contents, HoardContents, FileStatus, HoardFile, HoardDir, DirProps
+from contents import FileProps, HoardFileProps, RepoContents, HoardContents, FileStatus, HoardFile, HoardDir, DirProps
 from contents_diff import Diff, FileMissingInHoard, FileIsSame, FileContentsDiffer, FileMissingInLocal, \
     DirMissingInHoard, DirIsSame, DirMissingInLocal
 from hashing import fast_hash
@@ -481,7 +481,7 @@ class HoardCommand(object):
         remote_path = self.paths()[remote_uuid].find()
         logging.info(f"Using repo contents {remote_uuid} in {remote_path}...")
         repo_cmd = RepoCommand(remote_path)
-        current_contents = Contents.load(repo_cmd._contents_filename(remote_uuid))
+        current_contents = RepoContents.load(repo_cmd._contents_filename(remote_uuid))
         return current_contents
 
     def health(self):
@@ -897,7 +897,7 @@ def _restore_from_copy(
     return False, None
 
 
-def compare_local_to_hoard(local: Contents, hoard: HoardContents, config: HoardConfig, paths: HoardPaths) \
+def compare_local_to_hoard(local: RepoContents, hoard: HoardContents, config: HoardConfig, paths: HoardPaths) \
         -> Generator[Diff, None, None]:
     pathing = HoardPathing(config, paths)
 

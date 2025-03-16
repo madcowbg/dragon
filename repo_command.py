@@ -9,7 +9,7 @@ from typing import Generator, Tuple, List
 
 from alive_progress import alive_bar
 
-from contents import Contents, FileProps, DirProps
+from contents import RepoContents, FileProps, DirProps
 from hashing import find_hashes
 from util import format_size
 
@@ -70,7 +70,7 @@ class RepoCommand(object):
         current_uuid = self.current_uuid()
         logging.info(f"Refreshing uuid {current_uuid}")
 
-        contents = Contents.load(self._contents_filename(current_uuid), create_for_uuid=current_uuid)
+        contents = RepoContents.load(self._contents_filename(current_uuid), create_for_uuid=current_uuid)
         contents.config.touch_updated()
 
         print(f"Removing old files and folders.")
@@ -156,7 +156,7 @@ class RepoCommand(object):
         remote_uuid = self.current_uuid()
 
         logging.info(f"Reading repo {self.repo}...")
-        contents = Contents.load(self._contents_filename(remote_uuid))
+        contents = RepoContents.load(self._contents_filename(remote_uuid))
         logging.info(f"Read repo!")
 
         with StringIO() as out:

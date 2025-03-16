@@ -107,7 +107,7 @@ class FSObjects:
         self._objects.pop(path)
 
 
-class Contents:
+class RepoContents:
     @staticmethod
     def load(filepath: str, create_for_uuid: Optional[str] = None):
         if not os.path.isfile(filepath):
@@ -117,7 +117,7 @@ class Contents:
             else:
                 raise ValueError(f"File {filepath} does not exist, need to pass create=True to create.")
         with open(filepath, "r", encoding="utf-8") as f:
-            return Contents(filepath, rtoml.load(f))
+            return RepoContents(filepath, rtoml.load(f))
 
     def __init__(self, filepath: str, contents_doc: Dict[str, Any]):
         self.filepath = filepath
