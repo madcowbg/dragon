@@ -5,7 +5,8 @@ from typing import Dict, Any, Generator, Tuple, Optional
 
 import rtoml
 
-from contents import FSObjects, RepoFileProps, DirProps, FSObjectProps
+from contents import FSObjects, FSObjectProps
+from contents_props import RepoFileProps, DirProps
 
 
 class RepoContentsConfig(abc.ABC):
