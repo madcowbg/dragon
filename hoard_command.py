@@ -572,7 +572,7 @@ class HoardCommand(object):
                 out.write("DONE")
                 return out.getvalue()
 
-    def move(self, from_path: str, to_path: str, no_files: bool = True):
+    def move_mounts(self, from_path: str, to_path: str, no_files: bool = True):
         assert no_files, "NOT IMPLEMENTED"
         config = self.config()
         pathing = HoardPathing(config, self.paths())
@@ -751,9 +751,9 @@ class HoardCommand(object):
 
 
 def _restore(
-        hoard_file: HoardPathing.HoardPath, local_uuid: str, hoard_props: HoardFileProps,
+        hoard_file: HoardPathing.HoardPath, uuid_to_restore_to: str, hoard_props: HoardFileProps,
         config: HoardConfig) -> (bool, str):
-    fullpath_to_restore = hoard_file.at_local(local_uuid).on_device_path()
+    fullpath_to_restore = hoard_file.at_local(uuid_to_restore_to).on_device_path()
     logging.info(f"Restoring hoard file {hoard_file} to {fullpath_to_restore}.")
 
     candidates = hoard_props.by_status(FileStatus.AVAILABLE) + hoard_props.by_status(FileStatus.CLEANUP)
@@ -765,29 +765,35 @@ def _restore(
 
         file_fullpath = hoard_file.at_local(remote_uuid).on_device_path()
 
-        if not os.path.isfile(file_fullpath):
-            logging.error(f"File {file_fullpath} does not exist, but is needed for restore from {remote_uuid}!")
-            continue
-
-        remote_hash = fast_hash(file_fullpath)
-        if hoard_props.fasthash != remote_hash:
-            logging.error(
-                f"File {file_fullpath} with fast hash {remote_hash}!={hoard_props.fasthash} that was expected.")
-            continue
-
-        dirpath, _ = os.path.split(fullpath_to_restore)
-        logging.info(f"making necessary folders to restore: {dirpath}")
-        os.makedirs(dirpath, exist_ok=True)
-
-        logging.info(f"Copying {file_fullpath} to {fullpath_to_restore}")
-        try:
-            shutil.copy2(file_fullpath, fullpath_to_restore)
-            return True, fullpath_to_restore
-        except shutil.SameFileError as e:
-            logging.error(f"Are same file: {e}")
+        success, restored_file = _restore_file(file_fullpath, fullpath_to_restore, hoard_props)
+        if success:
+            return True, restored_file
 
     logging.error(f"Did not find any available for {hoard_file}!")
     return False, fullpath_to_restore
+
+
+def _restore_file(fetch_fullpath: str, fullpath_to_restore: str, hoard_props: HoardFileProps) -> (bool, str):
+    if not os.path.isfile(fetch_fullpath):
+        logging.error(f"File {fetch_fullpath} does not exist, but is needed for restore!")
+        return False, None
+
+    remote_hash = fast_hash(fetch_fullpath)
+    if hoard_props.fasthash != remote_hash:
+        logging.error(
+            f"File {fetch_fullpath} with fast hash {remote_hash}!={hoard_props.fasthash} that was expected.")
+        return False, None
+
+    dirpath, _ = os.path.split(fullpath_to_restore)
+    logging.info(f"making necessary folders to restore: {dirpath}")
+    os.makedirs(dirpath, exist_ok=True)
+
+    logging.info(f"Copying {fetch_fullpath} to {fullpath_to_restore}")
+    try:
+        shutil.copy2(fetch_fullpath, fullpath_to_restore)
+        return True, fullpath_to_restore
+    except shutil.SameFileError as e:
+        logging.error(f"Are same file: {e}")
 
 
 def compare_local_to_hoard(local: Contents, hoard: HoardContents, config: HoardConfig, paths: HoardPaths) \

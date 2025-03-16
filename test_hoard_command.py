@@ -692,12 +692,12 @@ class TestRepoCommand(unittest.TestCase):
             "/first-point/wat/test.me.2 = a:1\n"
             "DONE", res)
 
-        res = hoard_cmd.move(from_path="/first-point/inner", to_path="/cant-move-files", no_files=True)
+        res = hoard_cmd.move_mounts(from_path="/first-point/inner", to_path="/cant-move-files", no_files=True)
         self.assertEqual(
             "Can't move /first-point/inner to /cant-move-files, requires moving files in repo-partial-name:inner.",
             res.strip())
 
-        res = hoard_cmd.move(from_path="/", to_path="/move-all-inside", no_files=True)
+        res = hoard_cmd.move_mounts(from_path="/", to_path="/move-all-inside", no_files=True)
         self.assertEqual(
             "Moving files and folders:\n"
             "/first-point/test.me.1=>/move-all-inside/first-point/test.me.1\n"
@@ -725,10 +725,10 @@ class TestRepoCommand(unittest.TestCase):
             "  /move-all-inside/first-point -> repo-partial-name\n"
             "DONE", res.strip())
 
-        res = hoard_cmd.move(from_path="/first-point", to_path="/moved-data", no_files=True)
+        res = hoard_cmd.move_mounts(from_path="/first-point", to_path="/moved-data", no_files=True)
         self.assertEqual("No repos to move!", res.strip())
 
-        res = hoard_cmd.move(from_path="/move-all-inside/first-point", to_path="/moved-data", no_files=True)
+        res = hoard_cmd.move_mounts(from_path="/move-all-inside/first-point", to_path="/moved-data", no_files=True)
         self.assertEqual(
             "Moving files and folders:\n"
             "/move-all-inside/first-point/test.me.1=>/moved-data/test.me.1\n"
@@ -747,7 +747,7 @@ class TestRepoCommand(unittest.TestCase):
             "/moved-data/wat/test.me.2 = a:1\n"
             "DONE", res)
 
-        res = hoard_cmd.move(from_path="/moved-data", to_path="/", no_files=True)
+        res = hoard_cmd.move_mounts(from_path="/moved-data", to_path="/", no_files=True)
         self.assertEqual(
             "Moving files and folders:\n"
             "/moved-data/test.me.1=>/test.me.1\n"
@@ -764,6 +764,11 @@ class TestRepoCommand(unittest.TestCase):
             "/wat => (repo-partial-name:wat)\n"
             "/wat/test.me.2 = a:1\n"
             "DONE", res)
+
+        partial_cave_cmd.refresh()
+
+        res = hoard_cmd.refresh("repo-partial-name")  # needs to do nothing
+        self.assertEqual("Sync'ed repo-partial-name to hoard!", res.strip())
 
 
 def dump_file_list(tmpdir: str, path: str) -> List[str]:
