@@ -122,7 +122,7 @@ class RepoCommand(object):
 
                 bar(len(filenames) + len(dirnames))
 
-        print(f"Hashing {files_to_update} files to add:")
+        print(f"Hashing {len(files_to_update)} files to add:")
         file_hashes = asyncio.run(find_hashes(files_to_update))
 
         print(f"Reading all files in {self.repo}")
