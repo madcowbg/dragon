@@ -136,6 +136,7 @@ class FileStatus(enum.Enum):
     AVAILABLE = "available"
     GET = "get"
     CLEANUP = "cleanup"
+    COPY = "copy"
     UNKNOWN = "UNKNOWN"
 
 
@@ -200,6 +201,12 @@ class HoardFileProps(FSObjectProps):
 
     def remove_status(self, remote_uuid: str):
         self.doc["status"].pop(remote_uuid)
+
+    def status_to_copy(self) -> List[str]:
+        return [uuid for uuid, status in self.doc["status"].items() if status in STATUSES_TO_COPY]
+
+
+STATUSES_TO_COPY = [FileStatus.COPY.value, FileStatus.GET.value, FileStatus.AVAILABLE.value]
 
 
 class HoardTree:
@@ -303,27 +310,30 @@ class HoardFSObjects:
     def __len__(self):
         return len(self._objects)
 
-    def __getitem__(self, key: str) -> FSObjectProps: return self._objects[key]
+    def __getitem__(self, key: str) -> FSObjectProps:
+        return self._objects[key]
 
-    def __iter__(self) -> Generator[Tuple[str, FSObjectProps], None, None]: yield from self._objects.copy().items()
+    def __iter__(self) -> Generator[Tuple[str, FSObjectProps], None, None]:
+        yield from self._objects.copy().items()
 
-    def __contains__(self, item: str) -> bool: return item in self._objects
+    def __contains__(self, item: str) -> bool:
+        return item in self._objects
 
     def add_new_file(
-            self, curr_file: str, props: FileProps,
-            current_uuid: str, repos_to_add_new_files: List[HoardRemote]) -> HoardFileProps:
-        self._doc[curr_file] = {
+            self, filepath: str, props: FileProps,
+            current_uuid: str, repos_to_add_new_files: List[str]) -> HoardFileProps:
+        self._doc[filepath] = {
             "isdir": False,
             "size": props.size,
             "fasthash": props.fasthash,
-            "status": dict((r.uuid, FileStatus.GET.value) for r in repos_to_add_new_files)
+            "status": dict((uuid, FileStatus.GET.value) for uuid in repos_to_add_new_files)
         }
 
         # mark as present here
-        self._doc[curr_file]["status"][current_uuid] = FileStatus.AVAILABLE.value
+        self._doc[filepath]["status"][current_uuid] = FileStatus.AVAILABLE.value
 
-        self._objects[curr_file] = HoardFileProps(self._doc[curr_file])
-        return self._objects[curr_file]
+        self._objects[filepath] = HoardFileProps(self._doc[filepath])
+        return self._objects[filepath]
 
     def add_dir(self, curr_dir: str):
         self._doc[curr_dir] = {"isdir": True}
@@ -333,7 +343,7 @@ class HoardFSObjects:
         self._objects.pop(curr_path)
         self._doc.pop(curr_path)
 
-    def move(self, orig_path: str, new_path: str, props: FSObjectProps):
+    def move(self, orig_path: str, new_path: str, props: DirProps | HoardFileProps):
         assert orig_path != new_path
         assert isinstance(props, HoardFileProps) or isinstance(props, DirProps)
 
@@ -341,6 +351,23 @@ class HoardFSObjects:
         self._objects[new_path] = props
 
         self.delete(orig_path)
+
+    def copy(self, from_fullpath: str, to_fullpath: str):
+        assert from_fullpath != to_fullpath
+
+        props = self._objects[from_fullpath]
+        if isinstance(props, HoardFileProps):
+            self._doc[to_fullpath] = {
+                "isdir": False,
+                "size": props.size,
+                "fasthash": props.fasthash,
+                "status": dict((uuid, FileStatus.COPY.value) for uuid in props.status_to_copy())
+            }
+            self._objects[to_fullpath] = HoardFileProps(self._doc[to_fullpath])
+        elif isinstance(props, DirProps):
+            self.add_dir(to_fullpath)
+        else:
+            raise ValueError(f"props type unrecognized: {type(props)}")
 
     @property
     def num_files(self):

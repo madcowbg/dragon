@@ -537,10 +537,10 @@ class TestRepoCommand(unittest.TestCase):
             f"{full_cave_cmd.current_uuid()}:\n"
             f"{backup_cave_cmd.current_uuid()}:\n"
             f"{incoming_cave_cmd.current_uuid()}:\n"
-            "c test.me.4\n"
-            "c test.me.5\n"
-            "c wat/test.me.3\n"
-            "c wat/test.me.6\n"
+            "d test.me.4\n"
+            "d test.me.5\n"
+            "d wat/test.me.3\n"
+            "d wat/test.me.6\n"
             "DONE", res)
 
         self.assertEqual([
@@ -692,12 +692,12 @@ class TestRepoCommand(unittest.TestCase):
             "/first-point/wat/test.me.2 = a:1\n"
             "DONE", res)
 
-        res = hoard_cmd.move_mounts(from_path="/first-point/inner", to_path="/cant-move-files", no_files=True)
+        res = hoard_cmd.move_mounts(from_path="/first-point/inner", to_path="/cant-move-files")
         self.assertEqual(
             "Can't move /first-point/inner to /cant-move-files, requires moving files in repo-partial-name:inner.",
             res.strip())
 
-        res = hoard_cmd.move_mounts(from_path="/", to_path="/move-all-inside", no_files=True)
+        res = hoard_cmd.move_mounts(from_path="/", to_path="/move-all-inside")
         self.assertEqual(
             "Moving files and folders:\n"
             "/first-point/test.me.1=>/move-all-inside/first-point/test.me.1\n"
@@ -725,10 +725,10 @@ class TestRepoCommand(unittest.TestCase):
             "  /move-all-inside/first-point -> repo-partial-name\n"
             "DONE", res.strip())
 
-        res = hoard_cmd.move_mounts(from_path="/first-point", to_path="/moved-data", no_files=True)
+        res = hoard_cmd.move_mounts(from_path="/first-point", to_path="/moved-data")
         self.assertEqual("No repos to move!", res.strip())
 
-        res = hoard_cmd.move_mounts(from_path="/move-all-inside/first-point", to_path="/moved-data", no_files=True)
+        res = hoard_cmd.move_mounts(from_path="/move-all-inside/first-point", to_path="/moved-data")
         self.assertEqual(
             "Moving files and folders:\n"
             "/move-all-inside/first-point/test.me.1=>/moved-data/test.me.1\n"
@@ -747,7 +747,7 @@ class TestRepoCommand(unittest.TestCase):
             "/moved-data/wat/test.me.2 = a:1\n"
             "DONE", res)
 
-        res = hoard_cmd.move_mounts(from_path="/moved-data", to_path="/", no_files=True)
+        res = hoard_cmd.move_mounts(from_path="/moved-data", to_path="/")
         self.assertEqual(
             "Moving files and folders:\n"
             "/moved-data/test.me.1=>/test.me.1\n"
@@ -769,6 +769,75 @@ class TestRepoCommand(unittest.TestCase):
 
         res = hoard_cmd.refresh("repo-partial-name")  # needs to do nothing
         self.assertEqual("Sync'ed repo-partial-name to hoard!", res.strip())
+
+    def test_copy_locations_of_files(self):
+        populate_repotypes(self.tmpdir.name)
+        partial_cave_cmd = TotalCommand(path=join(self.tmpdir.name, "repo-partial")).cave
+        partial_cave_cmd.init()
+        partial_cave_cmd.refresh()
+
+        hoard_cmd = TotalCommand(path=join(self.tmpdir.name, "hoard")).hoard
+        hoard_cmd.init()
+
+        hoard_cmd.add_remote(
+            remote_path=join(self.tmpdir.name, "repo-partial"), name="repo-partial-name",
+            mount_point="/first-point",
+            type=CaveType.PARTIAL, fetch_new=True)
+
+        # "+/first-point/test.me.1\n"
+        # "+/first-point/wat/test.me.2\n"
+        hoard_cmd.refresh("repo-partial-name")
+
+        res = hoard_cmd.move_mounts(from_path="/first-point", to_path="/moved-data")
+        self.assertEqual(
+            "Moving files and folders:\n"
+            "/first-point/test.me.1=>/moved-data/test.me.1\n"
+            "/first-point/wat/test.me.2=>/moved-data/wat/test.me.2\n"
+            "/first-point/wat=>/moved-data/wat\n"
+            "Moving 1 repos:\n"
+            "[repo-partial-name] /first-point => /moved-data\n"
+            "DONE", res)
+
+        res = hoard_cmd.copy(from_path="/moved-data/wat", to_path="/moved-data/zed")
+        self.assertEqual(
+            "c+ /moved-data/zed/test.me.2\n"
+            "c+ /moved-data/zed\n"
+            "DONE", res)
+
+        res = hoard_cmd.ls(show_remotes=True)
+        self.assertEqual(
+            "/\n"
+            "/moved-data => (repo-partial-name:.)\n"
+            "/moved-data/test.me.1 = a:1\n"
+            "/moved-data/wat => (repo-partial-name:wat)\n"
+            "/moved-data/wat/test.me.2 = a:1\n"
+            "/moved-data/zed => (repo-partial-name:zed)\n"
+            "/moved-data/zed/test.me.2 = x:1\n"
+            "DONE", res)
+
+        res = hoard_cmd.sync_contents("repo-partial-name")
+        self.assertEqual(
+            f"{partial_cave_cmd.current_uuid()}:\n"
+            "c+ zed/test.me.2\n"
+            f"{partial_cave_cmd.current_uuid()}:\n"
+            "DONE", res)
+
+        res = hoard_cmd.ls(show_remotes=True)
+        self.assertEqual(
+            "/\n"
+            "/moved-data => (repo-partial-name:.)\n"
+            "/moved-data/test.me.1 = a:1\n"
+            "/moved-data/wat => (repo-partial-name:wat)\n"
+            "/moved-data/wat/test.me.2 = a:1\n"
+            "/moved-data/zed => (repo-partial-name:zed)\n"
+            "/moved-data/zed/test.me.2 = a:1\n"
+            "DONE", res)
+
+        res = dump_file_list(self.tmpdir.name, "repo-partial")
+        self.assertEqual(
+            ['repo-partial/test.me.1',
+             'repo-partial/wat/test.me.2',
+             'repo-partial/zed/test.me.2'], res)
 
 
 def dump_file_list(tmpdir: str, path: str) -> List[str]:
