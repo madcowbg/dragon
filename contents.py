@@ -174,6 +174,10 @@ class HoardFileProps(FSObjectProps):
     def available_at(self) -> List[str]:
         return self.by_status(FileStatus.AVAILABLE)
 
+    @property
+    def presence(self):
+        return dict((repo_uuid, FileStatus(status)) for repo_uuid, status in self.doc["status"].items())
+
     def by_status(self, selected_status: FileStatus):
         return [uuid for uuid, status in self.doc["status"].items() if status == selected_status.value]
 
