@@ -73,6 +73,23 @@ class TestRepoCommand(unittest.TestCase):
 
         current_uuid = cave_cmd.current_uuid()
 
-        res = TotalCommand(path=join(self.tmpdir.name, "repo")).cave.show().split("\n")
+        res = cave_cmd.show().split("\n")
         self.assertEqual('Result for local', res[0])
         self.assertEqual(['  # files = 3 of size 19', '  # dirs  = 1', ''], res[3:])
+
+        res = cave_cmd.status()
+        self.assertEqual(
+            f"{cave_cmd.current_uuid()}:\n"
+            f"files:\n"
+            f"    same: 3 (100.0%)\n"
+            f"     mod: 0 (0.0%)\n"
+            f"     new: 0 (0.0%)\n"
+            f" current: 3\n"
+            f" in repo: 3\n"
+            f" deleted: 0 (0.0%)\n"
+            f"dirs:\n"
+            f"    same: 1\n"
+            f"     new: 0 (0.0%)\n"
+            f" current: 1\n"
+            f" in repo: 1\n"
+            f" deleted: 0 (0.0%)\n", res)

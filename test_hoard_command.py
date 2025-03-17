@@ -200,6 +200,23 @@ class TestRepoCommand(unittest.TestCase):
         write_contents(join(self.tmpdir.name, "repo", "newdir", "newfile.is"), "lhiWFELHFE")
         os.remove(join(self.tmpdir.name, "repo", "wat", 'test.me.different'))
 
+        res = cave_cmd.status()
+        self.assertEqual(
+            f"{cave_cmd.current_uuid()}:\n"
+            "files:\n"
+            "    same: 2 (66.7%)\n"
+            "     mod: 0 (0.0%)\n"
+            "     new: 1 (33.3%)\n"
+            " current: 3\n"
+            " in repo: 3\n"
+            " deleted: 1 (33.3%)\n"
+            "dirs:\n"
+            "    same: 1\n"
+            "     new: 1 (50.0%)\n"
+            " current: 2\n"
+            " in repo: 1\n"
+            " deleted: 0 (0.0%)\n", res)
+
         # as is not refreshed, no change in status
         self.assertEqual(f"Status of {repo_uuid}:\nDF /wat\nDONE", hoard_cmd.status("repo-in-local").strip())
 
@@ -888,6 +905,23 @@ class TestRepoCommand(unittest.TestCase):
             dump_file_list(self.tmpdir.name, 'repo-partial'))
 
         os.remove(join(self.tmpdir.name, 'repo-partial/wat/test.me.2'))
+
+        res = partial_cave_cmd.status()
+        self.assertEqual(
+            f"{partial_cave_cmd.current_uuid()}:\n"
+            "files:\n"
+            "    same: 1 (100.0%)\n"
+            "     mod: 0 (0.0%)\n"
+            "     new: 0 (0.0%)\n"
+            " current: 1\n"
+            " in repo: 2\n"
+            " deleted: 1 (50.0%)\n"
+            "dirs:\n"
+            "    same: 1\n"
+            "     new: 0 (0.0%)\n"
+            " current: 1\n"
+            " in repo: 1\n"
+            " deleted: 0 (0.0%)\n", res)
 
         res = partial_cave_cmd.refresh()
         self.assertEqual("Refresh done!", res)

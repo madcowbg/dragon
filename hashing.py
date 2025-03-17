@@ -7,8 +7,10 @@ from typing import Set, Dict, List
 import aiofiles
 from alive_progress import alive_bar
 
+
 def fast_hash(fullpath: str, chunk_size: int = 1 << 16) -> str:
     return asyncio.run(fast_hash_async(fullpath, chunk_size))
+
 
 async def fast_hash_async(fullpath: str, chunk_size: int = 1 << 16) -> str:
     async with aiofiles.open(fullpath, "rb") as f:

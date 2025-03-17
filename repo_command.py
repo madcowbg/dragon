@@ -11,7 +11,7 @@ from alive_progress import alive_bar, alive_it
 
 from contents_props import RepoFileProps, DirProps
 from contents_repo import RepoContents
-from hashing import find_hashes
+from hashing import find_hashes, fast_hash
 from util import format_size
 
 CURRENT_UUID_FILENAME = "current.uuid"
@@ -64,7 +64,7 @@ class RepoCommand(object):
         self._validate_repo()
         return f"Repo initialized at {self.repo}"
 
-    def refresh(self, fast_refresh: bool = False):
+    def refresh(self, skip_integrity_checks: bool = False):
         """ Refreshes the cache of the current hoard folder """
         self._validate_repo()
 
@@ -87,7 +87,7 @@ class RepoCommand(object):
                     logging.info(f"Removing dir {diff.dirpath}")
                     contents.fsobjects.remove(diff.dirpath)
                 elif isinstance(diff, RepoFileWeakSame):
-                    if fast_refresh:
+                    if skip_integrity_checks:
                         logging.info("Skipping file as size and mtime is the same!!!")
                     else:
                         logging.info(f"File {diff.filepath} is weakly the same, but still needs checking.")
@@ -149,8 +149,75 @@ class RepoCommand(object):
                     f"  # dirs  = {contents.fsobjects.num_dirs}\n", ])
                 return out.getvalue()
 
+    def status(self, skip_integrity_checks: bool = False):
+        self._validate_repo()
+
+        current_uuid = self.current_uuid()
+
+        files_same = []
+        files_new = []
+        files_mod = []
+        files_del = []
+
+        dir_new = []
+        dir_same = []
+        dir_deleted = []
+        with RepoContents.load(
+                self._contents_filename(current_uuid),
+                create_for_uuid=current_uuid, write_on_exit=False) as contents:
+            for diff in compute_diffs(contents, self.repo):
+                if isinstance(diff, FileNotInFilesystem):
+                    files_del.append(diff.filepath)
+                elif isinstance(diff, RepoFileWeakSame):
+                    if skip_integrity_checks:
+                        files_same.append(diff.filepath)
+                    else:
+                        if diff.props.fasthash == fast_hash(join(self.repo, diff.filepath)):
+                            files_same.append(diff.filepath)
+                        else:
+                            files_mod.append(diff.filepath)
+                elif isinstance(diff, RepoFileDifferent):
+                    files_mod.append(diff.filepath)
+                elif isinstance(diff, FileNotInRepo):
+                    files_new.append(diff.filepath)
+                elif isinstance(diff, DirNotInFilesystem):
+                    dir_deleted.append(diff.dirpath)
+                elif isinstance(diff, DirIsSameInRepo):
+                    dir_same.append(diff.dirpath)
+                elif isinstance(diff, DirNotInRepo):
+                    dir_new.append(diff.dirpath)
+                else:
+                    raise ValueError(f"unknown diff type: {type(diff)}")
+
+            # assert len(files_same) + len(files_del) + len(files_mod) == contents.fsobjects.num_files
+            # assert len(dir_new) + len(dir_same) == contents.fsobjects.num_dirs
+
+            files_current = len(files_new) + len(files_same) + len(files_mod)
+            dirs_current = len(dir_same) + len(dir_new)
+            with StringIO() as out:
+                out.write(
+                    f"{current_uuid}:\n"
+                    f"files:\n"
+                    f"    same: {len(files_same)} ({fmt_percent(len(files_same) / files_current)})\n"
+                    f"     mod: {len(files_mod)} ({fmt_percent(len(files_mod) / files_current)})\n"
+                    f"     new: {len(files_new)} ({fmt_percent(len(files_new) / files_current)})\n"
+                    f" current: {files_current}\n"
+                    f" in repo: {contents.fsobjects.num_files}\n"
+                    f" deleted: {len(files_del)} ({fmt_percent(len(files_del) / contents.fsobjects.num_files)})\n"
+                    f"dirs:\n"
+                    f"    same: {len(dir_same)}\n"
+                    f"     new: {len(dir_new)} ({fmt_percent(len(dir_new) / dirs_current)})\n"
+                    f" current: {dirs_current}\n"
+                    f" in repo: {contents.fsobjects.num_dirs}\n"
+                    f" deleted: {len(dir_deleted)} ({fmt_percent(len(dir_deleted) / contents.fsobjects.num_dirs)})\n")
+
+                return out.getvalue()
+
     def _contents_filename(self, current_uuid):
         return os.path.join(self._hoard_folder(), f"{current_uuid}.contents")
+
+
+def fmt_percent(num: float): return f"{100 * num:.1f}%"
 
 
 class FileNotInFilesystem:
@@ -204,9 +271,11 @@ type RepoDiffs = (
 def compute_diffs(contents: RepoContents, repo_path: str) -> Generator[RepoDiffs, None, None]:
     for obj_path, props in contents.fsobjects:
         if isinstance(props, RepoFileProps):
-            yield FileNotInFilesystem(obj_path, props)
+            if not pathlib.Path(repo_path).joinpath(obj_path).is_file():
+                yield FileNotInFilesystem(obj_path, props)
         elif isinstance(props, DirProps):
-            yield DirNotInFilesystem(obj_path, props)
+            if not pathlib.Path(repo_path).joinpath(obj_path).is_dir():
+                yield DirNotInFilesystem(obj_path, props)
         else:
             raise ValueError(f"invalid props type: {type(props)}")
 
