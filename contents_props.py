@@ -85,41 +85,40 @@ class HoardFileProps:
 
 
 class SQLHoardFileProps(HoardFileProps):
-    def __init__(self, parent: "SQLHoardContents", filepath: str):
+    def __init__(self, parent: "SQLHoardContents", fsobject_id: int):
         self.parent = parent
-        self.filepath = filepath
+        self.fsobject_id = fsobject_id
 
     @property
     def size(self):
         return self.parent.conn.execute(
-            "SELECT size FROM fsobject WHERE fullpath = ?",
-            (self.filepath,)).fetchone()[0]
+            "SELECT size FROM fsobject WHERE fsobject_id = ?",
+            (self.fsobject_id,)).fetchone()[0]
 
     @property
     def fasthash(self):
         return self.parent.conn.execute(
-            "SELECT fasthash FROM fsobject WHERE fullpath = ?",
-            (self.filepath,)).fetchone()[0]
+            "SELECT fasthash FROM fsobject WHERE fsobject_id = ?",
+            (self.fsobject_id,)).fetchone()[0]
 
     def replace_file(self, new_props: RepoFileProps, available_uuid: str):
         self.parent.conn.execute(
-            "UPDATE fsobject SET size = ?, fasthash = ? WHERE fullpath = ?",
-            (new_props.size, new_props.fasthash, self.filepath))
+            "UPDATE fsobject SET size = ?, fasthash = ? WHERE fsobject_id = ?",
+            (new_props.size, new_props.fasthash, self.fsobject_id))
 
         # mark for re-fetching everywhere it is already available
         self.parent.conn.execute(
             "UPDATE fspresence SET status = ? "
-            "WHERE fsobject_id = (SELECT fsobject_id from fsobject WHERE fullpath = ?) AND status = ?",
-            (FileStatus.GET.value, self.filepath, FileStatus.AVAILABLE.value))
+            "WHERE fsobject_id = ? AND status = ?",
+            (FileStatus.GET.value, self.fsobject_id, FileStatus.AVAILABLE.value))
 
         # mark that is available here
         self.mark_available(available_uuid)
 
     def mark_available(self, remote_uuid: str):
         self.parent.conn.execute(
-            "INSERT OR REPLACE INTO fspresence(fsobject_id, uuid, status) "
-            "SELECT fsobject_id, ?, ? FROM fsobject WHERE fullpath = ?",
-            (remote_uuid, FileStatus.AVAILABLE.value, self.filepath))
+            "INSERT OR REPLACE INTO fspresence(fsobject_id, uuid, status) VALUES (?, ?, ?)",
+            (self.fsobject_id, remote_uuid, FileStatus.AVAILABLE.value))
 
     @property
     def available_at(self) -> List[str]:
@@ -128,59 +127,55 @@ class SQLHoardFileProps(HoardFileProps):
     @property
     def presence(self) -> Dict[str, FileStatus]:
         return dict((repo_uuid, FileStatus(status)) for repo_uuid, status in self.parent.conn.execute(
-            "SELECT uuid, status FROM fspresence JOIN fsobject ON fspresence.fsobject_id = fsobject.fsobject_id "
-            "WHERE fullpath = ?", (self.filepath,)))
+            "SELECT uuid, status FROM fspresence WHERE fsobject_id = ?",
+            (self.fsobject_id,)))
 
     def by_status(self, selected_status: FileStatus):
         return [u[0] for u in self.parent.conn.execute(
-            "SELECT uuid FROM fspresence JOIN fsobject ON fspresence.fsobject_id = fsobject.fsobject_id "
-            "WHERE fullpath = ? AND status = ?",
-            (self.filepath, selected_status.value))]
+            "SELECT uuid FROM fspresence WHERE fsobject_id = ? AND status = ?",
+            (self.fsobject_id, selected_status.value))]
 
     def mark_for_cleanup(self, repo_uuid: str):
         self.parent.conn.execute(
-            "INSERT OR REPLACE INTO fspresence (fsobject_id, uuid, status) "
-            "SELECT fsobject_id, ?, ? FROM fsobject WHERE fullpath = ?",
-            (repo_uuid, FileStatus.CLEANUP.value, self.filepath))
+            "INSERT OR REPLACE INTO fspresence (fsobject_id, uuid, status) VALUES (?, ?, ?)",
+            (self.fsobject_id, repo_uuid, FileStatus.CLEANUP.value))
 
     def status(self, repo_uuid: str) -> FileStatus:
         current = self.parent.conn.execute(
-            "SELECT status FROM fspresence "
-            "WHERE fsobject_id = (SELECT fsobject_id FROM fsobject WHERE fullpath = ?) and uuid=?",
-            (self.filepath, repo_uuid)
+            "SELECT status FROM fspresence WHERE fsobject_id = ? and uuid=?",
+            (self.fsobject_id, repo_uuid)
         ).fetchone()
         return FileStatus(current[0]) if current is not None else FileStatus.UNKNOWN
 
     def mark_to_get(self, repo_uuid: str):
         self.parent.conn.execute(
-             "INSERT OR REPLACE INTO fspresence(fsobject_id, uuid, status) "
-            "SELECT fsobject_id, ?, ? FROM fsobject WHERE fullpath = ?",
-            (repo_uuid, FileStatus.GET.value, self.filepath))
+            "INSERT OR REPLACE INTO fspresence(fsobject_id, uuid, status) VALUES (?, ?, ?)",
+            (self.fsobject_id, repo_uuid, FileStatus.GET.value))
 
     def mark_to_delete(self):
         # remove places that still haven't gotten it
         self.parent.conn.execute(
             "DELETE FROM fspresence "
-            "WHERE fsobject_id = (SELECT fsobject_id FROM fsobject WHERE fullpath = ?) and status = ?",
-            (self.filepath, FileStatus.GET.value))
+            "WHERE fsobject_id = ? and status = ?",
+            (self.fsobject_id, FileStatus.GET.value))
 
         # mark for cleanup places where it is available
         self.parent.conn.execute(
             "UPDATE fspresence SET status = ? "
-            "WHERE fsobject_id = (SELECT fsobject_id FROM fsobject WHERE fullpath = ?) AND status=?",
-            (FileStatus.CLEANUP.value, self.filepath, FileStatus.AVAILABLE.value))
+            "WHERE fsobject_id = ? AND status = ?",
+            (FileStatus.CLEANUP.value, self.fsobject_id, FileStatus.AVAILABLE.value))
 
     def remove_status(self, remote_uuid: str):
         self.parent.conn.execute(
             "DELETE FROM fspresence "
-            "WHERE fsobject_id = (SELECT fsobject_id FROM fsobject WHERE fullpath = ?) AND uuid=?",
-            (self.filepath, remote_uuid))
+            "WHERE fsobject_id = ? AND uuid=?",
+            (self.fsobject_id, remote_uuid))
 
     def status_to_copy(self) -> List[str]:
         return [row[0] for row in self.parent.conn.execute(
             "SELECT uuid FROM fspresence "
-            "WHERE fsobject_id = (SELECT fsobject_id FROM fsobject WHERE fullpath = ?) AND status IN (?, ?, ?)",
-            (self.filepath, *STATUSES_TO_COPY))]
+            "WHERE fsobject_id = ? AND status IN (?, ?, ?)",
+            (self.fsobject_id, *STATUSES_TO_COPY))]
 
 
 class TOMLHoardFileProps(HoardFileProps):

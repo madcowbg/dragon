@@ -285,8 +285,8 @@ class SQLHoardFSObjects(HoardFSObjects):
         return get_singular_value(self.parent.conn, "SELECT count(1) FROM fsobject")
 
     def __getitem__(self, file_path: str) -> FSObjectProps:
-        fullpath, isdir = self.parent.conn.execute(
-            "SELECT fullpath, isdir "
+        fsobject_id, isdir = self.parent.conn.execute(
+            "SELECT fsobject_id, isdir "
             "FROM fsobject "
             "WHERE fsobject.fullpath = ? ",
             (file_path,)).fetchone()
@@ -294,14 +294,14 @@ class SQLHoardFSObjects(HoardFSObjects):
         if isdir:
             return DirProps({})
         else:
-            return SQLHoardFileProps(self.parent, fullpath)
+            return SQLHoardFileProps(self.parent, fsobject_id)
 
     def __iter__(self) -> Generator[Tuple[str, FSObjectProps], None, None]:  # fixme maybe optimize to create directly?
-        for fullpath, isdir in self.parent.conn.execute("SELECT fullpath, isdir FROM fsobject "):
+        for fsobject_id, fullpath, isdir in self.parent.conn.execute("SELECT fsobject_id, fullpath, isdir FROM fsobject"):
             if isdir:
                 yield fullpath, DirProps({})
             else:
-                yield fullpath, SQLHoardFileProps(self.parent, fullpath)
+                yield fullpath, SQLHoardFileProps(self.parent, fsobject_id)
 
     def __contains__(self, file_path: str) -> bool:
         return self.parent.conn.execute(
@@ -317,10 +317,10 @@ class SQLHoardFSObjects(HoardFSObjects):
             (filepath, props.size, props.fasthash))
 
         fsobject_id: int = self.parent.conn.execute(
-            "SELECT fsobject_id FROM fsobject WHERE fullpath = ?", (filepath, )).fetchone()[0]
+            "SELECT fsobject_id FROM fsobject WHERE fullpath = ?", (filepath,)).fetchone()[0]
 
         # add status for new repos
-        self.parent.conn.execute("DELETE FROM fspresence WHERE fsobject_id = ?", (fsobject_id, ))
+        self.parent.conn.execute("DELETE FROM fspresence WHERE fsobject_id = ?", (fsobject_id,))
         self.parent.conn.executemany(
             "INSERT INTO fspresence(fsobject_id, uuid, status) VALUES (?, ?, ?)",
             [(fsobject_id, uuid, FileStatus.GET.value) for uuid in repos_to_add_new_files])
@@ -330,7 +330,7 @@ class SQLHoardFSObjects(HoardFSObjects):
             "INSERT OR REPLACE INTO fspresence(fsobject_id, uuid, status) VALUES (?, ?, ?)",
             (fsobject_id, current_uuid, FileStatus.AVAILABLE.value))
 
-        return SQLHoardFileProps(self.parent, filepath)
+        return SQLHoardFileProps(self.parent, fsobject_id)
 
     def add_dir(self, curr_dir: str):
         # add fsobject entry
@@ -514,9 +514,10 @@ class SQLHoardContents(HoardContents):
                 "INSERT INTO config(updated) VALUES (?)",
                 (datetime.now().isoformat(),))
 
-            curr.execute("CREATE TABLE epoch("
-                         " uuid TEXT PRIMARY KEY,"
-                         " epoch INTEGER NOT NULL DEFAULT -1)")
+            curr.execute(
+                "CREATE TABLE epoch("
+                " uuid TEXT PRIMARY KEY,"
+                " epoch INTEGER NOT NULL DEFAULT -1)")
 
             conn.commit()
             conn.close()
