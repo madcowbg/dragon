@@ -7,7 +7,7 @@ from io import StringIO
 from os.path import join
 from typing import Generator, Tuple, List
 
-from alive_progress import alive_bar
+from alive_progress import alive_bar, alive_it
 
 from contents_props import RepoFileProps, DirProps
 from contents_repo import RepoContents
@@ -76,73 +76,52 @@ class RepoCommand(object):
                 create_for_uuid=current_uuid, write_on_exit=False) as contents:
             contents.config.touch_updated()
 
-            print(f"Removing old files and folders.")
-            with alive_bar(len(contents.fsobjects)) as bar:
-                for file, props in contents.fsobjects:
-                    bar()
-                    if isinstance(props, RepoFileProps):
-                        fullpath = str(os.path.join(self.repo, file))
-                        if not os.path.isfile(fullpath):
-                            logging.info(f"Removing file {file}")
-                            contents.fsobjects.remove(file)
-                    elif isinstance(props, DirProps):
-                        dirname = file
-                        fullpath = str(os.path.join(self.repo, dirname))
-                        if not os.path.isdir(fullpath):
-                            logging.info(f"Removing dir {dirname}")
-                            contents.fsobjects.remove(dirname)
-                    else:
-                        raise ValueError(f"invalid props type: {type(props)}")
-
-            print("Counting files to add or update...")
+            print(f"Computing diffs.")
             files_to_update: List[str] = []
             folders_to_add: List[str] = []
-            with alive_bar(0) as bar:
-                for dirpath_s, dirnames, filenames in walk_repo(self.repo):
-                    dirpath = pathlib.Path(dirpath_s)
-                    for filename in filenames:
-                        file_path_full = dirpath.joinpath(filename)
-                        if fast_refresh:
-                            file_path_local = file_path_full.relative_to(self.repo).as_posix()
-                            logging.info(f"Checking {file_path_local} for existence...")
-                            if file_path_local in contents.fsobjects:  # file is already in index
-                                logging.info(f"File is in contents, checking size and mtime.")
-                                props = contents.fsobjects[file_path_local]
-                                assert isinstance(props, RepoFileProps)
-                                if props.mtime == os.path.getmtime(file_path_full.as_posix()) \
-                                        and props.size == os.path.getsize(file_path_full.as_posix()):
-                                    logging.info("Skipping file as size and mtime is the same!!!")
-                                    continue
-
-                        files_to_update.append(file_path_full.as_posix())
-                    for dirname in dirnames:
-                        dir_path_full = dirpath.joinpath(dirname)
-                        dir_path_in_local = dir_path_full.relative_to(self.repo).as_posix()
-                        if fast_refresh and dir_path_in_local in contents.fsobjects:
-                            assert isinstance(contents.fsobjects[dir_path_in_local], DirProps)
-                            continue
-                        folders_to_add.append(dir_path_full.as_posix())
-
-                    bar(len(filenames) + len(dirnames))
+            for diff in compute_diffs(contents, self.repo):
+                if isinstance(diff, FileNotInFilesystem):
+                    logging.info(f"Removing file {diff.filepath}")
+                    contents.fsobjects.remove(diff.filepath)
+                elif isinstance(diff, DirNotInFilesystem):
+                    logging.info(f"Removing dir {diff.dirpath}")
+                    contents.fsobjects.remove(diff.dirpath)
+                elif isinstance(diff, RepoFileWeakSame):
+                    if fast_refresh:
+                        logging.info("Skipping file as size and mtime is the same!!!")
+                    else:
+                        logging.info(f"File {diff.filepath} is weakly the same, but still needs checking.")
+                        files_to_update.append(pathlib.Path(self.repo).joinpath(diff.filepath).as_posix())
+                elif isinstance(diff, RepoFileDifferent):
+                    logging.info(f"File {diff.filepath} is different, adding to check.")
+                    files_to_update.append(pathlib.Path(self.repo).joinpath(diff.filepath).as_posix())
+                elif isinstance(diff, FileNotInRepo):
+                    logging.info(f"File {diff.filepath} not in repo, adding.")
+                    files_to_update.append(pathlib.Path(self.repo).joinpath(diff.filepath).as_posix())
+                elif isinstance(diff, DirIsSameInRepo):
+                    logging.info(f"Dir {diff.dirpath} is same, skipping")
+                elif isinstance(diff, DirNotInRepo):
+                    logging.info(f"Dir {diff.dirpath} is different, adding...")
+                    folders_to_add.append(pathlib.Path(self.repo).joinpath(diff.dirpath).as_posix())
+                else:
+                    raise ValueError(f"unknown diff type: {type(diff)}")
 
             print(f"Hashing {len(files_to_update)} files to add:")
             file_hashes = asyncio.run(find_hashes(files_to_update))
 
-            print(f"Reading all files in {self.repo}")
-            with alive_bar(len(files_to_update) + len(folders_to_add)) as bar:
-                for fullpath in files_to_update:
-                    relpath = pathlib.Path(fullpath).relative_to(self.repo).as_posix()
+            print(f"Adding {len(files_to_update)} files in {self.repo}")
+            for fullpath in alive_it(files_to_update):
+                relpath = pathlib.Path(fullpath).relative_to(self.repo).as_posix()
 
-                    contents.fsobjects.add_file(
-                        relpath, size=os.path.getsize(fullpath),
-                        mtime=os.path.getmtime(fullpath),
-                        fasthash=file_hashes.get(fullpath, None))
-                    bar()
+                contents.fsobjects.add_file(
+                    relpath, size=os.path.getsize(fullpath),
+                    mtime=os.path.getmtime(fullpath),
+                    fasthash=file_hashes.get(fullpath, None))
 
-                for fullpath in folders_to_add:
-                    relpath = pathlib.Path(fullpath).relative_to(self.repo).as_posix()
-                    contents.fsobjects.add_dir(relpath)
-                    bar()
+            print(f"Adding {len(folders_to_add)} folders in {self.repo}")
+            for fullpath in alive_it(folders_to_add):
+                relpath = pathlib.Path(fullpath).relative_to(self.repo).as_posix()
+                contents.fsobjects.add_dir(relpath)
 
             logging.info(f"Files read!")
 
@@ -152,10 +131,9 @@ class RepoCommand(object):
             logging.info(f"Writing cache...")
             contents.write()
 
-            logging.info(f"Refresh done!")
             return f"Refresh done!"
 
-    def show(self):
+    def show(self):  # fixme remove in favor of status
         remote_uuid = self.current_uuid()
 
         logging.info(f"Reading repo {self.repo}...")
@@ -173,3 +151,92 @@ class RepoCommand(object):
 
     def _contents_filename(self, current_uuid):
         return os.path.join(self._hoard_folder(), f"{current_uuid}.contents")
+
+
+class FileNotInFilesystem:
+    def __init__(self, filepath: str, props: RepoFileProps):
+        self.filepath = filepath
+        self.props = props
+
+
+class DirNotInFilesystem:
+    def __init__(self, dirpath: str, props: DirProps):
+        self.dirpath = dirpath
+        self.props = props
+
+
+class RepoFileWeakSame:
+    def __init__(self, filepath: str, props: RepoFileProps):
+        self.filepath = filepath
+        self.props = props
+
+
+class RepoFileDifferent:
+    def __init__(self, filepath: str, props: RepoFileProps, mtime: float, size: int):
+        self.filepath = filepath
+        self.props = props
+
+        self.mtime = mtime
+        self.size = size
+
+
+class DirIsSameInRepo:
+    def __init__(self, dirpath: str, props: DirProps):
+        self.dirpath = dirpath
+        self.props = props
+
+
+class DirNotInRepo:
+    def __init__(self, dirpath: str):
+        self.dirpath = dirpath
+
+
+class FileNotInRepo:
+    def __init__(self, filepath: str):
+        self.filepath = filepath
+
+
+type RepoDiffs = (
+        FileNotInFilesystem | RepoFileWeakSame | RepoFileDifferent | FileNotInRepo
+        | DirNotInFilesystem | DirIsSameInRepo | DirNotInRepo)
+
+
+def compute_diffs(contents: RepoContents, repo_path: str) -> Generator[RepoDiffs, None, None]:
+    for obj_path, props in contents.fsobjects:
+        if isinstance(props, RepoFileProps):
+            yield FileNotInFilesystem(obj_path, props)
+        elif isinstance(props, DirProps):
+            yield DirNotInFilesystem(obj_path, props)
+        else:
+            raise ValueError(f"invalid props type: {type(props)}")
+
+    for dirpath_s, dirnames, filenames in walk_repo(repo_path):
+        dirpath = pathlib.Path(dirpath_s)
+        for filename in filenames:
+            file_path_full = dirpath.joinpath(filename)
+
+            file_path_local = file_path_full.relative_to(repo_path).as_posix()
+            logging.info(f"Checking {file_path_local} for existence...")
+            if file_path_local in contents.fsobjects:  # file is already in index
+                logging.info(f"File is in contents, checking size and mtime.")
+                props = contents.fsobjects[file_path_local]
+                assert isinstance(props, RepoFileProps)
+
+                mtime = os.path.getmtime(file_path_full.as_posix())
+                size = os.path.getsize(file_path_full.as_posix())
+                if props.mtime == mtime and props.size == size:
+                    logging.info("File is same!")
+                    yield RepoFileWeakSame(file_path_local, props)
+                else:
+                    yield RepoFileDifferent(file_path_local, props, mtime, size)
+            else:
+                yield FileNotInRepo(file_path_local)
+        for dirname in dirnames:
+            dir_path_full = dirpath.joinpath(dirname)
+            dir_path_in_local = dir_path_full.relative_to(repo_path).as_posix()
+            if dir_path_in_local in contents.fsobjects:
+                props = contents.fsobjects[dir_path_in_local]
+                assert isinstance(props, DirProps)
+                yield DirIsSameInRepo(dir_path_in_local, props)
+            else:
+                yield DirNotInRepo(dir_path_in_local)
