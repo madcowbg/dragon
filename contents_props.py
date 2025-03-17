@@ -3,6 +3,12 @@ from typing import Dict, Any, List
 
 
 class RepoFileProps:
+    size: int
+    mtime: float
+    fasthash: str
+
+
+class TOMLRepoFileProps(RepoFileProps):
     def __init__(self, doc: Dict[str, Any]):
         self.doc = doc
 

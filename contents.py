@@ -23,7 +23,6 @@ class HoardContentsConfig:
         return datetime.fromisoformat(self.doc["updated"])
 
 
-
 class FSObjects(abc.ABC):
     @abc.abstractmethod
     def __len__(self) -> int: pass

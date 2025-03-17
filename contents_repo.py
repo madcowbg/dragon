@@ -6,7 +6,7 @@ from typing import Dict, Any, Generator, Tuple, Optional
 import rtoml
 
 from contents import FSObjects, FSObjectProps
-from contents_props import RepoFileProps, DirProps
+from contents_props import RepoFileProps, DirProps, TOMLRepoFileProps
 
 
 class RepoContentsConfig(abc.ABC):
@@ -44,7 +44,7 @@ class TOMLFSObjects(FSObjects):
     def __init__(self, fsobjects_doc: Dict[str, Any]):
         self._doc = fsobjects_doc
         self._objects = dict(
-            (f, RepoFileProps(data) if not data['isdir'] else DirProps(data))
+            (f, TOMLRepoFileProps(data) if not data['isdir'] else DirProps(data))
             for f, data in self._doc.items())
 
     def __len__(self) -> int: return len(self._objects)
@@ -71,7 +71,7 @@ class TOMLFSObjects(FSObjects):
 
     def add_file(self, filepath: str, size: int, mtime: float, fasthash: str) -> None:
         self._doc[filepath] = {"size": size, "mtime": mtime, "isdir": False, "fasthash": fasthash}
-        self._objects[filepath] = RepoFileProps(self._doc[filepath])
+        self._objects[filepath] = TOMLRepoFileProps(self._doc[filepath])
 
     def add_dir(self, dirpath):
         self._doc[dirpath] = {"isdir": True}
