@@ -2,7 +2,7 @@ import abc
 import os
 import sqlite3
 from datetime import datetime
-from sqlite3 import Connection, Cursor
+from sqlite3 import Connection, Cursor, Row
 from typing import Dict, Any, Generator, Tuple, Optional
 
 import rtoml
@@ -200,25 +200,29 @@ class SQLFSObjects(FSObjects):
     def __len__(self) -> int:
         return self._first_value_cursor().execute("SELECT count(1) FROM fsobject").fetchone()
 
-    def __getitem__(self, file_path: str) -> FSObjectProps:
-        fullpath, isdir, size, mtime, fasthash = self.parent.conn.execute(
-            "SELECT fullpath, isdir, size, mtime, fasthash "
-            "FROM fsobject "
-            "WHERE fsobject.fullpath = ? ",
-            (file_path,)).fetchone()
+    @staticmethod
+    def _create_fsobjectprops(cursor: Cursor, row: Row) -> Tuple[str, FSObjectProps]:
+        fullpath, isdir, size, mtime, fasthash = row
+
         if isdir:
-            return DirProps({})
+            return fullpath, DirProps({})
         else:
-            return RepoFileProps({"size": size, "mtime": mtime, "fasthash": fasthash})
+            return fullpath, RepoFileProps({"size": size, "mtime": mtime, "fasthash": fasthash})
+
+    def __getitem__(self, file_path: str) -> FSObjectProps:
+        curr = self.parent.conn.cursor()
+        curr.row_factory = SQLFSObjects._create_fsobjectprops
+
+        _, props = curr.execute(
+            "SELECT fullpath, isdir, size, mtime, fasthash FROM fsobject WHERE fsobject.fullpath = ?",
+            (file_path,)).fetchone()
+        return props
 
     def __iter__(self) -> Generator[Tuple[str, FSObjectProps], None, None]:
-        for fullpath, isdir, size, mtime, fasthash in self.parent.conn.execute(
-                "SELECT fullpath, isdir, size, mtime, fasthash FROM fsobject "):
+        curr = self.parent.conn.cursor()
+        curr.row_factory = SQLFSObjects._create_fsobjectprops
 
-            if isdir:
-                yield fullpath, DirProps({})
-            else:
-                yield fullpath, RepoFileProps({"size": size, "mtime": mtime, "fasthash": fasthash})
+        yield from curr.execute("SELECT fullpath, isdir, size, mtime, fasthash FROM fsobject")
 
     def __contains__(self, file_path: str) -> bool:
         return self._first_value_cursor().execute(
