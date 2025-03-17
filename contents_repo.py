@@ -2,12 +2,13 @@ import abc
 import os
 import sqlite3
 from datetime import datetime
-from sqlite3 import Connection
+from sqlite3 import Connection, Cursor
 from typing import Dict, Any, Generator, Tuple, Optional
 
 import rtoml
 
-from contents_props import RepoFileProps, DirProps, TOMLRepoFileProps, FSObjectProps
+from util import FIRST_VALUE
+from contents_props import RepoFileProps, DirProps, RepoFileProps, FSObjectProps
 
 
 class RepoContentsConfig(abc.ABC):
@@ -77,7 +78,7 @@ class TOMLFSObjects(FSObjects):
     def __init__(self, fsobjects_doc: Dict[str, Any]):
         self._doc = fsobjects_doc
         self._objects = dict(
-            (f, TOMLRepoFileProps(data) if not data['isdir'] else DirProps(data))
+            (f, RepoFileProps(data) if not data['isdir'] else DirProps(data))
             for f, data in self._doc.items())
 
     def __len__(self) -> int: return len(self._objects)
@@ -104,7 +105,7 @@ class TOMLFSObjects(FSObjects):
 
     def add_file(self, filepath: str, size: int, mtime: float, fasthash: str) -> None:
         self._doc[filepath] = {"size": size, "mtime": mtime, "isdir": False, "fasthash": fasthash}
-        self._objects[filepath] = TOMLRepoFileProps(self._doc[filepath])
+        self._objects[filepath] = RepoFileProps(self._doc[filepath])
 
     def add_dir(self, dirpath):
         self._doc[dirpath] = {"isdir": True}
@@ -175,28 +176,29 @@ class TOMLRepoContents(RepoContents):
             }, f)
 
 
-def get_singular_value(conn: Connection, stmt: str) -> Any:
-    return conn.execute(stmt).fetchone()[0]
-
-
 class SQLFSObjects(FSObjects):
     def __init__(self, parent: "SQLRepoContents"):
         self.parent = parent
 
     @property
     def num_files(self) -> int:
-        return get_singular_value(self.parent.conn, "SELECT count(1) FROM fsobject WHERE isdir=FALSE")
+        return self._first_value_cursor().execute("SELECT count(1) FROM fsobject WHERE isdir=FALSE").fetchone()
+
+    def _first_value_cursor(self):
+        curr = self.parent.conn.cursor()
+        curr.row_factory = FIRST_VALUE
+        return curr
 
     @property
     def num_dirs(self) -> int:
-        return get_singular_value(self.parent.conn, "SELECT count(1) FROM fsobject WHERE isdir=TRUE")
+        return self._first_value_cursor().execute("SELECT count(1) FROM fsobject WHERE isdir=TRUE").fetchone()
 
     @property
     def total_size(self) -> int:
-        return get_singular_value(self.parent.conn, "SELECT sum(size) FROM fsobject WHERE isdir=FALSE")
+        return self._first_value_cursor().execute("SELECT sum(size) FROM fsobject WHERE isdir=FALSE").fetchone()
 
     def __len__(self) -> int:
-        return get_singular_value(self.parent.conn, "SELECT count(1) FROM fsobject")
+        return self._first_value_cursor().execute("SELECT count(1) FROM fsobject").fetchone()
 
     def __getitem__(self, file_path: str) -> FSObjectProps:
         fullpath, isdir, size, mtime, fasthash = self.parent.conn.execute(
@@ -207,7 +209,7 @@ class SQLFSObjects(FSObjects):
         if isdir:
             return DirProps({})
         else:
-            return TOMLRepoFileProps({"size": size, "mtime": mtime, "fasthash": fasthash})
+            return RepoFileProps({"size": size, "mtime": mtime, "fasthash": fasthash})
 
     def __iter__(self) -> Generator[Tuple[str, FSObjectProps], None, None]:
         for fullpath, isdir, size, mtime, fasthash in self.parent.conn.execute(
@@ -216,12 +218,12 @@ class SQLFSObjects(FSObjects):
             if isdir:
                 yield fullpath, DirProps({})
             else:
-                yield fullpath, TOMLRepoFileProps({"size": size, "mtime": mtime, "fasthash": fasthash})
+                yield fullpath, RepoFileProps({"size": size, "mtime": mtime, "fasthash": fasthash})
 
     def __contains__(self, file_path: str) -> bool:
-        return self.parent.conn.execute(
+        return self._first_value_cursor().execute(
             "SELECT count(1) FROM fsobject WHERE fsobject.fullpath = ?",
-            (file_path,)).fetchone()[0] > 0
+            (file_path,)).fetchone() > 0
 
     def add_file(self, filepath: str, size: int, mtime: float, fasthash: str) -> None:
         self.parent.conn.execute(
@@ -244,19 +246,24 @@ class SQLRepoContentsConfig(RepoContentsConfig):
 
     @property
     def updated(self) -> datetime:
-        return datetime.fromisoformat(self.parent.conn.execute("SELECT updated FROM config").fetchone()[0])
+        return datetime.fromisoformat(self._first_value_cursor().execute("SELECT updated FROM config").fetchone())
 
     @property
     def uuid(self) -> str:
-        return self.parent.conn.execute("SELECT uuid FROM config").fetchone()[0]
+        return self._first_value_cursor().execute("SELECT uuid FROM config").fetchone()
 
     @property
     def epoch(self) -> int:
-        return self.parent.conn.execute("SELECT epoch FROM config").fetchone()[0]
+        return self._first_value_cursor().execute("SELECT epoch FROM config").fetchone()
 
     def bump_epoch(self):
         self.parent.conn.execute("UPDATE config SET epoch = (SELECT MAX(epoch) FROM config) + 1")
         self.parent.conn.commit()
+
+    def _first_value_cursor(self) -> Cursor:
+        curr = self.parent.conn.cursor()
+        curr.row_factory = FIRST_VALUE
+        return curr
 
 
 class SQLRepoContents(RepoContents):

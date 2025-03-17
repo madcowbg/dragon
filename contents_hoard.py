@@ -12,7 +12,7 @@ import rtoml
 
 from contents_props import RepoFileProps, DirProps, FileStatus, HoardFileProps, FSObjectProps, TOMLHoardFileProps, \
     SQLHoardFileProps
-from contents_repo import get_singular_value
+from util import FIRST_VALUE
 
 
 class HoardContentsConfig:
@@ -33,7 +33,9 @@ class SQLHoardContentsConfig(HoardContentsConfig):
 
     @property
     def updated(self) -> datetime:
-        return datetime.fromisoformat(self.parent.conn.execute("SELECT updated FROM config").fetchone()[0])
+        curr = self.parent.conn.cursor()
+        curr.row_factory = FIRST_VALUE
+        return datetime.fromisoformat(curr.execute("SELECT updated FROM config").fetchone())
 
 
 class TOMLHoardContentsConfig(HoardContentsConfig):
@@ -290,18 +292,26 @@ class SQLHoardFSObjects(HoardFSObjects):
 
     @property
     def num_files(self) -> int:
-        return get_singular_value(self.parent.conn, "SELECT count(1) FROM fsobject WHERE isdir=FALSE")
+        curr = self.parent.conn.cursor()
+        curr.row_factory = FIRST_VALUE
+        return curr.execute("SELECT count(1) FROM fsobject WHERE isdir=FALSE").fetchone()
 
     @property
     def num_dirs(self) -> int:
-        return get_singular_value(self.parent.conn, "SELECT count(1) FROM fsobject WHERE isdir=TRUE")
+        curr = self.parent.conn.cursor()
+        curr.row_factory = FIRST_VALUE
+        return curr.execute("SELECT count(1) FROM fsobject WHERE isdir=TRUE").fetchone()
 
     @property
     def total_size(self) -> int:
-        return get_singular_value(self.parent.conn, "SELECT sum(size) FROM fsobject WHERE isdir=FALSE")
+        curr = self.parent.conn.cursor()
+        curr.row_factory = FIRST_VALUE
+        return curr.execute("SELECT sum(size) FROM fsobject WHERE isdir=FALSE").fetchone()
 
     def __len__(self) -> int:
-        return get_singular_value(self.parent.conn, "SELECT count(1) FROM fsobject")
+        curr = self.parent.conn.cursor()
+        curr.row_factory = FIRST_VALUE
+        return curr.execute("SELECT count(1) FROM fsobject").fetchone()
 
     def __getitem__(self, file_path: str) -> FSObjectProps:
         fsobject_id, isdir = self.parent.conn.execute(
@@ -340,50 +350,62 @@ class SQLHoardFSObjects(HoardFSObjects):
             yield fullpath, SQLHoardFileProps(self.parent, fsobject_id)
 
     def __contains__(self, file_path: str) -> bool:
-        return self.parent.conn.execute(
-            "SELECT count(1) FROM fsobject WHERE fsobject.fullpath = ?",
-            (file_path,)).fetchone()[0] > 0
+        curr = self._first_value_curr()
+        return curr.execute(
+            "SELECT count(1) > 0 FROM fsobject WHERE fsobject.fullpath = ?",
+            (file_path,)).fetchone()
 
     def add_new_file(
             self, filepath: str, props: RepoFileProps,
             current_uuid: str, repos_to_add_new_files: List[str]) -> HoardFileProps:
+        curr = self.parent.conn.cursor()
+        curr.row_factory = FIRST_VALUE
+
         # add fsobject entry
         self.parent.conn.execute(
             "INSERT OR REPLACE INTO fsobject(fullpath, isdir, size, fasthash) VALUES (?, FALSE, ?, ?)",
             (filepath, props.size, props.fasthash))
 
-        fsobject_id: int = self.parent.conn.execute(
-            "SELECT fsobject_id FROM fsobject WHERE fullpath = ?", (filepath,)).fetchone()[0]
+        fsobject_id: int = curr.execute(
+            "SELECT fsobject_id FROM fsobject WHERE fullpath = ?", (filepath,)).fetchone()
 
         # add status for new repos
-        self.parent.conn.execute("DELETE FROM fspresence WHERE fsobject_id = ?", (fsobject_id,))
-        self.parent.conn.executemany(
+        curr.execute("DELETE FROM fspresence WHERE fsobject_id = ?", (fsobject_id,))
+        curr.executemany(
             "INSERT INTO fspresence(fsobject_id, uuid, status) VALUES (?, ?, ?)",
             [(fsobject_id, uuid, FileStatus.GET.value) for uuid in repos_to_add_new_files])
 
         # set status here
-        self.parent.conn.execute(
+        curr.execute(
             "INSERT OR REPLACE INTO fspresence(fsobject_id, uuid, status) VALUES (?, ?, ?)",
             (fsobject_id, current_uuid, FileStatus.AVAILABLE.value))
 
         return SQLHoardFileProps(self.parent, fsobject_id)
 
+    def _first_value_curr(self):
+        curr = self.parent.conn.cursor()
+        curr.row_factory = FIRST_VALUE
+        return curr
+
     def add_dir(self, curr_dir: str):
+        curr = self._first_value_curr()
+
         # add fsobject entry
-        self.parent.conn.execute(
+        curr.execute(
             "INSERT OR REPLACE INTO fsobject(fullpath, isdir) VALUES (?, TRUE)",
             (curr_dir,))
-        fsobject_id: int = self.parent.conn.execute(
-            "SELECT fsobject_id FROM fsobject WHERE fullpath = ?", (curr_dir,)).fetchone()[0]
-        self.parent.conn.execute("DELETE FROM fspresence WHERE fsobject_id = ?", (fsobject_id,))
+        fsobject_id: int = curr.execute(
+            "SELECT fsobject_id FROM fsobject WHERE fullpath = ?", (curr_dir,)).fetchone()
+        curr.execute("DELETE FROM fspresence WHERE fsobject_id = ?", (fsobject_id,))
 
     def delete(self, curr_path: str):
-        fsobject_id: List[int] = self.parent.conn.execute(
+        curr = self._first_value_curr()
+        fsobject_id: Optional[int] = curr.execute(
             "SELECT fsobject_id FROM fsobject WHERE fullpath = ?", (curr_path,)).fetchone()
         if fsobject_id is None:
             return
-        self.parent.conn.execute("DELETE FROM fsobject WHERE fullpath = ?", (curr_path,))
-        self.parent.conn.execute("DELETE FROM fspresence WHERE fsobject_id = ?", (fsobject_id[0],))
+        curr.execute("DELETE FROM fsobject WHERE fullpath = ?", (curr_path,))
+        curr.execute("DELETE FROM fspresence WHERE fsobject_id = ?", (fsobject_id,))
 
     def move(self, orig_path: str, new_path: str, props: DirProps | HoardFileProps):
         assert orig_path != new_path
@@ -392,22 +414,25 @@ class SQLHoardFSObjects(HoardFSObjects):
         # delete whatever new_path had
         self.delete(new_path)
 
+        curr = self.parent.conn.cursor()
+        curr.row_factory = FIRST_VALUE
+
         if isinstance(props, HoardFileProps):
             # add fsobject entry
-            self.parent.conn.execute(
+            curr.execute(
                 "INSERT OR REPLACE INTO fsobject(fullpath, isdir, size, fasthash) VALUES (?, FALSE, ?, ?)",
                 (new_path, props.size, props.fasthash))
 
             # add old presence
-            new_path_id: int = self.parent.conn.execute(
+            new_path_id: int = curr.execute(
                 "SELECT fsobject_id FROM fsobject WHERE fullpath = ?",
-                (new_path,)).fetchone()[0]
-            self.parent.conn.executemany(
+                (new_path,)).fetchone()
+            curr.executemany(
                 "INSERT INTO fspresence(fsobject_id, uuid, status) VALUES (?, ?, ?)",
                 [(new_path_id, uuid, status.value) for uuid, status in props.presence.items()])
         else:
             assert isinstance(props, DirProps)
-            self.parent.conn.execute(
+            curr.execute(
                 "INSERT OR REPLACE INTO fsobject(fullpath, isdir) VALUES (?, TRUE)",
                 (new_path,))
 
@@ -418,18 +443,21 @@ class SQLHoardFSObjects(HoardFSObjects):
 
         self.delete(to_fullpath)
 
+        curr = self.parent.conn.cursor()
+        curr.row_factory = FIRST_VALUE
+
         props = self[from_fullpath]
         if isinstance(props, HoardFileProps):
             # add fsobject entry
-            self.parent.conn.execute(
+            curr.execute(
                 "INSERT OR REPLACE INTO fsobject(fullpath, isdir, size, fasthash) VALUES (?, FALSE, ?, ?)",
                 (to_fullpath, props.size, props.fasthash))
 
             # add presence tp request
-            new_path_id: int = self.parent.conn.execute(
+            new_path_id: int = curr.execute(
                 "SELECT fsobject_id FROM fsobject WHERE fullpath = ?",
-                (to_fullpath,)).fetchone()[0]
-            self.parent.conn.executemany(
+                (to_fullpath,)).fetchone()
+            curr.executemany(
                 "INSERT INTO fspresence(fsobject_id, uuid, status) VALUES (?, ?, ?)",
                 [(new_path_id, uuid, FileStatus.COPY.value) for uuid in props.status_to_copy()])
         elif isinstance(props, DirProps):
@@ -591,11 +619,14 @@ class SQLHoardContents(HoardContents):
         self.conn.commit()
 
     def epoch(self, remote_uuid: str) -> int:
-        result = self.conn.execute("SELECT epoch FROM epoch WHERE uuid = ?", (remote_uuid,)).fetchone()
-        return result[0] if result is not None else -1
+        curr = self.conn.cursor()
+        curr.row_factory = FIRST_VALUE
+        result = curr.execute("SELECT epoch FROM epoch WHERE uuid = ?", (remote_uuid,)).fetchone()
+        return result if result is not None else -1
 
     def set_epoch(self, remote_uuid: str, epoch: int):
-        self.conn.execute(
+        curr = self.conn.cursor()
+        curr.execute(
             "INSERT OR REPLACE INTO epoch(uuid, epoch) VALUES (?, ?)",
             (remote_uuid, epoch))
         self.conn.commit()

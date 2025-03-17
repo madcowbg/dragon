@@ -1,5 +1,6 @@
 import asyncio
 from asyncio import Queue, TaskGroup
+from sqlite3 import Cursor, Row
 from typing import List, Tuple, Any, Callable, Coroutine, Dict, TypeVar
 
 
@@ -52,3 +53,6 @@ def run_async_in_parallel(
     asyncio.run(run_all())
 
     return [v for i, v in sorted(result_per_invocation.items())]
+
+
+FIRST_VALUE: Callable[[Cursor, Row], Any] = lambda cursor, row: row[0] if row is not None else None
