@@ -1,3 +1,4 @@
+import abc
 import logging
 import os
 import pathlib
@@ -11,6 +12,15 @@ from contents_props import RepoFileProps, DirProps, FileStatus, HoardFileProps, 
 
 
 class HoardContentsConfig:
+    @abc.abstractmethod
+    def touch_updated(self) -> None: pass
+
+    @property
+    @abc.abstractmethod
+    def updated(self) -> datetime: pass
+
+
+class TOMLHoardContentsConfig(HoardContentsConfig):
     def __init__(self, config_doc: Dict[str, Any]):
         self.doc = config_doc
 
@@ -112,6 +122,49 @@ class HoardDir:
 
 
 class HoardFSObjects:
+    @abc.abstractmethod
+    def __len__(self): pass
+
+    @abc.abstractmethod
+    def __getitem__(self, key: str) -> FSObjectProps: pass
+
+    @abc.abstractmethod
+    def __iter__(self) -> Generator[Tuple[str, FSObjectProps], None, None]: pass
+
+    @abc.abstractmethod
+    def __contains__(self, item: str) -> bool: pass
+
+    @abc.abstractmethod
+    def add_new_file(
+            self, filepath: str, props: RepoFileProps,
+            current_uuid: str, repos_to_add_new_files: List[str]) -> HoardFileProps: pass
+
+    @abc.abstractmethod
+    def add_dir(self, curr_dir: str): pass
+
+    @abc.abstractmethod
+    def delete(self, curr_path: str): pass
+
+    @abc.abstractmethod
+    def move(self, orig_path: str, new_path: str, props: DirProps | HoardFileProps): pass
+
+    @abc.abstractmethod
+    def copy(self, from_fullpath: str, to_fullpath: str): pass
+
+    @property
+    @abc.abstractmethod
+    def num_files(self): pass
+
+    @property
+    @abc.abstractmethod
+    def num_dirs(self): pass
+
+    @property
+    @abc.abstractmethod
+    def total_size(self) -> int: pass
+
+
+class TOMLHoardFSObjects(HoardFSObjects):
     tree: HoardTree
 
     def __init__(self, doc: Dict[str, Any]):
@@ -196,6 +249,30 @@ class HoardFSObjects:
 
 
 class HoardContents:
+    config: HoardContentsConfig
+    fsobjects: HoardFSObjects
+
+    @staticmethod
+    def load(filename: str, write_on_close: bool = True) -> "HoardContents":
+        return TOMLHoardContents.load(filename, write_on_close)
+
+    @abc.abstractmethod
+    def __enter__(self) -> "HoardContents": pass
+
+    @abc.abstractmethod
+    def __exit__(self, exc_type, exc_val, exc_tb) -> bool: pass
+
+    @abc.abstractmethod
+    def write(self): pass
+
+    @abc.abstractmethod
+    def epoch(self, remote_uuid: str) -> int: pass
+
+    @abc.abstractmethod
+    def set_epoch(self, remote_uuid: str, epoch: int): pass
+
+
+class TOMLHoardContents(HoardContents):
     @staticmethod
     def load(filename: str, write_on_close: bool = True) -> "HoardContents":
         if not os.path.isfile(filename):
@@ -206,7 +283,7 @@ class HoardContents:
                     "epochs": {},
                     "fsobjects": {},
                 }, f)
-        return HoardContents(filename, write_on_close)
+        return TOMLHoardContents(filename, write_on_close)
 
     def __init__(self, filepath: str, write_on_close: bool):
         self.filepath = filepath
@@ -220,8 +297,8 @@ class HoardContents:
         with open(self.filepath, "r", encoding="utf-8") as f:
             contents_doc = rtoml.load(f)
 
-        self.config = HoardContentsConfig(contents_doc["config"] if "config" in contents_doc else {})
-        self.fsobjects = HoardFSObjects(contents_doc["fsobjects"] if "fsobjects" in contents_doc else {})
+        self.config = TOMLHoardContentsConfig(contents_doc["config"] if "config" in contents_doc else {})
+        self.fsobjects = TOMLHoardFSObjects(contents_doc["fsobjects"] if "fsobjects" in contents_doc else {})
         self.epochs = contents_doc["epochs"] if "epochs" in contents_doc else {}
 
         return self
