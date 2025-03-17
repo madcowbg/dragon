@@ -217,6 +217,26 @@ class TestRepoCommand(unittest.TestCase):
             " in repo: 1\n"
             " deleted: 0 (0.0%)\n", res)
 
+        # touch file without changing contents, will assume a change if we skip integrity checks
+        pathlib.Path(join(self.tmpdir.name, "repo/wat/test.me.once")).touch()
+        res = cave_cmd.status(skip_integrity_checks=True)
+        self.assertEqual(
+            f"{cave_cmd.current_uuid()}:\n"
+            "files:\n"
+            "    same: 1 (33.3%)\n"
+            "     mod: 1 (33.3%)\n"
+            "     new: 1 (33.3%)\n"
+            " current: 3\n"
+            " in repo: 3\n"
+            " deleted: 1 (33.3%)\n"
+            "dirs:\n"
+            "    same: 1\n"
+            "     new: 1 (50.0%)\n"
+            " current: 2\n"
+            " in repo: 1\n"
+            " deleted: 0 (0.0%)\n", res)
+
+
         # as is not refreshed, no change in status
         self.assertEqual(f"Status of {repo_uuid}:\nDF /wat\nDONE", hoard_cmd.status("repo-in-local").strip())
 
