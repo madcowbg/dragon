@@ -846,6 +846,75 @@ class TestRepoCommand(unittest.TestCase):
              'repo-partial/wat/test.me.2',
              'repo-partial/zed/test.me.2'], res)
 
+    def test_restore_missing_local_file_on_refresh(self):
+        populate_repotypes(self.tmpdir.name)
+        hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = self._init_complex_hoard()
+
+        res = hoard_cmd.refresh("repo-partial-name")
+        self.assertEqual("+/test.me.1\n+/wat/test.me.2\nSync'ed repo-partial-name to hoard!", res)
+
+        res = hoard_cmd.refresh("repo-backup-name")
+        self.assertEqual("=/test.me.1\n?/wat/test.me.3\nSync'ed repo-backup-name to hoard!", res)
+
+        self.assertEqual(
+            "/\n"
+            "/test.me.1 = a:2 g:1\n"
+            "/wat\n"
+            "/wat/test.me.2 = a:1 g:2\n"
+            "DONE", hoard_cmd.ls(depth=2))
+
+        res = hoard_cmd.sync_contents("repo-backup-name")
+        self.assertEqual(
+            f"{backup_cave_cmd.current_uuid()}:\n"
+            "+ wat/test.me.2\n"
+            f"{backup_cave_cmd.current_uuid()}:\n"
+            "DONE", res.strip())
+
+        self.assertEqual([
+            'repo-backup/test.me.1',
+            'repo-backup/wat/test.me.2',
+            'repo-backup/wat/test.me.3'], dump_file_list(self.tmpdir.name, 'repo-backup'))
+
+        self.assertEqual(
+            "/\n"
+            "/test.me.1 = a:2 g:1\n"
+            "/wat\n"
+            "/wat/test.me.2 = a:2 g:1\n"
+            "DONE", hoard_cmd.ls(depth=2))
+
+        self.assertEqual([
+            'repo-partial/test.me.1',
+            'repo-partial/wat/test.me.2'],
+            dump_file_list(self.tmpdir.name, 'repo-partial'))
+
+        os.remove(join(self.tmpdir.name, 'repo-partial/wat/test.me.2'))
+
+        res = partial_cave_cmd.refresh()
+        self.assertEqual("Refresh done!", res)
+
+        res = hoard_cmd.refresh("repo-partial-name", force_fetch_local_missing=True)
+        self.assertEqual(
+            "g/wat/test.me.2\n"
+            "Sync'ed repo-partial-name to hoard!", res)
+
+        self.assertEqual(
+            "/\n"
+            "/test.me.1 = a:2 g:1\n"
+            "/wat\n"
+            "/wat/test.me.2 = a:1 g:2\n"
+            "DONE", hoard_cmd.ls(depth=2))
+
+        res = hoard_cmd.sync_contents("repo-partial-name")
+        self.assertEqual(
+            f"{partial_cave_cmd.current_uuid()}:\n"
+            f"+ wat/test.me.2\n"
+            f"{partial_cave_cmd.current_uuid()}:\n"
+            f"DONE", res)
+
+        self.assertEqual(
+            ['repo-partial/test.me.1', 'repo-partial/wat/test.me.2'],
+            dump_file_list(self.tmpdir.name, 'repo-partial'))
+
 
 def dump_file_list(tmpdir: str, path: str) -> List[str]:
     return sorted([

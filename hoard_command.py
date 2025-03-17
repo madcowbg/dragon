@@ -114,11 +114,12 @@ def filter_accessible(pathing: HoardPathing, repos: List[HoardRemote], hoard_fil
 class PartialDiffHandler(DiffHandler):
     def __init__(
             self, remote_uuid: str, hoard: HoardContents, repos_to_add_new_files: List[HoardRemote],
-            fetch_new: bool, pathing: HoardPathing):
+            fetch_new: bool, pathing: HoardPathing, force_fetch_local_missing: bool):
         super().__init__(remote_uuid, hoard)
         self.repos_to_add_new_files = repos_to_add_new_files
         self.fetch_new = fetch_new
         self.pathing = pathing
+        self.force_fetch_local_missing = force_fetch_local_missing
 
     def handle_local_only(self, diff: "FileMissingInHoard", out: StringIO):
         out.write(f"+{diff.hoard_file}\n")
@@ -160,10 +161,16 @@ class PartialDiffHandler(DiffHandler):
             logging.info(f"file had been deleted.")
             diff.hoard_props.remove_status(self.remote_uuid)
         elif goal_status == FileStatus.AVAILABLE:  # file was here, is no longer
-            logging.info(f"deleting file {diff.hoard_file} as is no longer in local")
-            diff.hoard_props.mark_to_delete()
-            diff.hoard_props.remove_status(self.remote_uuid)
-            out.write(f"-{diff.hoard_file}\n")
+            if self.force_fetch_local_missing:
+                logging.info(f"file {diff.hoard_file} is missing, restoring due to --force-fetch-local-missing")
+
+                diff.hoard_props.mark_to_get(self.remote_uuid)
+                out.write(f"g{diff.hoard_file}\n")
+            else:
+                logging.info(f"deleting file {diff.hoard_file} as is no longer in local")
+                diff.hoard_props.mark_to_delete()
+                diff.hoard_props.remove_status(self.remote_uuid)
+                out.write(f"-{diff.hoard_file}\n")
         elif goal_status == FileStatus.GET:
             logging.info(f"file fetch had been scheduled already.")
         elif goal_status == FileStatus.UNKNOWN:
@@ -413,7 +420,7 @@ class HoardCommand(object):
             out.write("DONE\n")
             return out.getvalue()
 
-    def refresh(self, remote: str, ignore_epoch: bool = False):
+    def refresh(self, remote: str, ignore_epoch: bool = False, force_fetch_local_missing: bool = False):
         logging.info("Loading config")
         config = self.config()
 
@@ -430,7 +437,9 @@ class HoardCommand(object):
             if remote_type == CaveType.PARTIAL:
                 remote_op_handler: DiffHandler = PartialDiffHandler(
                     remote_uuid, hoard, repos_to_add_new_files,
-                    config.remotes[remote_uuid].fetch_new, pathing=HoardPathing(config, self.paths()))
+                    config.remotes[remote_uuid].fetch_new,
+                    pathing=HoardPathing(config, self.paths()),
+                    force_fetch_local_missing=force_fetch_local_missing)
             elif remote_type == CaveType.BACKUP:
                 remote_op_handler: DiffHandler = BackupDiffHandler(remote_uuid, hoard)
             elif remote_type == CaveType.INCOMING:
