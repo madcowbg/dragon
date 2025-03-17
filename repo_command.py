@@ -5,14 +5,15 @@ import pathlib
 import uuid
 from io import StringIO
 from os.path import join
-from typing import Generator, Tuple, List
+from typing import Generator, Tuple, List, Dict
 
+import aiofiles.os
 from alive_progress import alive_bar, alive_it
 
 from contents_props import RepoFileProps, DirProps
 from contents_repo import RepoContents
 from hashing import find_hashes, fast_hash
-from util import format_size
+from util import format_size, run_async_in_parallel
 
 CURRENT_UUID_FILENAME = "current.uuid"
 
@@ -92,8 +93,8 @@ class RepoCommand(object):
                     else:
                         logging.info(f"File {diff.filepath} is weakly the same, but still needs checking.")
                         files_to_update.append(pathlib.Path(self.repo).joinpath(diff.filepath).as_posix())
-                elif isinstance(diff, RepoFileDifferent):
-                    logging.info(f"File {diff.filepath} is different, adding to check.")
+                elif isinstance(diff, RepoFileWeakDifferent):
+                    logging.info(f"File {diff.filepath} is weakly different, adding to check.")
                     files_to_update.append(pathlib.Path(self.repo).joinpath(diff.filepath).as_posix())
                 elif isinstance(diff, FileNotInRepo):
                     logging.info(f"File {diff.filepath} not in repo, adding.")
@@ -165,29 +166,38 @@ class RepoCommand(object):
         with RepoContents.load(
                 self._contents_filename(current_uuid),
                 create_for_uuid=current_uuid, write_on_exit=False) as contents:
-            for diff in compute_diffs(contents, self.repo):
-                if isinstance(diff, FileNotInFilesystem):
-                    files_del.append(diff.filepath)
-                elif isinstance(diff, RepoFileWeakSame):
-                    if skip_integrity_checks:
-                        files_same.append(diff.filepath)
-                    else:
-                        if diff.props.fasthash == fast_hash(join(self.repo, diff.filepath)):
+            print("Calculating diffs between repo and filesystem...")
+            with alive_bar(0) as bar:
+                for diff in compute_diffs(contents, self.repo):
+                    if isinstance(diff, FileNotInFilesystem):
+                        files_del.append(diff.filepath)
+                    elif isinstance(diff, RepoFileWeakSame):
+                        if skip_integrity_checks:
                             files_same.append(diff.filepath)
                         else:
+                            if diff.props.fasthash == fast_hash(join(self.repo, diff.filepath)):
+                                files_same.append(diff.filepath)
+                            else:
+                                files_mod.append(diff.filepath)
+                    elif isinstance(diff, RepoFileWeakDifferent):
+                        if skip_integrity_checks:
                             files_mod.append(diff.filepath)
-                elif isinstance(diff, RepoFileDifferent):
-                    files_mod.append(diff.filepath)
-                elif isinstance(diff, FileNotInRepo):
-                    files_new.append(diff.filepath)
-                elif isinstance(diff, DirNotInFilesystem):
-                    dir_deleted.append(diff.dirpath)
-                elif isinstance(diff, DirIsSameInRepo):
-                    dir_same.append(diff.dirpath)
-                elif isinstance(diff, DirNotInRepo):
-                    dir_new.append(diff.dirpath)
-                else:
-                    raise ValueError(f"unknown diff type: {type(diff)}")
+                        else:
+                            if diff.props.fasthash == fast_hash(join(self.repo, diff.filepath)):
+                                files_same.append(diff.filepath)
+                            else:
+                                files_mod.append(diff.filepath)
+                    elif isinstance(diff, FileNotInRepo):
+                        files_new.append(diff.filepath)
+                    elif isinstance(diff, DirNotInFilesystem):
+                        dir_deleted.append(diff.dirpath)
+                    elif isinstance(diff, DirIsSameInRepo):
+                        dir_same.append(diff.dirpath)
+                    elif isinstance(diff, DirNotInRepo):
+                        dir_new.append(diff.dirpath)
+                    else:
+                        raise ValueError(f"unknown diff type: {type(diff)}")
+                    bar()
 
             # assert len(files_same) + len(files_del) + len(files_mod) == contents.fsobjects.num_files
             # assert len(dir_new) + len(dir_same) == contents.fsobjects.num_dirs
@@ -238,7 +248,7 @@ class RepoFileWeakSame:
         self.props = props
 
 
-class RepoFileDifferent:
+class RepoFileWeakDifferent:
     def __init__(self, filepath: str, props: RepoFileProps, mtime: float, size: int):
         self.filepath = filepath
         self.props = props
@@ -264,7 +274,7 @@ class FileNotInRepo:
 
 
 type RepoDiffs = (
-        FileNotInFilesystem | RepoFileWeakSame | RepoFileDifferent | FileNotInRepo
+        FileNotInFilesystem | RepoFileWeakSame | RepoFileWeakDifferent | FileNotInRepo
         | DirNotInFilesystem | DirIsSameInRepo | DirNotInRepo)
 
 
@@ -279,6 +289,7 @@ def compute_diffs(contents: RepoContents, repo_path: str) -> Generator[RepoDiffs
         else:
             raise ValueError(f"invalid props type: {type(props)}")
 
+    file_path_matches: List[str] = list()
     for dirpath_s, dirnames, filenames in walk_repo(repo_path):
         dirpath = pathlib.Path(dirpath_s)
         for filename in filenames:
@@ -287,17 +298,8 @@ def compute_diffs(contents: RepoContents, repo_path: str) -> Generator[RepoDiffs
             file_path_local = file_path_full.relative_to(repo_path).as_posix()
             logging.info(f"Checking {file_path_local} for existence...")
             if file_path_local in contents.fsobjects:  # file is already in index
-                logging.info(f"File is in contents, checking size and mtime.")
-                props = contents.fsobjects[file_path_local]
-                assert isinstance(props, RepoFileProps)
-
-                mtime = os.path.getmtime(file_path_full.as_posix())
-                size = os.path.getsize(file_path_full.as_posix())
-                if props.mtime == mtime and props.size == size:
-                    logging.info("File is same!")
-                    yield RepoFileWeakSame(file_path_local, props)
-                else:
-                    yield RepoFileDifferent(file_path_local, props, mtime, size)
+                logging.info(f"File is in contents, adding to check")  # checking size and mtime.")
+                file_path_matches.append(file_path_full.as_posix())
             else:
                 yield FileNotInRepo(file_path_local)
         for dirname in dirnames:
@@ -309,3 +311,23 @@ def compute_diffs(contents: RepoContents, repo_path: str) -> Generator[RepoDiffs
                 yield DirIsSameInRepo(dir_path_in_local, props)
             else:
                 yield DirNotInRepo(dir_path_in_local)
+
+    print(f"Checking mtime and size for {len(file_path_matches)} files...")
+    async def find_size_mtime_of(file_fullpath: str) -> Tuple[float, int]:
+        stats = await aiofiles.os.stat(file_fullpath)
+        return stats.st_mtime, stats.st_size
+
+    prop_tuples = run_async_in_parallel(
+        [(f,) for f in file_path_matches],
+        find_size_mtime_of)
+    assert len(prop_tuples) == len(file_path_matches)
+
+    for fullpath, (mtime, size) in zip(file_path_matches, prop_tuples):
+        file_path_local = pathlib.Path(fullpath).relative_to(repo_path).as_posix()
+        props = contents.fsobjects[file_path_local]
+
+        if props.mtime == mtime and props.size == size:
+            logging.info("File is same!")
+            yield RepoFileWeakSame(file_path_local, props)
+        else:
+            yield RepoFileWeakDifferent(file_path_local, props, mtime, size)
