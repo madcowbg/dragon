@@ -612,9 +612,9 @@ class HoardCommand(object):
 
             with StringIO() as out:
                 out.write("Moving files and folders:\n")
-                for orig_path, props in hoard.fsobjects:
-                    assert isinstance(props, HoardFileProps) or isinstance(props,
-                                                                           DirProps), f"Unsupported props type: {type(props)}"
+                for orig_path, props in list(hoard.fsobjects):
+                    assert isinstance(props, HoardFileProps) or isinstance(props, DirProps), \
+                        f"Unsupported props type: {type(props)}"
                     current_path = pathlib.Path(orig_path)
                     if current_path.is_relative_to(from_path):
                         rel_path = current_path.relative_to(from_path)

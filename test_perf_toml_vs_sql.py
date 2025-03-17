@@ -9,7 +9,7 @@ from typing import Callable, Dict
 from alive_progress import alive_bar
 
 from contents_hoard import HoardContents, HoardTree
-from contents_props import DirProps, HoardFileProps
+from contents_props import DirProps, HoardFileProps, TOMLHoardFileProps
 
 
 def _create_tables(conn: Connection):
@@ -89,7 +89,7 @@ def _load_fsobjects(conn: Connection):
         # print(f"{fullpath} {isdir} {size} {fasthash} {group_uuid} {group_fspresence}")
 
         if not isdir:
-            _objects[fullpath] = HoardFileProps({
+            _objects[fullpath] = TOMLHoardFileProps({
                 "isdir": isdir, "size": size, "fasthash": fasthash,
                 "status": dict((uuid, state) for uuid, state in zip(group_uuid.split("|"), group_fspresence.split("|")))
             })

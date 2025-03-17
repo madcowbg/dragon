@@ -459,7 +459,13 @@ class TestRepoCommand(unittest.TestCase):
         hoard_cmd.refresh("repo-partial-name")
         hoard_cmd.refresh("repo-full-name")
         hoard_cmd.refresh("repo-backup-name")  # just registers the files already in backup
-        hoard_cmd.refresh("repo-incoming-name")
+        res = hoard_cmd.refresh("repo-incoming-name")
+        self.assertEqual(
+            "-/test.me.4\n"
+            "<+/test.me.5\n"
+            "u/wat/test.me.3\n"
+            "<+/wat/test.me.6\n"
+            "Sync'ed repo-incoming-name to hoard!", res)
 
         res = hoard_cmd.ls(skip_folders=True)
         self.assertEqual(
