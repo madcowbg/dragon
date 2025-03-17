@@ -179,6 +179,15 @@ class HoardFSObjects:
     @abc.abstractmethod
     def total_size(self) -> int: pass
 
+    @abc.abstractmethod
+    def to_fetch(self, repo_uuid: str) -> Generator[Tuple[str, FSObjectProps], None, None]: pass
+
+    @abc.abstractmethod
+    def to_cleanup(self, repo_uuid: str) -> Generator[Tuple[str, FSObjectProps], None, None]: pass
+
+
+STATUSES_TO_FETCH = [FileStatus.COPY.value, FileStatus.GET.value]
+
 
 class TOMLHoardFSObjects(HoardFSObjects):
     tree: HoardTree
@@ -197,6 +206,16 @@ class TOMLHoardFSObjects(HoardFSObjects):
 
     def __iter__(self) -> Generator[Tuple[str, FSObjectProps], None, None]:
         yield from self._objects.copy().items()
+
+    def to_fetch(self, repo_uuid: str) -> Generator[Tuple[str, FSObjectProps], None, None]:
+        for f, props in self:
+            if isinstance(props, HoardFileProps) and props.status(repo_uuid).value in STATUSES_TO_FETCH:
+                yield f, props
+
+    def to_cleanup(self, repo_uuid: str) -> Generator[Tuple[str, FSObjectProps], None, None]:
+        for f, props in self:
+            if isinstance(props, HoardFileProps) and props.status(repo_uuid) == FileStatus.CLEANUP:
+                yield f, props
 
     def __contains__(self, item: str) -> bool:
         return item in self._objects
@@ -297,11 +316,28 @@ class SQLHoardFSObjects(HoardFSObjects):
             return SQLHoardFileProps(self.parent, fsobject_id)
 
     def __iter__(self) -> Generator[Tuple[str, FSObjectProps], None, None]:  # fixme maybe optimize to create directly?
-        for fsobject_id, fullpath, isdir in self.parent.conn.execute("SELECT fsobject_id, fullpath, isdir FROM fsobject"):
+        for fsobject_id, fullpath, isdir in self.parent.conn.execute(
+                "SELECT fsobject_id, fullpath, isdir FROM fsobject"):
             if isdir:
                 yield fullpath, DirProps({})
             else:
                 yield fullpath, SQLHoardFileProps(self.parent, fsobject_id)
+
+    def to_fetch(self, repo_uuid: str) -> Generator[Tuple[str, FSObjectProps], None, None]:
+        for fsobject_id, fullpath, isdir in self.parent.conn.execute(
+                "SELECT fsobject.fsobject_id, fullpath, isdir "
+                "FROM fsobject JOIN fspresence on fsobject.fsobject_id = fspresence.fsobject_id "
+                "WHERE fspresence.uuid = ? and fspresence.status in (?, ?)", (repo_uuid, *STATUSES_TO_FETCH)):
+            assert not isdir
+            yield fullpath, SQLHoardFileProps(self.parent, fsobject_id)
+
+    def to_cleanup(self, repo_uuid: str) -> Generator[Tuple[str, FSObjectProps], None, None]:
+        for fsobject_id, fullpath, isdir in self.parent.conn.execute(
+                "SELECT fsobject.fsobject_id, fullpath, isdir "
+                "FROM fsobject JOIN fspresence on fsobject.fsobject_id = fspresence.fsobject_id "
+                "WHERE fspresence.uuid = ? and fspresence.status = ?", (repo_uuid, FileStatus.CLEANUP.value)):
+            assert not isdir
+            yield fullpath, SQLHoardFileProps(self.parent, fsobject_id)
 
     def __contains__(self, file_path: str) -> bool:
         return self.parent.conn.execute(

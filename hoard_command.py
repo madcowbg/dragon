@@ -8,7 +8,7 @@ from io import StringIO
 from itertools import groupby
 from typing import Dict, Generator, List, Optional
 
-from alive_progress import alive_bar
+from alive_progress import alive_bar, alive_it
 
 from config import HoardRemote, HoardConfig, CavePath, HoardPaths, CaveType
 from contents_hoard import HoardContents, HoardFile, HoardDir
@@ -687,18 +687,22 @@ class HoardCommand(object):
                 for repo_uuid in repo_uuids:
                     print(f"fetching for {config.remotes[repo_uuid].name}")
                     out.write(f"{repo_uuid}:\n")
-                    with alive_bar(len(hoard.fsobjects)) as bar:  # fixme do it over only files to copy!
-                        for hoard_file, hoard_props in sorted(hoard.fsobjects):
-                            bar()
-                            if not isinstance(hoard_props, HoardFileProps):
-                                continue
+
+                    files_to_fetch = sorted(hoard.fsobjects.to_fetch(repo_uuid))
+
+                    def to_mb(size: int) -> int:
+                        return size // (1 << 20)
+
+                    with alive_bar(to_mb(sum(f[1].size for f in files_to_fetch)), unit="MB") as bar:
+                        for hoard_file, hoard_props in files_to_fetch:
+                            assert isinstance(hoard_props, HoardFileProps)
 
                             goal_status = hoard_props.status(repo_uuid)
-                            if goal_status == FileStatus.AVAILABLE or goal_status == FileStatus.CLEANUP:
-                                pass  # nothing to do with gotten or files for cleanup
-                            elif goal_status == FileStatus.UNKNOWN:
-                                pass  # skipping files without goal
-                            elif goal_status == FileStatus.COPY:
+                            assert goal_status != FileStatus.AVAILABLE
+                            assert goal_status != FileStatus.CLEANUP
+                            assert goal_status != FileStatus.UNKNOWN
+
+                            if goal_status == FileStatus.COPY:
                                 candidates_to_copy = files_to_copy.get(hoard_props.fasthash, [])
                                 logging.info(f"# of candidates to copy: {len(candidates_to_copy)}")
 
@@ -728,6 +732,7 @@ class HoardCommand(object):
                                     logging.error("error restoring file!")
                             else:
                                 raise ValueError(f"Unexpected status {goal_status.value}")
+                            bar(to_mb(hoard_props.size))
 
                 logging.info("Writing hoard file...")
                 hoard.write()
@@ -741,20 +746,18 @@ class HoardCommand(object):
                     print(f"cleaning repo {config.remotes[repo_uuid].name}")
                     out.write(f"{repo_uuid}:\n")
 
-                    with alive_bar(len(hoard.fsobjects)) as bar:  # fixme do it over only files to cleanup!
-                        for hoard_file, hoard_props in sorted(hoard.fsobjects):
-                            bar()
-
-                            if not isinstance(hoard_props, HoardFileProps):
-                                continue
+                    files_to_cleanup = sorted(hoard.fsobjects.to_cleanup(repo_uuid))
+                    with alive_bar(to_mb(sum(f[1].size for f in files_to_cleanup)), unit="MB") as bar:
+                        for hoard_file, hoard_props in files_to_cleanup:
+                            assert isinstance(hoard_props, HoardFileProps)
 
                             goal_status = hoard_props.status(repo_uuid)
 
-                            if goal_status == FileStatus.AVAILABLE or goal_status == FileStatus.GET:
-                                pass  # nothing to do with available or files to get
-                            elif goal_status == FileStatus.UNKNOWN:
-                                pass  # nothing to do with files not known to the repo
-                            elif goal_status == FileStatus.CLEANUP:
+                            assert goal_status != FileStatus.AVAILABLE
+                            assert goal_status != FileStatus.GET
+                            assert goal_status != FileStatus.UNKNOWN
+
+                            if goal_status == FileStatus.CLEANUP:
                                 to_be_got = hoard_props.by_status(FileStatus.GET)
 
                                 local_path = pathing.in_hoard(hoard_file).at_local(repo_uuid)
@@ -781,6 +784,7 @@ class HoardCommand(object):
                                     out.write(f"~ {local_file_to_delete}\n")
                             else:
                                 raise ValueError(f"Unexpected status {goal_status.value}")
+                            bar(to_mb(hoard_props.size))
                 out.write("DONE")
                 return out.getvalue()
 
