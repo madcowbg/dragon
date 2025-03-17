@@ -1,6 +1,8 @@
 import abc
 import os
+import sqlite3
 from datetime import datetime
+from sqlite3 import Connection
 from typing import Dict, Any, Generator, Tuple, Optional
 
 import rtoml
@@ -11,6 +13,11 @@ from contents_props import RepoFileProps, DirProps, TOMLRepoFileProps, FSObjectP
 class RepoContentsConfig(abc.ABC):
     uuid: str
     epoch: int
+
+    updated: datetime
+
+    @abc.abstractmethod
+    def touch_updated(self) -> None: pass
 
     @abc.abstractmethod
     def bump_epoch(self): pass
@@ -120,7 +127,8 @@ class RepoContents(abc.ABC):
 
     @staticmethod
     def load(filepath: str, create_for_uuid: Optional[str] = None, write_on_exit: bool = True):
-        return TOMLRepoContents.load(filepath, create_for_uuid, write_on_exit)
+        # return TOMLRepoContents.load(filepath, create_for_uuid, write_on_exit)
+        return SQLRepoContents.load(filepath, create_for_uuid)
 
 
 class TOMLRepoContents(RepoContents):
@@ -165,3 +173,145 @@ class TOMLRepoContents(RepoContents):
                 "config": self.config.doc,
                 "fsobjects": self.fsobjects._doc
             }, f)
+
+
+def get_singular_value(conn: Connection, stmt: str) -> Any:
+    return conn.execute(stmt).fetchone()[0]
+
+
+class SQLFSObjects(FSObjects):
+    def __init__(self, parent: "SQLRepoContents"):
+        self.parent = parent
+
+    @property
+    def num_files(self) -> int:
+        return get_singular_value(self.parent.conn, "SELECT count(1) FROM fsobject WHERE isdir=FALSE")
+
+    @property
+    def num_dirs(self) -> int:
+        return get_singular_value(self.parent.conn, "SELECT count(1) FROM fsobject WHERE isdir=TRUE")
+
+    @property
+    def total_size(self) -> int:
+        return get_singular_value(self.parent.conn, "SELECT sum(size) FROM fsobject WHERE isdir=FALSE")
+
+    def __len__(self) -> int:
+        return get_singular_value(self.parent.conn, "SELECT count(1) FROM fsobject")
+
+    def __getitem__(self, file_path: str) -> FSObjectProps:
+        fullpath, isdir, size, mtime, fasthash = self.parent.conn.execute(
+            "SELECT fullpath, isdir, size, mtime, fasthash "
+            "FROM fsobject "
+            "WHERE fsobject.fullpath = ? ",
+            (file_path,)).fetchone()
+        if isdir:
+            return DirProps({})
+        else:
+            return TOMLRepoFileProps({"size": size, "mtime": mtime, "fasthash": fasthash})
+
+    def __iter__(self) -> Generator[Tuple[str, FSObjectProps], None, None]:
+        for fullpath, isdir, size, mtime, fasthash in self.parent.conn.execute(
+                "SELECT fullpath, isdir, size, mtime, fasthash FROM fsobject "):
+
+            if isdir:
+                yield fullpath, DirProps({})
+            else:
+                yield fullpath, TOMLRepoFileProps({"size": size, "mtime": mtime, "fasthash": fasthash})
+
+    def __contains__(self, file_path: str) -> bool:
+        return self.parent.conn.execute(
+            "SELECT count(1) FROM fsobject WHERE fsobject.fullpath = ?",
+            (file_path,)).fetchone()[0] > 0
+
+    def add_file(self, filepath: str, size: int, mtime: float, fasthash: str) -> None:
+        self.parent.conn.execute(
+            "INSERT OR REPLACE INTO fsobject(fullpath, isdir, size, mtime, fasthash) VALUES (?, FALSE, ?, ?, ?)",
+            (filepath, size, mtime, fasthash))
+
+    def add_dir(self, dirpath: str):
+        self.parent.conn.execute("INSERT OR REPLACE INTO fsobject(fullpath, isdir) VALUES (?, TRUE)", (dirpath,))
+
+    def remove(self, path: str):
+        self.parent.conn.execute("DELETE FROM fsobject WHERE fsobject.fullpath = ?", (path,))
+
+
+class SQLRepoContentsConfig(RepoContentsConfig):
+    def __init__(self, parent: "SQLRepoContents"):
+        self.parent = parent
+
+    def touch_updated(self) -> None:
+        self.parent.conn.execute("UPDATE config SET updated = ?", (datetime.now().isoformat(),))
+
+    @property
+    def updated(self) -> datetime:
+        return datetime.fromisoformat(self.parent.conn.execute("SELECT updated FROM config").fetchone()[0])
+
+    @property
+    def uuid(self) -> str:
+        return self.parent.conn.execute("SELECT uuid FROM config").fetchone()[0]
+
+    @property
+    def epoch(self) -> int:
+        return self.parent.conn.execute("SELECT epoch FROM config").fetchone()[0]
+
+    def bump_epoch(self):
+        self.parent.conn.execute("UPDATE config SET epoch = (SELECT MAX(epoch) FROM config) + 1")
+        self.parent.conn.commit()
+
+
+class SQLRepoContents(RepoContents):
+    @staticmethod
+    def load(filepath: str, create_for_uuid: Optional[str] = None):
+        if not os.path.isfile(filepath):
+            if create_for_uuid is not None:
+                conn = sqlite3.connect(filepath)
+                curr = conn.cursor()
+
+                curr.execute(
+                    "CREATE TABLE fsobject("
+                    " fsobject_id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                    " fullpath TEXT NOT NULL UNIQUE,"
+                    " isdir BOOL NOT NULL,"
+                    " size INTEGER,"
+                    " mtime REAL,"
+                    " fasthash TEXT)")
+
+                curr.execute(
+                    "CREATE TABLE config("
+                    "uuid text PRIMARY KEY NOT NULL, "
+                    "epoch INTEGER DEFAULT 0,"
+                    "updated TEXT NOT NULL)")
+                curr.execute(
+                    "INSERT INTO config(uuid, updated) VALUES (?, ?)",
+                    (create_for_uuid, datetime.now().isoformat()))
+
+                conn.commit()
+                conn.close()
+            else:
+                raise ValueError(f"File {filepath} does not exist, need to pass create=True to create.")
+
+        return SQLRepoContents(filepath)
+
+    conn: Connection
+
+    def __init__(self, filepath: str):
+        self.filepath = filepath
+
+        self.conn = None
+
+    def __enter__(self) -> "RepoContents":
+        assert self.conn is None
+        self.conn = sqlite3.connect(self.filepath)
+        self.fsobjects = SQLFSObjects(self)
+        self.config = SQLRepoContentsConfig(self)
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
+        assert self.conn is not None
+        self.write()
+        self.conn.close()
+
+        return False
+
+    def write(self):
+        self.conn.commit()
