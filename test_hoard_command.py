@@ -10,6 +10,8 @@ from config import CaveType
 from contents_hoard import HoardContents
 from contents_props import DirProps, HoardFileProps
 from dragon import TotalCommand
+from repo_command import RepoCommand
+from resolve_uuid import resolve_remote_uuid
 from test_repo_command import populate, write_contents, pretty_file_writer
 
 
@@ -273,7 +275,7 @@ class TestRepoCommand(unittest.TestCase):
         res = hoard_cmd.clone(to_path=new_repo_path, mount_at="/wat", name="cloned-repo")
         self.assertEqual("DONE", res)
 
-        new_uuid = hoard_cmd._resolve_remote_uuid("cloned-repo")
+        new_uuid = resolve_remote_uuid(hoard_cmd.config(), "cloned-repo")
 
         res = hoard_cmd.health()
         self.assertEqual(
@@ -304,7 +306,7 @@ class TestRepoCommand(unittest.TestCase):
         hoard_cmd.add_remote(remote_path=join(self.tmpdir.name, "repo"), name="repo-in-local", mount_point="/")
 
         # status should be still empty hoard
-        new_uuid = hoard_cmd._resolve_remote_uuid("cloned-repo")
+        new_uuid = resolve_remote_uuid(hoard_cmd.config(), "cloned-repo")
         res = hoard_cmd.status(new_uuid)
         self.assertEqual(f"Status of {new_uuid}:\nDONE", res)
 
@@ -395,6 +397,11 @@ class TestRepoCommand(unittest.TestCase):
             "\nMounts:"
             "\n  / -> repo-partial-name, repo-full-name, repo-backup-name, repo-incoming-name"
             "\nDONE", res.strip())
+
+        # make sure resolving the command from a hoard path works
+        tmp_command = RepoCommand(path=join(self.tmpdir.name, "hoard"), name="repo-partial-name")
+        self.assertEqual(partial_cave_cmd.current_uuid(), tmp_command.current_uuid())
+        self.assertEqual(partial_cave_cmd.repo, tmp_command.repo)
 
         return hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd
 

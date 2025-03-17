@@ -5,7 +5,7 @@ import sys
 from abc import abstractmethod
 from io import StringIO
 from itertools import groupby
-from typing import Dict, Generator, List, Optional, Callable, TypeVar
+from typing import Dict, Generator, List, Optional
 
 import aioshutil
 from alive_progress import alive_bar
@@ -18,10 +18,9 @@ from contents_diff import Diff, FileMissingInHoard, FileIsSame, FileContentsDiff
     DirMissingInHoard, DirIsSame, DirMissingInLocal
 from hashing import fast_hash_async
 from repo_command import RepoCommand
+from resolve_uuid import load_config, resolve_remote_uuid, load_paths
 from util import format_size, to_mb, run_async_in_parallel
 
-CONFIG_FILE = "hoard.config"
-PATHS_FILE = "hoard.paths"
 HOARD_CONTENTS_FILENAME = "hoard.contents"
 
 
@@ -276,18 +275,11 @@ class HoardCommand(object):
     def _contents_filename(self, remote_uuid):
         return os.path.join(self.hoardpath, f"{remote_uuid}.contents")
 
-    def _remotes_names(self) -> Dict[str, str]:
-        logging.info(f"Reading config...")
-        config = self.config()
-        return config.remotes.names_map()
-
     def config(self, create: bool = False) -> HoardConfig:
-        config_file = os.path.join(self.hoardpath, CONFIG_FILE)
-        return HoardConfig.load(config_file, create)
+        return load_config(self.hoardpath, create)
 
     def paths(self) -> HoardPaths:
-        paths_file = os.path.join(self.hoardpath, PATHS_FILE)
-        return HoardPaths.load(paths_file)
+        return load_paths(self.hoardpath)
 
     def init(self):
         logging.info(f"Reading or creating config...")
@@ -309,7 +301,7 @@ class HoardCommand(object):
         logging.info(f"Getting remote uuid")
         remote_uuid = repo_cmd.current_uuid()
 
-        resolved_uuid = self._resolve_remote_uuid(name)
+        resolved_uuid = resolve_remote_uuid(self.config(), name)
         if resolved_uuid is not None and resolved_uuid != remote_uuid and resolved_uuid != name:  # fixme ugly AF
             raise ValueError(f"Remote uuid {name} already resolves to {resolved_uuid} and does not match {remote_uuid}")
 
@@ -320,7 +312,7 @@ class HoardCommand(object):
         paths.write()
 
     def show(self, remote: str):
-        remote_uuid = self._resolve_remote_uuid(remote)
+        remote_uuid = resolve_remote_uuid(self.config(), remote)
 
         logging.info(f"Reading repo {remote_uuid}...")
         with self._fetch_repo_contents(remote_uuid, write_on_exit=False) as contents:
@@ -342,7 +334,7 @@ class HoardCommand(object):
         return os.path.join(self.hoardpath, HOARD_CONTENTS_FILENAME)
 
     def status(self, remote: str):
-        remote_uuid = self._resolve_remote_uuid(remote)
+        remote_uuid = resolve_remote_uuid(self.config(), remote)
 
         logging.info(f"Reading current contents of {remote_uuid}...")
         with self._fetch_repo_contents(remote_uuid, write_on_exit=False) as current_contents:
@@ -373,7 +365,7 @@ class HoardCommand(object):
                     return out.getvalue()
 
     def mount_remote(self, remote: str, mount_point: str, force: bool = False):
-        remote_uuid = self._resolve_remote_uuid(remote)
+        remote_uuid = resolve_remote_uuid(self.config(), remote)
         logging.info(f"Reading config in {self.hoardpath}...")
         config = self.config()
 
@@ -395,11 +387,6 @@ class HoardCommand(object):
         config.write()
 
         return f"set path of {remote} to {mount_path.as_posix()}\n"
-
-    def _resolve_remote_uuid(self, remote):
-        remotes = self._remotes_names()
-        remote_uuid = remotes[remote] if remote in remotes else remote
-        return remote_uuid
 
     def remotes(self, show_paths: bool = False):
         logging.info(f"Reading config in {self.hoardpath}...")
@@ -428,7 +415,7 @@ class HoardCommand(object):
         with HoardContents.load(self._hoard_contents_filename(), write_on_close=False) as hoard:
             logging.info(f"Loaded hoard TOML!")
 
-            remote_uuid = self._resolve_remote_uuid(remote)
+            remote_uuid = resolve_remote_uuid(self.config(), remote)
             remote_type = config.remotes[remote_uuid].type
 
             repos_to_add_new_files: List[HoardRemote] = [
@@ -680,7 +667,8 @@ class HoardCommand(object):
         logging.info(f"Loading hoard TOML...")
         with HoardContents.load(self._hoard_contents_filename()) as hoard:
             repo_uuids: List[str] = \
-                [self._resolve_remote_uuid(repo)] if repo is not None else [r.uuid for r in config.remotes.all()]
+                [resolve_remote_uuid(self.config(), repo)] if repo is not None else [r.uuid for r in
+                                                                                     config.remotes.all()]
 
             pathing = HoardPathing(config, self.paths())
 
@@ -718,7 +706,7 @@ class HoardCommand(object):
         logging.info(f"Loading hoard TOML...")
         with HoardContents.load(self._hoard_contents_filename()) as hoard:
 
-            repo_uuid = self._resolve_remote_uuid(repo)
+            repo_uuid = resolve_remote_uuid(self.config(), repo)
             repo_mounted_at = config.remotes[repo_uuid].mounted_at
             logging.info(f"repo {repo} mounted at {repo_mounted_at}")
 

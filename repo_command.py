@@ -4,15 +4,15 @@ import os
 import pathlib
 import uuid
 from io import StringIO
-from os.path import join
-from typing import Generator, Tuple, List, Dict
+from typing import Generator, Tuple, List, Optional
 
 import aiofiles.os
 from alive_progress import alive_bar, alive_it
 
 from contents_props import RepoFileProps, DirProps
 from contents_repo import RepoContents
-from hashing import find_hashes, fast_hash, fast_hash_async
+from hashing import find_hashes, fast_hash_async
+from resolve_uuid import load_config, resolve_remote_uuid, load_paths
 from util import format_size, run_async_in_parallel
 
 CURRENT_UUID_FILENAME = "current.uuid"
@@ -27,7 +27,22 @@ def walk_repo(repo: str) -> Generator[Tuple[str, List[str], List[str]], None, No
 
 
 class RepoCommand(object):
-    def __init__(self, path: str = "."):
+    def __init__(self, path: str = ".", name: Optional[str] = None):
+        if name is not None:  # assume path is a hoard, and the name to use is the provided
+            logging.info(f"Finding repo path by hoard assumed at {path}...")
+
+            config = load_config(hoardpath=path, create=False)
+            remote_uuid = resolve_remote_uuid(config, name)
+            logging.info(f"resolved {name} to assumed uuid {remote_uuid}")
+
+            paths = load_paths(hoardpath=path)
+            cave_path = paths[remote_uuid]
+            if cave_path is None:
+                raise ValueError(f"No repo with uuid {remote_uuid}.")
+
+            print(f"Resolved repo {name} to path {cave_path.find()}.")
+            path = cave_path.find()
+
         self.repo = pathlib.Path(path).absolute().as_posix()
 
     def _hoard_folder(self):

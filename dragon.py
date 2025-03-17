@@ -1,3 +1,5 @@
+from typing import Optional
+
 import fire
 import logging
 
@@ -8,10 +10,10 @@ NONE_TOML = "MISSING"
 
 
 class TotalCommand(object):
-    def __init__(self, verbose: bool = False, path: str = "."):
+    def __init__(self, verbose: bool = False, path: str = ".", name: Optional[str] = None):
         if verbose:
             logging.basicConfig(level=logging.INFO)
-        self.cave = RepoCommand(path=path)
+        self.cave = RepoCommand(path=path, name=name)
         self.hoard = HoardCommand(path=path)
 
 
