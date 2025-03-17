@@ -7,7 +7,7 @@ from time import sleep
 from typing import Tuple, List
 
 from config import CaveType
-from contents import HoardContents
+from contents_hoard import HoardContents
 from contents_props import DirProps, HoardFileProps
 from dragon import TotalCommand
 from test_repo_command import populate, write_contents, pretty_file_writer

@@ -5,8 +5,7 @@ from typing import Dict, Any, Generator, Tuple, Optional
 
 import rtoml
 
-from contents import FSObjects, FSObjectProps
-from contents_props import RepoFileProps, DirProps, TOMLRepoFileProps
+from contents_props import RepoFileProps, DirProps, TOMLRepoFileProps, FSObjectProps
 
 
 class RepoContentsConfig(abc.ABC):
@@ -38,6 +37,33 @@ class TOMLContentsConfig(RepoContentsConfig):
 
     def bump_epoch(self):
         self.doc["epoch"] = self.epoch + 1
+
+
+class FSObjects(abc.ABC):
+    @abc.abstractmethod
+    def __len__(self) -> int: pass
+
+    @abc.abstractmethod
+    def __getitem__(self, key: str) -> FSObjectProps: pass
+
+    @abc.abstractmethod
+    def __iter__(self) -> Generator[Tuple[str, FSObjectProps], None, None]: pass
+
+    @abc.abstractmethod
+    def __contains__(self, item: str) -> bool: pass
+
+    num_files: int
+    num_dirs: int
+    total_size: int
+
+    @abc.abstractmethod
+    def add_file(self, filepath: str, size: int, mtime: float, fasthash: str) -> None: pass
+
+    @abc.abstractmethod
+    def add_dir(self, dirpath): pass
+
+    @abc.abstractmethod
+    def remove(self, path: str): pass
 
 
 class TOMLFSObjects(FSObjects):

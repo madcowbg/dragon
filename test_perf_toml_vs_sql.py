@@ -8,7 +8,7 @@ from typing import Callable, Dict
 
 from alive_progress import alive_bar
 
-from contents import HoardContents, HoardTree
+from contents_hoard import HoardContents, HoardTree
 from contents_props import DirProps, HoardFileProps
 
 

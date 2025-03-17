@@ -1,4 +1,3 @@
-import abc
 import logging
 import os
 import pathlib
@@ -21,33 +20,6 @@ class HoardContentsConfig:
     @property
     def updated(self) -> datetime:
         return datetime.fromisoformat(self.doc["updated"])
-
-
-class FSObjects(abc.ABC):
-    @abc.abstractmethod
-    def __len__(self) -> int: pass
-
-    @abc.abstractmethod
-    def __getitem__(self, key: str) -> FSObjectProps: pass
-
-    @abc.abstractmethod
-    def __iter__(self) -> Generator[Tuple[str, FSObjectProps], None, None]: pass
-
-    @abc.abstractmethod
-    def __contains__(self, item: str) -> bool: pass
-
-    num_files: int
-    num_dirs: int
-    total_size: int
-
-    @abc.abstractmethod
-    def add_file(self, filepath: str, size: int, mtime: float, fasthash: str) -> None: pass
-
-    @abc.abstractmethod
-    def add_dir(self, dirpath): pass
-
-    @abc.abstractmethod
-    def remove(self, path: str): pass
 
 
 class HoardTree:
