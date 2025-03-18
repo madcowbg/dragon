@@ -5,7 +5,7 @@ import sys
 from abc import abstractmethod
 from io import StringIO
 from itertools import groupby
-from typing import Dict, Generator, List, Optional
+from typing import Dict, Generator, List, Optional, Any
 
 import aioshutil
 from alive_progress import alive_bar
@@ -332,6 +332,40 @@ class HoardCommand(object):
 
     def _hoard_contents_filename(self):
         return os.path.join(self.hoardpath, HOARD_CONTENTS_FILENAME)
+
+    def status(self):
+        config = self.config()
+        with HoardContents.load(self._hoard_contents_filename()) as hoard:
+            statuses: Dict[str, Dict[str, Dict[str, Any]]] = hoard.fsobjects.status_by_uuid
+            statuses_sorted = sorted((config.remotes[uuid].name, vals) for uuid, vals in statuses.items())
+            all_stats = ["total", FileStatus.AVAILABLE.value, FileStatus.GET.value, FileStatus.COPY.value, FileStatus.CLEANUP.value]
+            with StringIO() as out:
+                out.write(f"|{'Num Files':<25}|")
+                for col in all_stats:
+                    out.write(f"{col:<10}|")
+                out.write("\n")
+
+                for name, uuid_stats in statuses_sorted:
+                    out.write(f"|{name:<25}|")
+                    for stat in all_stats:
+                        nfiles = uuid_stats[stat]["nfiles"] if stat in uuid_stats else ""
+                        out.write(f"{nfiles:>10}|")
+                    out.write("\n")
+
+                out.write("\n")
+
+                out.write(f"|{'Size':<25}|")
+                for col in all_stats:
+                    out.write(f"{col:<10}|")
+                out.write("\n")
+                for name, uuid_stats in statuses_sorted:
+                    out.write(f"|{name:<25}|")
+                    for stat in all_stats:
+                        size = format_size(uuid_stats[stat]["size"]) if stat in uuid_stats else ""
+                        out.write(f"{size:>10}|")
+                    out.write("\n")
+
+                return out.getvalue()
 
     def status_deprecated(self, remote: str):  # fixme remove
         remote_uuid = resolve_remote_uuid(self.config(), remote)

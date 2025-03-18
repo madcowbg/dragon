@@ -570,6 +570,21 @@ class TestRepoCommand(unittest.TestCase):
         hoard_cmd.refresh("repo-backup-name")  # just registers the files already in backup
         hoard_cmd.refresh("repo-incoming-name")
 
+        res = hoard_cmd.status()
+        self.assertEqual(
+            ""
+            "|Num Files                |total     |available |get       |copy      |cleanup   |\n"
+            "|repo-backup-name         |         6|         1|         5|          |          |\n"
+            "|repo-full-name           |         6|         3|         3|          |          |\n"
+            "|repo-incoming-name       |         4|          |          |          |         4|\n"
+            "|repo-partial-name        |         2|         2|          |          |          |\n"
+            "\n"
+            "|Size                     |total     |available |get       |copy      |cleanup   |\n"
+            "|repo-backup-name         |        46|         6|        40|          |          |\n"
+            "|repo-full-name           |        46|        25|        21|          |          |\n"
+            "|repo-incoming-name       |        32|          |          |          |        32|\n"
+            "|repo-partial-name        |        14|        14|          |          |          |\n", res)
+
         res = hoard_cmd.sync_contents()
         self.assertEqual(
             f"{partial_cave_cmd.current_uuid()}:\n"

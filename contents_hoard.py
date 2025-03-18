@@ -168,6 +168,25 @@ class HoardFSObjects:
             else:
                 yield fullpath, HoardFileProps(self.parent, fsobject_id)
 
+    @property
+    def status_by_uuid(self) -> Dict[str, Dict[str, Dict[str, Any]]]:
+        stats: Dict[str, Dict[str, Dict[str, Any]]] = dict()
+        for uuid, nfiles, size in self.parent.conn.execute(
+                "SELECT fspresence.uuid, count(fspresence.fsobject_id) as nfiles, sum(size) as total_size "
+                "FROM fsobject JOIN fspresence ON fsobject.fsobject_id=fspresence.fsobject_id "
+                "WHERE isdir = FALSE "
+                "GROUP BY fspresence.uuid"):
+            stats[uuid] = {
+                "total": {"nfiles": nfiles, "size": size}}
+
+        for uuid, status, nfiles, size in self.parent.conn.execute(
+                "SELECT fspresence.uuid, fspresence.status, count(fspresence.fsobject_id) as nfiles, sum(size) as total_size "
+                "FROM fsobject JOIN fspresence ON fsobject.fsobject_id=fspresence.fsobject_id "
+                "WHERE isdir = FALSE "
+                "GROUP BY fspresence.uuid, fspresence.status"):
+            stats[uuid][status] = {"nfiles": nfiles, "size": size}
+        return stats
+
     def to_fetch(self, repo_uuid: str) -> Generator[Tuple[str, FSObjectProps], None, None]:
         for fsobject_id, fullpath, isdir in self.parent.conn.execute(
                 "SELECT fsobject.fsobject_id, fullpath, isdir "
