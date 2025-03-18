@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from os.path import join
 from time import sleep
-from typing import Tuple, List
+from typing import Tuple, List, Dict
 
 from config import CaveType
 from contents.hoard import HoardContents
@@ -21,7 +21,7 @@ def populate_hoard(tmpdir: str):
     os.mkdir(join(tmpdir, "hoard"))
 
 
-class TestRepoCommand(unittest.TestCase):
+class TestHoardCommand(unittest.TestCase):
     def setUp(self):
         self.tmpdir = tempfile.TemporaryDirectory()
         populate_hoard(self.tmpdir.name)
@@ -196,7 +196,8 @@ class TestRepoCommand(unittest.TestCase):
         repo_uuid = cave_cmd.current_uuid()
         hoard_cmd.contents.refresh("repo-in-local")
 
-        self.assertEqual(f"Status of {repo_uuid}:\nDF /wat\nDONE", hoard_cmd.deprecated.status_deprecated("repo-in-local").strip())
+        self.assertEqual(f"Status of {repo_uuid}:\nDF /wat\nDONE",
+                         hoard_cmd.deprecated.status_deprecated("repo-in-local").strip())
 
         os.mkdir(join(self.tmpdir.name, "repo", "newdir"))
         write_contents(join(self.tmpdir.name, "repo", "newdir", "newfile.is"), "lhiWFELHFE")
@@ -238,9 +239,9 @@ class TestRepoCommand(unittest.TestCase):
             " in repo: 1\n"
             " deleted: 0 (0.0%)\n", res)
 
-
         # as is not refreshed, no change in status
-        self.assertEqual(f"Status of {repo_uuid}:\nDF /wat\nDONE", hoard_cmd.deprecated.status_deprecated("repo-in-local").strip())
+        self.assertEqual(f"Status of {repo_uuid}:\nDF /wat\nDONE",
+                         hoard_cmd.deprecated.status_deprecated("repo-in-local").strip())
 
         cave_cmd.refresh()
         self.assertEqual(
@@ -351,67 +352,15 @@ class TestRepoCommand(unittest.TestCase):
             'cloned-repo/test.me.once',
             'cloned-repo/test.me.twice'], dump_file_list(self.tmpdir.name, "cloned-repo"))
 
-    def _init_complex_hoard(self):
-        partial_cave_cmd = TotalCommand(path=join(self.tmpdir.name, "repo-partial")).cave
-        partial_cave_cmd.init()
-        partial_cave_cmd.refresh()
-
-        full_cave_cmd = TotalCommand(path=join(self.tmpdir.name, "repo-full")).cave
-        full_cave_cmd.init()
-        full_cave_cmd.refresh()
-
-        backup_cave_cmd = TotalCommand(path=join(self.tmpdir.name, "repo-backup")).cave
-        backup_cave_cmd.init()
-        backup_cave_cmd.refresh()
-
-        incoming_cave_cmd = TotalCommand(path=join(self.tmpdir.name, "repo-incoming")).cave
-        incoming_cave_cmd.init()
-        incoming_cave_cmd.refresh()
-
-        hoard_cmd = TotalCommand(path=join(self.tmpdir.name, "hoard")).hoard
-        hoard_cmd.init()
-
-        hoard_cmd.add_remote(
-            remote_path=join(self.tmpdir.name, "repo-partial"), name="repo-partial-name", mount_point="/",
-            type=CaveType.PARTIAL)
-
-        hoard_cmd.add_remote(
-            remote_path=join(self.tmpdir.name, "repo-full"), name="repo-full-name", mount_point="/",
-            type=CaveType.PARTIAL, fetch_new=True)
-
-        hoard_cmd.add_remote(
-            remote_path=join(self.tmpdir.name, "repo-backup"), name="repo-backup-name", mount_point="/",
-            type=CaveType.BACKUP)
-
-        hoard_cmd.add_remote(
-            remote_path=join(self.tmpdir.name, "repo-incoming"), name="repo-incoming-name", mount_point="/",
-            type=CaveType.INCOMING)
-
-        res = hoard_cmd.remotes()
-        self.assertEqual(
-            "4 total remotes."
-            f"\n  [repo-partial-name] {partial_cave_cmd.current_uuid()} (partial)"
-            f"\n  [repo-full-name] {full_cave_cmd.current_uuid()} (partial)"
-            f"\n  [repo-backup-name] {backup_cave_cmd.current_uuid()} (backup)"
-            f"\n  [repo-incoming-name] {incoming_cave_cmd.current_uuid()} (incoming)"
-            "\nMounts:"
-            "\n  / -> repo-partial-name, repo-full-name, repo-backup-name, repo-incoming-name"
-            "\nDONE", res.strip())
-
-        # make sure resolving the command from a hoard path works
-        tmp_command = RepoCommand(path=join(self.tmpdir.name, "hoard"), name="repo-partial-name")
-        self.assertEqual(partial_cave_cmd.current_uuid(), tmp_command.current_uuid())
-        self.assertEqual(partial_cave_cmd.repo.path, tmp_command.repo.path)
-
-        return hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd
-
     def test_create_repo_types(self):
         populate_repotypes(self.tmpdir.name)
-        hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = self._init_complex_hoard()
+        hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = init_complex_hoard(
+            self.tmpdir.name)
 
     def test_sync_hoard_definitions(self):
         populate_repotypes(self.tmpdir.name)
-        hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = self._init_complex_hoard()
+        hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = init_complex_hoard(
+            self.tmpdir.name)
 
         res = hoard_cmd.deprecated.status_deprecated("repo-partial-name")
         self.assertEqual(
@@ -498,7 +447,8 @@ class TestRepoCommand(unittest.TestCase):
 
     def test_sync_hoard_file_contents_one(self):
         populate_repotypes(self.tmpdir.name)
-        hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = self._init_complex_hoard()
+        hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = init_complex_hoard(
+            self.tmpdir.name)
 
         hoard_cmd.contents.refresh("repo-partial-name")
         hoard_cmd.contents.refresh("repo-full-name")
@@ -563,7 +513,8 @@ class TestRepoCommand(unittest.TestCase):
 
     def test_sync_hoard_file_contents_all(self):
         populate_repotypes(self.tmpdir.name)
-        hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = self._init_complex_hoard()
+        hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = init_complex_hoard(
+            self.tmpdir.name)
 
         hoard_cmd.contents.refresh("repo-partial-name")
         hoard_cmd.contents.refresh("repo-full-name")
@@ -908,7 +859,8 @@ class TestRepoCommand(unittest.TestCase):
 
     def test_restore_missing_local_file_on_refresh(self):
         populate_repotypes(self.tmpdir.name)
-        hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = self._init_complex_hoard()
+        hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = init_complex_hoard(
+            self.tmpdir.name)
 
         res = hoard_cmd.contents.refresh("repo-partial-name")
         self.assertEqual("+/test.me.1\n+/wat/test.me.2\nSync'ed repo-partial-name to hoard!", res)
@@ -993,11 +945,18 @@ class TestRepoCommand(unittest.TestCase):
             dump_file_list(self.tmpdir.name, 'repo-partial'))
 
 
-def dump_file_list(tmpdir: str, path: str) -> List[str]:
-    return sorted([
+def dump_file_list(tmpdir: str, path: str, data: bool = False) -> List[str] | Dict[str, str]:
+    files = sorted([
         pathlib.Path(join(dirpath, filename)).relative_to(tmpdir).as_posix()
         for dirpath, dirnames, filenames in os.walk(join(tmpdir, path), topdown=True)
         for filename in filenames if dirpath.find(".hoard") == -1])
+    if not data:
+        return files
+    else:
+        def read(f):
+            with open(join(tmpdir, f)) as fo:
+                return fo.read()
+        return dict((f, read(f)) for f in files)
 
 
 def populate_repotypes(tmpdir: str):
@@ -1024,3 +983,58 @@ def populate_repotypes(tmpdir: str):
     pfw('repo-incoming/test.me.4', "fwadeaewdsa")
     pfw('repo-incoming/test.me.5', "adsfg")
     pfw('repo-incoming/wat/test.me.6', "f2fwsdf")
+
+
+def init_complex_hoard(tmpdir: str):
+    partial_cave_cmd = TotalCommand(path=join(tmpdir, "repo-partial")).cave
+    partial_cave_cmd.init()
+    partial_cave_cmd.refresh()
+
+    full_cave_cmd = TotalCommand(path=join(tmpdir, "repo-full")).cave
+    full_cave_cmd.init()
+    full_cave_cmd.refresh()
+
+    backup_cave_cmd = TotalCommand(path=join(tmpdir, "repo-backup")).cave
+    backup_cave_cmd.init()
+    backup_cave_cmd.refresh()
+
+    incoming_cave_cmd = TotalCommand(path=join(tmpdir, "repo-incoming")).cave
+    incoming_cave_cmd.init()
+    incoming_cave_cmd.refresh()
+
+    hoard_cmd = TotalCommand(path=join(tmpdir, "hoard")).hoard
+    hoard_cmd.init()
+
+    hoard_cmd.add_remote(
+        remote_path=join(tmpdir, "repo-partial"), name="repo-partial-name", mount_point="/",
+        type=CaveType.PARTIAL)
+
+    hoard_cmd.add_remote(
+        remote_path=join(tmpdir, "repo-full"), name="repo-full-name", mount_point="/",
+        type=CaveType.PARTIAL, fetch_new=True)
+
+    hoard_cmd.add_remote(
+        remote_path=join(tmpdir, "repo-backup"), name="repo-backup-name", mount_point="/",
+        type=CaveType.BACKUP)
+
+    hoard_cmd.add_remote(
+        remote_path=join(tmpdir, "repo-incoming"), name="repo-incoming-name", mount_point="/",
+        type=CaveType.INCOMING)
+
+    res = hoard_cmd.remotes()
+    assert (""
+            "4 total remotes."
+            f"\n  [repo-partial-name] {partial_cave_cmd.current_uuid()} (partial)"
+            f"\n  [repo-full-name] {full_cave_cmd.current_uuid()} (partial)"
+            f"\n  [repo-backup-name] {backup_cave_cmd.current_uuid()} (backup)"
+            f"\n  [repo-incoming-name] {incoming_cave_cmd.current_uuid()} (incoming)"
+            "\nMounts:"
+            "\n  / -> repo-partial-name, repo-full-name, repo-backup-name, repo-incoming-name"
+            "\nDONE") == res.strip()
+
+    # make sure resolving the command from a hoard path works
+    tmp_command = RepoCommand(path=join(tmpdir, "hoard"), name="repo-partial-name")
+    assert partial_cave_cmd.current_uuid() == tmp_command.current_uuid()
+    assert partial_cave_cmd.repo.path == tmp_command.repo.path
+
+    return hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd

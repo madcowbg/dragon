@@ -156,6 +156,13 @@ class HoardFSObjects:
         else:
             return HoardFileProps(self.parent, fsobject_id, size, fasthash)
 
+    def by_fasthash(self, fasthash: str) -> Generator[Tuple[str, HoardFileProps], None, None]:
+        for fsobject_id, fullpath, isdir, size, fasthash in self.parent.conn.execute(
+                "SELECT fsobject_id, fullpath, isdir, size, fasthash "
+                "FROM fsobject "
+                "WHERE isdir = FALSE and fasthash = ?", (fasthash, )):
+            yield fullpath, HoardFileProps(self.parent, fsobject_id, size, fasthash)
+
     def __iter__(self) -> Generator[Tuple[str, FSObjectProps], None, None]:  # fixme maybe optimize to create directly?
         for fsobject_id, fullpath, isdir, size, fasthash in self.parent.conn.execute(
                 "SELECT fsobject_id, fullpath, isdir, size, fasthash FROM fsobject"):
@@ -405,4 +412,3 @@ class HoardContents:
             "INSERT OR REPLACE INTO epoch(uuid, epoch, updated) VALUES (?, ?, ?)",
             (remote_uuid, epoch, updated))
         self.conn.commit()
-

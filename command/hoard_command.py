@@ -1,9 +1,10 @@
 import logging
 import os
 import pathlib
+import shutil
 from io import StringIO
 from itertools import groupby
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 from command.hoard import Hoard
 from command.hoard_contents import HoardCommandContents, compare_local_to_hoard
@@ -15,6 +16,7 @@ from contents_diff import FileMissingInHoard, FileContentsDiffer, FileMissingInL
     DirMissingInHoard, DirMissingInLocal
 from command.pathing import HoardPathing
 from command.repo_command import RepoCommand
+from hashing import fast_hash
 from resolve_uuid import resolve_remote_uuid
 from util import format_size
 
@@ -246,9 +248,9 @@ class HoardCommand(object):
         if len(repos_to_move) == 0:
             return f"No repos to move!"
 
-        logging.info(f"Loading hoard TOML...")
+        logging.info(f"Loading hoard...")
         with HoardContents.load(self.hoard.hoard_contents_filename()) as hoard:
-            logging.info(f"Loaded hoard TOML.")
+            logging.info(f"Loaded hoard.")
 
             with StringIO() as out:
                 out.write("Moving files and folders:\n")
@@ -280,4 +282,71 @@ class HoardCommand(object):
                 config.write()
 
                 out.write("DONE")
+                return out.getvalue()
+
+    def recover(self, source: str, dest: str, move: bool = False, junk_folder: str = "_JUNK_"):
+        if not os.path.isdir(source):
+            return f"Source path {source} does not exist!"
+        if not os.path.isdir(dest):
+            return f"Dest path {dest} does not exist!"
+        if len(os.listdir(dest)) != 0:
+            return f"Dest path {dest} must be empty!"
+
+        logging.info(f"Loading hoard...")
+        with HoardContents.load(self.hoard.hoard_contents_filename()) as hoard:
+            logging.info(f"Loaded hoard.")
+            junk_path = pathlib.Path(dest).joinpath(junk_folder)
+            junk_path.mkdir()
+
+            copied, copied_dest, mismatched, errors = 0, 0, 0, 0
+            with StringIO() as out:
+                for dirpath, _, filenames in os.walk(source):
+                    for filename in filenames:
+                        fullpath = os.path.join(dirpath, filename)
+                        print(f"Full path: {fullpath}")
+                        rel_to_source = pathlib.Path(fullpath).relative_to(source)
+                        print(f"Rel path: {rel_to_source}")
+
+                        fasthash = fast_hash(fullpath)
+
+                        places: List[Tuple[str, HoardFileProps]] = list(hoard.fsobjects.by_fasthash(fasthash))
+                        if len(places) == 0:
+                            mismatched += 1
+
+                            dest_junk_path = junk_path.joinpath(rel_to_source)
+                            rel_junk_path = dest_junk_path.relative_to(dest).as_posix()
+                            if move:
+                                print(f"Copying {fullpath} to {dest_junk_path}")
+                                dest_junk_path.parent.mkdir(parents=True, exist_ok=True)
+                                try:
+                                    shutil.move(fullpath, dest_junk_path)
+                                    out.write(f"+{rel_junk_path}\n")
+                                except shutil.Error as e:
+                                    logging.error(e)
+                                    errors += 0
+                                    out.write(f"E{rel_junk_path}\n")
+                            else:  # do nothing, as we are preserving the input
+                                out.write(f"s{rel_junk_path}\n")
+                        else:
+                            copied += 1
+                            for hoard_filepath, hoard_props in places:
+                                # use + because hoard paths are absolute!
+                                end_place = pathlib.Path(dest + hoard_filepath)
+                                logging.info(f"Creating {end_place} from {fullpath}")
+                                end_place.parent.mkdir(parents=True, exist_ok=True)
+
+                                try:
+                                    if move:
+                                        shutil.move(fullpath, end_place)
+                                        out.write(f"M{hoard_filepath}\n")
+                                    else:
+                                        shutil.copy2(fullpath, end_place)
+                                        out.write(f"A{hoard_filepath}\n")
+
+                                    copied_dest += 1
+                                except shutil.Error as e:
+                                    logging.error(e)
+                                    errors += 0
+                                    out.write(f"E{end_place}\n")
+                out.write(f"Copied: {copied} to Dest: {copied_dest}, Mismatched: {mismatched} and Errors: {errors}\n")
                 return out.getvalue()
