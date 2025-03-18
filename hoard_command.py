@@ -333,7 +333,7 @@ class HoardCommand(object):
     def _hoard_contents_filename(self):
         return os.path.join(self.hoardpath, HOARD_CONTENTS_FILENAME)
 
-    def status(self, remote: str):
+    def status_deprecated(self, remote: str):  # fixme remove
         remote_uuid = resolve_remote_uuid(self.config(), remote)
 
         logging.info(f"Reading current contents of {remote_uuid}...")
