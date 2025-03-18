@@ -7,7 +7,7 @@ from config import HoardRemote
 from contents_diff import FileMissingInHoard, FileIsSame, FileContentsDiffer, FileMissingInLocal
 from contents.hoard import HoardContents
 from contents.props import FileStatus
-from command.hoard_pathing import HoardPathing
+from command.pathing import HoardPathing
 
 
 class DiffHandler:

@@ -26,6 +26,17 @@ def walk_repo(repo: str) -> Generator[Tuple[str, List[str], List[str]], None, No
         yield dirpath, dirnames, filenames
 
 
+class Repo:
+    def __init__(self, path: str):
+        self.path = path
+
+    def contents_filename(self, current_uuid):
+        return os.path.join(self.hoard_folder(), f"{current_uuid}.contents")
+
+    def hoard_folder(self):
+        return os.path.join(self.path, ".hoard")
+
+
 class RepoCommand(object):
     def __init__(self, path: str = ".", name: Optional[str] = None):
         if name is not None:  # assume path is a hoard, and the name to use is the provided
@@ -43,42 +54,39 @@ class RepoCommand(object):
             print(f"Resolved repo {name} to path {cave_path.find()}.")
             path = cave_path.find()
 
-        self.repo = pathlib.Path(path).absolute().as_posix()
-
-    def _hoard_folder(self):
-        return os.path.join(self.repo, ".hoard")
+        self.repo = Repo(pathlib.Path(path).absolute().as_posix())
 
     def current_uuid(self):
-        with open(os.path.join(self._hoard_folder(), CURRENT_UUID_FILENAME), "r") as f:
+        with open(os.path.join(self.repo.hoard_folder(), CURRENT_UUID_FILENAME), "r") as f:
             return f.readline()
 
     def _init_uuid(self):
-        with open(os.path.join(self._hoard_folder(), CURRENT_UUID_FILENAME), "w") as f:
+        with open(os.path.join(self.repo.hoard_folder(), CURRENT_UUID_FILENAME), "w") as f:
             f.write(str(uuid.uuid4()))
 
     def _validate_repo(self):
-        logging.info(f"Validating {self.repo}")
-        if not os.path.isdir(self.repo):
-            raise ValueError(f"folder {self.repo} does not exist")
-        if not os.path.isdir(self._hoard_folder()):
-            raise ValueError(f"no hoard folder in {self.repo}")
-        if not os.path.isfile(os.path.join(self._hoard_folder(), CURRENT_UUID_FILENAME)):
-            raise ValueError(f"no hoard guid in {self.repo}/.hoard/{CURRENT_UUID_FILENAME}")
+        logging.info(f"Validating {self.repo.path}")
+        if not os.path.isdir(self.repo.path):
+            raise ValueError(f"folder {self.repo.path} does not exist")
+        if not os.path.isdir(self.repo.hoard_folder()):
+            raise ValueError(f"no hoard folder in {self.repo.path}")
+        if not os.path.isfile(os.path.join(self.repo.hoard_folder(), CURRENT_UUID_FILENAME)):
+            raise ValueError(f"no hoard guid in {self.repo.path}/.hoard/{CURRENT_UUID_FILENAME}")
 
     def init(self):
-        logging.info(f"Creating repo in {self.repo}")
+        logging.info(f"Creating repo in {self.repo.path}")
 
-        if not os.path.isdir(self.repo):
-            raise ValueError(f"folder {self.repo} does not exist")
+        if not os.path.isdir(self.repo.path):
+            raise ValueError(f"folder {self.repo.path} does not exist")
 
-        if not os.path.isdir(self._hoard_folder()):
-            os.mkdir(self._hoard_folder())
+        if not os.path.isdir(self.repo.hoard_folder()):
+            os.mkdir(self.repo.hoard_folder())
 
-        if not os.path.isfile(os.path.join(self._hoard_folder(), CURRENT_UUID_FILENAME)):
+        if not os.path.isfile(os.path.join(self.repo.hoard_folder(), CURRENT_UUID_FILENAME)):
             self._init_uuid()
 
         self._validate_repo()
-        return f"Repo initialized at {self.repo}"
+        return f"Repo initialized at {self.repo.path}"
 
     def refresh(self, skip_integrity_checks: bool = False):
         """ Refreshes the cache of the current hoard folder """
@@ -88,14 +96,14 @@ class RepoCommand(object):
         logging.info(f"Refreshing uuid {current_uuid}")
 
         with RepoContents.load(
-                self._contents_filename(current_uuid),
+                self.repo.contents_filename(current_uuid),
                 create_for_uuid=current_uuid) as contents:
             contents.config.touch_updated()
 
             print(f"Computing diffs.")
             files_to_update: List[str] = []
             folders_to_add: List[str] = []
-            for diff in compute_diffs(contents, self.repo, skip_integrity_checks):
+            for diff in compute_diffs(contents, self.repo.path, skip_integrity_checks):
                 if isinstance(diff, FileNotInFilesystem):
                     logging.info(f"Removing file {diff.filepath}")
                     contents.fsobjects.remove(diff.filepath)
@@ -108,29 +116,29 @@ class RepoCommand(object):
                 elif isinstance(diff, RepoFileWeakDifferent):
                     assert skip_integrity_checks
                     logging.info(f"File {diff.filepath} is weakly different, adding to check.")
-                    files_to_update.append(pathlib.Path(self.repo).joinpath(diff.filepath).as_posix())
+                    files_to_update.append(pathlib.Path(self.repo.path).joinpath(diff.filepath).as_posix())
                 elif isinstance(diff, RepoFileSame):
                     logging.info(f"File {diff.filepath} is same.")
                 elif isinstance(diff, RepoFileDifferent):
                     logging.info(f"File {diff.filepath} is different, adding to check.")
-                    files_to_update.append(pathlib.Path(self.repo).joinpath(diff.filepath).as_posix())
+                    files_to_update.append(pathlib.Path(self.repo.path).joinpath(diff.filepath).as_posix())
                 elif isinstance(diff, FileNotInRepo):
                     logging.info(f"File {diff.filepath} not in repo, adding.")
-                    files_to_update.append(pathlib.Path(self.repo).joinpath(diff.filepath).as_posix())
+                    files_to_update.append(pathlib.Path(self.repo.path).joinpath(diff.filepath).as_posix())
                 elif isinstance(diff, DirIsSameInRepo):
                     logging.info(f"Dir {diff.dirpath} is same, skipping")
                 elif isinstance(diff, DirNotInRepo):
                     logging.info(f"Dir {diff.dirpath} is different, adding...")
-                    folders_to_add.append(pathlib.Path(self.repo).joinpath(diff.dirpath).as_posix())
+                    folders_to_add.append(pathlib.Path(self.repo.path).joinpath(diff.dirpath).as_posix())
                 else:
                     raise ValueError(f"unknown diff type: {type(diff)}")
 
             print(f"Hashing {len(files_to_update)} files to add:")
             file_hashes = asyncio.run(find_hashes(files_to_update))
 
-            print(f"Adding {len(files_to_update)} files in {self.repo}")
+            print(f"Adding {len(files_to_update)} files in {self.repo.path}")
             for fullpath in alive_it(files_to_update):
-                relpath = pathlib.Path(fullpath).relative_to(self.repo).as_posix()
+                relpath = pathlib.Path(fullpath).relative_to(self.repo.path).as_posix()
 
                 if fullpath not in file_hashes:
                     logging.warning(f"Skipping {fullpath} as it doesn't have a computed hash!")
@@ -143,9 +151,9 @@ class RepoCommand(object):
                     logging.error("Error while adding file!")
                     logging.error(e)
 
-            print(f"Adding {len(folders_to_add)} folders in {self.repo}")
+            print(f"Adding {len(folders_to_add)} folders in {self.repo.path}")
             for fullpath in alive_it(folders_to_add):
-                relpath = pathlib.Path(fullpath).relative_to(self.repo).as_posix()
+                relpath = pathlib.Path(fullpath).relative_to(self.repo.path).as_posix()
                 contents.fsobjects.add_dir(relpath)
 
             logging.info(f"Files read!")
@@ -161,8 +169,8 @@ class RepoCommand(object):
     def show(self):  # fixme remove in favor of status
         remote_uuid = self.current_uuid()
 
-        logging.info(f"Reading repo {self.repo}...")
-        with RepoContents.load(self._contents_filename(remote_uuid)) as contents:
+        logging.info(f"Reading repo {self.repo.path}...")
+        with RepoContents.load(self.repo.contents_filename(remote_uuid)) as contents:
             logging.info(f"Read repo!")
 
             with StringIO() as out:
@@ -187,9 +195,9 @@ class RepoCommand(object):
         dir_new = []
         dir_same = []
         dir_deleted = []
-        with RepoContents.load(self._contents_filename(current_uuid), create_for_uuid=current_uuid) as contents:
+        with RepoContents.load(self.repo.contents_filename(current_uuid), create_for_uuid=current_uuid) as contents:
             print("Calculating diffs between repo and filesystem...")
-            for diff in compute_diffs(contents, self.repo, skip_integrity_checks):
+            for diff in compute_diffs(contents, self.repo.path, skip_integrity_checks):
                 if isinstance(diff, FileNotInFilesystem):
                     files_del.append(diff.filepath)
                 elif isinstance(diff, RepoFileWeakSame):
@@ -236,9 +244,6 @@ class RepoCommand(object):
                     f" deleted: {len(dir_deleted)} ({fmt_percent(len(dir_deleted) / contents.fsobjects.num_dirs)})\n")
 
                 return out.getvalue()
-
-    def _contents_filename(self, current_uuid):
-        return os.path.join(self._hoard_folder(), f"{current_uuid}.contents")
 
 
 def fmt_percent(num: float): return f"{100 * num:.1f}%"

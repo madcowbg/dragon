@@ -6,8 +6,6 @@ from os.path import join
 from time import sleep
 from typing import Callable
 
-import fire
-
 from dragon import TotalCommand
 
 
