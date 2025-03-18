@@ -7,12 +7,12 @@ from time import sleep
 from typing import Tuple, List
 
 from config import CaveType
-from contents_hoard import HoardContents
-from contents_props import DirProps, HoardFileProps
+from contents.hoard import HoardContents
+from contents.props import DirProps, HoardFileProps
 from dragon import TotalCommand
-from repo_command import RepoCommand
+from command.repo_command import RepoCommand
 from resolve_uuid import resolve_remote_uuid
-from test_repo_command import populate, write_contents, pretty_file_writer
+from command.test_repo_command import populate, write_contents, pretty_file_writer
 
 
 def populate_hoard(tmpdir: str):

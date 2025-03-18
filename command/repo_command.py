@@ -9,8 +9,8 @@ from typing import Generator, Tuple, List, Optional
 import aiofiles.os
 from alive_progress import alive_bar, alive_it
 
-from contents_props import RepoFileProps, DirProps
-from contents_repo import RepoContents
+from contents.props import RepoFileProps, DirProps
+from contents.repo import RepoContents
 from hashing import find_hashes, fast_hash_async
 from resolve_uuid import load_config, resolve_remote_uuid, load_paths
 from util import format_size, run_async_in_parallel

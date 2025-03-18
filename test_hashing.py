@@ -1,10 +1,9 @@
-import asyncio
 import tempfile
 import unittest
 from os.path import join
 
-from hashing import fast_hash_async, calc_file_md5, fast_hash
-from test_repo_command import write_contents
+from hashing import calc_file_md5, fast_hash
+from command.test_repo_command import write_contents
 
 
 class TestHashing(unittest.TestCase):

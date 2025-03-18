@@ -8,8 +8,8 @@ from typing import Callable, Dict
 
 from alive_progress import alive_bar
 
-from contents_hoard import HoardContents
-from contents_props import DirProps, HoardFileProps
+from contents.contents_hoard import HoardContents
+from contents.contents_props import DirProps, HoardFileProps
 
 
 def _create_tables(conn: Connection):

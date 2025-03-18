@@ -1,4 +1,4 @@
-from contents_props import RepoFileProps, HoardFileProps
+from contents.props import RepoFileProps, HoardFileProps
 
 
 class Diff:
