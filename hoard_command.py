@@ -8,6 +8,7 @@ from itertools import groupby
 from typing import Dict, Generator, List, Optional, Any
 
 import aioshutil
+import humanize
 from alive_progress import alive_bar
 
 from config import HoardRemote, HoardConfig, CavePath, HoardPaths, CaveType
@@ -337,16 +338,16 @@ class HoardCommand(object):
         config = self.config()
         with HoardContents.load(self._hoard_contents_filename()) as hoard:
             statuses: Dict[str, Dict[str, Dict[str, Any]]] = hoard.fsobjects.status_by_uuid
-            statuses_sorted = sorted((config.remotes[uuid].name, vals) for uuid, vals in statuses.items())
+            statuses_sorted = sorted((config.remotes[uuid].name, hoard.updated(uuid), vals) for uuid, vals in statuses.items())
             all_stats = ["total", FileStatus.AVAILABLE.value, FileStatus.GET.value, FileStatus.COPY.value, FileStatus.CLEANUP.value]
             with StringIO() as out:
-                out.write(f"|{'Num Files':<25}|")
+                out.write(f"|{'Num Files':<25}|{'updated':>20}|")
                 for col in all_stats:
                     out.write(f"{col:<10}|")
                 out.write("\n")
 
-                for name, uuid_stats in statuses_sorted:
-                    out.write(f"|{name:<25}|")
+                for name, updated, uuid_stats in statuses_sorted:
+                    out.write(f"|{name:<25}|{humanize.naturaltime(updated):>20}|")
                     for stat in all_stats:
                         nfiles = uuid_stats[stat]["nfiles"] if stat in uuid_stats else ""
                         out.write(f"{nfiles:>10}|")
@@ -354,12 +355,12 @@ class HoardCommand(object):
 
                 out.write("\n")
 
-                out.write(f"|{'Size':<25}|")
+                out.write(f"|{'Size':<25}|{'updated':>20}|")
                 for col in all_stats:
                     out.write(f"{col:<10}|")
                 out.write("\n")
-                for name, uuid_stats in statuses_sorted:
-                    out.write(f"|{name:<25}|")
+                for name, updated, uuid_stats in statuses_sorted:
+                    out.write(f"|{name:<25}|{humanize.naturaltime(updated):>20}|")
                     for stat in all_stats:
                         size = format_size(uuid_stats[stat]["size"]) if stat in uuid_stats else ""
                         out.write(f"{size:>10}|")
@@ -499,7 +500,7 @@ class HoardCommand(object):
                             logging.info(f"skipping diff of type {type(diff)}")
 
                     logging.info(f"Updating epoch of {remote_uuid} to {current_contents.config.epoch}")
-                    hoard.set_epoch(remote_uuid, current_contents.config.epoch)
+                    hoard.set_epoch(remote_uuid, current_contents.config.epoch, current_contents.config.updated)
 
                     logging.info("Writing updated hoard contents...")
                     hoard.write()

@@ -353,7 +353,8 @@ class HoardContents:
             curr.execute(
                 "CREATE TABLE epoch("
                 " uuid TEXT PRIMARY KEY,"
-                " epoch INTEGER NOT NULL DEFAULT -1)")
+                " epoch INTEGER NOT NULL DEFAULT -1,"
+                " updated TEXT)")
 
             conn.commit()
             conn.close()
@@ -396,9 +397,16 @@ class HoardContents:
         result = curr.execute("SELECT epoch FROM epoch WHERE uuid = ?", (remote_uuid,)).fetchone()
         return result if result is not None else -1
 
-    def set_epoch(self, remote_uuid: str, epoch: int):
+    def updated(self, remote_uuid: str) -> datetime:
+        curr = self.conn.cursor()
+        curr.row_factory = FIRST_VALUE
+        result = curr.execute("SELECT updated FROM epoch WHERE uuid = ?", (remote_uuid,)).fetchone()
+        return datetime.fromisoformat(result) if result is not None else (datetime.now() - datetime.timedelta(years=1))
+
+    def set_epoch(self, remote_uuid: str, epoch: int, updated: str):
         curr = self.conn.cursor()
         curr.execute(
-            "INSERT OR REPLACE INTO epoch(uuid, epoch) VALUES (?, ?)",
-            (remote_uuid, epoch))
+            "INSERT OR REPLACE INTO epoch(uuid, epoch, updated) VALUES (?, ?, ?)",
+            (remote_uuid, epoch, updated))
         self.conn.commit()
+

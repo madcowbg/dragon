@@ -573,17 +573,18 @@ class TestRepoCommand(unittest.TestCase):
         res = hoard_cmd.status()
         self.assertEqual(
             ""
-            "|Num Files                |total     |available |get       |copy      |cleanup   |\n"
-            "|repo-backup-name         |         6|         1|         5|          |          |\n"
-            "|repo-full-name           |         6|         3|         3|          |          |\n"
-            "|repo-incoming-name       |         4|          |          |          |         4|\n"
-            "|repo-partial-name        |         2|         2|          |          |          |\n"
+            "|Num Files                |             updated|total     |available |get       |copy      |cleanup   |\n"
+            "|repo-backup-name         |                 now|         6|         1|         5|          |          |\n"
+            "|repo-full-name           |                 now|         6|         3|         3|          |          |\n"
+            "|repo-incoming-name       |                 now|         4|          |          |          |         4|\n"
+            "|repo-partial-name        |                 now|         2|         2|          |          |          |\n"
             "\n"
-            "|Size                     |total     |available |get       |copy      |cleanup   |\n"
-            "|repo-backup-name         |        46|         6|        40|          |          |\n"
-            "|repo-full-name           |        46|        25|        21|          |          |\n"
-            "|repo-incoming-name       |        32|          |          |          |        32|\n"
-            "|repo-partial-name        |        14|        14|          |          |          |\n", res)
+            "|Size                     |             updated|total     |available |get       |copy      |cleanup   |\n"
+            "|repo-backup-name         |                 now|        46|         6|        40|          |          |\n"
+            "|repo-full-name           |                 now|        46|        25|        21|          |          |\n"
+            "|repo-incoming-name       |                 now|        32|          |          |          |        32|\n"
+            "|repo-partial-name        |                 now|        14|        14|          |          |          |\n",
+            res)
 
         res = hoard_cmd.sync_contents()
         self.assertEqual(
