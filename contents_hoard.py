@@ -149,8 +149,8 @@ class HoardFSObjects:
         return curr.execute("SELECT count(1) FROM fsobject").fetchone()
 
     def __getitem__(self, file_path: str) -> FSObjectProps:
-        fsobject_id, isdir = self.parent.conn.execute(
-            "SELECT fsobject_id, isdir "
+        fsobject_id, isdir, size, fasthash = self.parent.conn.execute(
+            "SELECT fsobject_id, isdir, size, fasthash "
             "FROM fsobject "
             "WHERE fsobject.fullpath = ? ",
             (file_path,)).fetchone()
@@ -158,15 +158,15 @@ class HoardFSObjects:
         if isdir:
             return DirProps({})
         else:
-            return HoardFileProps(self.parent, fsobject_id)
+            return HoardFileProps(self.parent, fsobject_id, size, fasthash)
 
     def __iter__(self) -> Generator[Tuple[str, FSObjectProps], None, None]:  # fixme maybe optimize to create directly?
-        for fsobject_id, fullpath, isdir in self.parent.conn.execute(
-                "SELECT fsobject_id, fullpath, isdir FROM fsobject"):
+        for fsobject_id, fullpath, isdir, size, fasthash in self.parent.conn.execute(
+                "SELECT fsobject_id, fullpath, isdir, size, fasthash FROM fsobject"):
             if isdir:
                 yield fullpath, DirProps({})
             else:
-                yield fullpath, HoardFileProps(self.parent, fsobject_id)
+                yield fullpath, HoardFileProps(self.parent, fsobject_id, size, fasthash)
 
     @property
     def status_by_uuid(self) -> Dict[str, Dict[str, Dict[str, Any]]]:
@@ -188,20 +188,20 @@ class HoardFSObjects:
         return stats
 
     def to_fetch(self, repo_uuid: str) -> Generator[Tuple[str, FSObjectProps], None, None]:
-        for fsobject_id, fullpath, isdir in self.parent.conn.execute(
-                "SELECT fsobject.fsobject_id, fullpath, isdir "
+        for fsobject_id, fullpath, isdir, size, fasthash in self.parent.conn.execute(
+                "SELECT fsobject.fsobject_id, fullpath, isdir, size, fasthash "
                 "FROM fsobject JOIN fspresence on fsobject.fsobject_id = fspresence.fsobject_id "
                 "WHERE fspresence.uuid = ? and fspresence.status in (?, ?)", (repo_uuid, *STATUSES_TO_FETCH)):
             assert not isdir
-            yield fullpath, HoardFileProps(self.parent, fsobject_id)
+            yield fullpath, HoardFileProps(self.parent, fsobject_id, size, fasthash)
 
     def to_cleanup(self, repo_uuid: str) -> Generator[Tuple[str, FSObjectProps], None, None]:
-        for fsobject_id, fullpath, isdir in self.parent.conn.execute(
-                "SELECT fsobject.fsobject_id, fullpath, isdir "
+        for fsobject_id, fullpath, isdir, size, fasthash in self.parent.conn.execute(
+                "SELECT fsobject.fsobject_id, fullpath, isdir, size, fasthash "
                 "FROM fsobject JOIN fspresence on fsobject.fsobject_id = fspresence.fsobject_id "
                 "WHERE fspresence.uuid = ? and fspresence.status = ?", (repo_uuid, FileStatus.CLEANUP.value)):
             assert not isdir
-            yield fullpath, HoardFileProps(self.parent, fsobject_id)
+            yield fullpath, HoardFileProps(self.parent, fsobject_id, size, fasthash)
 
     def __contains__(self, file_path: str) -> bool:
         curr = self._first_value_curr()
@@ -234,7 +234,7 @@ class HoardFSObjects:
             "INSERT OR REPLACE INTO fspresence(fsobject_id, uuid, status) VALUES (?, ?, ?)",
             (fsobject_id, current_uuid, FileStatus.AVAILABLE.value))
 
-        return HoardFileProps(self.parent, fsobject_id)
+        return HoardFileProps(self.parent, fsobject_id, props.size, props.fasthash)
 
     def _first_value_curr(self):
         curr = self.parent.conn.cursor()

@@ -8,7 +8,7 @@ class RepoFileProps:
         self.doc = doc
 
     @property
-    def size(self) -> float:
+    def size(self) -> int:
         return self.doc["size"]
 
     @property
@@ -34,23 +34,17 @@ class FileStatus(enum.Enum):
 
 
 class HoardFileProps:
-    def __init__(self, parent: "HoardContents", fsobject_id: int):
+    def __init__(self, parent: "HoardContents", fsobject_id: int, size: int, fasthash: str):
         self.parent = parent
         self.fsobject_id = fsobject_id
 
-    @property
-    def size(self):
-        return self.parent.conn.execute(
-            "SELECT size FROM fsobject WHERE fsobject_id = ?",
-            (self.fsobject_id,)).fetchone()[0]
-
-    @property
-    def fasthash(self):
-        return self.parent.conn.execute(
-            "SELECT fasthash FROM fsobject WHERE fsobject_id = ?",
-            (self.fsobject_id,)).fetchone()[0]
+        self.size = size
+        self.fasthash = fasthash
 
     def replace_file(self, new_props: RepoFileProps, available_uuid: str):
+        self.size = new_props.size
+        self.fasthash = new_props.fasthash
+
         self.parent.conn.execute(
             "UPDATE fsobject SET size = ?, fasthash = ? WHERE fsobject_id = ?",
             (new_props.size, new_props.fasthash, self.fsobject_id))
