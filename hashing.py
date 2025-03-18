@@ -1,5 +1,6 @@
 import asyncio
 import hashlib
+import logging
 import os
 from asyncio import Queue, TaskGroup
 from typing import Set, Dict, List
@@ -42,7 +43,10 @@ async def find_hashes(filenames: List[str]) -> Dict[str, str]:
         async def run_queue():
             while not queue.empty():
                 fullpath = await queue.get()
-                file_hashes[fullpath] = await fast_hash_async(fullpath)
+                try:
+                    file_hashes[fullpath] = await fast_hash_async(fullpath)
+                except FileNotFoundError as e:
+                    logging.error(e)
                 queue.task_done()
                 bar()
 

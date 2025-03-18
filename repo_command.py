@@ -132,10 +132,16 @@ class RepoCommand(object):
             for fullpath in alive_it(files_to_update):
                 relpath = pathlib.Path(fullpath).relative_to(self.repo).as_posix()
 
-                contents.fsobjects.add_file(
-                    relpath, size=os.path.getsize(fullpath),
-                    mtime=os.path.getmtime(fullpath),
-                    fasthash=file_hashes.get(fullpath, None))
+                if fullpath not in file_hashes:
+                    logging.warning(f"Skipping {fullpath} as it doesn't have a computed hash!")
+                    continue
+                try:
+                    size = os.path.getsize(fullpath)
+                    mtime = os.path.getmtime(fullpath)
+                    contents.fsobjects.add_file(relpath, size=size, mtime=mtime, fasthash=file_hashes[fullpath])
+                except FileNotFoundError as e:
+                    logging.error("Error while adding file!")
+                    logging.error(e)
 
             print(f"Adding {len(folders_to_add)} folders in {self.repo}")
             for fullpath in alive_it(folders_to_add):
