@@ -8,8 +8,8 @@ from typing import Callable, Dict
 
 from alive_progress import alive_bar
 
-from contents_hoard import HoardContents, HoardTree
-from contents_props import DirProps, HoardFileProps, TOMLHoardFileProps
+from contents_hoard import HoardContents
+from contents_props import DirProps, HoardFileProps
 
 
 def _create_tables(conn: Connection):
@@ -168,7 +168,7 @@ class TestPerfTomlVsSql(unittest.TestCase):
 
     def test_using_toml(self):
         t_before = time.perf_counter()
-        with HoardContents.load(join(self.path, "hoard.contents"), write_on_close=False) as hoard:
+        with HoardContents.load(join(self.path, "hoard.contents")) as hoard:
             t_after = time.perf_counter()
             print(f" Real time to load TOML: {t_after - t_before:.2f} seconds")
             print(f" Time per file entry: {(t_after - t_before) / len(hoard.fsobjects) * 1000:.2f} ms")

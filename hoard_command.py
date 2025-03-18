@@ -315,7 +315,7 @@ class HoardCommand(object):
         remote_uuid = resolve_remote_uuid(self.config(), remote)
 
         logging.info(f"Reading repo {remote_uuid}...")
-        with self._fetch_repo_contents(remote_uuid, write_on_exit=False) as contents:
+        with self._fetch_repo_contents(remote_uuid) as contents:
             logging.info(f"Read repo!")
 
             config = self.config()
@@ -337,9 +337,9 @@ class HoardCommand(object):
         remote_uuid = resolve_remote_uuid(self.config(), remote)
 
         logging.info(f"Reading current contents of {remote_uuid}...")
-        with self._fetch_repo_contents(remote_uuid, write_on_exit=False) as current_contents:
+        with self._fetch_repo_contents(remote_uuid) as current_contents:
             logging.info(f"Loading hoard TOML...")
-            with HoardContents.load(self._hoard_contents_filename(), write_on_close=False) as hoard:
+            with HoardContents.load(self._hoard_contents_filename()) as hoard:
                 logging.info(f"Loaded hoard TOML!")
                 logging.info(f"Computing status ...")
 
@@ -412,7 +412,7 @@ class HoardCommand(object):
         config = self.config()
 
         logging.info(f"Loading hoard TOML...")
-        with HoardContents.load(self._hoard_contents_filename(), write_on_close=False) as hoard:
+        with HoardContents.load(self._hoard_contents_filename()) as hoard:
             logging.info(f"Loaded hoard TOML!")
 
             remote_uuid = resolve_remote_uuid(self.config(), remote)
@@ -436,7 +436,7 @@ class HoardCommand(object):
             else:
                 raise ValueError(f"FIXME unsupported remote type: {remote_type}")
 
-            with self._fetch_repo_contents(remote_uuid, write_on_exit=False) as current_contents:
+            with self._fetch_repo_contents(remote_uuid) as current_contents:
 
                 if not ignore_epoch and hoard.epoch(remote_uuid) >= current_contents.config.epoch:
                     return (
@@ -474,11 +474,11 @@ class HoardCommand(object):
                     out.write(f"Sync'ed {remote} to hoard!")
                     return out.getvalue()
 
-    def _fetch_repo_contents(self, remote_uuid: str, write_on_exit: bool = True):
+    def _fetch_repo_contents(self, remote_uuid: str):
         remote_path = self.paths()[remote_uuid].find()
         logging.info(f"Using repo contents {remote_uuid} in {remote_path}...")
         repo_cmd = RepoCommand(remote_path)
-        current_contents = RepoContents.load(repo_cmd._contents_filename(remote_uuid), write_on_exit=write_on_exit)
+        current_contents = RepoContents.load(repo_cmd._contents_filename(remote_uuid))
         return current_contents
 
     def health(self):
@@ -486,7 +486,7 @@ class HoardCommand(object):
         config = self.config()
 
         logging.info(f"Loading hoard TOML...")
-        with HoardContents.load(self._hoard_contents_filename(), write_on_close=False) as hoard:
+        with HoardContents.load(self._hoard_contents_filename()) as hoard:
             logging.info(f"Loaded hoard TOML!")
 
             repo_health: Dict[str, Dict[int, int]] = dict()
@@ -539,7 +539,7 @@ class HoardCommand(object):
             self, selected_path: Optional[str] = None, depth: int = None,
             skip_folders: bool = False, show_remotes: int = False):
         logging.info(f"Loading hoard TOML...")
-        with HoardContents.load(self._hoard_contents_filename(), write_on_close=False) as hoard:
+        with HoardContents.load(self._hoard_contents_filename()) as hoard:
             if depth is None:
                 depth = sys.maxsize if selected_path is None else 1
 
@@ -666,9 +666,8 @@ class HoardCommand(object):
 
         logging.info(f"Loading hoard TOML...")
         with HoardContents.load(self._hoard_contents_filename()) as hoard:
-            repo_uuids: List[str] = \
-                [resolve_remote_uuid(self.config(), repo)] if repo is not None else [r.uuid for r in
-                                                                                     config.remotes.all()]
+            repo_uuids: List[str] = [resolve_remote_uuid(self.config(), repo)] \
+                if repo is not None else [r.uuid for r in config.remotes.all()]
 
             pathing = HoardPathing(config, self.paths())
 

@@ -74,7 +74,7 @@ class TestRepoCommand(unittest.TestCase):
             "+/wat/test.me.twice\n"
             "Sync'ed repo-in-local to hoard!", res.strip())
 
-        with HoardContents.load(hoard_cmd._hoard_contents_filename(), write_on_close=False) as hoard_contents:
+        with HoardContents.load(hoard_cmd._hoard_contents_filename()) as hoard_contents:
             self._assert_hoard_contents(
                 hoard_contents,
                 files_exp=[
@@ -116,7 +116,7 @@ class TestRepoCommand(unittest.TestCase):
 
         hoard_cmd.refresh("repo-in-local")
 
-        with HoardContents.load(hoard_cmd._hoard_contents_filename(), write_on_close=False) as hc:
+        with HoardContents.load(hoard_cmd._hoard_contents_filename()) as hc:
             self._assert_hoard_contents(
                 hc,
                 files_exp=[
@@ -132,7 +132,7 @@ class TestRepoCommand(unittest.TestCase):
         self.assertEqual(
             "=/wat/test.me.twice\nSync'ed repo-in-local-2 to hoard!", res.strip())
 
-        with HoardContents.load(hoard_cmd._hoard_contents_filename(), write_on_close=False) as hc:
+        with HoardContents.load(hoard_cmd._hoard_contents_filename()) as hc:
             self._assert_hoard_contents(
                 hc,
                 files_exp=[
@@ -144,7 +144,7 @@ class TestRepoCommand(unittest.TestCase):
         res = hoard_cmd.refresh("repo-in-local", ignore_epoch=True)
         self.assertEqual("Sync'ed repo-in-local to hoard!", res)
 
-        with HoardContents.load(hoard_cmd._hoard_contents_filename(), write_on_close=False) as hc:
+        with HoardContents.load(hoard_cmd._hoard_contents_filename()) as hc:
             self._assert_hoard_contents(
                 hc,
                 files_exp=[

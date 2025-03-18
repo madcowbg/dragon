@@ -89,7 +89,7 @@ class RepoCommand(object):
 
         with RepoContents.load(
                 self._contents_filename(current_uuid),
-                create_for_uuid=current_uuid, write_on_exit=False) as contents:
+                create_for_uuid=current_uuid) as contents:
             contents.config.touch_updated()
 
             print(f"Computing diffs.")
@@ -156,7 +156,7 @@ class RepoCommand(object):
         remote_uuid = self.current_uuid()
 
         logging.info(f"Reading repo {self.repo}...")
-        with RepoContents.load(self._contents_filename(remote_uuid), write_on_exit=False) as contents:
+        with RepoContents.load(self._contents_filename(remote_uuid)) as contents:
             logging.info(f"Read repo!")
 
             with StringIO() as out:
@@ -181,9 +181,7 @@ class RepoCommand(object):
         dir_new = []
         dir_same = []
         dir_deleted = []
-        with RepoContents.load(
-                self._contents_filename(current_uuid),
-                create_for_uuid=current_uuid, write_on_exit=False) as contents:
+        with RepoContents.load(self._contents_filename(current_uuid), create_for_uuid=current_uuid) as contents:
             print("Calculating diffs between repo and filesystem...")
             for diff in compute_diffs(contents, self.repo, skip_integrity_checks):
                 if isinstance(diff, FileNotInFilesystem):
