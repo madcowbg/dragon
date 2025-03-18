@@ -18,7 +18,8 @@ Alternatives that turned out to be insufficient:
   scalable, however, and a peculiar
   problem presents itself with the set of backups. I don't want to necessarily manage 10 or more HDDs/SSDs that contain
   the backups of all the data, and manually split where each sub-folder goes.
-- [git-annex](https://git-annex.branchable.com/) is magical and powerful but inflexible ... and slow for large repositories on
+- [git-annex](https://git-annex.branchable.com/) is magical and powerful but inflexible ... and slow for large
+  repositories on
   Windows with >100k files... and utterly confusing as to
   what exactly is happening at each instant in time, making it frustrating to deal with on a daily basis. Even with
   partial checkouts, its insistence to put everything in the same hierarchy and touching the actual files to convert to
@@ -47,4 +48,16 @@ There has got to be a better way, and [**Dragon**](https://github.com/madcowbg/d
   repo or TimeMachine in hoard.
 
 # Usage
+
 TODO
+
+# Screenshots
+
+`dragon hoard status` - creates a table summarizing the status of the current hoard, and what each repo is currently
+sheduled to
+get, copy and cleanup.
+
+`dragon hoard sync-contents REPO` - execute file synchronization between repositories, aiming to fill `REPO` with all
+files that it requests to get or copy.
+
+<img src="doc/status-example-with-sync.png"/>
