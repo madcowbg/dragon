@@ -139,7 +139,7 @@ class HoardCommandContents:
                 out.write("DONE")
                 return out.getvalue()
 
-    def enable_contents(self, repo: str, path: str = ""):
+    def get(self, repo: str, path: str = ""):
         config = self.hoard.config()
 
         logging.info(f"Loading hoard TOML...")
@@ -171,7 +171,7 @@ class HoardCommandContents:
                 out.write("DONE")
                 return out.getvalue()
 
-    def refresh(self, remote: str, ignore_epoch: bool = False, force_fetch_local_missing: bool = False):
+    def pull(self, remote: str, ignore_epoch: bool = False, force_fetch_local_missing: bool = False):
         logging.info("Loading config")
         config = self.hoard.config()
 

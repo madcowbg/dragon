@@ -24,7 +24,7 @@ class TestHoardCommand(unittest.TestCase):
         hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = init_complex_hoard(
             self.tmpdir.name)
 
-        res = hoard_cmd.contents.refresh("repo-full-name")
+        res = hoard_cmd.contents.pull("repo-full-name")
         self.assertEqual(
             "+/test.me.1\n"
             "+/test.me.4\n"
