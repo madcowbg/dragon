@@ -159,7 +159,7 @@ class HoardCommand(object):
             out.write("Mounts:\n")
 
             mounts = dict((m, list(rs)) for m, rs in groupby(config.remotes.all(), lambda r: r.mounted_at))
-            for mount, remotes in mounts.items():
+            for mount, remotes in sorted(mounts.items()):
                 out.write(f"  {mount} -> {', '.join([remote.name for remote in remotes])}\n")
             out.write("DONE\n")
             return out.getvalue()

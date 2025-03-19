@@ -352,6 +352,16 @@ class TestHoardCommand(unittest.TestCase):
             'cloned-repo/test.me.once',
             'cloned-repo/test.me.twice'], dump_file_list(self.tmpdir.name, "cloned-repo"))
 
+        res = hoard_cmd.remotes(show_paths=True)
+        self.assertEqual(
+            "2 total remotes.\n"
+            f"  [cloned-repo] {cloned_cave_cmd.current_uuid()} (partial) in {pathlib.Path(self.tmpdir.name).joinpath('cloned-repo').as_posix()}\n"
+            f"  [repo-in-local] {orig_cave_cmd.current_uuid()} (partial) in {pathlib.Path(self.tmpdir.name).joinpath('repo').as_posix()}\n"
+            "Mounts:\n"
+            "  / -> repo-in-local\n"
+            "  /wat -> cloned-repo\n"
+            "DONE", res.strip())
+
     def test_create_repo_types(self):
         populate_repotypes(self.tmpdir.name)
         hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = init_complex_hoard(
@@ -956,6 +966,7 @@ def dump_file_list(tmpdir: str, path: str, data: bool = False) -> List[str] | Di
         def read(f):
             with open(join(tmpdir, f)) as fo:
                 return fo.read()
+
         return dict((f, read(f)) for f in files)
 
 
