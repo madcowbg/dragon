@@ -51,13 +51,14 @@ class PartialDiffHandler(DiffHandler):
 
     def handle_local_only(self, diff: "FileMissingInHoard", out: StringIO):
         out.write(f"+{diff.hoard_file}\n")
-        self.hoard.fsobjects.add_new_file(
-            diff.hoard_file, diff.local_props,
+
+        hoard_file = self.hoard.fsobjects.add_or_replace_file(diff.hoard_file, diff.local_props)
+        hoard_file.fix_statuses_of_new_file(
             current_uuid=self.remote_uuid,
             repos_to_add_new_files=self.content_prefs.repos_to_add(diff.hoard_file, diff.local_props))
 
     def handle_file_is_same(self, diff: "FileIsSame", out: StringIO):
-        goal_status = diff.hoard_props.status(self.remote_uuid)
+        goal_status = diff.hoard_props.get_status(self.remote_uuid)
         if goal_status == FileStatus.CLEANUP:
             logging.info(f"skipping {diff.hoard_file} as is marked for deletion")
             out.write(f"?{diff.hoard_file}\n")
@@ -71,7 +72,7 @@ class PartialDiffHandler(DiffHandler):
             raise ValueError(f"unrecognized hoard state for {diff.hoard_file}: {goal_status}")
 
     def handle_file_contents_differ(self, diff: FileContentsDiffer, out: StringIO):
-        goal_status = diff.hoard_props.status(self.remote_uuid)
+        goal_status = diff.hoard_props.get_status(self.remote_uuid)
         if goal_status == FileStatus.CLEANUP:
             logging.info(f"skipping {diff.hoard_file} as is marked for deletion")
             out.write(f"?{diff.hoard_file}\n")
@@ -81,10 +82,10 @@ class PartialDiffHandler(DiffHandler):
         elif goal_status == FileStatus.AVAILABLE:  # file was changed in-place
             diff.hoard_props.replace_file(diff.local_props, self.remote_uuid)
             out.write(f"u{diff.hoard_file}\n")
-            diff.hoard_props.mark_to_get(self.remote_uuid)
+            diff.hoard_props.mark_to_get([self.remote_uuid])
 
     def handle_hoard_only(self, diff: FileMissingInLocal, out: StringIO):
-        goal_status = diff.hoard_props.status(self.remote_uuid)
+        goal_status = diff.hoard_props.get_status(self.remote_uuid)
         if goal_status == FileStatus.CLEANUP:
             logging.info(f"file had been deleted.")
             diff.hoard_props.remove_status(self.remote_uuid)
@@ -92,11 +93,11 @@ class PartialDiffHandler(DiffHandler):
             if self.force_fetch_local_missing:
                 logging.info(f"file {diff.hoard_file} is missing, restoring due to --force-fetch-local-missing")
 
-                diff.hoard_props.mark_to_get(self.remote_uuid)
+                diff.hoard_props.mark_to_get([self.remote_uuid])
                 out.write(f"g{diff.hoard_file}\n")
             else:
                 logging.info(f"deleting file {diff.hoard_file} as is no longer in local")
-                diff.hoard_props.mark_to_delete()
+                diff.hoard_props.mark_to_delete_everywhere()
                 diff.hoard_props.remove_status(self.remote_uuid)
                 out.write(f"-{diff.hoard_file}\n")
         elif goal_status == FileStatus.GET:
@@ -114,32 +115,34 @@ class IncomingDiffHandler(DiffHandler):
 
     def handle_local_only(self, diff: FileMissingInHoard, out: StringIO):
         out.write(f"<+{diff.hoard_file}\n")
-        hoard_file = self.hoard.fsobjects.add_new_file(
-            diff.hoard_file, diff.local_props,
+        hoard_file = self.hoard.fsobjects.add_or_replace_file(diff.hoard_file, diff.local_props)
+
+        hoard_file.fix_statuses_of_new_file(
             current_uuid=self.remote_uuid,
             repos_to_add_new_files=self.content_prefs.repos_to_add(diff.hoard_file, diff.local_props))
+
         logging.info(f"marking {diff.hoard_file} for cleanup from {self.remote_uuid}")
-        hoard_file.mark_for_cleanup(repo_uuid=self.remote_uuid)
+        hoard_file.mark_for_cleanup([self.remote_uuid])
 
     def handle_file_is_same(self, diff: FileIsSame, out: StringIO):
         logging.info(f"incoming file is already recorded in hoard.")
         logging.info(f"marking {diff.hoard_file} for cleanup from {self.remote_uuid}")
         out.write(f"-{diff.hoard_file}\n")
-        diff.hoard_props.mark_for_cleanup(repo_uuid=self.remote_uuid)
+        diff.hoard_props.mark_for_cleanup([self.remote_uuid])
 
     def handle_file_contents_differ(self, diff: FileContentsDiffer, out: StringIO):
-        goal_status = diff.hoard_props.status(self.remote_uuid)
+        goal_status = diff.hoard_props.get_status(self.remote_uuid)
         if goal_status == FileStatus.CLEANUP:  # is already marked for deletion
             logging.info(f"skipping {diff.hoard_file} as is marked for deletion")
             out.write(f"?{diff.hoard_file}\n")
         else:  # file was changed in-place
             diff.hoard_props.replace_file(diff.local_props, self.remote_uuid)
             out.write(f"u{diff.hoard_file}\n")
-            diff.hoard_props.mark_for_cleanup(self.remote_uuid)
+            diff.hoard_props.mark_for_cleanup([self.remote_uuid])
 
     def handle_hoard_only(self, diff: FileMissingInLocal, out: StringIO):
         logging.info(f"skipping file not in local.")
-        if diff.hoard_props.status(self.remote_uuid) == FileStatus.CLEANUP:
+        if diff.hoard_props.get_status(self.remote_uuid) == FileStatus.CLEANUP:
             diff.hoard_props.remove_status(self.remote_uuid)
 
 
@@ -151,27 +154,30 @@ class BackupDiffHandler(DiffHandler):
     def handle_file_is_same(self, diff: FileIsSame, out: StringIO):
         logging.info(f"file already backed up ... skipping.")
 
-        goal_status = diff.hoard_props.status(self.remote_uuid)
+        goal_status = diff.hoard_props.get_status(self.remote_uuid)
         if goal_status == FileStatus.GET or goal_status == FileStatus.UNKNOWN:
             diff.hoard_props.mark_available(self.remote_uuid)
             out.write(f"={diff.hoard_file}\n")
 
     def handle_file_contents_differ(self, diff: FileContentsDiffer, out: StringIO):
-        goal_status = diff.hoard_props.status(self.remote_uuid)
+        goal_status = diff.hoard_props.get_status(self.remote_uuid)
         if goal_status == FileStatus.AVAILABLE:  # was backed-up here, get it again
             out.write(f"g{diff.hoard_file}\n")
-            diff.hoard_props.mark_to_get(self.remote_uuid)
+            props = diff.hoard_props
+            props.mark_to_get([self.remote_uuid])
 
     def handle_hoard_only(self, diff: FileMissingInLocal, out: StringIO):
-        goal_status = diff.hoard_props.status(self.remote_uuid)
+        goal_status = diff.hoard_props.get_status(self.remote_uuid)
         if goal_status == FileStatus.AVAILABLE:  # was backed-up here, get it again
             out.write(f"g{diff.hoard_file}\n")
-            diff.hoard_props.mark_to_get(self.remote_uuid)
+            props = diff.hoard_props
+            props.mark_to_get([self.remote_uuid])
         elif goal_status == FileStatus.CLEANUP:  # file already deleted
             diff.hoard_props.remove_status(self.remote_uuid)
         elif goal_status == FileStatus.GET:
             pass
         elif goal_status == FileStatus.UNKNOWN:
-            diff.hoard_props.mark_to_get(self.remote_uuid)  # fixme make into a backup set
+            file_props = diff.hoard_props
+            file_props.mark_to_get([self.remote_uuid])
         else:
             raise NotImplementedError(f"Unrecognized goal status {goal_status}")

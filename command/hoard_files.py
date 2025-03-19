@@ -68,7 +68,7 @@ def _fetch_files_in_repo(
             try:
                 assert isinstance(hoard_props, HoardFileProps)
 
-                goal_status = hoard_props.status(repo_uuid)
+                goal_status = hoard_props.get_status(repo_uuid)
                 assert goal_status != FileStatus.AVAILABLE
                 assert goal_status != FileStatus.CLEANUP
                 assert goal_status != FileStatus.UNKNOWN
@@ -120,7 +120,7 @@ def _cleanup_files_in_repo(
         for hoard_file, hoard_props in files_to_cleanup:
             assert isinstance(hoard_props, HoardFileProps)
 
-            goal_status = hoard_props.status(repo_uuid)
+            goal_status = hoard_props.get_status(repo_uuid)
 
             assert goal_status != FileStatus.AVAILABLE
             assert goal_status != FileStatus.GET
@@ -222,7 +222,7 @@ async def _restore_from_copy(
     print(f"Restoring to {to_fullpath}")
     for candidate_file in candidates_to_copy:
         other_props = hoard.fsobjects[candidate_file]
-        if other_props.status(repo_uuid) != FileStatus.AVAILABLE:  # file is not available here
+        if other_props.get_status(repo_uuid) != FileStatus.AVAILABLE:  # file is not available here
             continue
 
         other_file_path = pathing.in_hoard(candidate_file).at_local(repo_uuid).on_device_path()

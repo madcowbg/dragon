@@ -164,9 +164,9 @@ class HoardCommandContents:
                     if not pathlib.Path(local_file.as_posix()).is_relative_to(path):
                         logging.info(f"file not in {path}: {local_file.as_posix()}")
                         continue
-                    if hoard_props.status(repo_uuid) not in already_enabled:
+                    if hoard_props.get_status(repo_uuid) not in already_enabled:
                         logging.info(f"enabling file {hoard_file} on {repo_uuid}")
-                        hoard_props.mark_to_get(repo_uuid)
+                        hoard_props.mark_to_get([repo_uuid])
                         out.write(f"+{hoard_file}\n")
 
                 out.write("DONE")

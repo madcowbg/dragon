@@ -1,6 +1,7 @@
-import abc
 import enum
 from typing import Dict, Any, List
+
+from util import FIRST_VALUE
 
 
 class RepoFileProps:
@@ -59,9 +60,7 @@ class HoardFileProps:
         self.mark_available(available_uuid)
 
     def mark_available(self, remote_uuid: str):
-        self.parent.conn.execute(
-            "INSERT OR REPLACE INTO fspresence(fsobject_id, uuid, status) VALUES (?, ?, ?)",
-            (self.fsobject_id, remote_uuid, FileStatus.AVAILABLE.value))
+        self.set_status([remote_uuid], FileStatus.AVAILABLE)
 
     @property
     def available_at(self) -> List[str]:
@@ -73,34 +72,35 @@ class HoardFileProps:
             "SELECT uuid, status FROM fspresence WHERE fsobject_id = ?",
             (self.fsobject_id,)))
 
-    def by_status(self, selected_status: FileStatus):
+    def by_status(self, selected_status: FileStatus) -> List[str]:
         return [u[0] for u in self.parent.conn.execute(
             "SELECT uuid FROM fspresence WHERE fsobject_id = ? AND status = ?",
             (self.fsobject_id, selected_status.value))]
 
-    def mark_for_cleanup(self, repo_uuid: str):
-        self.parent.conn.execute(
-            "INSERT OR REPLACE INTO fspresence (fsobject_id, uuid, status) VALUES (?, ?, ?)",
-            (self.fsobject_id, repo_uuid, FileStatus.CLEANUP.value))
+    def mark_for_cleanup(self, repos: List[str]):
+        self.set_status(repos, FileStatus.CLEANUP)
 
-    def status(self, repo_uuid: str) -> FileStatus:
+    def get_status(self, repo_uuid: str) -> FileStatus:
         current = self.parent.conn.execute(
             "SELECT status FROM fspresence WHERE fsobject_id = ? and uuid=?",
             (self.fsobject_id, repo_uuid)
         ).fetchone()
         return FileStatus(current[0]) if current is not None else FileStatus.UNKNOWN
 
-    def mark_to_get(self, repo_uuid: str):
-        self.parent.conn.execute(
+    def set_status(self, repos: List[str], status: FileStatus):
+        self.parent.conn.executemany(
             "INSERT OR REPLACE INTO fspresence(fsobject_id, uuid, status) VALUES (?, ?, ?)",
-            (self.fsobject_id, repo_uuid, FileStatus.GET.value))
+            ((self.fsobject_id, repo_uuid, status.value) for repo_uuid in repos))
 
-    def mark_to_delete(self):
+    def mark_to_get(self, repos: List[str]):
+        self.set_status(repos, FileStatus.GET)
+
+    def mark_to_delete_everywhere(self):
         # remove places that still haven't gotten it
         self.parent.conn.execute(
             "DELETE FROM fspresence "
-            "WHERE fsobject_id = ? and status = ?",
-            (self.fsobject_id, FileStatus.GET.value))
+            "WHERE fsobject_id = ? and status in (?, ?)",
+            (self.fsobject_id, FileStatus.GET.value, FileStatus.COPY.value))
 
         # mark for cleanup places where it is available
         self.parent.conn.execute(
@@ -114,11 +114,21 @@ class HoardFileProps:
             "WHERE fsobject_id = ? AND uuid=?",
             (self.fsobject_id, remote_uuid))
 
-    def status_to_copy(self) -> List[str]:
-        return [row[0] for row in self.parent.conn.execute(
+    def repos_with_status_to_copy(self) -> List[str]:
+        curr = self.parent.conn.cursor()
+        curr.row_factory = FIRST_VALUE
+
+        return curr.execute(
             "SELECT uuid FROM fspresence "
             "WHERE fsobject_id = ? AND status IN (?, ?, ?)",
-            (self.fsobject_id, *STATUSES_TO_COPY))]
+            (self.fsobject_id, *STATUSES_TO_COPY)).fetchall()
+
+    def fix_statuses_of_new_file(self, current_uuid: str, repos_to_add_new_files: List[str]) -> None:
+        # add status for new repos
+        self.set_status(repos_to_add_new_files, FileStatus.GET)
+
+        # set status here
+        self.mark_available(current_uuid)
 
 
 STATUSES_TO_COPY = [FileStatus.COPY.value, FileStatus.GET.value, FileStatus.AVAILABLE.value]

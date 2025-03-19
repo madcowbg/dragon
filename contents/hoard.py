@@ -160,7 +160,7 @@ class HoardFSObjects:
         for fsobject_id, fullpath, isdir, size, fasthash in self.parent.conn.execute(
                 "SELECT fsobject_id, fullpath, isdir, size, fasthash "
                 "FROM fsobject "
-                "WHERE isdir = FALSE and fasthash = ?", (fasthash, )):
+                "WHERE isdir = FALSE and fasthash = ?", (fasthash,)):
             yield fullpath, HoardFileProps(self.parent, fsobject_id, size, fasthash)
 
     def __iter__(self) -> Generator[Tuple[str, FSObjectProps], None, None]:  # fixme maybe optimize to create directly?
@@ -212,31 +212,19 @@ class HoardFSObjects:
             "SELECT count(1) > 0 FROM fsobject WHERE fsobject.fullpath = ?",
             (file_path,)).fetchone()
 
-    def add_new_file(
-            self, filepath: str, props: RepoFileProps,
-            current_uuid: str, repos_to_add_new_files: List[str]) -> HoardFileProps:
+    def add_or_replace_file(self, filepath: str, props: RepoFileProps):
         curr = self.parent.conn.cursor()
         curr.row_factory = FIRST_VALUE
 
         # add fsobject entry
-        self.parent.conn.execute(
+        curr.execute(
             "INSERT OR REPLACE INTO fsobject(fullpath, isdir, size, fasthash) VALUES (?, FALSE, ?, ?)",
             (filepath, props.size, props.fasthash))
 
+        # cleanup presence status
         fsobject_id: int = curr.execute(
             "SELECT fsobject_id FROM fsobject WHERE fullpath = ?", (filepath,)).fetchone()
-
-        # add status for new repos
         curr.execute("DELETE FROM fspresence WHERE fsobject_id = ?", (fsobject_id,))
-        curr.executemany(
-            "INSERT INTO fspresence(fsobject_id, uuid, status) VALUES (?, ?, ?)",
-            [(fsobject_id, uuid, FileStatus.GET.value) for uuid in repos_to_add_new_files])
-
-        # set status here
-        curr.execute(
-            "INSERT OR REPLACE INTO fspresence(fsobject_id, uuid, status) VALUES (?, ?, ?)",
-            (fsobject_id, current_uuid, FileStatus.AVAILABLE.value))
-
         return HoardFileProps(self.parent, fsobject_id, props.size, props.fasthash)
 
     def _first_value_curr(self):
@@ -316,7 +304,7 @@ class HoardFSObjects:
                 (to_fullpath,)).fetchone()
             curr.executemany(
                 "INSERT INTO fspresence(fsobject_id, uuid, status) VALUES (?, ?, ?)",
-                [(new_path_id, uuid, FileStatus.COPY.value) for uuid in props.status_to_copy()])
+                [(new_path_id, uuid, FileStatus.COPY.value) for uuid in props.repos_with_status_to_copy()])
         elif isinstance(props, DirProps):
             self.add_dir(to_fullpath)
         else:
