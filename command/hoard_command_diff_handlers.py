@@ -1,12 +1,12 @@
 import logging
 from abc import abstractmethod
 from io import StringIO
-from typing import List
+from typing import List, Generator, Optional, Iterable
 
 from config import HoardRemote, HoardConfig, CaveType
 from contents_diff import FileMissingInHoard, FileIsSame, FileContentsDiffer, FileMissingInLocal
 from contents.hoard import HoardContents
-from contents.props import FileStatus, RepoFileProps
+from contents.props import FileStatus, RepoFileProps, HoardFileProps
 from command.pathing import HoardPathing
 
 
@@ -28,18 +28,88 @@ class DiffHandler:
     def handle_hoard_only(self, diff: FileMissingInLocal, out: StringIO): pass
 
 
+class BackupSet:
+    def __init__(self, backups: List[HoardRemote], pathing: HoardPathing):
+        self.backups = dict((backup.uuid, backup) for backup in backups)
+        self.pathing = pathing
+
+        self.num_backup_copies_desired = 1
+
+    def repos_to_backup_to(
+            self, hoard_file: str, local_props: RepoFileProps,
+            hoard_props: Optional[HoardFileProps] = None) -> Iterable[HoardRemote]:
+
+        past_backups = list(self._find_past_backups(hoard_file, hoard_props))
+
+        logging.info(f"Got {len(past_backups)} currently requested backups for {hoard_file}.")
+        if len(past_backups) >= self.num_backup_copies_desired:
+            logging.info(
+                f"Skipping {hoard_file}, requested backups {len(past_backups)} >= {self.num_backup_copies_desired}")
+            return []
+
+        num_backups_to_request = self.num_backup_copies_desired - len(past_backups)
+
+        new_possible_backups = list(self._find_new_backups(hoard_file, hoard_props, past_backups))
+
+        if len(new_possible_backups) < num_backups_to_request:
+            logging.error(
+                f"Need at least {num_backups_to_request} backup media to satisfy, has only {len(new_possible_backups)} remaining.")
+
+        logging.info(
+            f"Returning {min(num_backups_to_request, len(new_possible_backups))} new backups "
+            f"from requested {num_backups_to_request}.")
+        return map(lambda r: r.uuid, new_possible_backups[:num_backups_to_request])
+
+    def _find_past_backups(
+            self, hoard_file: str, hoard_props: Optional[HoardFileProps]) -> Iterable[HoardRemote]:
+        if hoard_props is None:
+            return
+
+        for uuid in hoard_props.repos_having_status(FileStatus.GET, FileStatus.COPY, FileStatus.AVAILABLE):
+            if uuid not in self.backups:
+                continue
+
+            if not is_path_available(self.pathing, hoard_file, uuid):
+                continue
+
+            yield self.backups[uuid]
+
+    def _find_new_backups(self, hoard_file: str, hoard_props: Optional[HoardFileProps],
+                          past_backups: List[HoardRemote]) -> Iterable[HoardRemote]:
+
+        # FIXME implement balancing logic e.g. by ordering as % empty and checking file size
+        for uuid, backup in self.backups.items():
+            if not is_path_available(self.pathing, hoard_file, uuid):
+                continue
+
+            if backup in past_backups:
+                continue
+
+            yield backup
+
+
 class ContentPrefs:
     def __init__(self, config: HoardConfig, pathing: HoardPathing):
         self.config = config
-        self._repos_to_add_new_files: List[HoardRemote] = [
+        self._partials_with_fetch_new: List[HoardRemote] = [
             r for r in config.remotes.all() if
-            (r.type == CaveType.PARTIAL and r.fetch_new) or r.type == CaveType.BACKUP]
+            r.type == CaveType.PARTIAL and r.fetch_new]
+
+        self._backup_set = BackupSet([r for r in config.remotes.all() if r.type == CaveType.BACKUP], pathing)
         self.pathing = pathing
 
-    def repos_to_add(self, hoard_file: str, local_props: RepoFileProps):
-        return [
-            r.uuid for r in self._repos_to_add_new_files
-            if self.pathing.in_hoard(hoard_file).at_local(r.uuid) is not None]
+    def repos_to_add(
+            self, hoard_file: str, local_props: RepoFileProps,
+            hoard_props: Optional[HoardFileProps] = None) -> Generator[HoardRemote, None, None]:
+        for r in self._partials_with_fetch_new:
+            if is_path_available(self.pathing, hoard_file, r.uuid):
+                yield r.uuid
+
+        yield from self._backup_set.repos_to_backup_to(hoard_file, local_props, hoard_props)
+
+
+def is_path_available(pathing, hoard_file: str, repo: str) -> bool:
+    return pathing.in_hoard(hoard_file).at_local(repo) is not None
 
 
 class PartialDiffHandler(DiffHandler):
@@ -52,10 +122,13 @@ class PartialDiffHandler(DiffHandler):
     def handle_local_only(self, diff: "FileMissingInHoard", out: StringIO):
         out.write(f"+{diff.hoard_file}\n")
 
-        hoard_file = self.hoard.fsobjects.add_or_replace_file(diff.hoard_file, diff.local_props)
-        hoard_file.fix_statuses_of_new_file(
-            current_uuid=self.remote_uuid,
-            repos_to_add_new_files=self.content_prefs.repos_to_add(diff.hoard_file, diff.local_props))
+        hoard_props = self.hoard.fsobjects.add_or_replace_file(diff.hoard_file, diff.local_props)
+
+        # add status for new repos
+        hoard_props.set_status(self.content_prefs.repos_to_add(diff.hoard_file, diff.local_props), FileStatus.GET)
+
+        # set status here
+        hoard_props.mark_available(self.remote_uuid)
 
     def handle_file_is_same(self, diff: "FileIsSame", out: StringIO):
         goal_status = diff.hoard_props.get_status(self.remote_uuid)
@@ -117,9 +190,8 @@ class IncomingDiffHandler(DiffHandler):
         out.write(f"<+{diff.hoard_file}\n")
         hoard_file = self.hoard.fsobjects.add_or_replace_file(diff.hoard_file, diff.local_props)
 
-        hoard_file.fix_statuses_of_new_file(
-            current_uuid=self.remote_uuid,
-            repos_to_add_new_files=self.content_prefs.repos_to_add(diff.hoard_file, diff.local_props))
+        # add status for new repos
+        hoard_file.set_status(self.content_prefs.repos_to_add(diff.hoard_file, diff.local_props), FileStatus.GET)
 
         logging.info(f"marking {diff.hoard_file} for cleanup from {self.remote_uuid}")
         hoard_file.mark_for_cleanup([self.remote_uuid])

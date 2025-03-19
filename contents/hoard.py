@@ -302,9 +302,11 @@ class HoardFSObjects:
             new_path_id: int = curr.execute(
                 "SELECT fsobject_id FROM fsobject WHERE fullpath = ?",
                 (to_fullpath,)).fetchone()
+
+            previously_added_repos = props.repos_having_status(FileStatus.COPY, FileStatus.GET, FileStatus.AVAILABLE)
             curr.executemany(
                 "INSERT INTO fspresence(fsobject_id, uuid, status) VALUES (?, ?, ?)",
-                [(new_path_id, uuid, FileStatus.COPY.value) for uuid in props.repos_with_status_to_copy()])
+                [(new_path_id, uuid, FileStatus.COPY.value) for uuid in previously_added_repos])
         elif isinstance(props, DirProps):
             self.add_dir(to_fullpath)
         else:

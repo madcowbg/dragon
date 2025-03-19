@@ -114,23 +114,14 @@ class HoardFileProps:
             "WHERE fsobject_id = ? AND uuid=?",
             (self.fsobject_id, remote_uuid))
 
-    def repos_with_status_to_copy(self) -> List[str]:
+    def repos_having_status(self, *statuses: FileStatus) -> List[str]:
         curr = self.parent.conn.cursor()
         curr.row_factory = FIRST_VALUE
 
         return curr.execute(
-            "SELECT uuid FROM fspresence "
-            "WHERE fsobject_id = ? AND status IN (?, ?, ?)",
-            (self.fsobject_id, *STATUSES_TO_COPY)).fetchall()
+            f"SELECT uuid FROM fspresence "
+            f"WHERE fsobject_id = ? AND status IN ({', '.join('?' * len(statuses))})",
+            (self.fsobject_id, *(s.value for s in statuses))).fetchall()
 
-    def fix_statuses_of_new_file(self, current_uuid: str, repos_to_add_new_files: List[str]) -> None:
-        # add status for new repos
-        self.set_status(repos_to_add_new_files, FileStatus.GET)
-
-        # set status here
-        self.mark_available(current_uuid)
-
-
-STATUSES_TO_COPY = [FileStatus.COPY.value, FileStatus.GET.value, FileStatus.AVAILABLE.value]
 
 type FSObjectProps = RepoFileProps | HoardFileProps | DirProps
