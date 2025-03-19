@@ -9,7 +9,8 @@ import humanize
 from alive_progress import alive_bar
 
 from command.hoard import Hoard
-from command.hoard_command_diff_handlers import DiffHandler, PartialDiffHandler, BackupDiffHandler, IncomingDiffHandler
+from command.hoard_command_diff_handlers import DiffHandler, PartialDiffHandler, BackupDiffHandler, IncomingDiffHandler, \
+    ContentPrefs
 from command.pathing import HoardPathing
 from config import HoardRemote, CaveType, HoardConfig, HoardPaths
 from contents.hoard import HoardContents, HoardFile, HoardDir
@@ -174,6 +175,7 @@ class HoardCommandContents:
     def pull(self, remote: str, ignore_epoch: bool = False, force_fetch_local_missing: bool = False):
         logging.info("Loading config")
         config = self.hoard.config()
+        pathing = HoardPathing(config, self.hoard.paths())
 
         logging.info(f"Loading hoard TOML...")
         with HoardContents.load(self.hoard.hoard_contents_filename()) as hoard:
@@ -182,21 +184,16 @@ class HoardCommandContents:
             remote_uuid = resolve_remote_uuid(self.hoard.config(), remote)
             remote_type = config.remotes[remote_uuid].type
 
-            repos_to_add_new_files: List[HoardRemote] = [
-                r for r in config.remotes.all() if
-                (r.type == CaveType.PARTIAL and r.fetch_new) or r.type == CaveType.BACKUP]
+            content_prefs = ContentPrefs(config, pathing)
+
             if remote_type == CaveType.PARTIAL:
                 remote_op_handler: DiffHandler = PartialDiffHandler(
-                    remote_uuid, hoard, repos_to_add_new_files,
-                    config.remotes[remote_uuid].fetch_new,
-                    pathing=HoardPathing(config, self.hoard.paths()),
+                    remote_uuid, hoard, content_prefs,
                     force_fetch_local_missing=force_fetch_local_missing)
             elif remote_type == CaveType.BACKUP:
                 remote_op_handler: DiffHandler = BackupDiffHandler(remote_uuid, hoard)
             elif remote_type == CaveType.INCOMING:
-                remote_op_handler: DiffHandler = IncomingDiffHandler(
-                    remote_uuid, hoard,
-                    repos_to_add_new_files, pathing=HoardPathing(config, self.hoard.paths()))
+                remote_op_handler: DiffHandler = IncomingDiffHandler(remote_uuid, hoard, content_prefs)
             else:
                 raise ValueError(f"FIXME unsupported remote type: {remote_type}")
 

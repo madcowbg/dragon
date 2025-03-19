@@ -3,10 +3,10 @@ from abc import abstractmethod
 from io import StringIO
 from typing import List
 
-from config import HoardRemote
+from config import HoardRemote, HoardConfig, CaveType
 from contents_diff import FileMissingInHoard, FileIsSame, FileContentsDiffer, FileMissingInLocal
 from contents.hoard import HoardContents
-from contents.props import FileStatus
+from contents.props import FileStatus, RepoFileProps
 from command.pathing import HoardPathing
 
 
@@ -28,18 +28,25 @@ class DiffHandler:
     def handle_hoard_only(self, diff: FileMissingInLocal, out: StringIO): pass
 
 
-def filter_accessible(pathing: HoardPathing, repos: List[HoardRemote], hoard_file: str) -> List[str]:
-    return [r.uuid for r in repos if pathing.in_hoard(hoard_file).at_local(r.uuid) is not None]
+class ContentPrefs:
+    def __init__(self, config: HoardConfig, pathing: HoardPathing):
+        self.config = config
+        self._repos_to_add_new_files: List[HoardRemote] = [
+            r for r in config.remotes.all() if
+            (r.type == CaveType.PARTIAL and r.fetch_new) or r.type == CaveType.BACKUP]
+        self.pathing = pathing
+
+    def repos_to_add(self, hoard_file: str, local_props: RepoFileProps):
+        return [
+            r.uuid for r in self._repos_to_add_new_files
+            if self.pathing.in_hoard(hoard_file).at_local(r.uuid) is not None]
 
 
 class PartialDiffHandler(DiffHandler):
     def __init__(
-            self, remote_uuid: str, hoard: HoardContents, repos_to_add_new_files: List[HoardRemote],
-            fetch_new: bool, pathing: HoardPathing, force_fetch_local_missing: bool):
+            self, remote_uuid: str, hoard: HoardContents, content_prefs: ContentPrefs, force_fetch_local_missing: bool):
         super().__init__(remote_uuid, hoard)
-        self.repos_to_add_new_files = repos_to_add_new_files
-        self.fetch_new = fetch_new
-        self.pathing = pathing
+        self.content_prefs = content_prefs
         self.force_fetch_local_missing = force_fetch_local_missing
 
     def handle_local_only(self, diff: "FileMissingInHoard", out: StringIO):
@@ -47,7 +54,7 @@ class PartialDiffHandler(DiffHandler):
         self.hoard.fsobjects.add_new_file(
             diff.hoard_file, diff.local_props,
             current_uuid=self.remote_uuid,
-            repos_to_add_new_files=filter_accessible(self.pathing, self.repos_to_add_new_files, diff.hoard_file))
+            repos_to_add_new_files=self.content_prefs.repos_to_add(diff.hoard_file, diff.local_props))
 
     def handle_file_is_same(self, diff: "FileIsSame", out: StringIO):
         goal_status = diff.hoard_props.status(self.remote_uuid)
@@ -101,19 +108,16 @@ class PartialDiffHandler(DiffHandler):
 
 
 class IncomingDiffHandler(DiffHandler):
-    def __init__(
-            self, remote_uuid: str, hoard: HoardContents,
-            repos_to_add_new_files: List[HoardRemote], pathing: HoardPathing):
+    def __init__(self, remote_uuid: str, hoard: HoardContents, content_prefs: ContentPrefs):
         super().__init__(remote_uuid, hoard)
-        self.repos_to_add_new_files = repos_to_add_new_files
-        self.pathing = pathing
+        self.content_prefs = content_prefs
 
     def handle_local_only(self, diff: FileMissingInHoard, out: StringIO):
         out.write(f"<+{diff.hoard_file}\n")
         hoard_file = self.hoard.fsobjects.add_new_file(
             diff.hoard_file, diff.local_props,
             current_uuid=self.remote_uuid,
-            repos_to_add_new_files=filter_accessible(self.pathing, self.repos_to_add_new_files, diff.hoard_file))
+            repos_to_add_new_files=self.content_prefs.repos_to_add(diff.hoard_file, diff.local_props))
         logging.info(f"marking {diff.hoard_file} for cleanup from {self.remote_uuid}")
         hoard_file.mark_for_cleanup(repo_uuid=self.remote_uuid)
 
