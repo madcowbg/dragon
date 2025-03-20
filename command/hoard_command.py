@@ -287,7 +287,7 @@ class HoardCommand(object):
                 out.write("DONE")
                 return out.getvalue()
 
-    def recover(self, source: str, dest: str, move: bool = False, junk_folder: str = "_JUNK_"):
+    def meld(self, source: str, dest: str, move: bool = False, junk_folder: str = "_JUNK_"):
         if not os.path.isdir(source):
             return f"Source path {source} does not exist!"
         if not os.path.isdir(dest):
