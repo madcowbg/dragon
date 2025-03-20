@@ -561,15 +561,16 @@ class TestFileChangingFlows(unittest.TestCase):
             "DONE", res)
 
         res = hoard_cmd.contents.status(hide_time=True)
-        self.assertEqual("|Num Files                |total     |available |get       |copy      |cleanup   |\n"
-                         "|repo-backup-name         |         4|          |         4|          |          |\n"
-                         "|repo-full-name           |         4|         4|          |          |          |\n"
-                         "|repo-partial-name        |         2|         2|          |          |          |\n"
-                         "\n"
-                         "|Size                     |total     |available |get       |copy      |cleanup   |\n"
-                         "|repo-backup-name         |        35|          |        35|          |          |\n"
-                         "|repo-full-name           |        35|        35|          |          |          |\n"
-                         "|repo-partial-name        |        14|        14|          |          |          |\n", res)
+        self.assertEqual(
+            "|Num Files                |total     |available |get       |copy      |cleanup   |\n"
+            "|repo-backup-name         |         4|          |         4|          |          |\n"
+            "|repo-full-name           |         4|         4|          |          |          |\n"
+            "|repo-partial-name        |         2|         2|          |          |          |\n"
+            "\n"
+            "|Size                     |total     |available |get       |copy      |cleanup   |\n"
+            "|repo-backup-name         |        35|          |        35|          |          |\n"
+            "|repo-full-name           |        35|        35|          |          |          |\n"
+            "|repo-partial-name        |        14|        14|          |          |          |\n", res)
 
         res = hoard_cmd.contents.pull(changed_cave_cmd.current_uuid(), assume_current=True)
         self.assertEqual(
@@ -580,17 +581,18 @@ class TestFileChangingFlows(unittest.TestCase):
             "Sync'ed repo-changed-cave-name to hoard!\nDONE", res)
 
         res = hoard_cmd.contents.status(hide_time=True)
-        self.assertEqual("|Num Files                |total     |available |get       |copy      |cleanup   |\n"
-                         "|repo-backup-name         |         4|          |         4|          |          |\n"
-                         "|repo-changed-cave-name   |         4|         4|          |          |          |\n"
-                         "|repo-full-name           |         4|         2|         2|          |          |\n"
-                         "|repo-partial-name        |         2|         1|         1|          |          |\n"
-                         "\n"
-                         "|Size                     |total     |available |get       |copy      |cleanup   |\n"
-                         "|repo-backup-name         |        38|          |        38|          |          |\n"
-                         "|repo-changed-cave-name   |        38|        38|          |          |          |\n"
-                         "|repo-full-name           |        38|        19|        19|          |          |\n"
-                         "|repo-partial-name        |        18|         8|        10|          |          |\n", res)
+        self.assertEqual(
+            "|Num Files                |total     |available |get       |copy      |cleanup   |\n"
+            "|repo-backup-name         |         4|          |         4|          |          |\n"
+            "|repo-changed-cave-name   |         4|         4|          |          |          |\n"
+            "|repo-full-name           |         4|         2|         2|          |          |\n"
+            "|repo-partial-name        |         2|         1|         1|          |          |\n"
+            "\n"
+            "|Size                     |total     |available |get       |copy      |cleanup   |\n"
+            "|repo-backup-name         |        38|          |        38|          |          |\n"
+            "|repo-changed-cave-name   |        38|        38|          |          |          |\n"
+            "|repo-full-name           |        38|        19|        19|          |          |\n"
+            "|repo-partial-name        |        18|         8|        10|          |          |\n", res)
 
         res = hoard_cmd.files.pending()
         self.assertEqual(
@@ -607,4 +609,3 @@ class TestFileChangingFlows(unittest.TestCase):
             "repo-incoming-name:\n"
             "repo-changed-cave-name:\n"
             "DONE", res)
-
