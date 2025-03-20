@@ -7,8 +7,8 @@ from itertools import groupby
 from typing import Dict, List, Tuple
 
 from command.hoard import Hoard
-from command.hoard_contents import HoardCommandContents, compare_local_to_hoard
-from command.hoard_files import HoardCommandFiles
+from command.contents.command import HoardCommandContents, compare_local_to_hoard
+from command.files.command import HoardCommandFiles
 from config import HoardRemote, CavePath, CaveType
 from contents.hoard import HoardContents
 from contents.props import DirProps, HoardFileProps

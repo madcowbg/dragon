@@ -9,10 +9,10 @@ import humanize
 from alive_progress import alive_bar
 
 from command.hoard import Hoard
-from command.hoard_command_diff_handlers import DiffHandler, PartialDiffHandler, BackupDiffHandler, IncomingDiffHandler, \
+from command.contents.diff_handlers import DiffHandler, PartialDiffHandler, BackupDiffHandler, IncomingDiffHandler, \
     ContentPrefs
 from command.pathing import HoardPathing
-from config import HoardRemote, CaveType, HoardConfig, HoardPaths
+from config import CaveType, HoardConfig, HoardPaths
 from contents.hoard import HoardContents, HoardFile, HoardDir
 
 from contents.props import HoardFileProps, FileStatus, RepoFileProps, DirProps
