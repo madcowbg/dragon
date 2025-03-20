@@ -1,7 +1,7 @@
 import logging
 import os
 from io import StringIO
-from typing import Optional, List, Dict, Iterable
+from typing import Optional, List, Dict
 
 import aioshutil
 from alive_progress import alive_bar
@@ -16,81 +16,10 @@ from hashing import fast_hash_async
 from resolve_uuid import resolve_remote_uuid
 from util import to_mb, run_async_in_parallel
 
-type FileOp = GetFile | CopyFile | CleanupFile
-
-
-class GetFile:
-    def __init__(self, hoard_file: str, hoard_props: HoardFileProps):
-        self.hoard_file = hoard_file
-        self.hoard_props = hoard_props
-
-
-class CopyFile:
-    def __init__(self, hoard_file: str, hoard_props: HoardFileProps):
-        self.hoard_file = hoard_file
-        self.hoard_props = hoard_props
-
-
-class CleanupFile:
-    def __init__(self, hoard_file: str, hoard_props: HoardFileProps):
-        self.hoard_file = hoard_file
-        self.hoard_props = hoard_props
-
-
-def _get_pending_operations(hoard: HoardContents, repo_uuid: str) -> Iterable[FileOp]:
-    for hoard_file, hoard_props in hoard.fsobjects.with_pending(repo_uuid):
-        goal_status = hoard_props.get_status(repo_uuid)
-        if goal_status == FileStatus.GET:
-            yield GetFile(hoard_file, hoard_props)
-        elif goal_status == FileStatus.COPY:
-            yield CopyFile(hoard_file, hoard_props)
-        elif goal_status == FileStatus.CLEANUP:
-            yield CleanupFile(hoard_file, hoard_props)
-        else:
-            raise ValueError(f"File {hoard_file} has no pending ops, yet was selected as one that has.")
-
 
 class HoardCommandFiles:
     def __init__(self, hoard: Hoard):
         self.hoard = hoard
-
-    def pending(self, repo: Optional[str] = None):
-        config = self.hoard.config()
-
-        repo_uuids: List[str] = [resolve_remote_uuid(config, repo)] \
-            if repo is not None else [r.uuid for r in config.remotes.all()]
-
-        logging.info(f"Loading hoard contents...")
-        with HoardContents.load(self.hoard.hoard_contents_filename()) as hoard:
-            with StringIO() as out:
-                for repo_uuid in repo_uuids:
-                    logging.info(f"Iterating over pending ops in {repo_uuid}")
-                    out.write(f"{config.remotes[repo_uuid].name}:\n")
-
-                    repos_containing_what_this_one_needs: Dict[str, int] = dict()
-                    for op in _get_pending_operations(hoard, repo_uuid):
-                        num_available = op.hoard_props.by_status(FileStatus.AVAILABLE)
-                        if isinstance(op, GetFile):
-                            out.write(f"TO_GET (from {len(num_available)}) {op.hoard_file}\n")
-                            for repo in num_available:
-                                repos_containing_what_this_one_needs[repo] = \
-                                    repos_containing_what_this_one_needs.get(repo, 0) + 1
-                        elif isinstance(op, CopyFile):
-                            out.write(f"TO_COPY (from {len(num_available)}+?) {op.hoard_file}\n")
-                            for repo in num_available:
-                                repos_containing_what_this_one_needs[repo] = \
-                                    repos_containing_what_this_one_needs.get(repo, 0) + 1
-                        elif isinstance(op, CleanupFile):
-                            out.write(f"TO_CLEANUP (is in {len(num_available)}) {op.hoard_file}\n")
-                        else:
-                            raise ValueError(f"Unhandled op type: {type(op)}")
-                    nc = sorted(map(
-                        lambda uc: (config.remotes[uc[0]].name, uc[1]), # uuid, count -> name, count
-                        repos_containing_what_this_one_needs.items()))
-                    for name, count in nc:
-                        out.write(f"{name} has {count} files\n")
-                out.write("DONE")
-                return out.getvalue()
 
     def sync_contents(self, repo: Optional[str] = None):
         config = self.hoard.config()
@@ -180,7 +109,7 @@ def _fetch_files_in_repo(
             finally:
                 bar(to_mb(hoard_props.size))
 
-        outputs = run_async_in_parallel(files_to_fetch, copy_or_get_file)
+        outputs = run_async_in_parallel(files_to_fetch, copy_or_get_file, ntasks=1)
 
         for line in outputs:
             if line is not None:
@@ -247,7 +176,7 @@ async def _restore_from_another_repo(
         hoard_file: HoardPathing.HoardPath, uuid_to_restore_to: str, hoard_props: HoardFileProps,
         config: HoardConfig) -> (bool, str):
     fullpath_to_restore = hoard_file.at_local(uuid_to_restore_to).on_device_path()
-    logging.info(f"Restoring hoard file {hoard_file} to {fullpath_to_restore}.")
+    logging.info(f"Restoring hoard file {hoard_file.as_posix()} to {fullpath_to_restore}.")
 
     candidates = hoard_props.by_status(FileStatus.AVAILABLE) + hoard_props.by_status(FileStatus.CLEANUP)
 
@@ -297,6 +226,7 @@ async def _restore_from_copy(
     for candidate_file in candidates_to_copy:
         other_props = hoard.fsobjects[candidate_file]
         if other_props.get_status(repo_uuid) != FileStatus.AVAILABLE:  # file is not available here
+            logging.error("trying to restore from a file that is not available!")
             continue
 
         other_file_path = pathing.in_hoard(candidate_file).at_local(repo_uuid).on_device_path()

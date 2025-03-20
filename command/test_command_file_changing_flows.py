@@ -594,7 +594,7 @@ class TestFileChangingFlows(unittest.TestCase):
             "|repo-full-name           |        38|        19|        19|          |          |\n"
             "|repo-partial-name        |        18|         8|        10|          |          |\n", res)
 
-        res = hoard_cmd.files.pending()
+        res = hoard_cmd.contents.pending()
         self.assertEqual(
             "repo-partial-name:\n"
             "TO_GET (from 1) /test.me.1\n"
@@ -602,7 +602,7 @@ class TestFileChangingFlows(unittest.TestCase):
             "repo-full-name:\n"
             "TO_GET (from 1) /test.me.1\n"
             "TO_GET (from 1) /wat/test.me.3\n"
-            "repo-changed-cave-name has 2 files\nadd"
+            "repo-changed-cave-name has 2 files\n"
             "repo-backup-name:\n"
             "TO_GET (from 3) /wat/test.me.2\n"
             "TO_GET (from 2) /test.me.4\n"
