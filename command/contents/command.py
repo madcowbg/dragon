@@ -184,73 +184,81 @@ class HoardCommandContents:
                 out.write("DONE")
                 return out.getvalue()
 
-    def pull(self, remote: str, ignore_epoch: bool = False, force_fetch_local_missing: bool = False):
+    def pull(self, remote: Optional[str] = None, all: bool = False, ignore_epoch: bool = False, force_fetch_local_missing: bool = False):
         logging.info("Loading config")
         config = self.hoard.config()
         pathing = HoardPathing(config, self.hoard.paths())
+
+        if all:
+            assert remote is None
+            logging.info("Pulling from all remotes!")
+            remote_uuids = [r.uuid for r in config.remotes.all()]
+        else:
+            remote_uuids = [remote]
 
         logging.info(f"Loading hoard TOML...")
         with HoardContents.load(self.hoard.hoard_contents_filename()) as hoard:
             logging.info(f"Loaded hoard TOML!")
 
-            remote_uuid = resolve_remote_uuid(self.hoard.config(), remote)
-            remote_type = config.remotes[remote_uuid].type
+            with StringIO() as out:
+                for remote_uuid in remote_uuids:
+                    remote_uuid = resolve_remote_uuid(self.hoard.config(), remote_uuid)
+                    remote_type = config.remotes[remote_uuid].type
 
-            content_prefs = ContentPrefs(config, pathing)
+                    content_prefs = ContentPrefs(config, pathing)
 
-            if remote_type == CaveType.PARTIAL:
-                remote_op_handler: DiffHandler = PartialDiffHandler(
-                    remote_uuid, hoard, content_prefs,
-                    force_fetch_local_missing=force_fetch_local_missing)
-            elif remote_type == CaveType.BACKUP:
-                remote_op_handler: DiffHandler = BackupDiffHandler(remote_uuid, hoard)
-            elif remote_type == CaveType.INCOMING:
-                remote_op_handler: DiffHandler = IncomingDiffHandler(remote_uuid, hoard, content_prefs)
-            else:
-                raise ValueError(f"FIXME unsupported remote type: {remote_type}")
+                    if remote_type == CaveType.PARTIAL:
+                        remote_op_handler: DiffHandler = PartialDiffHandler(
+                            remote_uuid, hoard, content_prefs,
+                            force_fetch_local_missing=force_fetch_local_missing)
+                    elif remote_type == CaveType.BACKUP:
+                        remote_op_handler: DiffHandler = BackupDiffHandler(remote_uuid, hoard)
+                    elif remote_type == CaveType.INCOMING:
+                        remote_op_handler: DiffHandler = IncomingDiffHandler(remote_uuid, hoard, content_prefs)
+                    else:
+                        raise ValueError(f"FIXME unsupported remote type: {remote_type}")
 
-            with self.hoard.fetch_repo_contents(remote_uuid) as current_contents:
-                if current_contents.config.is_dirty:
-                    logging.error(f"{remote} is_dirty = TRUE, so the refresh is not complete - can't use current repo.")
-                    return f"Skipping update as {remote} is not fully calculated!"
+                    with self.hoard.fetch_repo_contents(remote_uuid) as current_contents:
+                        if current_contents.config.is_dirty:
+                            logging.error(f"{remote_uuid} is_dirty = TRUE, so the refresh is not complete - can't use current repo.")
+                            return f"Skipping update as {remote_uuid} is not fully calculated!"
 
-                if not ignore_epoch and hoard.epoch(remote_uuid) >= current_contents.config.epoch:
-                    return (
-                        f"Skipping update as past epoch {current_contents.config.epoch} "
-                        f"is not after hoard epoch {hoard.epoch(remote_uuid)}")
+                        if not ignore_epoch and hoard.epoch(remote_uuid) >= current_contents.config.epoch:
+                            return (
+                                f"Skipping update as past epoch {current_contents.config.epoch} "
+                                f"is not after hoard epoch {hoard.epoch(remote_uuid)}")
 
-                remote_doc = config.remotes[remote_uuid]
-                if remote_doc is None or remote_doc.mounted_at is None:
-                    raise ValueError(f"remote_doc {remote_uuid} is not mounted!")
+                        remote_doc = config.remotes[remote_uuid]
+                        if remote_doc is None or remote_doc.mounted_at is None:
+                            raise ValueError(f"remote_doc {remote_uuid} is not mounted!")
 
-                with StringIO() as out:
-                    logging.info("Merging local changes...")
-                    for diff in compare_local_to_hoard(current_contents, hoard, config, self.hoard.paths()):
-                        if isinstance(diff, FileMissingInHoard):
-                            remote_op_handler.handle_local_only(diff, out)
-                        elif isinstance(diff, FileIsSame):
-                            remote_op_handler.handle_file_is_same(diff, out)
-                        elif isinstance(diff, FileContentsDiffer):
-                            remote_op_handler.handle_file_contents_differ(diff, out)
-                        elif isinstance(diff, FileMissingInLocal):
-                            remote_op_handler.handle_hoard_only(diff, out)
-                        elif isinstance(diff, DirMissingInHoard):
-                            logging.info(f"new dir found: {diff.local_dir}")
-                            hoard.fsobjects.add_dir(diff.hoard_dir)
-                        else:
-                            logging.info(f"skipping diff of type {type(diff)}")
+                        logging.info("Merging local changes...")
+                        for diff in compare_local_to_hoard(current_contents, hoard, config, self.hoard.paths()):
+                            if isinstance(diff, FileMissingInHoard):
+                                remote_op_handler.handle_local_only(diff, out)
+                            elif isinstance(diff, FileIsSame):
+                                remote_op_handler.handle_file_is_same(diff, out)
+                            elif isinstance(diff, FileContentsDiffer):
+                                remote_op_handler.handle_file_contents_differ(diff, out)
+                            elif isinstance(diff, FileMissingInLocal):
+                                remote_op_handler.handle_hoard_only(diff, out)
+                            elif isinstance(diff, DirMissingInHoard):
+                                logging.info(f"new dir found: {diff.local_dir}")
+                                hoard.fsobjects.add_dir(diff.hoard_dir)
+                            else:
+                                logging.info(f"skipping diff of type {type(diff)}")
+
+                        logging.info(f"Updating epoch of {remote_uuid} to {current_contents.config.epoch}")
+                        hoard.set_epoch(remote_uuid, current_contents.config.epoch, current_contents.config.updated)
 
                     clean_dangling_files(hoard, out)
-
-                    logging.info(f"Updating epoch of {remote_uuid} to {current_contents.config.epoch}")
-                    hoard.set_epoch(remote_uuid, current_contents.config.epoch, current_contents.config.updated)
-
                     logging.info("Writing updated hoard contents...")
                     hoard.write()
                     logging.info("Local commit DONE!")
 
-                    out.write(f"Sync'ed {remote} to hoard!")
-                    return out.getvalue()
+                    out.write(f"Sync'ed {config.remotes[remote_uuid].name} to hoard!\n")
+                out.write("DONE")
+                return out.getvalue()
 
 
 def clean_dangling_files(hoard: HoardContents, out: StringIO):  # fixme do this when status is modified, not after

@@ -30,7 +30,7 @@ class TestHoardCommand(unittest.TestCase):
             "+/test.me.4\n"
             "+/wat/test.me.2\n"
             "+/wat/test.me.3\n"
-            "Sync'ed repo-full-name to hoard!", res)
+            "Sync'ed repo-full-name to hoard!\nDONE", res)
 
         all_files = dump_file_list(self.tmpdir.name, 'repo-full', data=True)
         self.assertDictEqual({
