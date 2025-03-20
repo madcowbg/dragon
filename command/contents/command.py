@@ -6,11 +6,11 @@ from io import StringIO
 from typing import List, Dict, Any, Optional, Generator, Iterable
 
 import humanize
-from alive_progress import alive_bar
+from alive_progress import alive_bar, alive_it
 
 from command.hoard import Hoard
 from command.contents.diff_handlers import DiffHandler, PartialDiffHandler, BackupDiffHandler, IncomingDiffHandler, \
-    ContentPrefs
+    ContentPrefs, reset_local_as_current
 from command.pathing import HoardPathing
 from config import CaveType, HoardConfig, HoardPaths
 from contents.hoard import HoardContents, HoardFile, HoardDir
@@ -335,6 +335,55 @@ class HoardCommandContents:
                         repos_containing_what_this_one_needs.items()))
                     for name, count in nc:
                         out.write(f"{name} has {count} files\n")
+                out.write("DONE")
+                return out.getvalue()
+
+    def reset(self, repo: str):
+        config = self.hoard.config()
+        pathing = HoardPathing(config, self.hoard.paths())
+
+        repo_uuid = resolve_remote_uuid(config, repo)
+
+        logging.info(f"Loading hoard contents...")
+        with HoardContents.load(self.hoard.hoard_contents_filename()) as hoard:
+            with StringIO() as out:
+                out.write(f"{config.remotes[repo_uuid].name}:\n")
+
+                logging.info(f"Iterating over pending ops in {repo_uuid} to reset pending ops")
+
+                with self.hoard[repo_uuid].open_contents() as current_contents:
+                    ops = list(_get_pending_operations(hoard, repo_uuid))
+                    print("Clearing pending operations...")
+                    for op in alive_it(ops):
+                        local_file = pathing.in_hoard(op.hoard_file).at_local(repo_uuid).as_posix()
+                        assert local_file is not None
+
+                        if local_file in current_contents.fsobjects:
+                            assert isinstance(op, GetFile) or isinstance(op, CopyFile) or isinstance(op, CleanupFile)
+                            local_props = current_contents.fsobjects[local_file]
+                            assert isinstance(local_props, RepoFileProps)
+                            logging.info(f"Pending {local_file} is available, will reset its contents")
+
+                            reset_local_as_current(hoard, repo_uuid, op.hoard_file, op.hoard_props, local_props)
+                            out.write(f"RESET {op.hoard_file}\n")
+                        else:  # file is not available in repo
+                            if isinstance(op, GetFile):
+                                logging.info(f"File to get {local_file} is already missing, removing status.")
+                                op.hoard_props.remove_status(repo_uuid)
+
+                                out.write(f"WONT_GET {op.hoard_file}\n")
+                            elif isinstance(op, CopyFile):
+                                logging.info(
+                                    f"File to get {local_file} is already missing, removing status.")
+                                op.hoard_props.remove_status(repo_uuid)
+                                out.write(f"WONT_COPY {op.hoard_file}\n")
+                            elif isinstance(op, CleanupFile):
+                                op.hoard_props.remove_status(repo_uuid)
+
+                                out.write(f"WONT_CLEANUP {op.hoard_file}\n")
+                            else:
+                                raise ValueError(f"Unhandled op type: {type(op)}")
+
                 out.write("DONE")
                 return out.getvalue()
 

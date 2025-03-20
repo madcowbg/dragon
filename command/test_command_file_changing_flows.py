@@ -614,3 +614,46 @@ class TestFileChangingFlows(unittest.TestCase):
             "repo-incoming-name:\n"
             "repo-changed-cave-name:\n"
             "DONE", res)
+
+        # resetting back to what repo-full-name should contain!
+        res = hoard_cmd.contents.reset("repo-full-name")
+        self.assertEqual(
+            "repo-full-name:\n"
+            "RESET /test.me.1\n"
+            "RESET /wat/test.me.3\n"
+            "DONE", res)
+
+        res = hoard_cmd.contents.pending()
+        self.assertEqual(
+            "repo-partial-name:\n"
+            "TO_GET (from 1) /test.me.1\n"
+            "repo-full-name has 1 files\n"
+            "repo-full-name:\n"
+            "repo-backup-name:\n"
+            "TO_GET (from 3) /wat/test.me.2\n"
+            "TO_GET (from 2) /test.me.4\n"
+            "TO_GET (from 1) /test.me.1\n"
+            "TO_GET (from 1) /wat/test.me.3\n"
+            "repo-changed-cave-name has 2 files\n"
+            "repo-full-name has 4 files\n"
+            "repo-partial-name has 1 files\n"
+            "repo-incoming-name:\n"
+            "repo-changed-cave-name:\n"
+            "TO_GET (from 1) /test.me.1\n"
+            "TO_GET (from 1) /wat/test.me.3\n"
+            "repo-full-name has 2 files\n"
+            "DONE", res)
+
+        res = hoard_cmd.contents.status(hide_time=True)
+        self.assertEqual(
+            "|Num Files                |total     |available |get       |copy      |cleanup   |\n"
+            "|repo-backup-name         |         4|          |         4|          |          |\n"
+            "|repo-changed-cave-name   |         4|         2|         2|          |          |\n"
+            "|repo-full-name           |         4|         4|          |          |          |\n"
+            "|repo-partial-name        |         2|         1|         1|          |          |\n"
+            "\n"
+            "|Size                     |total     |available |get       |copy      |cleanup   |\n"
+            "|repo-backup-name         |        35|          |        35|          |          |\n"
+            "|repo-changed-cave-name   |        35|        19|        16|          |          |\n"
+            "|repo-full-name           |        35|        35|          |          |          |\n"
+            "|repo-partial-name        |        14|         8|         6|          |          |\n", res)
