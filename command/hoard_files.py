@@ -188,7 +188,7 @@ async def _restore_from_another_repo(
         if success:
             return True, restored_file
 
-    logging.error(f"Did not find any available for {hoard_file}!")
+    logging.error(f"Did not find any available for {hoard_file.as_posix()}!")
     return False, fullpath_to_restore
 
 

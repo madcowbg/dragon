@@ -44,7 +44,7 @@ class HoardCommandContents:
     def __init__(self, hoard: Hoard):
         self.hoard = hoard
 
-    def status(self):
+    def status(self, hide_time: bool = False):
         config = self.hoard.config()
         with HoardContents.load(self.hoard.hoard_contents_filename()) as hoard:
             statuses: Dict[str, Dict[str, Dict[str, Any]]] = hoard.fsobjects.status_by_uuid
@@ -53,13 +53,18 @@ class HoardCommandContents:
             all_stats = ["total", FileStatus.AVAILABLE.value, FileStatus.GET.value, FileStatus.COPY.value,
                          FileStatus.CLEANUP.value]
             with StringIO() as out:
-                out.write(f"|{'Num Files':<25}|{'updated':>20}|")
+                out.write(f"|{'Num Files':<25}|")
+                if not hide_time:
+                    out.write(f"{'updated':>20}|")
                 for col in all_stats:
                     out.write(f"{col:<10}|")
                 out.write("\n")
 
-                for name, updated, uuid_stats in statuses_sorted:
-                    out.write(f"|{name:<25}|{humanize.naturaltime(updated):>20}|")
+                for name, updated_maybe, uuid_stats in statuses_sorted:
+                    out.write(f"|{name:<25}|")
+                    if not hide_time:
+                        updated = humanize.naturaltime(updated_maybe) if updated_maybe is not None else "never"
+                        out.write(f"{updated:>20}|")
                     for stat in all_stats:
                         nfiles = uuid_stats[stat]["nfiles"] if stat in uuid_stats else ""
                         out.write(f"{nfiles:>10}|")
@@ -67,12 +72,17 @@ class HoardCommandContents:
 
                 out.write("\n")
 
-                out.write(f"|{'Size':<25}|{'updated':>20}|")
+                out.write(f"|{'Size':<25}|")
+                if not hide_time:
+                    out.write(f"{'updated':>20}|")
                 for col in all_stats:
                     out.write(f"{col:<10}|")
                 out.write("\n")
-                for name, updated, uuid_stats in statuses_sorted:
-                    out.write(f"|{name:<25}|{humanize.naturaltime(updated):>20}|")
+                for name, updated_maybe, uuid_stats in statuses_sorted:
+                    out.write(f"|{name:<25}|")
+                    if not hide_time:
+                        updated = humanize.naturaltime(updated_maybe) if updated_maybe is not None else "never"
+                        out.write(f"{updated:>20}|")
                     for stat in all_stats:
                         size = format_size(uuid_stats[stat]["size"]) if stat in uuid_stats else ""
                         out.write(f"{size:>10}|")
@@ -142,6 +152,8 @@ class HoardCommandContents:
 
     def get(self, repo: str, path: str = ""):
         config = self.hoard.config()
+        if os.path.isabs(path):
+            return f"Path {path} must be relative, but is absolute."
 
         logging.info(f"Loading hoard TOML...")
         with HoardContents.load(self.hoard.hoard_contents_filename()) as hoard:
