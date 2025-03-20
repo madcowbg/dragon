@@ -85,6 +85,16 @@ class RepoContentsConfig:
         return datetime.fromisoformat(self._first_value_cursor().execute("SELECT updated FROM config").fetchone())
 
     @property
+    def is_dirty(self) -> bool:
+        return self._first_value_cursor().execute("SELECT is_dirty FROM config").fetchone()
+
+    def start_updating(self):
+        self.parent.conn.execute("UPDATE config SET is_dirty = TRUE")
+
+    def end_updating(self):
+        self.parent.conn.execute("UPDATE config SET is_dirty = FALSE")
+
+    @property
     def uuid(self) -> str:
         return self._first_value_cursor().execute("SELECT uuid FROM config").fetchone()
 
@@ -123,9 +133,10 @@ class RepoContents:
                     "CREATE TABLE config("
                     "uuid text PRIMARY KEY NOT NULL, "
                     "epoch INTEGER DEFAULT 0,"
-                    "updated TEXT NOT NULL)")
+                    "updated TEXT NOT NULL,"
+                    "is_dirty BOOLEAN NOT NULL)")
                 curr.execute(
-                    "INSERT INTO config(uuid, updated) VALUES (?, ?)",
+                    "INSERT INTO config(uuid, updated, is_dirty) VALUES (?, ?, TRUE)",
                     (create_for_uuid, datetime.now().isoformat()))
 
                 conn.commit()
@@ -151,10 +162,7 @@ class RepoContents:
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
         assert self.conn is not None
-        self.write()
+        self.conn.commit()
         self.conn.close()
 
         return False
-
-    def write(self):
-        self.conn.commit()

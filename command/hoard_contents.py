@@ -198,6 +198,9 @@ class HoardCommandContents:
                 raise ValueError(f"FIXME unsupported remote type: {remote_type}")
 
             with self.hoard.fetch_repo_contents(remote_uuid) as current_contents:
+                if current_contents.config.is_dirty:
+                    logging.error(f"{remote} is_dirty = TRUE, so the refresh is not complete - can't use current repo.")
+                    return f"Skipping update as {remote} is not fully calculated!"
 
                 if not ignore_epoch and hoard.epoch(remote_uuid) >= current_contents.config.epoch:
                     return (

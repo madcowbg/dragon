@@ -98,7 +98,9 @@ class RepoCommand(object):
         with RepoContents.load(
                 self.repo.contents_filename(current_uuid),
                 create_for_uuid=current_uuid) as contents:
-            contents.config.touch_updated()
+
+            logging.info("Start updating, setting is_dirty to TRUE")
+            contents.config.start_updating()
 
             print(f"Computing diffs.")
             files_to_update: List[str] = []
@@ -158,11 +160,15 @@ class RepoCommand(object):
 
             logging.info(f"Files read!")
 
+            contents.config.touch_updated()
             contents.config.bump_epoch()
+
             logging.info(f"Bumped epoch to {contents.config.epoch}")
 
-            logging.info(f"Writing cache...")
-            contents.write()
+            logging.info("Start updating, setting is_dirty to FALSE")
+            contents.config.end_updating()
+
+            assert not contents.config.is_dirty
 
             return f"Refresh done!"
 
