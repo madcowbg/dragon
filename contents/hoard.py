@@ -6,6 +6,7 @@ from datetime import datetime
 from sqlite3 import Connection
 from typing import Dict, Any, List, Optional, Tuple, Generator, Iterator, Iterable
 
+from config import HoardConfig
 from contents.props import RepoFileProps, DirProps, FileStatus, HoardFileProps, FSObjectProps
 from util import FIRST_VALUE
 
@@ -181,6 +182,18 @@ class HoardFSObjects:
             "SELECT fullpath, fsobject_id, isdir, size, fasthash FROM fsobject "
             "WHERE isdir = FALSE AND "
             "  NOT EXISTS (SELECT 1 FROM fspresence WHERE fspresence.fsobject_id = fsobject.fsobject_id)")
+
+    def with_pending(self, repo_uuid: str) -> Iterable[Tuple[str, FSObjectProps]]:
+        curr = self.parent.conn.cursor()
+        curr.row_factory = self._read_as_prop_tuple
+        yield from curr.execute(
+            "SELECT fullpath, fsobject_id, isdir, size, fasthash FROM fsobject "
+            "WHERE isdir = FALSE AND EXISTS ("
+            "  SELECT 1 FROM fspresence "
+            "  WHERE fspresence.fsobject_id = fsobject.fsobject_id AND "
+            "    uuid = ? AND "
+            "    status in (?, ?, ?))",
+            (repo_uuid, FileStatus.GET.value, FileStatus.COPY.value, FileStatus.CLEANUP.value))
 
     @property
     def status_by_uuid(self) -> Dict[str, Dict[str, Dict[str, Any]]]:
@@ -366,6 +379,8 @@ class HoardContents:
         return HoardContents(filename)
 
     conn: Connection
+    config: HoardContentsConfig
+    fsobjects: HoardFSObjects
 
     def __init__(self, filepath: str):
         self.filepath = filepath
