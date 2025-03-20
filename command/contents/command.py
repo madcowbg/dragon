@@ -185,18 +185,27 @@ class HoardCommandContents:
                 out.write("DONE")
                 return out.getvalue()
 
-    def pull(self, remote: Optional[str] = None, all: bool = False, ignore_epoch: bool = False, force_fetch_local_missing: bool = False):
+    def pull(
+            self, remote: Optional[str] = None, all: bool = False, ignore_epoch: bool = False,
+            force_fetch_local_missing: bool = False, assume_current: bool = False):
         logging.info("Loading config")
         config = self.hoard.config()
         pathing = HoardPathing(config, self.hoard.paths())
 
         if all:
             assert remote is None
+            if assume_current:
+                return f"Cannot use --assume-current with --all!"
             logging.info("Pulling from all remotes!")
             remote_uuids = [r.uuid for r in config.remotes.all()]
         else:
             assert remote is not None
             remote_uuids = [remote]
+
+        if assume_current:
+            if not ignore_epoch:
+                logging.info(f"Forcing --ignore-epoch because --assume-current = True.")
+                ignore_epoch = True
 
         with StringIO() as out:
             for remote_uuid in remote_uuids:
@@ -212,7 +221,8 @@ class HoardCommandContents:
                     if remote_obj.type == CaveType.PARTIAL:
                         remote_op_handler: DiffHandler = PartialDiffHandler(
                             remote_uuid, hoard, content_prefs,
-                            force_fetch_local_missing=force_fetch_local_missing)
+                            force_fetch_local_missing=force_fetch_local_missing,
+                            assume_current=assume_current)
                     elif remote_obj.type == CaveType.BACKUP:
                         remote_op_handler: DiffHandler = BackupDiffHandler(remote_uuid, hoard)
                     elif remote_obj.type == CaveType.INCOMING:

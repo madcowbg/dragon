@@ -60,6 +60,12 @@ class HoardFileProps:
             "SELECT uuid FROM fspresence WHERE fsobject_id = ? AND status = ?",
             (self.fsobject_id, selected_status.value))]
 
+    def by_statuses(self, *selected_statuses: FileStatus) -> List[str]:
+        return [u[0] for u in self.parent.conn.execute(
+            f"SELECT uuid FROM fspresence "
+            f"WHERE fsobject_id = ? AND status in ({', '.join('?' * len(selected_statuses))})",
+            (self.fsobject_id, *[s.value for s in selected_statuses]))]
+
     def mark_for_cleanup(self, repos: List[str]):
         self.set_status(repos, FileStatus.CLEANUP)
 

@@ -520,3 +520,75 @@ class TestFileChangingFlows(unittest.TestCase):
         self.assertDictEqual(
             dump_file_list(self.tmpdir.name + "/repo-full/wat", "", data=True),
             dump_file_list(self.tmpdir.name + "/new-contents", "", data=True))
+
+    def test_resetting_file_contents(self):
+        populate_repotypes(self.tmpdir.name)
+        hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = \
+            init_complex_hoard(self.tmpdir.name)
+
+        pfw = pretty_file_writer(self.tmpdir.name)
+        os.mkdir(join(self.tmpdir.name, "changed-cave"))
+        pfw('changed-cave/test.me.1', "w3q45yhq3g")
+        pfw('changed-cave/test.me.4', "fwadeaewdsa")
+        pfw('changed-cave/wat/test.me.2', "gsadf3dq")
+        pfw('changed-cave/wat/test.me.3', "'psejmfw'")
+
+        changed_cave_cmd = TotalCommand(path=join(self.tmpdir.name, "changed-cave")).cave
+        changed_cave_cmd.init()
+        res = changed_cave_cmd.refresh()
+        self.assertEqual("Refresh done!", res)
+
+        res = hoard_cmd.add_remote(
+            remote_path=join(self.tmpdir.name, "changed-cave"), name="repo-changed-cave-name",
+            mount_point="/", type=CaveType.PARTIAL, fetch_new=False)
+        self.assertEqual(
+            fr"Added repo-changed-cave-name[{changed_cave_cmd.current_uuid()}] at {self.tmpdir.name}\changed-cave!",
+            res)
+
+        res = hoard_cmd.contents.pull(partial_cave_cmd.current_uuid())
+        self.assertEqual(
+            "+/test.me.1\n"
+            "+/wat/test.me.2\n"
+            "Sync'ed repo-partial-name to hoard!\nDONE", res)
+
+        res = hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
+        self.assertEqual(
+            "=/test.me.1\n"
+            "+/test.me.4\n"
+            "=/wat/test.me.2\n"
+            "+/wat/test.me.3\n"
+            "Sync'ed repo-full-name to hoard!\n"
+            "DONE", res)
+
+        res = hoard_cmd.contents.status(hide_time=True)
+        self.assertEqual("|Num Files                |total     |available |get       |copy      |cleanup   |\n"
+                         "|repo-backup-name         |         4|          |         4|          |          |\n"
+                         "|repo-full-name           |         4|         4|          |          |          |\n"
+                         "|repo-partial-name        |         2|         2|          |          |          |\n"
+                         "\n"
+                         "|Size                     |total     |available |get       |copy      |cleanup   |\n"
+                         "|repo-backup-name         |        35|          |        35|          |          |\n"
+                         "|repo-full-name           |        35|        35|          |          |          |\n"
+                         "|repo-partial-name        |        14|        14|          |          |          |\n", res)
+
+        res = hoard_cmd.contents.pull(changed_cave_cmd.current_uuid(), assume_current=True)
+        self.assertEqual(
+            "RESETTING /test.me.1\n"
+            "=/test.me.4\n"
+            "=/wat/test.me.2\n"
+            "RESETTING /wat/test.me.3\n"
+            "Sync'ed repo-changed-cave-name to hoard!\nDONE", res)
+
+        res = hoard_cmd.contents.status(hide_time=True)
+        self.assertEqual("|Num Files                |total     |available |get       |copy      |cleanup   |\n"
+                         "|repo-backup-name         |         4|          |         4|          |          |\n"
+                         "|repo-changed-cave-name   |         4|         4|          |          |          |\n"
+                         "|repo-full-name           |         4|         2|         2|          |          |\n"
+                         "|repo-partial-name        |         2|         1|         1|          |          |\n"
+                         "\n"
+                         "|Size                     |total     |available |get       |copy      |cleanup   |\n"
+                         "|repo-backup-name         |        38|          |        38|          |          |\n"
+                         "|repo-changed-cave-name   |        38|        38|          |          |          |\n"
+                         "|repo-full-name           |        38|        19|        19|          |          |\n"
+                         "|repo-partial-name        |        18|         8|        10|          |          |\n", res)
+
