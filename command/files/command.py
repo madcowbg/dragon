@@ -6,6 +6,7 @@ from typing import Optional, List, Dict
 import aioshutil
 from alive_progress import alive_bar
 
+from command.contents.command import clean_dangling_files
 from command.hoard import Hoard
 from command.pathing import HoardPathing
 from config import HoardConfig
@@ -55,6 +56,9 @@ class HoardCommandFiles:
                     out.write(f"{repo_uuid}:\n")
 
                     _cleanup_files_in_repo(hoard, repo_uuid, pathing, files_to_copy, out)
+
+                clean_dangling_files(hoard, out)
+
                 out.write("DONE")
                 return out.getvalue()
 

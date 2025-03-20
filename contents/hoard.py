@@ -4,7 +4,7 @@ import sqlite3
 import sys
 from datetime import datetime
 from sqlite3 import Connection
-from typing import Dict, Any, List, Optional, Tuple, Generator, Iterator
+from typing import Dict, Any, List, Optional, Tuple, Generator, Iterator, Iterable
 
 from contents.props import RepoFileProps, DirProps, FileStatus, HoardFileProps, FSObjectProps
 from util import FIRST_VALUE
@@ -144,32 +144,43 @@ class HoardFSObjects:
         curr.row_factory = FIRST_VALUE
         return curr.execute("SELECT count(1) FROM fsobject").fetchone()
 
+    def _read_as_prop_tuple(self, cursor, row) -> Tuple[str, HoardFileProps]:
+        fullpath, fsobject_id, isdir, size, fasthash = row
+        if isdir:
+            return fullpath, DirProps({})
+        else:
+            return fullpath, HoardFileProps(self.parent, fsobject_id, size, fasthash)
+
     def __getitem__(self, file_path: str) -> FSObjectProps:
-        fsobject_id, isdir, size, fasthash = self.parent.conn.execute(
-            "SELECT fsobject_id, isdir, size, fasthash "
+        curr = self.parent.conn.cursor()
+        curr.row_factory = self._read_as_prop_tuple
+        return curr.execute(
+            "SELECT fullpath, fsobject_id, isdir, size, fasthash "
             "FROM fsobject "
             "WHERE fsobject.fullpath = ? ",
-            (file_path,)).fetchone()
+            (file_path,)).fetchone()[1]
 
-        if isdir:
-            return DirProps({})
-        else:
-            return HoardFileProps(self.parent, fsobject_id, size, fasthash)
+    def by_fasthash(self, fasthash: str) -> Iterable[Tuple[str, HoardFileProps]]:
+        curr = self.parent.conn.cursor()
+        curr.row_factory = self._read_as_prop_tuple
+        yield from curr.execute(
+            "SELECT fullpath, fsobject_id, isdir, size, fasthash "
+            "FROM fsobject "
+            "WHERE isdir = FALSE and fasthash = ?", (fasthash,))
 
-    def by_fasthash(self, fasthash: str) -> Generator[Tuple[str, HoardFileProps], None, None]:
-        for fsobject_id, fullpath, isdir, size, fasthash in self.parent.conn.execute(
-                "SELECT fsobject_id, fullpath, isdir, size, fasthash "
-                "FROM fsobject "
-                "WHERE isdir = FALSE and fasthash = ?", (fasthash,)):
-            yield fullpath, HoardFileProps(self.parent, fsobject_id, size, fasthash)
+    def __iter__(self) -> Iterable[Tuple[str, FSObjectProps]]:
+        curr = self.parent.conn.cursor()
+        curr.row_factory = self._read_as_prop_tuple
+        yield from curr.execute("SELECT fullpath, fsobject_id, isdir, size, fasthash FROM fsobject")
 
-    def __iter__(self) -> Generator[Tuple[str, FSObjectProps], None, None]:  # fixme maybe optimize to create directly?
-        for fsobject_id, fullpath, isdir, size, fasthash in self.parent.conn.execute(
-                "SELECT fsobject_id, fullpath, isdir, size, fasthash FROM fsobject"):
-            if isdir:
-                yield fullpath, DirProps({})
-            else:
-                yield fullpath, HoardFileProps(self.parent, fsobject_id, size, fasthash)
+    @property
+    def dangling_files(self) -> Iterable[Tuple[str, FSObjectProps]]:
+        curr = self.parent.conn.cursor()
+        curr.row_factory = self._read_as_prop_tuple
+        yield from curr.execute(
+            "SELECT fullpath, fsobject_id, isdir, size, fasthash FROM fsobject "
+            "WHERE isdir = FALSE AND "
+            "  NOT EXISTS (SELECT 1 FROM fspresence WHERE fspresence.fsobject_id = fsobject.fsobject_id)")
 
     @property
     def status_by_uuid(self) -> Dict[str, Dict[str, Dict[str, Any]]]:
@@ -249,7 +260,7 @@ class HoardFSObjects:
             "SELECT fsobject_id FROM fsobject WHERE fullpath = ?", (curr_path,)).fetchone()
         if fsobject_id is None:
             return
-        curr.execute("DELETE FROM fsobject WHERE fullpath = ?", (curr_path,))
+        curr.execute("DELETE FROM fsobject WHERE fsobject_id = ?", (fsobject_id,))
         curr.execute("DELETE FROM fspresence WHERE fsobject_id = ?", (fsobject_id,))
 
     def move(self, orig_path: str, new_path: str, props: DirProps | HoardFileProps):

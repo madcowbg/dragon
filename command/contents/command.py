@@ -223,8 +223,8 @@ class HoardCommandContents:
                 if remote_doc is None or remote_doc.mounted_at is None:
                     raise ValueError(f"remote_doc {remote_uuid} is not mounted!")
 
-                logging.info("Merging local changes...")
                 with StringIO() as out:
+                    logging.info("Merging local changes...")
                     for diff in compare_local_to_hoard(current_contents, hoard, config, self.hoard.paths()):
                         if isinstance(diff, FileMissingInHoard):
                             remote_op_handler.handle_local_only(diff, out)
@@ -240,6 +240,8 @@ class HoardCommandContents:
                         else:
                             logging.info(f"skipping diff of type {type(diff)}")
 
+                    clean_dangling_files(hoard, out)
+
                     logging.info(f"Updating epoch of {remote_uuid} to {current_contents.config.epoch}")
                     hoard.set_epoch(remote_uuid, current_contents.config.epoch, current_contents.config.updated)
 
@@ -249,6 +251,16 @@ class HoardCommandContents:
 
                     out.write(f"Sync'ed {remote} to hoard!")
                     return out.getvalue()
+
+
+def clean_dangling_files(hoard: HoardContents, out: StringIO):  # fixme do this when status is modified, not after
+    logging.info("Cleaning dangling files from hoard...")
+
+    for dangling_path, props in hoard.fsobjects.dangling_files:
+        assert len(props.presence) == 0
+        logging.warning(f"Removing dangling path {dangling_path} from hoard!")
+        hoard.fsobjects.delete(dangling_path)
+        out.write(f"remove dangling {dangling_path}\n")
 
 
 def is_same_file(current: RepoFileProps, hoard: HoardFileProps):

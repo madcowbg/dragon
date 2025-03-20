@@ -114,7 +114,11 @@ class TestFileChangingFlows(unittest.TestCase):
         self.assertEqual("Refresh done!", res)
 
         res = hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
-        self.assertEqual(f"+/wat/test.me.z\n-/wat/test.me.3\nSync'ed {full_cave_cmd.current_uuid()} to hoard!", res)
+        self.assertEqual(
+            f"+/wat/test.me.z\n"
+            f"-/wat/test.me.3\n"
+            f"remove dangling /wat/test.me.3\n"
+            f"Sync'ed {full_cave_cmd.current_uuid()} to hoard!", res)
 
         res = hoard_cmd.contents.status(hide_time=True)
         self.assertEqual(
@@ -136,7 +140,6 @@ class TestFileChangingFlows(unittest.TestCase):
             "/test.me.4 = a:1 g:1\n"
             "/wat => (repo-backup-name:wat), (repo-full-name:wat), (repo-incoming-name:wat), (repo-partial-name:wat)\n"
             "/wat/test.me.2 = a:2 g:1\n"
-            "/wat/test.me.3 = \n"
             "/wat/test.me.z = a:1 g:1\n"
             "DONE", res)
 
@@ -170,7 +173,6 @@ class TestFileChangingFlows(unittest.TestCase):
             "/test.me.5 = a:1 g:2\n"
             "/wat => (repo-backup-name:wat), (repo-full-name:wat), (repo-incoming-name:wat), (repo-partial-name:wat)\n"
             "/wat/test.me.2 = a:2 g:1\n"
-            "/wat/test.me.3 = \n"  # FIXME a problem
             "/wat/test.me.z = a:1 g:1\n"
             "DONE", res)
 
@@ -178,25 +180,26 @@ class TestFileChangingFlows(unittest.TestCase):
         self.assertEqual("Path /wat must be relative, but is absolute.", res)
 
         res = hoard_cmd.contents.get("repo-partial-name", "wat")
-        self.assertEqual("+/wat/test.me.3\n+/wat/test.me.z\nDONE", res)
+        self.assertEqual(
+            "+/wat/test.me.z\n"
+            "DONE", res)
 
         res = hoard_cmd.contents.status(hide_time=True)
         self.assertEqual(
             "|Num Files                |total     |available |get       |copy      |cleanup   |\n"
             "|repo-backup-name         |         5|          |         5|          |          |\n"
             "|repo-full-name           |         5|         4|         1|          |          |\n"
-            "|repo-partial-name        |         5|         3|         2|          |          |\n"
+            "|repo-partial-name        |         4|         3|         1|          |          |\n"
             "\n"
             "|Size                     |total     |available |get       |copy      |cleanup   |\n"
             "|repo-backup-name         |        53|          |        53|          |          |\n"
             "|repo-full-name           |        53|        45|         8|          |          |\n"
-            "|repo-partial-name        |        52|        22|        30|          |          |\n",
+            "|repo-partial-name        |        42|        22|        20|          |          |\n",
             res)
 
         res = hoard_cmd.files.sync_contents("repo-partial-name")
         self.assertEqual(
             f"{partial_cave_cmd.current_uuid()}:\n"
-            "E wat/test.me.3\n"  # FIXME a problem
             "+ wat/test.me.z\n"
             f"{partial_cave_cmd.current_uuid()}:\n"
             "DONE", res)
@@ -204,7 +207,6 @@ class TestFileChangingFlows(unittest.TestCase):
         res = hoard_cmd.files.sync_contents("repo-partial-name")
         self.assertEqual(
             f"{partial_cave_cmd.current_uuid()}:\n"
-            "E wat/test.me.3\n"  # FIXME a problem
             f"{partial_cave_cmd.current_uuid()}:\n"
             "DONE", res)
 
@@ -267,7 +269,11 @@ class TestFileChangingFlows(unittest.TestCase):
         self.assertEqual("Refresh done!", res)
 
         res = hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
-        self.assertEqual(f"+/wat/test.me.z\n-/wat/test.me.3\nSync'ed {full_cave_cmd.current_uuid()} to hoard!", res)
+        self.assertEqual(
+            f"+/wat/test.me.z\n"
+            f"-/wat/test.me.3\n"
+            f"remove dangling /wat/test.me.3\n"
+            f"Sync'ed {full_cave_cmd.current_uuid()} to hoard!", res)
 
         res = hoard_cmd.contents.status(hide_time=True)
         self.assertEqual(
@@ -289,7 +295,6 @@ class TestFileChangingFlows(unittest.TestCase):
             "/test.me.4 = a:2\n"
             "/wat => (repo-backup-name:wat), (repo-full-name:wat), (repo-incoming-name:wat), (repo-partial-name:wat)\n"
             "/wat/test.me.2 = a:3\n"
-            "/wat/test.me.3 = \n"  # FIXME this is a problem
             "/wat/test.me.z = a:1 g:1\n"
             "DONE", res)
 
@@ -374,6 +379,7 @@ class TestFileChangingFlows(unittest.TestCase):
             f"{partial_cave_cmd.current_uuid()}:\n"
             f"{partial_cave_cmd.current_uuid()}:\n"
             "d wat/test.me.2\n"
+            "remove dangling /wat/test.me.2\n"
             "DONE", res)
 
         res = hoard_cmd.contents.status(hide_time=True)
@@ -394,6 +400,5 @@ class TestFileChangingFlows(unittest.TestCase):
             "/test.me.1 = a:3\n"
             "/test.me.4 = a:2\n"
             "/wat\n"
-            "/wat/test.me.2 = "  # fixme this is a problem
-            "\n/wat/test.me.3 = a:2\n"
+            "/wat/test.me.3 = a:2\n"
             "DONE", res)

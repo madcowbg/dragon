@@ -257,11 +257,11 @@ class TestHoardCommand(unittest.TestCase):
         self.assertEqual(
             "+/newdir/newfile.is\n"
             "-/wat/test.me.different\n"
+            "remove dangling /wat/test.me.different\n"
             "Sync'ed repo-in-local to hoard!", res)
 
         self.assertEqual(
             f"Status of {repo_uuid}:\n"
-            f"D /wat/test.me.different\n"
             "DF /wat\n"
             "DF /newdir\n"
             f"DONE", hoard_cmd.deprecated.status_deprecated("repo-in-local").strip())
