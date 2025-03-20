@@ -42,23 +42,6 @@ class HoardFileProps:
         self.size = size
         self.fasthash = fasthash
 
-    def replace_file(self, new_props: RepoFileProps, available_uuid: str):
-        self.size = new_props.size
-        self.fasthash = new_props.fasthash
-
-        self.parent.conn.execute(
-            "UPDATE fsobject SET size = ?, fasthash = ? WHERE fsobject_id = ?",
-            (new_props.size, new_props.fasthash, self.fsobject_id))
-
-        # mark for re-fetching everywhere it is already available
-        self.parent.conn.execute(
-            "UPDATE fspresence SET status = ? "
-            "WHERE fsobject_id = ? AND status = ?",
-            (FileStatus.GET.value, self.fsobject_id, FileStatus.AVAILABLE.value))
-
-        # mark that is available here
-        self.mark_available(available_uuid)
-
     def mark_available(self, remote_uuid: str):
         self.set_status([remote_uuid], FileStatus.AVAILABLE)
 
