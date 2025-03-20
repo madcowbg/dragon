@@ -995,6 +995,57 @@ class TestHoardCommand(unittest.TestCase):
             ['repo-partial/test.me.1', 'repo-partial/wat/test.me.2'],
             dump_file_list(self.tmpdir.name, 'repo-partial'))
 
+    def test_pull_on_missing_contents_are_skipped(self):
+        populate_repotypes(self.tmpdir.name)
+        tmpdir = self.tmpdir.name
+
+        hoard_cmd = TotalCommand(path=join(tmpdir, "hoard")).hoard
+        hoard_cmd.init()
+
+        res = hoard_cmd.add_remote(
+            remote_path=join(tmpdir, "repo-partial"), name="repo-partial-name", mount_point="/",
+            type=CaveType.PARTIAL)
+        self.assertEqual(f"Repo does not exist at {join(tmpdir, 'repo-partial')}!", res)
+
+        partial_cave_cmd = TotalCommand(path=join(tmpdir, "repo-partial")).cave
+        partial_cave_cmd.init()
+
+        res = hoard_cmd.add_remote(
+            remote_path=join(tmpdir, "repo-partial"), name="repo-partial-name", mount_point="/",
+            type=CaveType.PARTIAL)
+        self.assertEqual(fr"Added repo-partial-name[{partial_cave_cmd.current_uuid()}] at {tmpdir}\repo-partial!", res)
+
+        res = hoard_cmd.contents.pull(partial_cave_cmd.current_uuid())
+        self.assertEqual(f"Repo {partial_cave_cmd.current_uuid()} has no current contents available!\nDONE", res)
+
+        res = hoard_cmd.contents.pull(all=True)
+        self.assertEqual(f"Repo {partial_cave_cmd.current_uuid()} has no current contents available!\nDONE", res)
+
+        res = partial_cave_cmd.refresh()
+        self.assertEqual("Refresh done!", res)
+
+        res = hoard_cmd.contents.pull(partial_cave_cmd.current_uuid())
+        self.assertEqual("+/test.me.1\n+/wat/test.me.2\nSync'ed repo-partial-name to hoard!\nDONE", res)
+
+        full_cave_cmd = TotalCommand(path=join(tmpdir, "repo-full")).cave
+        full_cave_cmd.init()
+        full_cave_cmd.refresh()
+
+        res = hoard_cmd.add_remote(
+            remote_path=join(tmpdir, "repo-full"), name="repo-full-name", mount_point="/",
+            type=CaveType.PARTIAL, fetch_new=True)
+        self.assertEqual(f"Added repo-full-name[{full_cave_cmd.current_uuid()}] at {join(tmpdir, 'repo-full')}!", res)
+
+        res = hoard_cmd.contents.pull(all=True)
+        self.assertEqual(
+            "Skipping update as past epoch 1 is not after hoard epoch 1\n"
+            "=/test.me.1\n"
+            "+/test.me.4\n"
+            "=/wat/test.me.2\n"
+            "+/wat/test.me.3\n"
+            "Sync'ed repo-full-name to hoard!\n"
+            "DONE", res)
+
 
 def dump_file_list(tmpdir: str, path: str, data: bool = False) -> List[str] | Dict[str, str]:
     files = sorted([

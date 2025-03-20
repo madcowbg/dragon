@@ -6,16 +6,16 @@ from io import StringIO
 from itertools import groupby
 from typing import Dict, List, Tuple
 
-from command.hoard import Hoard
 from command.contents.command import HoardCommandContents, compare_local_to_hoard
 from command.files.command import HoardCommandFiles
+from command.hoard import Hoard
+from command.pathing import HoardPathing
+from command.repo_command import RepoCommand, Repo
 from config import HoardRemote, CavePath, CaveType
 from contents.hoard import HoardContents
 from contents.props import DirProps, HoardFileProps
 from contents_diff import FileMissingInHoard, FileContentsDiffer, FileMissingInLocal, \
     DirMissingInHoard, DirMissingInLocal
-from command.pathing import HoardPathing
-from command.repo_command import RepoCommand
 from hashing import fast_hash
 from resolve_uuid import resolve_remote_uuid
 from util import format_size
@@ -33,7 +33,7 @@ class HoardCommandDeprecated:
         remote_uuid = resolve_remote_uuid(self.hoard.config(), remote)
 
         logging.info(f"Reading current contents of {remote_uuid}...")
-        with self.hoard.fetch_repo_contents(remote_uuid) as current_contents:
+        with self.hoard[remote_uuid].open_contents() as current_contents:
             logging.info(f"Loading hoard TOML...")
             with HoardContents.load(self.hoard.hoard_contents_filename()) as hoard:
                 logging.info(f"Loaded hoard TOML!")
@@ -66,7 +66,7 @@ class HoardCommandDeprecated:
         remote_uuid = resolve_remote_uuid(self.hoard.config(), remote)
 
         logging.info(f"Reading repo {remote_uuid}...")
-        with self.hoard.fetch_repo_contents(remote_uuid) as contents:
+        with self.hoard[remote_uuid].open_contents() as contents:
             logging.info(f"Read repo!")
 
             config = self.hoard.config()
@@ -106,10 +106,11 @@ class HoardCommand(object):
         logging.info(f"Adding remote {remote_abs_path} to config...")
 
         logging.info("Loading remote from remote_path")
-        repo_cmd = RepoCommand(remote_abs_path)
+        repo = Repo(remote_abs_path)
+        if not repo.has_uuid():
+            return f"Repo does not exist at {remote_path}!"
 
-        logging.info(f"Getting remote uuid")
-        remote_uuid = repo_cmd.current_uuid()
+        remote_uuid = repo.current_uuid
 
         resolved_uuid = resolve_remote_uuid(self.hoard.config(), name)
         if resolved_uuid is not None and resolved_uuid != remote_uuid and resolved_uuid != name:  # fixme ugly AF
@@ -120,6 +121,8 @@ class HoardCommand(object):
 
         paths[remote_uuid] = CavePath.exact(remote_abs_path)
         paths.write()
+
+        return f"Added {name}[{remote_uuid}] at {remote_path}!"
 
     def mount_remote(self, remote: str, mount_point: str, force: bool = False):
         remote_uuid = resolve_remote_uuid(self.hoard.config(), remote)

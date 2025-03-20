@@ -195,6 +195,7 @@ class HoardCommandContents:
             logging.info("Pulling from all remotes!")
             remote_uuids = [r.uuid for r in config.remotes.all()]
         else:
+            assert remote is not None
             remote_uuids = [remote]
 
         with StringIO() as out:
@@ -219,15 +220,20 @@ class HoardCommandContents:
                     else:
                         raise ValueError(f"FIXME unsupported remote type: {remote_type}")
 
-                    with self.hoard.fetch_repo_contents(remote_uuid) as current_contents:
+                    if not self.hoard[remote_uuid].has_contents():
+                        out.write(f"Repo {remote_uuid} has no current contents available!\n")
+                        continue
+
+                    with self.hoard[remote_uuid].open_contents() as current_contents:
                         if current_contents.config.is_dirty:
-                            logging.error(f"{remote_uuid} is_dirty = TRUE, so the refresh is not complete - can't use current repo.")
+                            logging.error(
+                                f"{remote_uuid} is_dirty = TRUE, so the refresh is not complete - can't use current repo.")
                             out.write(f"Skipping update as {remote_uuid} is not fully calculated!\n")
                             continue
 
                         if not ignore_epoch and hoard.epoch(remote_uuid) >= current_contents.config.epoch:
                             out.write(f"Skipping update as past epoch {current_contents.config.epoch} "
-                                f"is not after hoard epoch {hoard.epoch(remote_uuid)}\n")
+                                      f"is not after hoard epoch {hoard.epoch(remote_uuid)}\n")
                             continue
 
                         remote_doc = config.remotes[remote_uuid]

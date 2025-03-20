@@ -29,9 +29,31 @@ def walk_repo(repo: str) -> Generator[Tuple[str, List[str], List[str]], None, No
 class Repo:
     def __init__(self, path: str):
         self.path = path
+        self._uuid_filename = os.path.join(self.hoard_folder(), CURRENT_UUID_FILENAME)
 
-    def contents_filename(self, current_uuid):
-        return os.path.join(self.hoard_folder(), f"{current_uuid}.contents")
+    @property
+    def current_uuid(self):
+        with open(self._uuid_filename, "r") as f:
+            return f.readline()
+
+    def open_contents(self, create_for_uuid: Optional[str] = None) -> RepoContents:
+        assert self.has_contents() or create_for_uuid is not None
+        return RepoContents.load(
+            os.path.join(self.hoard_folder(), f"{self.current_uuid}.contents"),
+            create_for_uuid)
+
+    def has_uuid(self):
+        return os.path.isfile(self._uuid_filename)
+
+    def has_contents(self):
+        if not self.has_uuid():
+            logging.info(f"Repo UUID file not found: {self._uuid_filename}")
+            return False
+        elif not os.path.isfile(os.path.join(self.hoard_folder(), f"{self.current_uuid}.contents")):
+            logging.info(f"Contents file not found.")
+            return False
+        else:
+            return True
 
     def hoard_folder(self):
         return os.path.join(self.path, ".hoard")
@@ -56,9 +78,8 @@ class RepoCommand(object):
 
         self.repo = Repo(pathlib.Path(path).absolute().as_posix())
 
-    def current_uuid(self):
-        with open(os.path.join(self.repo.hoard_folder(), CURRENT_UUID_FILENAME), "r") as f:
-            return f.readline()
+    def current_uuid(self) -> str:
+        return self.repo.current_uuid
 
     def _init_uuid(self):
         with open(os.path.join(self.repo.hoard_folder(), CURRENT_UUID_FILENAME), "w") as f:
@@ -93,11 +114,9 @@ class RepoCommand(object):
         self._validate_repo()
 
         current_uuid = self.current_uuid()
-        logging.info(f"Refreshing uuid {current_uuid}")
+        print(f"Refreshing uuid {current_uuid}")
 
-        with RepoContents.load(
-                self.repo.contents_filename(current_uuid),
-                create_for_uuid=current_uuid) as contents:
+        with self.repo.open_contents(current_uuid) as contents:
 
             logging.info("Start updating, setting is_dirty to TRUE")
             contents.config.start_updating()
@@ -176,7 +195,7 @@ class RepoCommand(object):
         remote_uuid = self.current_uuid()
 
         logging.info(f"Reading repo {self.repo.path}...")
-        with RepoContents.load(self.repo.contents_filename(remote_uuid)) as contents:
+        with self.repo.open_contents() as contents:
             logging.info(f"Read repo!")
 
             with StringIO() as out:
@@ -201,7 +220,7 @@ class RepoCommand(object):
         dir_new = []
         dir_same = []
         dir_deleted = []
-        with RepoContents.load(self.repo.contents_filename(current_uuid), create_for_uuid=current_uuid) as contents:
+        with self.repo.open_contents(current_uuid) as contents:
             print("Calculating diffs between repo and filesystem...")
             for diff in compute_diffs(contents, self.repo.path, skip_integrity_checks):
                 if isinstance(diff, FileNotInFilesystem):
