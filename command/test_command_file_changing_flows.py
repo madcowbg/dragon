@@ -207,3 +207,193 @@ class TestFileChangingFlows(unittest.TestCase):
             "E wat/test.me.3\n"  # FIXME a problem
             f"{partial_cave_cmd.current_uuid()}:\n"
             "DONE", res)
+
+    def test_file_is_deleted_before_copied(self):
+        populate_repotypes(self.tmpdir.name)
+        hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = \
+            init_complex_hoard(self.tmpdir.name)
+        pfw = pretty_file_writer(self.tmpdir.name)
+
+        hoard_cmd.contents.pull(partial_cave_cmd.current_uuid())
+        hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
+
+        # delete file before it is backed up
+        assert os.path.isfile(join(self.tmpdir.name, 'repo-full/wat/test.me.3'))
+        os.remove(join(self.tmpdir.name, 'repo-full/wat/test.me.3'))
+        pfw('repo-full/wat/test.me.z', "whut-whut-in-the-but")
+
+        # still shows the file is presumed there
+        res = hoard_cmd.contents.ls(show_remotes=True)
+        self.assertEqual(
+            "/ => (repo-backup-name:.), (repo-full-name:.), (repo-incoming-name:.), (repo-partial-name:.)\n"
+            "/test.me.1 = a:2 g:1\n"
+            "/test.me.4 = a:1 g:1\n"
+            "/wat => (repo-backup-name:wat), (repo-full-name:wat), (repo-incoming-name:wat), (repo-partial-name:wat)\n"
+            "/wat/test.me.2 = a:2 g:1\n"
+            "/wat/test.me.3 = a:1 g:1\n"
+            "DONE", res)
+
+        # try to fetch - will have some errors
+        res = hoard_cmd.files.sync_contents("repo-backup-name")
+        self.assertEqual(
+            f"{backup_cave_cmd.current_uuid()}:\n"
+            f"+ test.me.1\n"
+            f"+ test.me.4\n"
+            f"+ wat/test.me.2\n"
+            f"E wat/test.me.3\n"
+            f"{backup_cave_cmd.current_uuid()}:\n"
+            f"DONE", res)
+
+        res = hoard_cmd.contents.ls(show_remotes=True)
+        self.assertEqual(
+            "/ => (repo-backup-name:.), (repo-full-name:.), (repo-incoming-name:.), (repo-partial-name:.)\n"
+            "/test.me.1 = a:3\n"
+            "/test.me.4 = a:2\n"
+            "/wat => (repo-backup-name:wat), (repo-full-name:wat), (repo-incoming-name:wat), (repo-partial-name:wat)\n"
+            "/wat/test.me.2 = a:3\n"
+            "/wat/test.me.3 = a:1 g:1\n"
+            "DONE", res)
+
+        # try to fetch - errors will remain
+        res = hoard_cmd.files.sync_contents("repo-backup-name")
+        self.assertEqual(
+            f"{backup_cave_cmd.current_uuid()}:\n"
+            f"E wat/test.me.3\n"
+            f"{backup_cave_cmd.current_uuid()}:\n"
+            "DONE", res)
+
+        # do refresh and pull to detect deleted file and its state
+        res = full_cave_cmd.refresh()
+        self.assertEqual("Refresh done!", res)
+
+        res = hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
+        self.assertEqual(f"+/wat/test.me.z\n-/wat/test.me.3\nSync'ed {full_cave_cmd.current_uuid()} to hoard!", res)
+
+        res = hoard_cmd.contents.status(hide_time=True)
+        self.assertEqual(
+            "|Num Files                |total     |available |get       |copy      |cleanup   |\n"
+            "|repo-backup-name         |         4|         3|         1|          |          |\n"
+            "|repo-full-name           |         4|         4|          |          |          |\n"
+            "|repo-partial-name        |         2|         2|          |          |          |\n"
+            "\n"
+            "|Size                     |total     |available |get       |copy      |cleanup   |\n"
+            "|repo-backup-name         |        45|        25|        20|          |          |\n"
+            "|repo-full-name           |        45|        45|          |          |          |\n"
+            "|repo-partial-name        |        14|        14|          |          |          |\n",
+            res)
+
+        res = hoard_cmd.contents.ls(show_remotes=True)
+        self.assertEqual(
+            "/ => (repo-backup-name:.), (repo-full-name:.), (repo-incoming-name:.), (repo-partial-name:.)\n"
+            "/test.me.1 = a:3\n"
+            "/test.me.4 = a:2\n"
+            "/wat => (repo-backup-name:wat), (repo-full-name:wat), (repo-incoming-name:wat), (repo-partial-name:wat)\n"
+            "/wat/test.me.2 = a:3\n"
+            "/wat/test.me.3 = \n"  # FIXME this is a problem
+            "/wat/test.me.z = a:1 g:1\n"
+            "DONE", res)
+
+    def test_file_is_deleted_after_copied(self):
+        populate_repotypes(self.tmpdir.name)
+        hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = \
+            init_complex_hoard(self.tmpdir.name)
+        pfw = pretty_file_writer(self.tmpdir.name)
+
+        hoard_cmd.contents.pull(partial_cave_cmd.current_uuid())
+        hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
+        hoard_cmd.files.sync_contents(backup_cave_cmd.current_uuid())
+
+        res = hoard_cmd.contents.ls(show_remotes=True)
+        self.assertEqual(
+            "/ => (repo-backup-name:.), (repo-full-name:.), (repo-incoming-name:.), (repo-partial-name:.)\n"
+            "/test.me.1 = a:3\n"
+            "/test.me.4 = a:2\n"
+            "/wat => (repo-backup-name:wat), (repo-full-name:wat), (repo-incoming-name:wat), (repo-partial-name:wat)\n"
+            "/wat/test.me.2 = a:3\n"
+            "/wat/test.me.3 = a:2\n"
+            "DONE", res)
+
+        # remove backed up file
+        os.remove(join(self.tmpdir.name, 'repo-full/wat/test.me.2'))
+
+        res = full_cave_cmd.refresh()
+        self.assertEqual("Refresh done!", res)
+
+        res = hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
+        self.assertEqual(f"-/wat/test.me.2\nSync'ed {full_cave_cmd.current_uuid()} to hoard!", res)
+
+        res = hoard_cmd.contents.status(hide_time=True)
+        self.assertEqual(
+            "|Num Files                |total     |available |get       |copy      |cleanup   |\n"
+            "|repo-backup-name         |         4|         3|          |          |         1|\n"
+            "|repo-full-name           |         3|         3|          |          |          |\n"
+            "|repo-partial-name        |         2|         1|          |          |         1|\n"
+            "\n"
+            "|Size                     |total     |available |get       |copy      |cleanup   |\n"
+            "|repo-backup-name         |        35|        27|          |          |         8|\n"
+            "|repo-full-name           |        27|        27|          |          |          |\n"
+            "|repo-partial-name        |        14|         6|          |          |         8|\n", res)
+
+        res = hoard_cmd.contents.ls()
+        self.assertEqual(
+            "/\n"
+            "/test.me.1 = a:3\n"
+            "/test.me.4 = a:2\n"
+            "/wat\n"
+            "/wat/test.me.2 = c:2"
+            "\n/wat/test.me.3 = a:2\n"
+            "DONE", res)
+
+        res = hoard_cmd.files.sync_contents("repo-backup-name")
+        self.assertEqual(
+            f"{backup_cave_cmd.current_uuid()}:\n"
+            f"{backup_cave_cmd.current_uuid()}:\n"
+            "d wat/test.me.2\n"
+            "DONE", res)
+
+        res = hoard_cmd.contents.status(hide_time=True)
+        self.assertEqual(
+            "|Num Files                |total     |available |get       |copy      |cleanup   |\n"
+            "|repo-backup-name         |         3|         3|          |          |          |\n"
+            "|repo-full-name           |         3|         3|          |          |          |\n"
+            "|repo-partial-name        |         2|         1|          |          |         1|\n"
+            "\n"
+            "|Size                     |total     |available |get       |copy      |cleanup   |\n"
+            "|repo-backup-name         |        27|        27|          |          |          |\n"
+            "|repo-full-name           |        27|        27|          |          |          |\n"
+            "|repo-partial-name        |        14|         6|          |          |         8|\n", res)
+
+        res = hoard_cmd.files.sync_contents("repo-full-name")
+        self.assertEqual(
+            f"{full_cave_cmd.current_uuid()}:\n"
+            f"{full_cave_cmd.current_uuid()}:\n"
+            "DONE", res)
+
+        res = hoard_cmd.files.sync_contents("repo-partial-name")
+        self.assertEqual(
+            f"{partial_cave_cmd.current_uuid()}:\n"
+            f"{partial_cave_cmd.current_uuid()}:\n"
+            "d wat/test.me.2\n"
+            "DONE", res)
+
+        res = hoard_cmd.contents.status(hide_time=True)
+        self.assertEqual(
+            "|Num Files                |total     |available |get       |copy      |cleanup   |\n"
+            "|repo-backup-name         |         3|         3|          |          |          |\n"
+            "|repo-full-name           |         3|         3|          |          |          |\n"
+            "|repo-partial-name        |         1|         1|          |          |          |\n"
+            "\n"
+            "|Size                     |total     |available |get       |copy      |cleanup   |\n"
+            "|repo-backup-name         |        27|        27|          |          |          |\n"
+            "|repo-full-name           |        27|        27|          |          |          |\n"
+            "|repo-partial-name        |         6|         6|          |          |          |\n", res)
+
+        res = hoard_cmd.contents.ls()
+        self.assertEqual(
+            "/\n"
+            "/test.me.1 = a:3\n"
+            "/test.me.4 = a:2\n"
+            "/wat\n"
+            "/wat/test.me.2 = "  # fixme this is a problem
+            "\n/wat/test.me.3 = a:2\n"
+            "DONE", res)

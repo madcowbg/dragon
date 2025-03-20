@@ -170,7 +170,7 @@ class RepoCommand(object):
 
             assert not contents.config.is_dirty
 
-            return f"Refresh done!"
+            return f"Refresh done!"  # fixme add more information on what happened
 
     def show(self):  # fixme remove in favor of status
         remote_uuid = self.current_uuid()
