@@ -200,25 +200,25 @@ class HoardCommandContents:
 
         with StringIO() as out:
             for remote_uuid in remote_uuids:
-                print(f"Pulling contents of repo {remote_uuid}.")
                 remote_uuid = resolve_remote_uuid(self.hoard.config(), remote_uuid)
-                remote_type = config.remotes[remote_uuid].type
+                remote_obj = config.remotes[remote_uuid]
+                print(f"Pulling contents of {remote_obj.name}[{remote_uuid}].")
 
                 logging.info(f"Loading hoard TOML...")
                 with HoardContents.load(self.hoard.hoard_contents_filename()) as hoard:
                     logging.info(f"Loaded hoard TOML!")
                     content_prefs = ContentPrefs(config, pathing)
 
-                    if remote_type == CaveType.PARTIAL:
+                    if remote_obj.type == CaveType.PARTIAL:
                         remote_op_handler: DiffHandler = PartialDiffHandler(
                             remote_uuid, hoard, content_prefs,
                             force_fetch_local_missing=force_fetch_local_missing)
-                    elif remote_type == CaveType.BACKUP:
+                    elif remote_obj.type == CaveType.BACKUP:
                         remote_op_handler: DiffHandler = BackupDiffHandler(remote_uuid, hoard)
-                    elif remote_type == CaveType.INCOMING:
+                    elif remote_obj.type == CaveType.INCOMING:
                         remote_op_handler: DiffHandler = IncomingDiffHandler(remote_uuid, hoard, content_prefs)
                     else:
-                        raise ValueError(f"FIXME unsupported remote type: {remote_type}")
+                        raise ValueError(f"FIXME unsupported remote type: {remote_obj.type}")
 
                     if not self.hoard[remote_uuid].has_contents():
                         out.write(f"Repo {remote_uuid} has no current contents available!\n")
