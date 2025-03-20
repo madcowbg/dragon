@@ -3,8 +3,10 @@ import tempfile
 import unittest
 from os.path import join
 
-from command.test_hoard_command import populate_hoard, populate_repotypes, init_complex_hoard
+from command.test_hoard_command import populate_hoard, populate_repotypes, init_complex_hoard, dump_file_list
 from command.test_repo_command import pretty_file_writer
+from config import CaveType
+from dragon import TotalCommand
 
 
 class TestFileChangingFlows(unittest.TestCase):
@@ -182,6 +184,7 @@ class TestFileChangingFlows(unittest.TestCase):
         res = hoard_cmd.contents.get("repo-partial-name", "wat")
         self.assertEqual(
             "+/wat/test.me.z\n"
+            "Considered 5 files.\n"
             "DONE", res)
 
         res = hoard_cmd.contents.status(hide_time=True)
@@ -402,3 +405,118 @@ class TestFileChangingFlows(unittest.TestCase):
             "/wat\n"
             "/wat/test.me.3 = a:2\n"
             "DONE", res)
+
+    def test_add_fetch_new_repo_after_content_is_in(self):
+        populate_repotypes(self.tmpdir.name)
+        hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = \
+            init_complex_hoard(self.tmpdir.name)
+        pfw = pretty_file_writer(self.tmpdir.name)
+
+        os.mkdir(join(self.tmpdir.name, "new-contents"))
+        pfw("new-contents/one-new.file", "eqrghjl9asd")
+
+        # initial pull only partial
+        hoard_cmd.contents.pull(partial_cave_cmd.current_uuid())
+
+        new_content_cmd = TotalCommand(path=join(self.tmpdir.name, "new-contents")).cave
+        new_content_cmd.init()
+        new_content_cmd.refresh()
+
+        hoard_cmd.add_remote(
+            remote_path=join(self.tmpdir.name, "new-contents"), name="repo-new-contents-name",
+            mount_point="/wat", type=CaveType.PARTIAL, fetch_new=True)
+
+        res = hoard_cmd.contents.status()
+        self.assertEqual(
+            "|Num Files                |             updated|total     |available |get       |copy      |cleanup   |\n"
+            "|repo-backup-name         |               never|         2|          |         2|          |          |\n"
+            "|repo-full-name           |               never|         2|          |         2|          |          |\n"
+            "|repo-partial-name        |                 now|         2|         2|          |          |          |\n"
+            "\n"
+            "|Size                     |             updated|total     |available |get       |copy      |cleanup   |\n"
+            "|repo-backup-name         |               never|        14|          |        14|          |          |\n"
+            "|repo-full-name           |               never|        14|          |        14|          |          |\n"
+            "|repo-partial-name        |                 now|        14|        14|          |          |          |\n"
+            "", res)
+
+        # refresh new contents file
+        hoard_cmd.contents.pull(new_content_cmd.current_uuid())
+
+        # pull full as well - its files will be added to the new repop
+        hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
+
+        res = hoard_cmd.contents.status(hide_time=True)
+        self.assertEqual(
+            "|Num Files                |total     |available |get       |copy      |cleanup   |\n"
+            "|repo-backup-name         |         5|          |         5|          |          |\n"
+            "|repo-full-name           |         5|         4|         1|          |          |\n"
+            "|repo-new-contents-name   |         2|         1|         1|          |          |\n"
+            "|repo-partial-name        |         2|         2|          |          |          |\n"
+            "\n"
+            "|Size                     |total     |available |get       |copy      |cleanup   |\n"
+            "|repo-backup-name         |        46|          |        46|          |          |\n"
+            "|repo-full-name           |        46|        35|        11|          |          |\n"
+            "|repo-new-contents-name   |        21|        11|        10|          |          |\n"
+            "|repo-partial-name        |        14|        14|          |          |          |\n",
+            res)
+
+        res = hoard_cmd.contents.get(repo="repo-new-contents-name")
+        self.assertEqual(
+            "+/wat/test.me.2\n"
+            "Considered 3 files.\n"
+            "DONE", res)
+
+        res = hoard_cmd.contents.status(hide_time=True)
+        self.assertEqual(
+            "|Num Files                |total     |available |get       |copy      |cleanup   |\n"
+            "|repo-backup-name         |         5|          |         5|          |          |\n"
+            "|repo-full-name           |         5|         4|         1|          |          |\n"
+            "|repo-new-contents-name   |         3|         1|         2|          |          |\n"
+            "|repo-partial-name        |         2|         2|          |          |          |\n"
+            "\n"
+            "|Size                     |total     |available |get       |copy      |cleanup   |\n"
+            "|repo-backup-name         |        46|          |        46|          |          |\n"
+            "|repo-full-name           |        46|        35|        11|          |          |\n"
+            "|repo-new-contents-name   |        29|        11|        18|          |          |\n"
+            "|repo-partial-name        |        14|        14|          |          |          |\n",
+            res)
+
+        res = new_content_cmd.refresh()
+        self.assertEqual("Refresh done!", res)
+
+        res = hoard_cmd.contents.pull(new_content_cmd.current_uuid())
+        self.assertEqual("Sync'ed repo-new-contents-name to hoard!\nDONE", res)
+
+        res = hoard_cmd.files.sync_contents(repo="repo-new-contents-name")
+        self.assertEqual(
+            f"{new_content_cmd.current_uuid()}:\n"
+            f"+ test.me.2\n"
+            f"+ test.me.3\n"
+            f"{new_content_cmd.current_uuid()}:\n"
+            f"DONE", res)
+
+        res = hoard_cmd.contents.status(hide_time=True)
+        self.assertEqual(
+            "|Num Files                |total     |available |get       |copy      |cleanup   |\n"
+            "|repo-backup-name         |         5|          |         5|          |          |\n"
+            "|repo-full-name           |         5|         4|         1|          |          |\n"
+            "|repo-new-contents-name   |         3|         3|          |          |          |\n"
+            "|repo-partial-name        |         2|         2|          |          |          |\n"
+            "\n"
+            "|Size                     |total     |available |get       |copy      |cleanup   |\n"
+            "|repo-backup-name         |        46|          |        46|          |          |\n"
+            "|repo-full-name           |        46|        35|        11|          |          |\n"
+            "|repo-new-contents-name   |        29|        29|          |          |          |\n"
+            "|repo-partial-name        |        14|        14|          |          |          |\n",
+            res)
+
+        res = hoard_cmd.files.sync_contents(repo=full_cave_cmd.current_uuid())
+        self.assertEqual(
+            f"{full_cave_cmd.current_uuid()}:\n"
+            f"+ wat/one-new.file\n"
+            f"{full_cave_cmd.current_uuid()}:\n"
+            f"DONE", res)
+
+        self.assertDictEqual(
+            dump_file_list(self.tmpdir.name + "/repo-full/wat", "", data=True),
+            dump_file_list(self.tmpdir.name + "/new-contents", "", data=True))

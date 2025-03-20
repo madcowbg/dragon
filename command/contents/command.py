@@ -164,23 +164,24 @@ class HoardCommandContents:
 
             pathing = HoardPathing(config, self.hoard.paths())
 
-            already_enabled = [FileStatus.AVAILABLE, FileStatus.GET]
+            considered = 0
             with StringIO() as out:
                 for hoard_file, hoard_props in hoard.fsobjects:
                     if not isinstance(hoard_props, HoardFileProps):
                         continue
 
                     local_file = pathing.in_hoard(hoard_file).at_local(repo_uuid)
-                    if local_file is None:
+                    if local_file is None:  # is not addressable here at all
                         continue
+                    considered += 1
                     if not pathlib.Path(local_file.as_posix()).is_relative_to(path):
                         logging.info(f"file not in {path}: {local_file.as_posix()}")
                         continue
-                    if hoard_props.get_status(repo_uuid) not in already_enabled:
+                    if hoard_props.get_status(repo_uuid) not in STATUSES_ALREADY_ENABLED:
                         logging.info(f"enabling file {hoard_file} on {repo_uuid}")
                         hoard_props.mark_to_get([repo_uuid])
                         out.write(f"+{hoard_file}\n")
-
+                out.write(f"Considered {considered} files.\n")
                 out.write("DONE")
                 return out.getvalue()
 
@@ -260,6 +261,7 @@ class HoardCommandContents:
                 out.write("DONE")
                 return out.getvalue()
 
+STATUSES_ALREADY_ENABLED = [FileStatus.AVAILABLE, FileStatus.GET]
 
 def clean_dangling_files(hoard: HoardContents, out: StringIO):  # fixme do this when status is modified, not after
     logging.info("Cleaning dangling files from hoard...")
