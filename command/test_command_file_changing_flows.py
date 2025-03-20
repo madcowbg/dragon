@@ -200,14 +200,14 @@ class TestFileChangingFlows(unittest.TestCase):
             "|repo-partial-name        |        42|        22|        20|          |          |\n",
             res)
 
-        res = hoard_cmd.files.sync_contents("repo-partial-name")
+        res = hoard_cmd.files.push("repo-partial-name")
         self.assertEqual(
             f"{partial_cave_cmd.current_uuid()}:\n"
             "+ wat/test.me.z\n"
             f"{partial_cave_cmd.current_uuid()}:\n"
             "DONE", res)
 
-        res = hoard_cmd.files.sync_contents("repo-partial-name")
+        res = hoard_cmd.files.push("repo-partial-name")
         self.assertEqual(
             f"{partial_cave_cmd.current_uuid()}:\n"
             f"{partial_cave_cmd.current_uuid()}:\n"
@@ -239,7 +239,7 @@ class TestFileChangingFlows(unittest.TestCase):
             "DONE", res)
 
         # try to fetch - will have some errors
-        res = hoard_cmd.files.sync_contents("repo-backup-name")
+        res = hoard_cmd.files.push("repo-backup-name")
         self.assertEqual(
             f"{backup_cave_cmd.current_uuid()}:\n"
             f"+ test.me.1\n"
@@ -260,7 +260,7 @@ class TestFileChangingFlows(unittest.TestCase):
             "DONE", res)
 
         # try to fetch - errors will remain
-        res = hoard_cmd.files.sync_contents("repo-backup-name")
+        res = hoard_cmd.files.push("repo-backup-name")
         self.assertEqual(
             f"{backup_cave_cmd.current_uuid()}:\n"
             f"E wat/test.me.3\n"
@@ -309,7 +309,7 @@ class TestFileChangingFlows(unittest.TestCase):
 
         hoard_cmd.contents.pull(partial_cave_cmd.current_uuid())
         hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
-        hoard_cmd.files.sync_contents(backup_cave_cmd.current_uuid())
+        hoard_cmd.files.push(backup_cave_cmd.current_uuid())
 
         res = hoard_cmd.contents.ls(show_remotes=True)
         self.assertEqual(
@@ -352,7 +352,7 @@ class TestFileChangingFlows(unittest.TestCase):
             "\n/wat/test.me.3 = a:2\n"
             "DONE", res)
 
-        res = hoard_cmd.files.sync_contents("repo-backup-name")
+        res = hoard_cmd.files.push("repo-backup-name")
         self.assertEqual(
             f"{backup_cave_cmd.current_uuid()}:\n"
             f"{backup_cave_cmd.current_uuid()}:\n"
@@ -371,13 +371,13 @@ class TestFileChangingFlows(unittest.TestCase):
             "|repo-full-name           |        27|        27|          |          |          |\n"
             "|repo-partial-name        |        14|         6|          |          |         8|\n", res)
 
-        res = hoard_cmd.files.sync_contents("repo-full-name")
+        res = hoard_cmd.files.push("repo-full-name")
         self.assertEqual(
             f"{full_cave_cmd.current_uuid()}:\n"
             f"{full_cave_cmd.current_uuid()}:\n"
             "DONE", res)
 
-        res = hoard_cmd.files.sync_contents("repo-partial-name")
+        res = hoard_cmd.files.push("repo-partial-name")
         self.assertEqual(
             f"{partial_cave_cmd.current_uuid()}:\n"
             f"{partial_cave_cmd.current_uuid()}:\n"
@@ -487,7 +487,7 @@ class TestFileChangingFlows(unittest.TestCase):
         res = hoard_cmd.contents.pull(new_content_cmd.current_uuid())
         self.assertEqual("Sync'ed repo-new-contents-name to hoard!\nDONE", res)
 
-        res = hoard_cmd.files.sync_contents(repo="repo-new-contents-name")
+        res = hoard_cmd.files.push(repo="repo-new-contents-name")
         self.assertEqual(
             f"{new_content_cmd.current_uuid()}:\n"
             f"+ test.me.2\n"
@@ -510,7 +510,7 @@ class TestFileChangingFlows(unittest.TestCase):
             "|repo-partial-name        |        14|        14|          |          |          |\n",
             res)
 
-        res = hoard_cmd.files.sync_contents(repo=full_cave_cmd.current_uuid())
+        res = hoard_cmd.files.push(repo=full_cave_cmd.current_uuid())
         self.assertEqual(
             f"{full_cave_cmd.current_uuid()}:\n"
             f"+ wat/one-new.file\n"

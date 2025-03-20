@@ -323,7 +323,7 @@ class TestHoardCommand(unittest.TestCase):
             "DF /wat\n"
             f"DONE", res)
 
-        res = hoard_cmd.files.sync_contents(repo="cloned-repo")
+        res = hoard_cmd.files.push(repo="cloned-repo")
         self.assertEqual(
             f"{cloned_cave_cmd.current_uuid()}:\n"
             "+ test.me.different\n"
@@ -341,7 +341,7 @@ class TestHoardCommand(unittest.TestCase):
             "DF /wat\n"
             f"DONE", res.strip())
 
-        res = hoard_cmd.files.sync_contents(repo="cloned-repo")
+        res = hoard_cmd.files.push(repo="cloned-repo")
         self.assertEqual(
             f"{cloned_cave_cmd.current_uuid()}:\n"
             f"{cloned_cave_cmd.current_uuid()}:\n"
@@ -485,7 +485,7 @@ class TestHoardCommand(unittest.TestCase):
             'repo-partial/test.me.1',
             'repo-partial/wat/test.me.2', ], dump_file_list(self.tmpdir.name, 'repo-partial'))
 
-        res = hoard_cmd.files.sync_contents("repo-full-name")
+        res = hoard_cmd.files.push("repo-full-name")
         self.assertEqual(
             f"{full_cave_cmd.current_uuid()}:\n"
             "+ test.me.5\n"
@@ -588,7 +588,7 @@ class TestHoardCommand(unittest.TestCase):
             "|repo-partial-name        |                 now|        14|        14|          |          |          |\n",
             res)
 
-        res = hoard_cmd.files.sync_contents()
+        res = hoard_cmd.files.push()
         self.assertEqual(
             f"{partial_cave_cmd.current_uuid()}:\n"
             f"{full_cave_cmd.current_uuid()}:\n"
@@ -694,7 +694,7 @@ class TestHoardCommand(unittest.TestCase):
 
         self.assertEqual([], dump_file_list(self.tmpdir.name, "repo-cloned-wat/"))  # no files yet
 
-        res = hoard_cmd.files.sync_contents("repo-cloned-wat")
+        res = hoard_cmd.files.push("repo-cloned-wat")
         self.assertEqual(
             f"{cloned_cave_cmd.current_uuid()}:\n"
             "+ inner/another.file\n"
@@ -711,7 +711,7 @@ class TestHoardCommand(unittest.TestCase):
         res = hoard_cmd.contents.get(repo="repo-cloned-wat")
         self.assertEqual("+/wat/test.me.2\n+/wat/test.me.3\nConsidered 3 files.\nDONE", res)
 
-        res = hoard_cmd.files.sync_contents("repo-cloned-wat")
+        res = hoard_cmd.files.push("repo-cloned-wat")
         self.assertEqual(
             f"{cloned_cave_cmd.current_uuid()}:\n"
             "+ test.me.2\n"
@@ -884,7 +884,7 @@ class TestHoardCommand(unittest.TestCase):
             "/moved-data/zed/test.me.2 = x:1\n"
             "DONE", res)
 
-        res = hoard_cmd.files.sync_contents("repo-partial-name")
+        res = hoard_cmd.files.push("repo-partial-name")
         self.assertEqual(
             f"{partial_cave_cmd.current_uuid()}:\n"
             "c+ zed/test.me.2\n"
@@ -926,7 +926,7 @@ class TestHoardCommand(unittest.TestCase):
             "/wat/test.me.2 = a:1 g:2\n"
             "DONE", hoard_cmd.contents.ls(depth=2))
 
-        res = hoard_cmd.files.sync_contents("repo-backup-name")
+        res = hoard_cmd.files.push("repo-backup-name")
         self.assertEqual(
             f"{backup_cave_cmd.current_uuid()}:\n"
             "+ wat/test.me.2\n"
@@ -984,7 +984,7 @@ class TestHoardCommand(unittest.TestCase):
             "/wat/test.me.2 = a:1 g:2\n"
             "DONE", hoard_cmd.contents.ls(depth=2))
 
-        res = hoard_cmd.files.sync_contents("repo-partial-name")
+        res = hoard_cmd.files.push("repo-partial-name")
         self.assertEqual(
             f"{partial_cave_cmd.current_uuid()}:\n"
             f"+ wat/test.me.2\n"

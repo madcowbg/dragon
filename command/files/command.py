@@ -21,7 +21,7 @@ class HoardCommandFiles:
     def __init__(self, hoard: Hoard):
         self.hoard = hoard
 
-    def sync_contents(self, repo: Optional[str] = None):
+    def push(self, repo: Optional[str] = None):
         config = self.hoard.config()
         pathing = HoardPathing(config, self.hoard.paths())
 
