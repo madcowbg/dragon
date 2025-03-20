@@ -306,9 +306,9 @@ class HoardCommand(object):
                 for dirpath, _, filenames in os.walk(source):
                     for filename in filenames:
                         fullpath = os.path.join(dirpath, filename)
-                        print(f"Full path: {fullpath}")
+                        logging.info(f"Full path: {fullpath}")
                         rel_to_source = pathlib.Path(fullpath).relative_to(source)
-                        print(f"Rel path: {rel_to_source}")
+                        logging.info(f"Rel path: {rel_to_source}")
 
                         fasthash = fast_hash(fullpath)
 
@@ -319,7 +319,7 @@ class HoardCommand(object):
                             dest_junk_path = junk_path.joinpath(rel_to_source)
                             rel_junk_path = dest_junk_path.relative_to(dest).as_posix()
                             if move:
-                                print(f"Copying {fullpath} to {dest_junk_path}")
+                                logging.info(f"Copying {fullpath} to {dest_junk_path}")
                                 dest_junk_path.parent.mkdir(parents=True, exist_ok=True)
                                 try:
                                     shutil.move(fullpath, dest_junk_path)
