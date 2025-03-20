@@ -334,7 +334,7 @@ class HoardCommandContents:
                         lambda uc: (config.remotes[uc[0]].name, uc[1]),  # uuid, count -> name, count
                         repos_containing_what_this_one_needs.items()))
                     for name, count in nc:
-                        out.write(f"{name} has {count} files\n")
+                        out.write(f" {name} has {count} files\n")
                 out.write("DONE")
                 return out.getvalue()
 
