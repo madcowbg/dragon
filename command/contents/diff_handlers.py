@@ -33,7 +33,9 @@ class BackupSet:
         self.backups = dict((backup.uuid, backup) for backup in backups)
         self.pathing = pathing
 
-        self.num_backup_copies_desired = 1
+        self.num_backup_copies_desired = min(1, len(self.backups))
+        if self.num_backup_copies_desired:
+            logging.warning("No backups are defined.")
 
     def repos_to_backup_to(
             self, hoard_file: str, local_props: RepoFileProps,

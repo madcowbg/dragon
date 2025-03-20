@@ -197,15 +197,15 @@ class HoardCommandContents:
         else:
             remote_uuids = [remote]
 
-        logging.info(f"Loading hoard TOML...")
-        with HoardContents.load(self.hoard.hoard_contents_filename()) as hoard:
-            logging.info(f"Loaded hoard TOML!")
+        with StringIO() as out:
+            for remote_uuid in remote_uuids:
+                print(f"Pulling contents of repo {remote_uuid}.")
+                remote_uuid = resolve_remote_uuid(self.hoard.config(), remote_uuid)
+                remote_type = config.remotes[remote_uuid].type
 
-            with StringIO() as out:
-                for remote_uuid in remote_uuids:
-                    remote_uuid = resolve_remote_uuid(self.hoard.config(), remote_uuid)
-                    remote_type = config.remotes[remote_uuid].type
-
+                logging.info(f"Loading hoard TOML...")
+                with HoardContents.load(self.hoard.hoard_contents_filename()) as hoard:
+                    logging.info(f"Loaded hoard TOML!")
                     content_prefs = ContentPrefs(config, pathing)
 
                     if remote_type == CaveType.PARTIAL:
@@ -222,16 +222,18 @@ class HoardCommandContents:
                     with self.hoard.fetch_repo_contents(remote_uuid) as current_contents:
                         if current_contents.config.is_dirty:
                             logging.error(f"{remote_uuid} is_dirty = TRUE, so the refresh is not complete - can't use current repo.")
-                            return f"Skipping update as {remote_uuid} is not fully calculated!"
+                            out.write(f"Skipping update as {remote_uuid} is not fully calculated!\n")
+                            continue
 
                         if not ignore_epoch and hoard.epoch(remote_uuid) >= current_contents.config.epoch:
-                            return (
-                                f"Skipping update as past epoch {current_contents.config.epoch} "
-                                f"is not after hoard epoch {hoard.epoch(remote_uuid)}")
+                            out.write(f"Skipping update as past epoch {current_contents.config.epoch} "
+                                f"is not after hoard epoch {hoard.epoch(remote_uuid)}\n")
+                            continue
 
                         remote_doc = config.remotes[remote_uuid]
                         if remote_doc is None or remote_doc.mounted_at is None:
-                            raise ValueError(f"remote_doc {remote_uuid} is not mounted!")
+                            out.write(f"Remote {remote_uuid} is not mounted!\n")
+                            continue
 
                         logging.info("Merging local changes...")
                         for diff in compare_local_to_hoard(current_contents, hoard, config, self.hoard.paths()):
@@ -257,9 +259,9 @@ class HoardCommandContents:
                     hoard.write()
                     logging.info("Local commit DONE!")
 
-                    out.write(f"Sync'ed {config.remotes[remote_uuid].name} to hoard!\n")
-                out.write("DONE")
-                return out.getvalue()
+                out.write(f"Sync'ed {config.remotes[remote_uuid].name} to hoard!\n")
+            out.write("DONE")
+            return out.getvalue()
 
 STATUSES_ALREADY_ENABLED = [FileStatus.AVAILABLE, FileStatus.GET]
 

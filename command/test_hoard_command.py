@@ -126,7 +126,7 @@ class TestHoardCommand(unittest.TestCase):
                 dirs_exp=["/wat"])
 
         res = hoard_cmd.contents.pull("repo-in-local")
-        self.assertEqual("Skipping update as past epoch 1 is not after hoard epoch 1", res)
+        self.assertEqual("Skipping update as past epoch 1 is not after hoard epoch 1\nDONE", res)
 
         res = hoard_cmd.contents.pull("repo-in-local-2")
         self.assertEqual(
@@ -416,7 +416,7 @@ class TestHoardCommand(unittest.TestCase):
             "Sync'ed repo-backup-name to hoard!\nDONE", res.strip())
 
         res = hoard_cmd.contents.pull("repo-backup-name")  # does nothing
-        self.assertEqual("Skipping update as past epoch 1 is not after hoard epoch 1", res.strip())
+        self.assertEqual("Skipping update as past epoch 1 is not after hoard epoch 1\nDONE", res.strip())
 
         res = hoard_cmd.contents.ls(skip_folders=True)
         self.assertEqual(
