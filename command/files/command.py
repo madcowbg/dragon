@@ -66,17 +66,29 @@ class HoardCommandFiles:
                 for repo_uuid in repo_uuids:
                     logging.info(f"Iterating over pending ops in {repo_uuid}")
                     out.write(f"{config.remotes[repo_uuid].name}:\n")
+
+                    repos_containing_what_this_one_needs: Dict[str, int] = dict()
                     for op in _get_pending_operations(hoard, repo_uuid):
-                        num_available = len(op.hoard_props.by_status(FileStatus.AVAILABLE))
+                        num_available = op.hoard_props.by_status(FileStatus.AVAILABLE)
                         if isinstance(op, GetFile):
-                            out.write(f"TO_GET (from {num_available}) {op.hoard_file}\n")
+                            out.write(f"TO_GET (from {len(num_available)}) {op.hoard_file}\n")
+                            for repo in num_available:
+                                repos_containing_what_this_one_needs[repo] = \
+                                    repos_containing_what_this_one_needs.get(repo, 0) + 1
                         elif isinstance(op, CopyFile):
-                            out.write(f"TO_COPY (from {num_available}+?) {op.hoard_file}\n")
+                            out.write(f"TO_COPY (from {len(num_available)}+?) {op.hoard_file}\n")
+                            for repo in num_available:
+                                repos_containing_what_this_one_needs[repo] = \
+                                    repos_containing_what_this_one_needs.get(repo, 0) + 1
                         elif isinstance(op, CleanupFile):
-                            out.write(f"TO_CLEANUP (is in {num_available}) {op.hoard_file}\n")
+                            out.write(f"TO_CLEANUP (is in {len(num_available)}) {op.hoard_file}\n")
                         else:
                             raise ValueError(f"Unhandled op type: {type(op)}")
-
+                    nc = sorted(map(
+                        lambda uc: (config.remotes[uc[0]].name, uc[1]), # uuid, count -> name, count
+                        repos_containing_what_this_one_needs.items()))
+                    for name, count in nc:
+                        out.write(f"{name} has {count} files\n")
                 out.write("DONE")
                 return out.getvalue()
 
