@@ -460,7 +460,7 @@ class TestFileChangingFlows(unittest.TestCase):
             "|repo-partial-name        |        14|        14|          |          |          |\n",
             res)
 
-        res = hoard_cmd.contents.get(repo="repo-new-contents-name")
+        res = hoard_cmd.contents.get(repo="repo-new-contents-name", path="")
         self.assertEqual(
             "+/wat/test.me.2\n"
             "Considered 3 files.\n"

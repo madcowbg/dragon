@@ -172,7 +172,7 @@ class HoardCommandContents:
                 out.write("DONE")
                 return out.getvalue()
 
-    def get(self, repo: str, path: str = ""):
+    def get(self, repo: str, path: str):
         config = self.hoard.config()
         if os.path.isabs(path):
             return f"Path {path} must be relative, but is absolute."
@@ -188,7 +188,8 @@ class HoardCommandContents:
 
             considered = 0
             with StringIO() as out:
-                for hoard_file, hoard_props in hoard.fsobjects:
+                print(f"Iterating over {len(hoard.fsobjects)} files and folders...")
+                for hoard_file, hoard_props in alive_it(hoard.fsobjects):
                     if not isinstance(hoard_props, HoardFileProps):
                         continue
 

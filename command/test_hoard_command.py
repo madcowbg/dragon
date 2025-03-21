@@ -707,7 +707,7 @@ class TestHoardCommand(unittest.TestCase):
         res = cloned_cave_cmd.refresh()
         self.assertEqual("Refresh done!", res)
 
-        res = hoard_cmd.contents.get(repo="repo-cloned-wat")
+        res = hoard_cmd.contents.get(repo="repo-cloned-wat", path="")
         self.assertEqual("+/wat/test.me.2\n+/wat/test.me.3\nConsidered 3 files.\nDONE", res)
 
         res = hoard_cmd.files.push("repo-cloned-wat")
