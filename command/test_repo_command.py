@@ -3,7 +3,6 @@ import pathlib
 import tempfile
 import unittest
 from os.path import join
-from time import sleep
 from typing import Callable
 
 from dragon import TotalCommand
@@ -29,7 +28,6 @@ def populate(tmpdir: str):
     pfw('repo/wat/test.me.once', "gsadfasd")
     pfw('repo/wat/test.me.different', "gsadf")
 
-    sleep(0.01)
     pfw('repo-2/test.me.twice', "gsadfs")
     pfw('repo-2/test.me.different', "gsadf3dq")
 

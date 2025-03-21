@@ -3,16 +3,15 @@ import pathlib
 import tempfile
 import unittest
 from os.path import join
-from time import sleep
 from typing import Tuple, List, Dict
 
+from command.repo_command import RepoCommand
+from command.test_repo_command import populate, write_contents, pretty_file_writer
 from config import CaveType
 from contents.hoard import HoardContents
 from contents.props import DirProps, HoardFileProps
 from dragon import TotalCommand
-from command.repo_command import RepoCommand
 from resolve_uuid import resolve_remote_uuid
-from command.test_repo_command import populate, write_contents, pretty_file_writer
 
 
 def populate_hoard(tmpdir: str):
@@ -1067,21 +1066,18 @@ def populate_repotypes(tmpdir: str):
     # f"D /wat/test.me.once\n"
     # f"D /wat/test.me.twice\nDONE"
     pfw = pretty_file_writer(tmpdir)
-    sleep(0.01)
+
     pfw('repo-partial/test.me.1', "gsadfs")
     pfw('repo-partial/wat/test.me.2', "gsadf3dq")
 
-    sleep(0.01)
     pfw('repo-full/test.me.1', "gsadfs")
     pfw('repo-full/test.me.4', "fwadeaewdsa")
     pfw('repo-full/wat/test.me.2', "gsadf3dq")
     pfw('repo-full/wat/test.me.3', "afaswewfas")
 
-    sleep(0.01)
     pfw('repo-backup/test.me.1', "gsadfs")
     pfw('repo-backup/wat/test.me.3', "afaswewfas")
 
-    sleep(0.01)
     pfw('repo-incoming/wat/test.me.3', "asdgvarfa")
     pfw('repo-incoming/test.me.4', "fwadeaewdsa")
     pfw('repo-incoming/test.me.5', "adsfg")
