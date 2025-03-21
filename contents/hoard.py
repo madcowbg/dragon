@@ -365,6 +365,9 @@ class HoardContents:
                 " size INTEGER,"
                 " fasthash TEXT)")
 
+            # for fasthash lookups in melding
+            curr.execute("CREATE INDEX index_fsobject_fasthash ON fsobject (fasthash) ")
+
             curr.execute(
                 "CREATE TABLE fspresence ("
                 " fsobject_id INTEGER,"
