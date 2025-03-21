@@ -324,11 +324,11 @@ class TestHoardCommand(unittest.TestCase):
 
         res = hoard_cmd.files.push(repo="cloned-repo")
         self.assertEqual(
-            f"{cloned_cave_cmd.current_uuid()}:\n"
+            f"cloned-repo:\n"
             "+ test.me.different\n"
             "+ test.me.once\n"
             "+ test.me.twice\n"
-            f"{cloned_cave_cmd.current_uuid()}:\n"
+            f"cloned-repo:\n"
             "DONE", res.strip())
 
         res = cloned_cave_cmd.refresh()
@@ -342,8 +342,8 @@ class TestHoardCommand(unittest.TestCase):
 
         res = hoard_cmd.files.push(repo="cloned-repo")
         self.assertEqual(
-            f"{cloned_cave_cmd.current_uuid()}:\n"
-            f"{cloned_cave_cmd.current_uuid()}:\n"
+            f"cloned-repo:\n"
+            f"cloned-repo:\n"
             "DONE", res.strip())
 
         self.assertEqual([
@@ -486,11 +486,11 @@ class TestHoardCommand(unittest.TestCase):
 
         res = hoard_cmd.files.push("repo-full-name")
         self.assertEqual(
-            f"{full_cave_cmd.current_uuid()}:\n"
+            f"repo-full-name:\n"
             "+ test.me.5\n"
             "+ wat/test.me.3\n"
             "+ wat/test.me.6\n"
-            f"{full_cave_cmd.current_uuid()}:\n"
+            f"repo-full-name:\n"
             "DONE", res)
 
         self.assertEqual([
@@ -587,24 +587,24 @@ class TestHoardCommand(unittest.TestCase):
             "|repo-partial-name        |                 now|        14|        14|          |          |          |\n",
             res)
 
-        res = hoard_cmd.files.push()
+        res = hoard_cmd.files.push(all=True)
         self.assertEqual(
-            f"{partial_cave_cmd.current_uuid()}:\n"
-            f"{full_cave_cmd.current_uuid()}:\n"
+            f"repo-partial-name:\n"
+            f"repo-full-name:\n"
             "+ test.me.5\n"
             "+ wat/test.me.3\n"
             "+ wat/test.me.6\n"
-            f"{backup_cave_cmd.current_uuid()}:\n"
+            f"repo-backup-name:\n"
             "+ test.me.4\n"
             "+ test.me.5\n"
             "+ wat/test.me.2\n"
             "+ wat/test.me.3\n"
             "+ wat/test.me.6\n"
-            f"{incoming_cave_cmd.current_uuid()}:\n"
-            f"{partial_cave_cmd.current_uuid()}:\n"
-            f"{full_cave_cmd.current_uuid()}:\n"
-            f"{backup_cave_cmd.current_uuid()}:\n"
-            f"{incoming_cave_cmd.current_uuid()}:\n"
+            f"repo-incoming-name:\n"
+            f"repo-partial-name:\n"
+            f"repo-full-name:\n"
+            f"repo-backup-name:\n"
+            f"repo-incoming-name:\n"
             "d test.me.4\n"
             "d test.me.5\n"
             "d wat/test.me.3\n"
@@ -695,9 +695,9 @@ class TestHoardCommand(unittest.TestCase):
 
         res = hoard_cmd.files.push("repo-cloned-wat")
         self.assertEqual(
-            f"{cloned_cave_cmd.current_uuid()}:\n"
+            f"repo-cloned-wat:\n"
             "+ inner/another.file\n"
-            f"{cloned_cave_cmd.current_uuid()}:\n"
+            f"repo-cloned-wat:\n"
             "DONE", res)
 
         self.assertEqual(
@@ -712,10 +712,10 @@ class TestHoardCommand(unittest.TestCase):
 
         res = hoard_cmd.files.push("repo-cloned-wat")
         self.assertEqual(
-            f"{cloned_cave_cmd.current_uuid()}:\n"
+            f"repo-cloned-wat:\n"
             "+ test.me.2\n"
             "+ test.me.3\n"
-            f"{cloned_cave_cmd.current_uuid()}:\n"
+            f"repo-cloned-wat:\n"
             "DONE", res)
 
         self.assertEqual([
@@ -885,9 +885,9 @@ class TestHoardCommand(unittest.TestCase):
 
         res = hoard_cmd.files.push("repo-partial-name")
         self.assertEqual(
-            f"{partial_cave_cmd.current_uuid()}:\n"
+            f"repo-partial-name:\n"
             "c+ zed/test.me.2\n"
-            f"{partial_cave_cmd.current_uuid()}:\n"
+            f"repo-partial-name:\n"
             "DONE", res)
 
         res = hoard_cmd.contents.ls(show_remotes=True)
@@ -927,9 +927,9 @@ class TestHoardCommand(unittest.TestCase):
 
         res = hoard_cmd.files.push("repo-backup-name")
         self.assertEqual(
-            f"{backup_cave_cmd.current_uuid()}:\n"
+            f"repo-backup-name:\n"
             "+ wat/test.me.2\n"
-            f"{backup_cave_cmd.current_uuid()}:\n"
+            f"repo-backup-name:\n"
             "DONE", res.strip())
 
         self.assertEqual([
@@ -985,9 +985,9 @@ class TestHoardCommand(unittest.TestCase):
 
         res = hoard_cmd.files.push("repo-partial-name")
         self.assertEqual(
-            f"{partial_cave_cmd.current_uuid()}:\n"
+            f"repo-partial-name:\n"
             f"+ wat/test.me.2\n"
-            f"{partial_cave_cmd.current_uuid()}:\n"
+            f"repo-partial-name:\n"
             f"DONE", res)
 
         self.assertEqual(

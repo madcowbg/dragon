@@ -205,15 +205,15 @@ class TestFileChangingFlows(unittest.TestCase):
 
         res = hoard_cmd.files.push("repo-partial-name")
         self.assertEqual(
-            f"{partial_cave_cmd.current_uuid()}:\n"
+            f"repo-partial-name:\n"
             "+ wat/test.me.z\n"
-            f"{partial_cave_cmd.current_uuid()}:\n"
+            f"repo-partial-name:\n"
             "DONE", res)
 
         res = hoard_cmd.files.push("repo-partial-name")
         self.assertEqual(
-            f"{partial_cave_cmd.current_uuid()}:\n"
-            f"{partial_cave_cmd.current_uuid()}:\n"
+            f"repo-partial-name:\n"
+            f"repo-partial-name:\n"
             "DONE", res)
 
     def test_file_is_deleted_before_copied(self):
@@ -243,12 +243,12 @@ class TestFileChangingFlows(unittest.TestCase):
         # try to fetch - will have some errors
         res = hoard_cmd.files.push("repo-backup-name")
         self.assertEqual(
-            f"{backup_cave_cmd.current_uuid()}:\n"
+            f"repo-backup-name:\n"
             f"+ test.me.1\n"
             f"+ test.me.4\n"
             f"+ wat/test.me.2\n"
             f"E wat/test.me.3\n"
-            f"{backup_cave_cmd.current_uuid()}:\n"
+            f"repo-backup-name:\n"
             f"DONE", res)
 
         res = hoard_cmd.contents.ls(show_remotes=True)
@@ -264,9 +264,9 @@ class TestFileChangingFlows(unittest.TestCase):
         # try to fetch - errors will remain
         res = hoard_cmd.files.push("repo-backup-name")
         self.assertEqual(
-            f"{backup_cave_cmd.current_uuid()}:\n"
+            f"repo-backup-name:\n"
             f"E wat/test.me.3\n"
-            f"{backup_cave_cmd.current_uuid()}:\n"
+            f"repo-backup-name:\n"
             "DONE", res)
 
         # do refresh and pull to detect deleted file and its state
@@ -355,8 +355,8 @@ class TestFileChangingFlows(unittest.TestCase):
 
         res = hoard_cmd.files.push("repo-backup-name")
         self.assertEqual(
-            f"{backup_cave_cmd.current_uuid()}:\n"
-            f"{backup_cave_cmd.current_uuid()}:\n"
+            f"repo-backup-name:\n"
+            f"repo-backup-name:\n"
             "d wat/test.me.2\n"
             "DONE", res)
 
@@ -374,14 +374,14 @@ class TestFileChangingFlows(unittest.TestCase):
 
         res = hoard_cmd.files.push("repo-full-name")
         self.assertEqual(
-            f"{full_cave_cmd.current_uuid()}:\n"
-            f"{full_cave_cmd.current_uuid()}:\n"
+            f"repo-full-name:\n"
+            f"repo-full-name:\n"
             "DONE", res)
 
         res = hoard_cmd.files.push("repo-partial-name")
         self.assertEqual(
-            f"{partial_cave_cmd.current_uuid()}:\n"
-            f"{partial_cave_cmd.current_uuid()}:\n"
+            f"repo-partial-name:\n"
+            f"repo-partial-name:\n"
             "d wat/test.me.2\n"
             "remove dangling /wat/test.me.2\n"
             "DONE", res)
@@ -489,10 +489,10 @@ class TestFileChangingFlows(unittest.TestCase):
 
         res = hoard_cmd.files.push(repo="repo-new-contents-name")
         self.assertEqual(
-            f"{new_content_cmd.current_uuid()}:\n"
+            f"repo-new-contents-name:\n"
             f"+ test.me.2\n"
             f"+ test.me.3\n"
-            f"{new_content_cmd.current_uuid()}:\n"
+            f"repo-new-contents-name:\n"
             f"DONE", res)
 
         res = hoard_cmd.contents.status(hide_time=True)
@@ -512,9 +512,9 @@ class TestFileChangingFlows(unittest.TestCase):
 
         res = hoard_cmd.files.push(repo=full_cave_cmd.current_uuid())
         self.assertEqual(
-            f"{full_cave_cmd.current_uuid()}:\n"
+            f"repo-full-name:\n"
             f"+ wat/one-new.file\n"
-            f"{full_cave_cmd.current_uuid()}:\n"
+            f"repo-full-name:\n"
             f"DONE", res)
 
         self.assertDictEqual(

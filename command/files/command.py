@@ -21,12 +21,17 @@ class HoardCommandFiles:
     def __init__(self, hoard: Hoard):
         self.hoard = hoard
 
-    def push(self, repo: Optional[str] = None):
+    def push(self, repo: Optional[str] = None, all: bool = False):
         config = self.hoard.config()
         pathing = HoardPathing(config, self.hoard.paths())
-
-        repo_uuids: List[str] = [resolve_remote_uuid(config, repo)] \
-            if repo is not None else [r.uuid for r in config.remotes.all()]
+        if all:
+            if repo is not None:
+                return f"Error: can't use --all and --repo={repo} at the same time."
+            repo_uuids: List[str] = [r.uuid for r in config.remotes.all()]
+        else:
+            if repo is None:
+                return f"Error: Need either --repo=REPO or --all."
+            repo_uuids = [resolve_remote_uuid(config, repo)]
 
         logging.info(f"Loading hoard contents...")
         with self.hoard.open_contents() as hoard:
@@ -38,7 +43,7 @@ class HoardCommandFiles:
 
                 for repo_uuid in repo_uuids:
                     print(f"fetching for {config.remotes[repo_uuid].name}")
-                    out.write(f"{repo_uuid}:\n")
+                    out.write(f"{config.remotes[repo_uuid].name}:\n")
 
                     _fetch_files_in_repo(hoard, repo_uuid, pathing, files_to_copy, out)
 
@@ -52,7 +57,7 @@ class HoardCommandFiles:
                 logging.info("try cleaning unneeded files, per repo")
                 for repo_uuid in repo_uuids:
                     print(f"cleaning repo {config.remotes[repo_uuid].name}")
-                    out.write(f"{repo_uuid}:\n")
+                    out.write(f"{config.remotes[repo_uuid].name}:\n")
 
                     _cleanup_files_in_repo(hoard, repo_uuid, pathing, files_to_copy, out)
 

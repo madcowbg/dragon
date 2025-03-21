@@ -62,25 +62,25 @@ def populate_repotypes(tmpdir: str):
     # f"D /wat/test.me.twice\nDONE"
     pfw = pretty_file_writer(tmpdir)
 
-    pfw('repo-partial/test.me.1', "gsadfs")
-    pfw('repo-partial/wat/test.me.2', "gsadf3dq")
+    pfw('repo-partial/test.me.1', "gsadfs" * 10)
+    pfw('repo-partial/wat/test.me.2', "gsadf3dq" * 2)
 
-    pfw('repo-full/test.me.1', "gsadfs")
-    pfw('repo-full/test.me.4', "fwadeaewdsa")
-    pfw('repo-full/wat/test.me.2', "gsadf3dq")
-    pfw('repo-full/wat/test.me.3', "afaswewfas")
+    pfw('repo-full/test.me.1', "gsadfs" * 10)
+    pfw('repo-full/test.me.4', "fwadeaewdsa" * 7)
+    pfw('repo-full/wat/test.me.2', "gsadf3dq" * 2)
+    pfw('repo-full/wat/test.me.3', "afaswewfas" * 9)
 
     pfw('repo-incoming/wat/test.me.3', "asdgvarfa")
-    pfw('repo-incoming/test.me.4', "fwadeaewdsa")
-    pfw('repo-incoming/test.me.5', "adsfg")
-    pfw('repo-incoming/wat/test.me.6', "f2fwsdf")
+    pfw('repo-incoming/test.me.4', "fwadeaewdsa" * 7)
+    pfw('repo-incoming/test.me.5', "adsfg" * 12)
+    pfw('repo-incoming/wat/test.me.6', "f2fwsdf" * 11)
 
-    pfw('repo-backup-1/test.me.1', "gsadfs")
-    pfw('repo-backup-1/wat/test.me.3', "afaswewfas")
+    pfw('repo-backup-1/test.me.1', "gsadfs" * 10)
+    pfw('repo-backup-1/wat/test.me.3', "afaswewfas" * 9)
 
-    pfw('repo-backup-2/test.me.1', "gsadfs")
+    pfw('repo-backup-2/test.me.1', "gsadfs" * 10)
 
-    pfw('repo-backup-3/test.me.obsolete', "asdfvawef")
+    pfw('repo-backup-3/test.me.obsolete', "asdfvawef" * 13)
 
     os.mkdir(join(tmpdir, 'repo-backup-4'))  # empty
 
@@ -140,17 +140,17 @@ class TestBackups(unittest.TestCase):
         full_cave_cmd.refresh()
         incoming_cave_cmd.refresh()
 
-        res = hoard_cmd.files.push()  # fixme add param
+        res = hoard_cmd.files.push(all=True)
         self.assertEqual(
-            f"{partial_cave_cmd.current_uuid()}:\n"
-            f"{full_cave_cmd.current_uuid()}:\n"
+            f"repo-partial-name:\n"
+            f"repo-full-name:\n"
             "+ test.me.5\n"
             "+ wat/test.me.3\n"
             "+ wat/test.me.6\n"
-            f"{incoming_cave_cmd.current_uuid()}:\n"
-            f"{partial_cave_cmd.current_uuid()}:\n"
-            f"{full_cave_cmd.current_uuid()}:\n"
-            f"{incoming_cave_cmd.current_uuid()}:\n"
+            f"repo-incoming-name:\n"
+            f"repo-partial-name:\n"
+            f"repo-full-name:\n"
+            f"repo-incoming-name:\n"
             "d test.me.4\n"
             "d test.me.5\n"
             "d wat/test.me.3\n"
@@ -174,7 +174,133 @@ class TestBackups(unittest.TestCase):
             "/wat/test.me.6 = a:1\n"
             "DONE", res)
 
-    def test_create_with_simple_backup(self):
+    def test_create_with_simple_backup_from_start(self):
+        hoard_cmd, partial_cave_cmd, full_cave_cmd, incoming_cave_cmd = init_complex_hoard(self.tmpdir.name)
+
+        backup_1_cmd = self._init_and_refresh_repo("repo-backup-1")
+        backup_2_cmd = self._init_and_refresh_repo("repo-backup-2")
+        backup_3_cmd = self._init_and_refresh_repo("repo-backup-3")
+        backup_4_cmd = self._init_and_refresh_repo("repo-backup-4")
+
+        hoard_cmd.add_remote(
+            remote_path=join(self.tmpdir.name, "repo-backup-1"), name="backup-1", mount_point="/",
+            type=CaveType.BACKUP)
+        hoard_cmd.add_remote(
+            remote_path=join(self.tmpdir.name, "repo-backup-2"), name="backup-2", mount_point="/",
+            type=CaveType.BACKUP)
+        hoard_cmd.add_remote(
+            remote_path=join(self.tmpdir.name, "repo-backup-3"), name="backup-3", mount_point="/",
+            type=CaveType.BACKUP)
+        hoard_cmd.add_remote(
+            remote_path=join(self.tmpdir.name, "repo-backup-4"), name="backup-4", mount_point="/",
+            type=CaveType.BACKUP)
+
+        res = hoard_cmd.contents.pull(all=True)
+        self.assertEqual(
+            "+/test.me.1\n"
+            "+/wat/test.me.2\n"
+            "Sync'ed repo-partial-name to hoard!\n"
+            "=/test.me.1\n"
+            "+/test.me.4\n"
+            "=/wat/test.me.2\n"
+            "+/wat/test.me.3\n"
+            "Sync'ed repo-full-name to hoard!\n"
+            "-/test.me.4\n"
+            "<+/test.me.5\n"
+            "u/wat/test.me.3\n"
+            "<+/wat/test.me.6\n"
+            "Sync'ed repo-incoming-name to hoard!\n"
+            "=/test.me.1\n"
+            "Sync'ed backup-1 to hoard!\n"
+            "=/test.me.1\n"
+            "Sync'ed backup-2 to hoard!\n"
+            "?/test.me.obsolete\n"
+            "Sync'ed backup-3 to hoard!\n"
+            "Sync'ed backup-4 to hoard!\n"
+            "DONE", res)
+
+        res = hoard_cmd.contents.status(hide_time=True)
+        self.assertEqual(
+            "|Num Files                |total     |available |get       |copy      |cleanup   |\n"
+            "|backup-1                 |         6|         1|         5|          |          |\n"
+            "|backup-2                 |         1|         1|          |          |          |\n"
+            "|repo-full-name           |         6|         3|         3|          |          |\n"
+            "|repo-incoming-name       |         4|          |          |          |         4|\n"
+            "|repo-partial-name        |         2|         2|          |          |          |\n"
+            "\n"
+            "|Size                     |total     |available |get       |copy      |cleanup   |\n"
+            "|backup-1                 |       299|        60|       239|          |          |\n"
+            "|backup-2                 |        60|        60|          |          |          |\n"
+            "|repo-full-name           |       299|       153|       146|          |          |\n"
+            "|repo-incoming-name       |       223|          |          |          |       223|\n"
+            "|repo-partial-name        |        76|        76|          |          |          |\n", res)
+
+        res = hoard_cmd.backups.health()
+        self.assertEqual(
+            "# backup sets: 1\n"
+            "# backups: 4\n"
+            "scheduled count:\n"
+            " 1: 5 files (239)\n"
+            " 2: 1 files (60)\n"
+            "available count:\n"
+            " 0: 5 files (239)\n"
+            " 2: 1 files (60)\n"
+            "get_or_copy count:\n"
+            " 2: 3 files (146)\n"
+            " 1: 2 files (93)\n"
+            " 0: 1 files (60)\n"
+            "cleanup count:\n"
+            " 1: 4 files (223)\n"
+            " 0: 2 files (76)\n"
+            "DONE", res)
+
+        res = hoard_cmd.files.push(all=True)
+        self.assertEqual(
+            "repo-partial-name:\n"
+            "repo-full-name:\n"
+            "+ test.me.5\n"
+            "+ wat/test.me.3\n"
+            "+ wat/test.me.6\n"
+            "repo-incoming-name:\n"
+            "backup-1:\n"
+            "+ test.me.4\n"
+            "+ test.me.5\n"
+            "+ wat/test.me.2\n"
+            "+ wat/test.me.3\n"
+            "+ wat/test.me.6\n"
+            "backup-2:\n"
+            "backup-3:\n"
+            "backup-4:\n"
+            "repo-partial-name:\n"
+            "repo-full-name:\n"
+            "repo-incoming-name:\n"
+            "d test.me.4\n"
+            "d test.me.5\n"
+            "d wat/test.me.3\n"
+            "d wat/test.me.6\n"
+            "backup-1:\n"
+            "backup-2:\n"
+            "backup-3:\n"
+            "backup-4:\n"
+            "DONE", res)
+
+        res = hoard_cmd.backups.health()
+        self.assertEqual(
+            "# backup sets: 1\n"
+            "# backups: 4\n"
+            "scheduled count:\n"
+            " 1: 5 files (239)\n"
+            " 2: 1 files (60)\n"
+            "available count:\n"
+            " 1: 5 files (239)\n"
+            " 2: 1 files (60)\n"
+            "get_or_copy count:\n"
+            " 0: 6 files (299)\n"
+            "cleanup count:\n"
+            " 0: 6 files (299)\n"
+            "DONE", res)
+
+    def test_add_backup_repos_over_time(self):
         hoard_cmd, partial_cave_cmd, full_cave_cmd, incoming_cave_cmd = init_complex_hoard(self.tmpdir.name)
 
         hoard_cmd.contents.pull(all=True)
@@ -221,30 +347,28 @@ class TestBackups(unittest.TestCase):
             "|repo-partial-name        |         2|         2|          |          |          |\n"
             "\n"
             "|Size                     |total     |available |get       |copy      |cleanup   |\n"
-            "|backup-1                 |         6|         6|          |          |          |\n"
-            "|backup-2                 |         6|         6|          |          |          |\n"
-            "|repo-full-name           |        46|        25|        21|          |          |\n"
-            "|repo-incoming-name       |        32|          |          |          |        32|\n"
-            "|repo-partial-name        |        14|        14|          |          |          |\n", res)
+            "|backup-1                 |        60|        60|          |          |          |\n"
+            "|backup-2                 |        60|        60|          |          |          |\n"
+            "|repo-full-name           |       299|       153|       146|          |          |\n"
+            "|repo-incoming-name       |       223|          |          |          |       223|\n"
+            "|repo-partial-name        |        76|        76|          |          |          |\n", res)
 
         res = hoard_cmd.backups.health()
         self.assertEqual(
             "# backup sets: 1\n"
             "# backups: 4\n"
             "scheduled count:\n"
-            " 0: 5 files (40)\n"
-            " 2: 1 files (6)\n"
+            " 0: 5 files (239)\n"
+            " 2: 1 files (60)\n"
             "available count:\n"
-            " 0: 3 files (21)\n"
-            " 1: 1 files (11)\n"
-            " 2: 1 files (8)\n"
-            " 4: 1 files (6)\n"
+            " 0: 5 files (239)\n"
+            " 2: 1 files (60)\n"
             "get_or_copy count:\n"
-            " 0: 3 files (25)\n"
-            " 1: 3 files (21)\n"
+            " 0: 3 files (153)\n"
+            " 1: 3 files (146)\n"
             "cleanup count:\n"
-            " 1: 4 files (32)\n"
-            " 0: 2 files (14)\n"
+            " 1: 4 files (223)\n"
+            " 0: 2 files (76)\n"
             "DONE", res)
 
     def _init_and_refresh_repo(self, backup_folder: str) -> RepoCommand:

@@ -25,7 +25,8 @@ class HoardCommandBackups:
         logging.info(f"Loading hoard...")
         with HoardContents.load(self.hoard.hoard_contents_filename()) as hoard:
             backup_sets = BackupSet.all(config, pathing)
-            count_backup_media = sum(len(b.backups) for b in backup_sets)
+            backup_media = set(sum((list(b.backups.keys()) for b in backup_sets), []))
+            count_backup_media = len(backup_media)
 
             with StringIO() as out:
                 out.write(f"# backup sets: {len(backup_sets)}\n")
@@ -44,7 +45,7 @@ class HoardCommandBackups:
                     for backup_set in backup_sets:
                         scheduled += len(backup_set.currently_scheduled_backups(hoard_file, hoard_props))
 
-                    available = len(hoard_props.by_status(FileStatus.AVAILABLE))
+                    available = sum(1 for uuid in hoard_props.by_status(FileStatus.AVAILABLE) if uuid in backup_media)
                     get_or_copy = len(hoard_props.by_statuses(FileStatus.GET, FileStatus.COPY))
                     cleanup = len(hoard_props.by_status(FileStatus.CLEANUP))
 
