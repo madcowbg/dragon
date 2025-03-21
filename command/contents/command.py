@@ -10,7 +10,8 @@ from alive_progress import alive_bar, alive_it
 
 from command.hoard import Hoard
 from command.contents.diff_handlers import DiffHandler, PartialDiffHandler, BackupDiffHandler, IncomingDiffHandler, \
-    ContentPrefs, reset_local_as_current
+    reset_local_as_current
+from command.content_prefs import ContentPrefs
 from command.pathing import HoardPathing
 from config import CaveType, HoardConfig, HoardPaths
 from contents.hoard import HoardContents, HoardFile, HoardDir

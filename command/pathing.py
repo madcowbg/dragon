@@ -55,3 +55,7 @@ class HoardPathing:
             if relative_local_path is not None:
                 paths[remote] = relative_local_path.as_posix()
         return paths
+
+
+def is_path_available(pathing: HoardPathing, hoard_file: str, repo: str) -> bool:
+    return pathing.in_hoard(hoard_file).at_local(repo) is not None

@@ -3,22 +3,26 @@ import tempfile
 import unittest
 from os.path import join
 
-from command.test_hoard_command import populate_hoard, populate_repotypes, init_complex_hoard, dump_file_list
+from command.test_hoard_command import populate_repotypes, init_complex_hoard, dump_file_list
 from command.test_repo_command import pretty_file_writer
 from config import CaveType
 from dragon import TotalCommand
 
 
+def populate(tmpdir: str):
+    os.mkdir(join(tmpdir, "hoard"))
+
+
 class TestFileChangingFlows(unittest.TestCase):
     def setUp(self):
         self.tmpdir = tempfile.TemporaryDirectory()
-        populate_hoard(self.tmpdir.name)
+        populate(self.tmpdir.name)
+        populate_repotypes(self.tmpdir.name)
 
     def tearDown(self):
         self.tmpdir.cleanup()
 
     def test_adding_full_then_adding_partial(self):
-        populate_repotypes(self.tmpdir.name)
         hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = \
             init_complex_hoard(self.tmpdir.name)
 
@@ -71,7 +75,6 @@ class TestFileChangingFlows(unittest.TestCase):
             "DONE", res)
 
     def test_initial_population(self):
-        populate_repotypes(self.tmpdir.name)
         hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = \
             init_complex_hoard(self.tmpdir.name)
         pfw = pretty_file_writer(self.tmpdir.name)
@@ -214,7 +217,6 @@ class TestFileChangingFlows(unittest.TestCase):
             "DONE", res)
 
     def test_file_is_deleted_before_copied(self):
-        populate_repotypes(self.tmpdir.name)
         hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = \
             init_complex_hoard(self.tmpdir.name)
         pfw = pretty_file_writer(self.tmpdir.name)
@@ -302,7 +304,6 @@ class TestFileChangingFlows(unittest.TestCase):
             "DONE", res)
 
     def test_file_is_deleted_after_copied(self):
-        populate_repotypes(self.tmpdir.name)
         hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = \
             init_complex_hoard(self.tmpdir.name)
         pfw = pretty_file_writer(self.tmpdir.name)
@@ -407,7 +408,6 @@ class TestFileChangingFlows(unittest.TestCase):
             "DONE", res)
 
     def test_add_fetch_new_repo_after_content_is_in(self):
-        populate_repotypes(self.tmpdir.name)
         hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = \
             init_complex_hoard(self.tmpdir.name)
         pfw = pretty_file_writer(self.tmpdir.name)
@@ -522,7 +522,6 @@ class TestFileChangingFlows(unittest.TestCase):
             dump_file_list(self.tmpdir.name + "/new-contents", "", data=True))
 
     def test_resetting_file_contents(self):
-        populate_repotypes(self.tmpdir.name)
         hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = \
             init_complex_hoard(self.tmpdir.name)
 

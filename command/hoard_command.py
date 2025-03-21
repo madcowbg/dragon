@@ -8,6 +8,7 @@ from typing import Dict, List, Tuple
 
 from alive_progress import alive_bar
 
+from command.backups.command import HoardCommandBackups
 from command.contents.command import HoardCommandContents, compare_local_to_hoard
 from command.files.command import HoardCommandFiles
 from command.hoard import Hoard
@@ -90,6 +91,7 @@ class HoardCommand(object):
 
         self.contents = HoardCommandContents(self.hoard)
         self.files = HoardCommandFiles(self.hoard)
+        self.backups = HoardCommandBackups(self.hoard)
 
         self.deprecated = HoardCommandDeprecated(self.hoard)
 
