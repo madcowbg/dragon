@@ -83,3 +83,6 @@ def run_in_parallel_threads(
 
 
 FIRST_VALUE: Callable[[Cursor, Row], Any] = lambda cursor, row: row[0] if row is not None else None
+
+
+def format_percent(num: float): return f"{100 * num:.1f}%"

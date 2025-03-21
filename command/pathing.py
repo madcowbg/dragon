@@ -1,4 +1,5 @@
 import pathlib
+import shutil
 from typing import Optional, Dict
 
 from config import HoardConfig, HoardPaths, HoardRemote
@@ -55,6 +56,12 @@ class HoardPathing:
             if relative_local_path is not None:
                 paths[remote] = relative_local_path.as_posix()
         return paths
+
+    def total_size_on(self, uuid: str):
+        return shutil.disk_usage(self._paths[uuid].find()).total
+
+    def free_size_on(self, uuid):
+        return shutil.disk_usage(self._paths[uuid].find()).free
 
 
 def is_path_available(pathing: HoardPathing, hoard_file: str, repo: str) -> bool:

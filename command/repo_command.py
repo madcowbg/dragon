@@ -13,7 +13,7 @@ from contents.props import RepoFileProps, DirProps
 from contents.repo import RepoContents
 from hashing import find_hashes, fast_hash_async
 from resolve_uuid import load_config, resolve_remote_uuid, load_paths
-from util import format_size, run_async_in_parallel
+from util import format_size, run_async_in_parallel, format_percent
 
 CURRENT_UUID_FILENAME = "current.uuid"
 
@@ -255,23 +255,20 @@ class RepoCommand(object):
                 out.write(
                     f"{current_uuid}:\n"
                     f"files:\n"
-                    f"    same: {len(files_same)} ({fmt_percent(len(files_same) / files_current)})\n"
-                    f"     mod: {len(files_mod)} ({fmt_percent(len(files_mod) / files_current)})\n"
-                    f"     new: {len(files_new)} ({fmt_percent(len(files_new) / files_current)})\n"
+                    f"    same: {len(files_same)} ({format_percent(len(files_same) / files_current)})\n"
+                    f"     mod: {len(files_mod)} ({format_percent(len(files_mod) / files_current)})\n"
+                    f"     new: {len(files_new)} ({format_percent(len(files_new) / files_current)})\n"
                     f" current: {files_current}\n"
                     f" in repo: {contents.fsobjects.num_files}\n"
-                    f" deleted: {len(files_del)} ({fmt_percent(len(files_del) / contents.fsobjects.num_files)})\n"
+                    f" deleted: {len(files_del)} ({format_percent(len(files_del) / contents.fsobjects.num_files)})\n"
                     f"dirs:\n"
                     f"    same: {len(dir_same)}\n"
-                    f"     new: {len(dir_new)} ({fmt_percent(len(dir_new) / dirs_current)})\n"
+                    f"     new: {len(dir_new)} ({format_percent(len(dir_new) / dirs_current)})\n"
                     f" current: {dirs_current}\n"
                     f" in repo: {contents.fsobjects.num_dirs}\n"
-                    f" deleted: {len(dir_deleted)} ({fmt_percent(len(dir_deleted) / contents.fsobjects.num_dirs)})\n")
+                    f" deleted: {len(dir_deleted)} ({format_percent(len(dir_deleted) / contents.fsobjects.num_dirs)})\n")
 
                 return out.getvalue()
-
-
-def fmt_percent(num: float): return f"{100 * num:.1f}%"
 
 
 class FileNotInFilesystem:

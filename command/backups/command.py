@@ -1,30 +1,32 @@
 import logging
+import pathlib
 from io import StringIO
 from itertools import groupby
 from typing import Dict, Tuple, Callable
 
 from alive_progress import alive_it
 
-from command.content_prefs import BackupSet
+from command.content_prefs import BackupSet, MIN_REPO_PERC_FREE
 from command.hoard import Hoard
 from command.pathing import HoardPathing
+from config import HoardRemote
 from contents.hoard import HoardContents
 from contents.props import FileStatus, DirProps
-from util import format_size
+from util import format_size, format_percent
 
 
 class HoardCommandBackups:
     def __init__(self, hoard: Hoard):
         self.hoard = hoard
 
-    def health(self):
+    def health(self):  # fixme rewrite output as table
         logging.info("Loading config")
         config = self.hoard.config()
         pathing = HoardPathing(config, self.hoard.paths())
 
         logging.info(f"Loading hoard...")
         with HoardContents.load(self.hoard.hoard_contents_filename()) as hoard:
-            backup_sets = BackupSet.all(config, pathing)
+            backup_sets = BackupSet.all(config, pathing, hoard)
             backup_media = set(sum((list(b.backups.keys()) for b in backup_sets), []))
             count_backup_media = len(backup_media)
 
@@ -70,3 +72,53 @@ class HoardCommandBackups:
 
                 out.write("DONE")
                 return out.getvalue()
+
+    def assign(self):
+        logging.info("Loading config")
+        config = self.hoard.config()
+        pathing = HoardPathing(config, self.hoard.paths())
+
+        logging.info(f"Loading hoard...")
+        with HoardContents.load(self.hoard.hoard_contents_filename()) as hoard:
+            backup_sets = BackupSet.all(config, pathing, hoard)
+
+            with StringIO() as out:
+                for backup_set in backup_sets:
+                    added_cnt: Dict[HoardRemote, int] = dict()
+                    added_size: Dict[HoardRemote, int] = dict()
+                    out.write(f"set: {backup_set.mounted_at} with {len(backup_set.backups)} media\n")
+
+                    print(f"Considering backup set at {backup_set.mounted_at} with {len(backup_set.backups)} media")
+                    for hoard_file, hoard_props in alive_it(hoard.fsobjects.in_folder(backup_set.mounted_at)):
+                        assert pathlib.Path(hoard_file).is_relative_to(backup_set.mounted_at)
+
+                        if isinstance(hoard_props, DirProps):
+                            continue
+
+                        new_repos_to_backup_to = backup_set.repos_to_backup_to(
+                            hoard_file, hoard_props, hoard_props.size)
+
+                        if len(new_repos_to_backup_to) == 0:
+                            logging.info(f"No new backups for {hoard_file}.")
+                            continue
+
+                        logging.info(f"Backing up {hoard_file} to {[r.uuid for r in new_repos_to_backup_to]}")
+                        hoard_props.mark_to_get([repo.uuid for repo in new_repos_to_backup_to])
+                        for repo in new_repos_to_backup_to:
+                            added_cnt[repo] = added_cnt.get(repo, 0) + 1
+                            added_size[repo] = added_size.get(repo, 0) + 1
+
+                            projected = backup_set.backup_sizes.remaining_pct(repo)
+                            if projected < MIN_REPO_PERC_FREE:
+                                # fixme this may be better handled in bulk...
+                                out.write(
+                                    f"Error: Backup {repo.name} free space is projected to become "
+                                    f"{format_percent(projected)} < {format_percent(MIN_REPO_PERC_FREE)}%!\n)")
+                                return out.getvalue()
+
+                    for repo, cnt in sorted(added_cnt.items(), key=lambda rc: rc[0].name):
+                        out.write(f" {repo.name} <- {cnt} files ({format_size(added_size[repo])})\n")
+                out.write("DONE")
+                return out.getvalue()
+
+

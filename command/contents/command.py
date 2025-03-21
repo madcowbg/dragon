@@ -238,7 +238,7 @@ class HoardCommandContents:
                 logging.info(f"Loading hoard TOML...")
                 with HoardContents.load(self.hoard.hoard_contents_filename()) as hoard:
                     logging.info(f"Loaded hoard TOML!")
-                    content_prefs = ContentPrefs(config, pathing)
+                    content_prefs = ContentPrefs(config, pathing, hoard)
 
                     if remote_obj.type == CaveType.PARTIAL:
                         remote_op_handler: DiffHandler = PartialDiffHandler(

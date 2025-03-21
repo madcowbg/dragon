@@ -7,6 +7,7 @@ from command.repo_command import RepoCommand
 from command.test_repo_command import pretty_file_writer
 from config import CaveType
 from dragon import TotalCommand
+from test_util import nice_dump
 
 
 def init_complex_hoard(tmpdir: str):
@@ -222,15 +223,17 @@ class TestBackups(unittest.TestCase):
         res = hoard_cmd.contents.status(hide_time=True)
         self.assertEqual(
             "|Num Files                |total     |available |get       |copy      |cleanup   |\n"
-            "|backup-1                 |         6|         1|         5|          |          |\n"
-            "|backup-2                 |         1|         1|          |          |          |\n"
+            "|backup-1                 |         3|         1|         2|          |          |\n"
+            "|backup-2                 |         3|         1|         2|          |          |\n"
+            "|backup-3                 |         1|          |         1|          |          |\n"
             "|repo-full-name           |         6|         3|         3|          |          |\n"
             "|repo-incoming-name       |         4|          |          |          |         4|\n"
             "|repo-partial-name        |         2|         2|          |          |          |\n"
             "\n"
             "|Size                     |total     |available |get       |copy      |cleanup   |\n"
-            "|backup-1                 |       299|        60|       239|          |          |\n"
-            "|backup-2                 |        60|        60|          |          |          |\n"
+            "|backup-1                 |       197|        60|       137|          |          |\n"
+            "|backup-2                 |        85|        60|        25|          |          |\n"
+            "|backup-3                 |        77|          |        77|          |          |\n"
             "|repo-full-name           |       299|       153|       146|          |          |\n"
             "|repo-incoming-name       |       223|          |          |          |       223|\n"
             "|repo-partial-name        |        76|        76|          |          |          |\n", res)
@@ -265,11 +268,11 @@ class TestBackups(unittest.TestCase):
             "backup-1:\n"
             "+ test.me.4\n"
             "+ test.me.5\n"
+            "backup-2:\n"
             "+ wat/test.me.2\n"
             "+ wat/test.me.3\n"
-            "+ wat/test.me.6\n"
-            "backup-2:\n"
             "backup-3:\n"
+            "+ wat/test.me.6\n"
             "backup-4:\n"
             "repo-partial-name:\n"
             "repo-full-name:\n"
@@ -370,6 +373,36 @@ class TestBackups(unittest.TestCase):
             " 1: 4 files (223)\n"
             " 0: 2 files (76)\n"
             "DONE", res)
+
+        res = hoard_cmd.backups.assign()
+        print(nice_dump(res))
+        self.assertEqual(
+            'set: / with 4 media\n'
+            ' backup-1 <- 1 files (1)\n'
+            ' backup-2 <- 1 files (1)\n'
+            ' backup-3 <- 1 files (1)\n'
+            ' backup-4 <- 2 files (2)\n'
+            'DONE', res)
+
+        res = hoard_cmd.contents.status(hide_time=True)
+        self.assertEqual(
+            "|Num Files                |total     |available |get       |copy      |cleanup   |\n"
+            "|backup-1                 |         2|         1|         1|          |          |\n"
+            "|backup-2                 |         2|         1|         1|          |          |\n"
+            "|backup-3                 |         1|          |         1|          |          |\n"
+            "|backup-4                 |         2|          |         2|          |          |\n"
+            "|repo-full-name           |         6|         3|         3|          |          |\n"
+            "|repo-incoming-name       |         4|          |          |          |         4|\n"
+            "|repo-partial-name        |         2|         2|          |          |          |\n"
+            "\n"
+            "|Size                     |total     |available |get       |copy      |cleanup   |\n"
+            "|backup-1                 |        76|        60|        16|          |          |\n"
+            "|backup-2                 |       137|        60|        77|          |          |\n"
+            "|backup-3                 |        60|          |        60|          |          |\n"
+            "|backup-4                 |        86|          |        86|          |          |\n"
+            "|repo-full-name           |       299|       153|       146|          |          |\n"
+            "|repo-incoming-name       |       223|          |          |          |       223|\n"
+            "|repo-partial-name        |        76|        76|          |          |          |\n", res)
 
     def _init_and_refresh_repo(self, backup_folder: str) -> RepoCommand:
         backup_1_cmd = TotalCommand(path=join(self.tmpdir.name, backup_folder)).cave
