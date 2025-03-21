@@ -195,6 +195,19 @@ class HoardFSObjects:
             "    status in (?, ?, ?))",
             (repo_uuid, FileStatus.GET.value, FileStatus.COPY.value, FileStatus.CLEANUP.value))
 
+    def in_folder(self, folder: str) -> Iterable[Tuple[str, FSObjectProps]]:
+        assert os.path.isabs(folder)
+        if folder.endswith("/"):
+            folder = folder[:-1]
+
+        curr = self.parent.conn.cursor()
+        curr.row_factory = self._read_as_prop_tuple
+
+        yield from curr.execute(
+            "SELECT fullpath, fsobject_id, isdir, size, fasthash FROM fsobject "
+            "WHERE fullpath like ? or fullpath = ?",
+            (f"{folder}/%", folder))
+
     @property
     def status_by_uuid(self) -> Dict[str, Dict[str, Dict[str, Any]]]:
         stats: Dict[str, Dict[str, Dict[str, Any]]] = dict()

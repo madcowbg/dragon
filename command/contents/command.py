@@ -462,26 +462,23 @@ def compare_local_to_hoard(local: RepoContents, hoard: HoardContents, config: Ho
                 raise ValueError(f"unknown props type: {type(props)}")
 
     print("Comparing hoard to current files")
-    with alive_bar(len(hoard.fsobjects)) as bar:
-        for hoard_file, props in hoard.fsobjects:
-            bar()
-            if isinstance(props, HoardFileProps):
-                curr_file_path_in_local = pathing.in_hoard(hoard_file).at_local(local.config.uuid)
-                if curr_file_path_in_local is None:
-                    continue  # hoard file is not in the mounted location
+    for hoard_file, props in alive_it(list(hoard.fsobjects.in_folder(pathing.mounted_at(local.config.uuid)))):
+        if isinstance(props, HoardFileProps):
+            curr_file_path_in_local = pathing.in_hoard(hoard_file).at_local(local.config.uuid)
+            assert curr_file_path_in_local is not None  # hoard file is not in the mounted location
 
-                if curr_file_path_in_local.as_posix() not in local.fsobjects:
-                    yield FileMissingInLocal(curr_file_path_in_local.as_posix(), hoard_file, props)
-                # else file is there, which is handled above
-            elif isinstance(props, DirProps):
-                hoard_dir = hoard_file
-                curr_dir_path_in_local = pathing.in_hoard(hoard_dir).at_local(local.config.uuid)
-                if curr_dir_path_in_local is None:
-                    continue  # hoard dir is not in the mounted location
-                if curr_dir_path_in_local.as_posix() not in hoard.fsobjects:
-                    logging.info(f"missing dir found in hoard: {hoard_dir}")
-                    yield DirMissingInLocal(curr_dir_path_in_local.as_posix(), hoard_dir)
-                else:
-                    pass  # existing dirs are handled above
+            if curr_file_path_in_local.as_posix() not in local.fsobjects:
+                yield FileMissingInLocal(curr_file_path_in_local.as_posix(), hoard_file, props)
+            # else file is there, which is handled above
+        elif isinstance(props, DirProps):
+            hoard_dir = hoard_file
+            curr_dir_path_in_local = pathing.in_hoard(hoard_dir).at_local(local.config.uuid)
+            assert curr_dir_path_in_local is not None  # hoard dir is not in the mounted location
+
+            if curr_dir_path_in_local.as_posix() not in hoard.fsobjects:
+                logging.info(f"missing dir found in hoard: {hoard_dir}")
+                yield DirMissingInLocal(curr_dir_path_in_local.as_posix(), hoard_dir)
             else:
-                raise ValueError(f"unknown props type: {type(props)}")
+                pass  # existing dirs are handled above
+        else:
+            raise ValueError(f"unknown props type: {type(props)}")

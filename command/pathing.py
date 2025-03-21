@@ -18,7 +18,7 @@ class HoardPathing:
             return self._path.as_posix()
 
         def at_local(self, repo_uuid: str) -> Optional["HoardPathing.LocalPath"]:
-            mounted_at = self._pathing._config.remotes[repo_uuid].mounted_at
+            mounted_at = self._pathing.mounted_at(repo_uuid)
             if not self._path.is_relative_to(mounted_at):
                 return None
             else:
@@ -36,8 +36,11 @@ class HoardPathing:
             return pathlib.Path(self._pathing._paths[self._repo_uuid].find()).joinpath(self._path).as_posix()
 
         def at_hoard(self) -> "HoardPathing.HoardPath":
-            joined_path = pathlib.Path(self._pathing._config.remotes[self._repo_uuid].mounted_at).joinpath(self._path)
+            joined_path = pathlib.Path(self._pathing.mounted_at(self._repo_uuid)).joinpath(self._path)
             return HoardPathing.HoardPath(joined_path.as_posix(), self._pathing)
+
+    def mounted_at(self, repo_uuid: str) -> str:
+        return self._config.remotes[repo_uuid].mounted_at
 
     def in_hoard(self, path: str) -> HoardPath:
         return self.HoardPath(path, self)
