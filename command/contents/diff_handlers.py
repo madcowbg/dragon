@@ -266,29 +266,30 @@ class BackupDiffHandler(DiffHandler):
         logging.info(f"file already backed up ... skipping.")
 
         goal_status = diff.hoard_props.get_status(self.remote_uuid)
-        if goal_status == FileStatus.GET or goal_status == FileStatus.UNKNOWN:
+        if goal_status == FileStatus.GET or goal_status == FileStatus.COPY or goal_status == FileStatus.UNKNOWN:
             diff.hoard_props.mark_available(self.remote_uuid)
             out.write(f"={diff.hoard_file}\n")
 
     def handle_file_contents_differ(self, diff: FileContentsDiffer, out: StringIO):
         goal_status = diff.hoard_props.get_status(self.remote_uuid)
         if goal_status == FileStatus.AVAILABLE:  # was backed-up here, get it again
-            out.write(f"g{diff.hoard_file}\n")
             props = diff.hoard_props
             props.mark_to_get([self.remote_uuid])
+
+            out.write(f"g{diff.hoard_file}\n")
 
     def handle_hoard_only(self, diff: FileMissingInLocal, out: StringIO):
         goal_status = diff.hoard_props.get_status(self.remote_uuid)
         if goal_status == FileStatus.AVAILABLE:  # was backed-up here, get it again
-            out.write(f"g{diff.hoard_file}\n")
             props = diff.hoard_props
             props.mark_to_get([self.remote_uuid])
+
+            out.write(f"g{diff.hoard_file}\n")
         elif goal_status == FileStatus.CLEANUP:  # file already deleted
             diff.hoard_props.remove_status(self.remote_uuid)
-        elif goal_status == FileStatus.GET:
+        elif goal_status == FileStatus.GET or goal_status == FileStatus.COPY:
             pass
         elif goal_status == FileStatus.UNKNOWN:
-            file_props = diff.hoard_props
-            file_props.mark_to_get([self.remote_uuid])
+            logging.info("File not recognized by this backup, skipping")
         else:
             raise NotImplementedError(f"Unrecognized goal status {goal_status}")
