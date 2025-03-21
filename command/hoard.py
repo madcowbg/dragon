@@ -3,7 +3,8 @@ import os
 
 from command.repo_command import Repo
 from config import HoardConfig, HoardPaths
-from resolve_uuid import load_config, load_paths
+from contents.hoard import HoardContents
+from resolve_uuid import load_config, load_paths, CONFIG_FILE
 
 HOARD_CONTENTS_FILENAME = "hoard.contents"
 
@@ -28,3 +29,12 @@ class Hoard:
 
     def hoard_contents_filename(self):
         return os.path.join(self.hoardpath, HOARD_CONTENTS_FILENAME)
+
+    def open_contents(self, create_missing: bool = False):
+        if not os.path.isfile(os.path.join(self.hoardpath, CONFIG_FILE)):
+            raise ValueError(f"Hoard is not configured in {self.hoardpath}!")
+        if not os.path.isfile(self.hoard_contents_filename()) and not create_missing:
+            raise ValueError(
+                f"Hoard contents file {self.hoard_contents_filename()} is not available,"
+                f" but --create-missing = False")
+        return HoardContents.load(self.hoard_contents_filename())

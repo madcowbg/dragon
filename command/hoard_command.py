@@ -6,6 +6,8 @@ from io import StringIO
 from itertools import groupby
 from typing import Dict, List, Tuple
 
+from alive_progress import alive_bar
+
 from command.contents.command import HoardCommandContents, compare_local_to_hoard
 from command.files.command import HoardCommandFiles
 from command.hoard import Hoard
@@ -161,9 +163,13 @@ class HoardCommand(object):
                 out.write(f"  {name_prefix}{remote.uuid} ({remote.type.value}){exact_path}\n")
             out.write("Mounts:\n")
 
-            mounts = dict((m, list(rs)) for m, rs in groupby(config.remotes.all(), lambda r: r.mounted_at))
-            for mount, remotes in sorted(mounts.items()):
-                out.write(f"  {mount} -> {', '.join([remote.name for remote in remotes])}\n")
+            mounts = [
+                (m, [r.name for r in rs]) for m, rs in
+                groupby(
+                    sorted(config.remotes.all(), key=lambda r: r.mounted_at),
+                    lambda r: r.mounted_at)]
+            for mount, remotes in mounts:
+                out.write(f"  {mount} -> {', '.join(remotes)}\n")
             out.write("DONE\n")
             return out.getvalue()
 
@@ -287,7 +293,9 @@ class HoardCommand(object):
                 out.write("DONE")
                 return out.getvalue()
 
-    def meld(self, source: str, dest: str, move: bool = False, junk_folder: str = "_JUNK_"):
+    def meld(
+            self, source: str, dest: str, move: bool = False, junk_folder: str = "_JUNK_",
+            skip_empty_files: bool = True):
         if not os.path.isdir(source):
             return f"Source path {source} does not exist!"
         if not os.path.isdir(dest):
@@ -295,44 +303,80 @@ class HoardCommand(object):
         if len(os.listdir(dest)) != 0:
             return f"Dest path {dest} must be empty!"
 
+        if move:
+            print("Moving files to proper locations!")
+        else:
+            print("Copying files to proper locations!")
+
         logging.info(f"Loading hoard...")
-        with HoardContents.load(self.hoard.hoard_contents_filename()) as hoard:
+        with self.hoard.open_contents() as hoard:
             logging.info(f"Loaded hoard.")
             junk_path = pathlib.Path(dest).joinpath(junk_folder)
-            junk_path.mkdir()
+            if move:
+                junk_path.mkdir()
 
-            copied, copied_dest, mismatched, errors = 0, 0, 0, 0
+            copied, copied_dest, mismatched, errors, skipped = 0, 0, 0, 0, 0
             with StringIO() as out:
-                for dirpath, _, filenames in os.walk(source):
-                    for filename in filenames:
-                        fullpath = os.path.join(dirpath, filename)
-                        logging.info(f"Full path: {fullpath}")
-                        rel_to_source = pathlib.Path(fullpath).relative_to(source)
-                        logging.info(f"Rel path: {rel_to_source}")
+                with alive_bar() as bar:
+                    for dirpath, _, filenames in os.walk(source):
+                        for filename in filenames:
+                            bar()
 
-                        fasthash = fast_hash(fullpath)
+                            fullpath = os.path.join(dirpath, filename)
+                            logging.info(f"Full path: {fullpath}")
+                            rel_to_source = pathlib.Path(fullpath).relative_to(source)
+                            logging.info(f"Rel path: {rel_to_source}")
 
-                        places: List[Tuple[str, HoardFileProps]] = list(hoard.fsobjects.by_fasthash(fasthash))
-                        if len(places) == 0:
-                            mismatched += 1
+                            fasthash = fast_hash(fullpath)
+                            size = os.stat(fullpath).st_size
+                            if size == 0 and skip_empty_files:
+                                logging.warning(f"Skipping empty file{fullpath}")
+                                skipped += 1
+                                continue
 
-                            dest_junk_path = junk_path.joinpath(rel_to_source)
-                            rel_junk_path = dest_junk_path.relative_to(dest).as_posix()
-                            if move:
-                                logging.info(f"Copying {fullpath} to {dest_junk_path}")
-                                dest_junk_path.parent.mkdir(parents=True, exist_ok=True)
-                                try:
-                                    shutil.move(fullpath, dest_junk_path)
-                                    out.write(f"+{rel_junk_path}\n")
-                                except shutil.Error as e:
-                                    logging.error(e)
-                                    errors += 0
-                                    out.write(f"E{rel_junk_path}\n")
-                            else:  # do nothing, as we are preserving the input
-                                out.write(f"s{rel_junk_path}\n")
-                        else:
-                            copied += 1
-                            for hoard_filepath, hoard_props in places:
+                            places: List[Tuple[str, HoardFileProps]] = list(hoard.fsobjects.by_fasthash(fasthash))
+                            if len(places) == 0:
+                                mismatched += 1
+
+                                dest_junk_path = junk_path.joinpath(rel_to_source)
+                                rel_junk_path = dest_junk_path.relative_to(dest).as_posix()
+                                if move:
+                                    logging.info(f"Copying {fullpath} to {dest_junk_path}")
+                                    dest_junk_path.parent.mkdir(parents=True, exist_ok=True)
+                                    try:
+                                        logging.info(f"m+{rel_junk_path}\n")
+                                        shutil.move(fullpath, dest_junk_path)
+                                        out.write(f"+{rel_junk_path}\n")
+                                    except shutil.Error as e:
+                                        logging.error(e)
+                                        errors += 0
+                                        out.write(f"E{rel_junk_path}\n")
+                                else:  # do nothing, as we are preserving the input
+                                    out.write(f"s{rel_junk_path}\n")
+                            else:
+                                copied += 1
+                                while len(places) > 1:  # all but the last file...
+                                    hoard_filepath, hoard_props = places.pop()
+
+                                    # use + because hoard paths are absolute!
+                                    end_place = pathlib.Path(dest + hoard_filepath)
+                                    logging.info(f"Creating {end_place} from {fullpath}")
+                                    end_place.parent.mkdir(parents=True, exist_ok=True)
+
+                                    try:
+                                        # copy (as we will need it for the last)
+                                        shutil.copy2(fullpath, end_place)
+                                        out.write(f"A{hoard_filepath}\n")
+
+                                        copied_dest += 1
+                                    except shutil.Error as e:
+                                        logging.error(e)
+                                        errors += 0
+                                        out.write(f"E{end_place}\n")
+
+                                assert len(places) == 1
+                                hoard_filepath, hoard_props = places.pop()
+
                                 # use + because hoard paths are absolute!
                                 end_place = pathlib.Path(dest + hoard_filepath)
                                 logging.info(f"Creating {end_place} from {fullpath}")
@@ -351,5 +395,8 @@ class HoardCommand(object):
                                     logging.error(e)
                                     errors += 0
                                     out.write(f"E{end_place}\n")
-                out.write(f"Copied: {copied} to Dest: {copied_dest}, Mismatched: {mismatched} and Errors: {errors}\n")
+
+                out.write(
+                    f"Copied: {copied} to Dest: {copied_dest}, Mismatched: {mismatched},"
+                    f" Errors: {errors} and Skipped: {skipped}\n")
                 return out.getvalue()

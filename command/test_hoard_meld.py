@@ -74,7 +74,7 @@ class TestHoardCommand(unittest.TestCase):
             "A/test.me.4\n"
             "A/wat/test.me.3\n"
             "s_tralala_/b2/red-herring.two\n"
-            "Copied: 4 to Dest: 4, Mismatched: 2 and Errors: 0\n", res)
+            "Copied: 4 to Dest: 4, Mismatched: 2, Errors: 0 and Skipped: 0\n", res)
 
         all_files = dump_file_list(self.tmpdir.name, 'recover-copy', data=True)
         self.assertDictEqual({
@@ -94,7 +94,7 @@ class TestHoardCommand(unittest.TestCase):
             "M/test.me.4\n"
             "M/wat/test.me.3\n"
             "+_JUNK_/b2/red-herring.two\n"
-            "Copied: 4 to Dest: 4, Mismatched: 2 and Errors: 0\n", res)
+            "Copied: 4 to Dest: 4, Mismatched: 2, Errors: 0 and Skipped: 0\n", res)
 
         all_files = dump_file_list(self.tmpdir.name, 'recover', data=True)
         self.assertDictEqual({

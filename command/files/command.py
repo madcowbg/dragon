@@ -29,7 +29,7 @@ class HoardCommandFiles:
             if repo is not None else [r.uuid for r in config.remotes.all()]
 
         logging.info(f"Loading hoard contents...")
-        with HoardContents.load(self.hoard.hoard_contents_filename()) as hoard:
+        with self.hoard.open_contents() as hoard:
             with StringIO() as out:
                 logging.info("try getting all requested files, per repo")
 
