@@ -14,7 +14,7 @@ from contents.hoard import HoardContents
 from contents.props import HoardFileProps, FileStatus
 from hashing import fast_hash_async
 from resolve_uuid import resolve_remote_uuid
-from util import to_mb, run_async_in_parallel
+from util import to_mb, run_async_in_parallel, format_size
 
 
 class HoardCommandFiles:
@@ -71,50 +71,62 @@ def _fetch_files_in_repo(
         hoard: HoardContents, repo_uuid: str, pathing: HoardPathing,
         files_requiring_copy: Dict[str, List[str]], out: StringIO):
     files_to_fetch = sorted(hoard.fsobjects.to_fetch(repo_uuid))
-    with alive_bar(to_mb(sum(f[1].size for f in files_to_fetch)), unit="MB") as bar:
-        async def copy_or_get_file(hoard_file: str, hoard_props: HoardFileProps) -> Optional[str]:
-            try:
-                assert isinstance(hoard_props, HoardFileProps)
+    total_size = sum(f[1].size for f in files_to_fetch)
 
-                goal_status = hoard_props.get_status(repo_uuid)
-                assert goal_status != FileStatus.AVAILABLE
-                assert goal_status != FileStatus.CLEANUP
-                assert goal_status != FileStatus.UNKNOWN
+    with alive_bar(to_mb(total_size), unit="MB") as bar:
+        class Copier:
+            def __init__(self):
+                self.current_size = 0
+                self.current_size_mb = 0
 
-                if goal_status == FileStatus.COPY:
-                    candidates_to_copy = files_requiring_copy.get(hoard_props.fasthash, [])
-                    logging.info(f"# of candidates to copy: {len(candidates_to_copy)}")
+            async def copy_or_get_file(self, hoard_file: str, hoard_props: HoardFileProps) -> Optional[str]:
+                if hoard_props.size > (5 * (1 << 30)): # >5G
+                    logging.warning(f"Copying large file {format_size(hoard_props.size)}: {hoard_file}")
+                try:
+                    assert isinstance(hoard_props, HoardFileProps)
 
-                    local_filepath = pathing.in_hoard(hoard_file).at_local(repo_uuid)
+                    goal_status = hoard_props.get_status(repo_uuid)
+                    assert goal_status != FileStatus.AVAILABLE
+                    assert goal_status != FileStatus.CLEANUP
+                    assert goal_status != FileStatus.UNKNOWN
 
-                    success, fullpath = await _restore_from_copy(
-                        repo_uuid, local_filepath, hoard_props,
-                        hoard, candidates_to_copy, pathing)
-                    if success:
-                        hoard_props.mark_available(repo_uuid)
-                        return f"c+ {local_filepath.as_posix()}\n"
+                    if goal_status == FileStatus.COPY:
+                        candidates_to_copy = files_requiring_copy.get(hoard_props.fasthash, [])
+                        logging.info(f"# of candidates to copy: {len(candidates_to_copy)}")
+
+                        local_filepath = pathing.in_hoard(hoard_file).at_local(repo_uuid)
+
+                        success, fullpath = await _restore_from_copy(
+                            repo_uuid, local_filepath, hoard_props,
+                            hoard, candidates_to_copy, pathing)
+                        if success:
+                            hoard_props.mark_available(repo_uuid)
+                            return f"c+ {local_filepath.as_posix()}\n"
+                        else:
+                            logging.error("error restoring file from local copy!")
+                            return f"E {local_filepath.as_posix()}\n"
                     else:
-                        logging.error("error restoring file from local copy!")
-                        return f"E {local_filepath.as_posix()}\n"
-                else:
-                    assert goal_status == FileStatus.GET, f"Unexpected status {goal_status.value}"
+                        assert goal_status == FileStatus.GET, f"Unexpected status {goal_status.value}"
 
-                    hoard_filepath = pathing.in_hoard(hoard_file)
-                    local_filepath = hoard_filepath.at_local(repo_uuid)
-                    logging.debug(f"restoring {hoard_file} to {local_filepath.as_posix()}...")
+                        hoard_filepath = pathing.in_hoard(hoard_file)
+                        local_filepath = hoard_filepath.at_local(repo_uuid)
+                        logging.debug(f"restoring {hoard_file} to {local_filepath.as_posix()}...")
 
-                    success, fullpath = await _restore_from_another_repo(
-                        hoard_filepath, repo_uuid, hoard_props, pathing._config)
-                    if success:
-                        hoard_props.mark_available(repo_uuid)
-                        return f"+ {local_filepath.as_posix()}\n"
-                    else:
-                        logging.error("error restoring file!")
-                        return f"E {local_filepath.as_posix()}\n"
-            finally:
-                bar(to_mb(hoard_props.size))
+                        success, fullpath = await _restore_from_another_repo(
+                            hoard_filepath, repo_uuid, hoard_props, pathing._config)
+                        if success:
+                            hoard_props.mark_available(repo_uuid)
+                            return f"+ {local_filepath.as_posix()}\n"
+                        else:
+                            logging.error("error restoring file!")
+                            return f"E {local_filepath.as_posix()}\n"
+                finally:
+                    self.current_size += hoard_props.size
+                    bar(to_mb(self.current_size) - self.current_size_mb)
+                    self.current_size_mb = to_mb(self.current_size)
 
-        outputs = run_async_in_parallel(files_to_fetch, copy_or_get_file, ntasks=1)
+        copier = Copier()
+        outputs = run_async_in_parallel(files_to_fetch, copier.copy_or_get_file, ntasks=1)
 
         for line in outputs:
             if line is not None:

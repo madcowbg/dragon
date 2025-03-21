@@ -303,6 +303,29 @@ class TestBackups(unittest.TestCase):
             " 0: 6 files (299)\n"
             "DONE", res)
 
+        res = hoard_cmd.contents.drop(repo="backup-2", path="wat")
+        self.assertEqual(
+            'DROP /wat/test.me.2\n'
+            'DROP /wat/test.me.3\n'
+            "Considered 6 files, 2 marked for cleanup, 0 won't be downloaded, 1 are skipped.\n"
+            'DONE', res)
+
+        res = hoard_cmd.contents.status(hide_time=True)
+        self.assertEqual(
+            '|Num Files                |total     |available |get       |copy      |cleanup   |\n'
+            '|backup-1                 |         3|         3|          |          |          |\n'
+            '|backup-2                 |         3|         1|          |          |         2|\n'
+            '|backup-3                 |         1|         1|          |          |          |\n'
+            '|repo-full-name           |         6|         6|          |          |          |\n'
+            '|repo-partial-name        |         2|         2|          |          |          |\n'
+            '\n'
+            '|Size                     |total     |available |get       |copy      |cleanup   |\n'
+            '|backup-1                 |       197|       197|          |          |          |\n'
+            '|backup-2                 |        85|        60|          |          |        25|\n'
+            '|backup-3                 |        77|        77|          |          |          |\n'
+            '|repo-full-name           |       299|       299|          |          |          |\n'
+            '|repo-partial-name        |        76|        76|          |          |          |\n', res)
+
     def test_add_backup_repos_over_time(self):
         hoard_cmd, partial_cave_cmd, full_cave_cmd, incoming_cave_cmd = init_complex_hoard(self.tmpdir.name)
 
@@ -403,6 +426,32 @@ class TestBackups(unittest.TestCase):
             "|repo-full-name           |       299|       153|       146|          |          |\n"
             "|repo-incoming-name       |       223|          |          |          |       223|\n"
             "|repo-partial-name        |        76|        76|          |          |          |\n", res)
+
+        res = hoard_cmd.contents.drop(repo="backup-1", path="wat")
+        self.assertEqual(
+            'WONT_GET /wat/test.me.2\n'  # fixme wrong
+            "Considered 6 files, 0 marked for cleanup, 1 won't be downloaded, 2 are skipped.\n"
+            'DONE', res)
+
+        res = hoard_cmd.contents.status(hide_time=True)
+        self.assertEqual(
+            '|Num Files                |total     |available |get       |copy      |cleanup   |\n'
+            '|backup-1                 |         1|         1|          |          |          |\n'
+            '|backup-2                 |         2|         1|         1|          |          |\n'
+            '|backup-3                 |         1|          |         1|          |          |\n'
+            '|backup-4                 |         2|          |         2|          |          |\n'
+            '|repo-full-name           |         6|         3|         3|          |          |\n'
+            '|repo-incoming-name       |         4|          |          |          |         4|\n'
+            '|repo-partial-name        |         2|         2|          |          |          |\n'
+            '\n'
+            '|Size                     |total     |available |get       |copy      |cleanup   |\n'
+            '|backup-1                 |        60|        60|          |          |          |\n'
+            '|backup-2                 |       137|        60|        77|          |          |\n'
+            '|backup-3                 |        60|          |        60|          |          |\n'
+            '|backup-4                 |        86|          |        86|          |          |\n'
+            '|repo-full-name           |       299|       153|       146|          |          |\n'
+            '|repo-incoming-name       |       223|          |          |          |       223|\n'
+            '|repo-partial-name        |        76|        76|          |          |          |\n', res)
 
     def _init_and_refresh_repo(self, backup_folder: str) -> RepoCommand:
         backup_1_cmd = TotalCommand(path=join(self.tmpdir.name, backup_folder)).cave

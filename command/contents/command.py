@@ -3,7 +3,7 @@ import os
 import pathlib
 import sys
 from io import StringIO
-from typing import List, Dict, Any, Optional, Generator, Iterable
+from typing import List, Dict, Any, Optional, Generator, Iterable, Callable
 
 import humanize
 from alive_progress import alive_bar, alive_it
@@ -172,41 +172,97 @@ class HoardCommandContents:
                 out.write("DONE")
                 return out.getvalue()
 
+    def drop(self, repo: str, path: str):
+        return self._run_op(repo, path, self._execute_drop)
+
+    def _execute_drop(self, hoard: HoardContents, repo_uuid: str, path: str) -> str:
+        pathing = HoardPathing(self.hoard.config(), self.hoard.paths())
+        mounted_at = pathing.mounted_at(repo_uuid)
+
+        considered = 0
+        cleaned_up, wont_get, skipped = 0, 0, 0
+        with StringIO() as out:
+            print(f"Iterating files and folders to see what to drop...")
+            for hoard_file, hoard_props in alive_it(hoard.fsobjects.in_folder(mounted_at)):
+                if not isinstance(hoard_props, HoardFileProps):
+                    continue
+
+                local_file = pathing.in_hoard(hoard_file).at_local(repo_uuid)
+                assert local_file is not None  # is not addressable here at all
+
+                considered += 1
+                if not pathlib.Path(local_file.as_posix()).is_relative_to(path):
+                    logging.info(f"file not in {path}: {local_file.as_posix()}, skipping")
+                    continue
+
+                goal_status = hoard_props.get_status(repo_uuid)
+                if goal_status == FileStatus.AVAILABLE:
+                    logging.info(f"File {hoard_file} is available, mapping for removal from {repo_uuid}.")
+
+                    hoard_props.mark_for_cleanup([repo_uuid])
+                    out.write(f"DROP {hoard_file}\n")
+
+                    cleaned_up += 1
+                elif goal_status == FileStatus.GET or goal_status == FileStatus.COPY:
+                    logging.info(f"File {hoard_file} is already not in repo, removing status.")
+
+                    hoard_props.remove_status(repo_uuid)
+                    out.write(f"WONT_GET {hoard_file}\n")
+
+                    wont_get += 1
+                elif goal_status == FileStatus.CLEANUP or goal_status == FileStatus.UNKNOWN:
+                    logging.info(f"Skipping {hoard_file} as it is already missing.")
+                    skipped += 1
+                else:
+                    raise ValueError(f"Unexpected status for {hoard_file}: {goal_status}")
+
+            out.write(
+                f"Considered {considered} files, {cleaned_up} marked for cleanup, "
+                f"{wont_get} won't be downloaded, {skipped} are skipped.\n")
+            out.write("DONE")
+            return out.getvalue()
+
     def get(self, repo: str, path: str):
+        return self._run_op(repo, path, self._execute_get)
+
+    def _execute_get(self, hoard: HoardContents, repo_uuid: str, path: str) -> str:
+        pathing = HoardPathing(self.hoard.config(), self.hoard.paths())
+
+        considered = 0
+        with StringIO() as out:
+            print(f"Iterating over {len(hoard.fsobjects)} files and folders...")
+            for hoard_file, hoard_props in alive_it(hoard.fsobjects):
+                if not isinstance(hoard_props, HoardFileProps):
+                    continue
+
+                local_file = pathing.in_hoard(hoard_file).at_local(repo_uuid)
+                if local_file is None:  # is not addressable here at all
+                    continue
+                considered += 1
+                if not pathlib.Path(local_file.as_posix()).is_relative_to(path):
+                    logging.info(f"file not in {path}: {local_file.as_posix()}")
+                    continue
+                if hoard_props.get_status(repo_uuid) not in STATUSES_ALREADY_ENABLED:
+                    logging.info(f"enabling file {hoard_file} on {repo_uuid}")
+                    hoard_props.mark_to_get([repo_uuid])
+                    out.write(f"+{hoard_file}\n")
+
+            out.write(f"Considered {considered} files.\n")
+            out.write("DONE")
+            return out.getvalue()
+
+    def _run_op(self, repo: str, path: str, fun: Callable[[HoardContents, str, str], str]):
         config = self.hoard.config()
         if os.path.isabs(path):
             return f"Path {path} must be relative, but is absolute."
 
         logging.info(f"Loading hoard TOML...")
         with HoardContents.load(self.hoard.hoard_contents_filename()) as hoard:
-
             repo_uuid = resolve_remote_uuid(self.hoard.config(), repo)
             repo_mounted_at = config.remotes[repo_uuid].mounted_at
             logging.info(f"repo {repo} mounted at {repo_mounted_at}")
 
-            pathing = HoardPathing(config, self.hoard.paths())
-
-            considered = 0
-            with StringIO() as out:
-                print(f"Iterating over {len(hoard.fsobjects)} files and folders...")
-                for hoard_file, hoard_props in alive_it(hoard.fsobjects):
-                    if not isinstance(hoard_props, HoardFileProps):
-                        continue
-
-                    local_file = pathing.in_hoard(hoard_file).at_local(repo_uuid)
-                    if local_file is None:  # is not addressable here at all
-                        continue
-                    considered += 1
-                    if not pathlib.Path(local_file.as_posix()).is_relative_to(path):
-                        logging.info(f"file not in {path}: {local_file.as_posix()}")
-                        continue
-                    if hoard_props.get_status(repo_uuid) not in STATUSES_ALREADY_ENABLED:
-                        logging.info(f"enabling file {hoard_file} on {repo_uuid}")
-                        hoard_props.mark_to_get([repo_uuid])
-                        out.write(f"+{hoard_file}\n")
-                out.write(f"Considered {considered} files.\n")
-                out.write("DONE")
-                return out.getvalue()
+            return fun(hoard, repo_uuid, path)
 
     def pull(
             self, remote: Optional[str] = None, all: bool = False, ignore_epoch: bool = False,
