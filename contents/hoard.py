@@ -197,8 +197,8 @@ class HoardFSObjects:
 
     def in_folder(self, folder: str) -> Iterable[Tuple[str, FSObjectProps]]:
         assert os.path.isabs(folder)
-        if folder.endswith("/"):
-            folder = folder[:-1]
+        folder_with_trailing = folder if folder.endswith("/") else folder + "/"
+        assert folder_with_trailing.endswith('/')
 
         curr = self.parent.conn.cursor()
         curr.row_factory = self._read_as_prop_tuple
@@ -206,7 +206,7 @@ class HoardFSObjects:
         yield from curr.execute(
             "SELECT fullpath, fsobject_id, isdir, size, fasthash FROM fsobject "
             "WHERE fullpath like ? or fullpath = ?",
-            (f"{folder}/%", folder))
+            (f"{folder_with_trailing}%", folder))
 
     @property
     def status_by_uuid(self) -> Dict[str, Dict[str, Dict[str, Any]]]:
