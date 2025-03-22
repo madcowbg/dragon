@@ -66,10 +66,46 @@ class HoardCommandBackups:
                 for idx, name in [(0, "scheduled"), (1, "available"), (2, "get_or_copy"), (3, "cleanup")]:
                     out.write(f"{name} count:\n")
                     sizes = pivot_stat(idx, lambda f: file_sizes[f])
-                    for num_copies, cnt in sorted(pivot_stat(idx, lambda _: 1).items(), key=lambda x: -x[1]):
+                    for num_copies, cnt in sorted(pivot_stat(idx, lambda _: 1).items(), key=lambda x: x[0]):
                         size = sizes[num_copies]
                         out.write(f" {num_copies}: {cnt} files ({format_size(size)})\n")
 
+                out.write("DONE")
+                return out.getvalue()
+
+    def clean(self):
+        logging.info("Loading config")
+        config = self.hoard.config()
+        pathing = HoardPathing(config, self.hoard.paths())
+
+        logging.info(f"Loading hoard...")
+        with HoardContents.load(self.hoard.hoard_contents_filename()) as hoard:
+            backup_sets = BackupSet.all(config, pathing, hoard)
+
+            with StringIO() as out:
+                for backup_set in backup_sets:
+                    removed_cnt: Dict[HoardRemote, int] = dict()
+                    removed_size: Dict[HoardRemote, int] = dict()
+                    out.write(f"set: {backup_set.mounted_at} with {len(backup_set.backups)} media\n")
+
+                    print(f"Considering backup set at {backup_set.mounted_at} with {len(backup_set.backups)} media")
+                    for hoard_file, hoard_props in alive_it(hoard.fsobjects.in_folder(backup_set.mounted_at)):
+                        assert pathlib.Path(hoard_file).is_relative_to(backup_set.mounted_at)
+
+                        if isinstance(hoard_props, DirProps):
+                            continue
+
+                        repos_to_clean_from = backup_set.repos_to_clean(hoard_file, hoard_props, hoard_props.size)
+
+                        logging.info(f"Cleaning up {hoard_file} from {[r.uuid for r in repos_to_clean_from]}")
+                        hoard_props.set_status([repo.uuid for repo in repos_to_clean_from], FileStatus.CLEANUP)
+
+                        for repo in repos_to_clean_from:
+                            removed_cnt[repo] = removed_cnt.get(repo, 0) + 1
+                            removed_size[repo] = removed_size.get(repo, 0) + hoard_props.size
+
+                    for repo, cnt in sorted(removed_cnt.items(), key=lambda rc: rc[0].name):
+                        out.write(f" {repo.name} LOST {cnt} files ({format_size(removed_size[repo])})\n")
                 out.write("DONE")
                 return out.getvalue()
 
@@ -106,7 +142,7 @@ class HoardCommandBackups:
                         hoard_props.mark_to_get([repo.uuid for repo in new_repos_to_backup_to])
                         for repo in new_repos_to_backup_to:
                             added_cnt[repo] = added_cnt.get(repo, 0) + 1
-                            added_size[repo] = added_size.get(repo, 0) + 1
+                            added_size[repo] = added_size.get(repo, 0) + hoard_props.size
 
                             projected = backup_set.backup_sizes.remaining_pct(repo)
                             if projected < MIN_REPO_PERC_FREE:
@@ -120,5 +156,3 @@ class HoardCommandBackups:
                         out.write(f" {repo.name} <- {cnt} files ({format_size(added_size[repo])})\n")
                 out.write("DONE")
                 return out.getvalue()
-
-

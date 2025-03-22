@@ -78,6 +78,41 @@ class BackupSet:
 
         return self.reserve_new_backups(hoard_file, file_size, past_backups)
 
+    def repos_to_clean(self, hoard_file: str, hoard_props: Optional[HoardFileProps], file_size: int) -> List[HoardRemote]:
+        past_backups = self.currently_scheduled_backups(hoard_file, hoard_props) if hoard_props is not None else []
+
+        logging.info(f"Got {len(past_backups)} currently requested backups for {hoard_file}.")
+
+        if len(past_backups) <= self.num_backup_copies_desired:
+            logging.info(
+                f"Retaining {hoard_file}, has only {len(past_backups)} backups "
+                f"out of requested {self.num_backup_copies_desired}.")
+            return []
+
+        num_backups_to_remove = len(past_backups) - self.num_backup_copies_desired
+        assert num_backups_to_remove > 0
+
+        def _available_are_largest(backup: HoardRemote) -> (float, str):
+            current_status = hoard_props.get_status(backup.uuid)
+            if current_status == FileStatus.CLEANUP:
+                return 0.0, backup.uuid
+            elif current_status == FileStatus.GET or current_status == FileStatus.COPY:
+                return 1.0, backup.uuid
+            elif current_status == FileStatus.AVAILABLE:
+                return (
+                    10 - self.backup_sizes.remaining_pct(backup),  # 9 means empty remote, 10 means full
+                    backup.uuid)
+            else:
+                raise ValueError(f"Unknown backup status {current_status} for backup UUID {backup.uuid}")
+
+        sorted_to_remove = sorted(past_backups, key=_available_are_largest)
+        logging.info(f"{hoard_file} has {len(sorted_to_remove)} backups to remove from.")
+
+        remotes_to_remove = sorted_to_remove[:num_backups_to_remove]
+        for remote in remotes_to_remove:
+            self.backup_sizes.reserve_size(remote, -file_size)
+        return remotes_to_remove
+
     def currently_scheduled_backups(self, hoard_file: str, hoard_props: HoardFileProps) -> List[HoardRemote]:
         return [
             self.backups[uuid] for uuid in hoard_props.repos_having_status(*STATUSES_DECLARED_TO_FETCH)

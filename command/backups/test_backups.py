@@ -249,12 +249,12 @@ class TestBackups(unittest.TestCase):
             " 0: 5 files (239)\n"
             " 2: 1 files (60)\n"
             "get_or_copy count:\n"
-            " 2: 3 files (146)\n"
-            " 1: 2 files (93)\n"
             " 0: 1 files (60)\n"
+            " 1: 2 files (93)\n"
+            " 2: 3 files (146)\n"
             "cleanup count:\n"
-            " 1: 4 files (223)\n"
             " 0: 2 files (76)\n"
+            " 1: 4 files (223)\n"
             "DONE", res)
 
         res = hoard_cmd.files.push(all=True)
@@ -393,18 +393,18 @@ class TestBackups(unittest.TestCase):
             " 0: 3 files (153)\n"
             " 1: 3 files (146)\n"
             "cleanup count:\n"
-            " 1: 4 files (223)\n"
             " 0: 2 files (76)\n"
+            " 1: 4 files (223)\n"
             "DONE", res)
 
         res = hoard_cmd.backups.assign()
         print(nice_dump(res))
         self.assertEqual(
             'set: / with 4 media\n'
-            ' backup-1 <- 1 files (1)\n'
-            ' backup-2 <- 1 files (1)\n'
-            ' backup-3 <- 1 files (1)\n'
-            ' backup-4 <- 2 files (2)\n'
+            ' backup-1 <- 1 files (16)\n'
+            ' backup-2 <- 1 files (77)\n'
+            ' backup-3 <- 1 files (60)\n'
+            ' backup-4 <- 2 files (86)\n'
             'DONE', res)
 
         res = hoard_cmd.contents.status(hide_time=True)
@@ -452,6 +452,51 @@ class TestBackups(unittest.TestCase):
             '|repo-full-name           |       299|       153|       146|          |          |\n'
             '|repo-incoming-name       |       223|          |          |          |       223|\n'
             '|repo-partial-name        |        76|        76|          |          |          |\n', res)
+
+        res = hoard_cmd.backups.health()
+        self.assertEqual(
+            '# backup sets: 1\n'
+            '# backups: 4\n'
+            'scheduled count:\n'
+            ' 0: 1 files (16)\n'
+            ' 1: 4 files (223)\n'
+            ' 2: 1 files (60)\n'
+            'available count:\n'
+            ' 0: 5 files (239)\n'
+            ' 2: 1 files (60)\n'
+            'get_or_copy count:\n'
+            ' 0: 2 files (76)\n'
+            ' 1: 1 files (77)\n'
+            ' 2: 3 files (146)\n'
+            'cleanup count:\n'
+            ' 0: 2 files (76)\n'
+            ' 1: 4 files (223)\n'
+            'DONE', res)
+
+        res = hoard_cmd.backups.clean()
+        self.assertEqual(
+            'set: / with 4 media\n'
+            ' backup-1 LOST 1 files (60)\n'
+            'DONE', res)
+
+        res = hoard_cmd.backups.health()
+        self.assertEqual(
+            '# backup sets: 1\n'
+            '# backups: 4\n'
+            'scheduled count:\n'
+            ' 0: 1 files (16)\n'
+            ' 1: 5 files (283)\n'
+            'available count:\n'
+            ' 0: 5 files (239)\n'
+            ' 1: 1 files (60)\n'
+            'get_or_copy count:\n'
+            ' 0: 2 files (76)\n'
+            ' 1: 1 files (77)\n'
+            ' 2: 3 files (146)\n'
+            'cleanup count:\n'
+            ' 0: 1 files (16)\n'
+            ' 1: 5 files (283)\n'
+            'DONE', res)
 
     def _init_and_refresh_repo(self, backup_folder: str) -> RepoCommand:
         backup_1_cmd = TotalCommand(path=join(self.tmpdir.name, backup_folder)).cave
