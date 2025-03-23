@@ -70,6 +70,46 @@ class HoardRemotes:
         return (self[uuid] for uuid in self.doc)
 
 
+class ConnectionSpeed(enum.Enum):
+    INTERNAL_DRIVE = "internal"
+    EXTERNAL_DRIVE = "attached"
+    LOCAL_NETWORK = "nas"
+    INTERNET = "internet"
+
+
+def connection_speed_order(speed: ConnectionSpeed) -> int:
+    if speed == ConnectionSpeed.INTERNAL_DRIVE:
+        return 1
+    elif speed == ConnectionSpeed.EXTERNAL_DRIVE:
+        return 2
+    elif speed == ConnectionSpeed.LOCAL_NETWORK:
+        return 3
+    elif speed == ConnectionSpeed.INTERNET:
+        return 4
+    else:
+        raise ValueError(f"Unknown connection speed: {speed}")
+
+
+class ConnectionLatency(enum.Enum):
+    ALWAYS = "milliseconds"
+    SECONDS = "seconds"
+    MINUTES = "minutes"
+    DAYS = "days"
+
+
+def latency_order(latency: ConnectionLatency) -> int:
+    if latency == ConnectionLatency.ALWAYS:
+        return 1
+    elif latency == ConnectionLatency.SECONDS:
+        return 2
+    elif latency == ConnectionLatency.MINUTES:
+        return 3
+    elif latency == ConnectionLatency.DAYS:
+        return 4
+    else:
+        raise ValueError(f"Unknown connection latency: {latency}")
+
+
 class CavePath:
     def __init__(self, doc: Dict[str, Any]):
         self.doc = doc
@@ -78,9 +118,28 @@ class CavePath:
         if "exact" in self.doc:
             return self.doc["exact"]
 
+    @property
+    def speed(self) -> ConnectionSpeed:
+        assert "speed" in self.doc
+        return ConnectionSpeed(self.doc["speed"])
+
+    @property
+    def latency(self) -> ConnectionLatency:
+        assert "latency" in self.doc
+        return ConnectionLatency(self.doc["latency"])
+
+    def prioritize_speed_over_latency(self) -> int:
+        return connection_speed_order(self.speed) * 100 + latency_order(self.latency)
+
+    def prioritize_latency_over_speed(self) -> int:
+        return latency_order(self.latency) * 100 + connection_speed_order(self.speed)
+
     @classmethod
-    def exact(cls, remote_abs_path):
-        return CavePath({"exact": remote_abs_path})
+    def exact(cls, remote_abs_path: str, speed: ConnectionSpeed, latency: ConnectionLatency) -> "CavePath":
+        return CavePath({
+            "exact": remote_abs_path,
+            "latency": latency.value,
+            "speed": speed.value})
 
 
 class HoardPaths:

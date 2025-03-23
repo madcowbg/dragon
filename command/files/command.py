@@ -1,5 +1,6 @@
 import logging
 import os
+import sys
 from io import StringIO
 from typing import Optional, List, Dict
 
@@ -9,7 +10,7 @@ from alive_progress import alive_bar
 from command.contents.command import clean_dangling_files
 from command.hoard import Hoard
 from command.pathing import HoardPathing
-from config import HoardConfig
+from config import HoardConfig, HoardPaths
 from contents.hoard import HoardContents
 from contents.props import HoardFileProps, FileStatus
 from hashing import fast_hash_async
@@ -113,7 +114,7 @@ def _fetch_files_in_repo(
                         logging.debug(f"restoring {hoard_file} to {local_filepath.as_posix()}...")
 
                         success, fullpath = await _restore_from_another_repo(
-                            hoard_filepath, repo_uuid, hoard_props, pathing._config)
+                            hoard_filepath, repo_uuid, hoard_props, pathing._config, pathing._paths)
                         if success:
                             hoard_props.mark_available(repo_uuid)
                             return f"+ {local_filepath.as_posix()}\n"
@@ -191,13 +192,20 @@ def _find_files_to_copy(hoard: HoardContents) -> Dict[str, List[str]]:
 
 async def _restore_from_another_repo(
         hoard_file: HoardPathing.HoardPath, uuid_to_restore_to: str, hoard_props: HoardFileProps,
-        config: HoardConfig) -> (bool, str):
+        config: HoardConfig, paths: HoardPaths) -> (bool, str):
     fullpath_to_restore = hoard_file.at_local(uuid_to_restore_to).on_device_path()
     logging.info(f"Restoring hoard file {hoard_file.as_posix()} to {fullpath_to_restore}.")
 
     candidates = hoard_props.by_status(FileStatus.AVAILABLE) + hoard_props.by_status(FileStatus.CLEANUP)
 
-    for remote_uuid in candidates:
+    def sort_by_speed_then_latency(uuid: str) -> int:
+        cave_path = paths[uuid]
+        return cave_path.prioritize_speed_over_latency() if cave_path is not None else sys.maxsize
+
+    for remote_uuid in sorted(candidates, key=sort_by_speed_then_latency):
+        logging.info(
+            f"Remote: {remote_uuid} "
+            f"[{paths[remote_uuid].speed.value}: {paths[remote_uuid].latency.value}] for {hoard_file.as_posix()}")
         if config.remotes[remote_uuid] is None:
             logging.warning(f"remote {remote_uuid} is invalid, won't try to restore")
             continue

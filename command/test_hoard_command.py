@@ -354,8 +354,10 @@ class TestHoardCommand(unittest.TestCase):
         res = hoard_cmd.remotes(show_paths=True)
         self.assertEqual(
             "2 total remotes.\n"
-            f"  [cloned-repo] {cloned_cave_cmd.current_uuid()} (partial) in {pathlib.Path(self.tmpdir.name).joinpath('cloned-repo').as_posix()}\n"
-            f"  [repo-in-local] {orig_cave_cmd.current_uuid()} (partial) in {pathlib.Path(self.tmpdir.name).joinpath('repo').as_posix()}\n"
+            f"  [cloned-repo] {cloned_cave_cmd.current_uuid()} (partial) "
+            f"in {pathlib.Path(self.tmpdir.name).joinpath('cloned-repo').as_posix()} [internal: milliseconds]\n"
+            f"  [repo-in-local] {orig_cave_cmd.current_uuid()} (partial) "
+            f"in {pathlib.Path(self.tmpdir.name).joinpath('repo').as_posix()} [internal: milliseconds]\n"
             "Mounts:\n"
             "  / -> repo-in-local\n"
             "  /wat -> cloned-repo\n"

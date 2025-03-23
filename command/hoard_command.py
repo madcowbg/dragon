@@ -14,7 +14,7 @@ from command.files.command import HoardCommandFiles
 from command.hoard import Hoard
 from command.pathing import HoardPathing
 from command.repo_command import RepoCommand, Repo
-from config import HoardRemote, CavePath, CaveType
+from config import HoardRemote, CavePath, CaveType, ConnectionSpeed, ConnectionLatency
 from contents.hoard import HoardContents
 from contents.props import DirProps, HoardFileProps
 from contents_diff import FileMissingInHoard, FileContentsDiffer, FileMissingInLocal, \
@@ -102,7 +102,9 @@ class HoardCommand(object):
 
     def add_remote(
             self, remote_path: str, name: str, mount_point: str,
-            type: CaveType = CaveType.PARTIAL, fetch_new: bool = False):
+            type: CaveType = CaveType.PARTIAL, fetch_new: bool = False,
+            speed: ConnectionSpeed = ConnectionSpeed.INTERNAL_DRIVE,
+            latency: ConnectionLatency = ConnectionLatency.ALWAYS):
         config = self.hoard.config()
         paths = self.hoard.paths()
 
@@ -123,7 +125,7 @@ class HoardCommand(object):
         config.remotes.declare(remote_uuid, name, type, mount_point, fetch_new)
         config.write()
 
-        paths[remote_uuid] = CavePath.exact(remote_abs_path)
+        paths[remote_uuid] = CavePath.exact(remote_abs_path, speed, latency)
         paths.write()
 
         return f"Added {name}[{remote_uuid}] at {remote_path}!"
@@ -160,7 +162,8 @@ class HoardCommand(object):
             out.write(f"{len(config.remotes)} total remotes.\n")
             for remote in config.remotes.all():
                 name_prefix = f"[{remote.name}] " if remote.name != "INVALID" else ""
-                exact_path = f" in {self.hoard.paths()[remote.uuid].find()}" if show_paths else ""
+                path = self.hoard.paths()[remote.uuid]
+                exact_path = f" in {path.find()} [{path.speed.value}: {path.latency.value}]" if show_paths else ""
 
                 out.write(f"  {name_prefix}{remote.uuid} ({remote.type.value}){exact_path}\n")
             out.write("Mounts:\n")
