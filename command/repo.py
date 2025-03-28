@@ -4,6 +4,7 @@ import uuid
 from os.path import join
 
 from contents.repo import RepoContents
+from exceptions import MissingRepo, WrongRepo, MissingRepoContents
 
 CURRENT_UUID_FILENAME = "current.uuid"
 
@@ -23,22 +24,6 @@ def _uuid_filename(path: str) -> str:
 
 def _has_uuid_filename(path: str) -> bool:
     return os.path.isfile(_uuid_filename(path))
-
-
-class RepoOpeningFailed(Exception):
-    pass
-
-
-class MissingRepo(RepoOpeningFailed):
-    pass
-
-
-class WrongRepo(RepoOpeningFailed):
-    pass
-
-
-class RepoHasNoContents(RepoOpeningFailed):
-    pass
 
 
 class ProspectiveRepo:
@@ -103,7 +88,7 @@ class ConnectedRepo(OfflineRepo):
 
         if require_contents and not self.has_contents:
             logging.info(f"Contents file not found.")
-            raise RepoHasNoContents()
+            raise MissingRepoContents()
 
     @property
     def has_contents(self):
@@ -111,10 +96,9 @@ class ConnectedRepo(OfflineRepo):
 
     def create_contents(self, create_for_uuid: str) -> RepoContents:
         assert not self.has_contents
-        return RepoContents.create(
-            os.path.join(self.config_folder, f"{self.current_uuid}.contents"), create_for_uuid)
+        return RepoContents.create(self.config_folder, create_for_uuid)
 
     def open_contents(self) -> RepoContents:
         if not self.has_contents:
-            raise RepoHasNoContents()
-        return RepoContents.load_existing(os.path.join(self.config_folder, f"{self.current_uuid}.contents"))
+            raise MissingRepoContents()
+        return RepoContents.load_existing(self.config_folder, self.current_uuid)

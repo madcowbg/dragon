@@ -14,7 +14,7 @@ from command.contents.diff_handlers import DiffHandler, PartialDiffHandler, Back
     reset_local_as_current
 from command.content_prefs import ContentPrefs
 from command.pathing import HoardPathing
-from command.repo import RepoHasNoContents
+from exceptions import MissingRepoContents
 from config import CaveType, HoardConfig, HoardPaths, HoardRemote
 from contents.hoard import HoardContents, HoardFile, HoardDir
 
@@ -288,7 +288,7 @@ class HoardCommandContents:
                     try:
                         current_contents = self.hoard.connect_to_repo(remote_uuid, require_contents=True) \
                             .open_contents()
-                    except RepoHasNoContents:
+                    except MissingRepoContents:
                         out.write(f"Repo {remote_uuid} has no current contents available!\n")
                         continue
 

@@ -14,7 +14,8 @@ from command.files.command import HoardCommandFiles
 from command.hoard import Hoard
 from command.pathing import HoardPathing
 from command.command_repo import RepoCommand
-from command.repo import ConnectedRepo, OfflineRepo, ProspectiveRepo, MissingRepo
+from command.repo import ConnectedRepo, OfflineRepo, ProspectiveRepo
+from exceptions import MissingRepo
 from config import HoardRemote, CavePath, CaveType, ConnectionSpeed, ConnectionLatency
 from contents.hoard import HoardContents
 from contents.props import DirProps, HoardFileProps

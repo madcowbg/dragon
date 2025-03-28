@@ -4,6 +4,7 @@ from datetime import datetime
 from sqlite3 import Connection, Cursor, Row
 from typing import Generator, Tuple, Optional
 
+from exceptions import MissingRepoContents
 from contents.props import RepoFileProps, RepoDirProps, RepoFileStatus
 from util import FIRST_VALUE
 
@@ -148,7 +149,9 @@ class RepoContentsConfig:
 
 class RepoContents:
     @staticmethod
-    def create(filepath: str, create_for_uuid: Optional[str] = None):
+    def create(folder: str, uuid: str):
+        filepath = os.path.join(folder, f"{uuid}.contents")
+
         assert not os.path.isfile(filepath)
         conn = sqlite3.connect(filepath)
         curr = conn.cursor()
@@ -173,25 +176,30 @@ class RepoContents:
             "is_dirty BOOLEAN NOT NULL)")
         curr.execute(
             "INSERT INTO config(uuid, updated, is_dirty) VALUES (?, ?, TRUE)",
-            (create_for_uuid, datetime.now().isoformat()))
+            (uuid, datetime.now().isoformat()))
 
         conn.commit()
         conn.close()
 
-        return RepoContents.load_existing(filepath)
+        return RepoContents.load_existing(folder, uuid)
 
     @staticmethod
-    def load_existing(filepath: str):
-        if not os.path.isfile(filepath):
-            raise ValueError(f"File {filepath} does not exist, need to pass create=True to create.")
-        return RepoContents(filepath)
+    def load_existing(folder: str, uuid: str):
+        return RepoContents(folder, uuid)
 
-    conn: Connection
+    conn: Connection | None
 
-    def __init__(self, filepath: str):
-        self.filepath = filepath
+    def __init__(self, folder: str, uuid: str):
+        self.folder = folder
+        self.uuid = uuid
+
+        if not os.path.isfile(self.filepath):
+            raise MissingRepoContents(f"File {self.filepath} does not exist.")
 
         self.conn = None
+
+    @property
+    def filepath(self): return os.path.join(self.folder, f"{self.uuid}.contents")
 
     def __enter__(self) -> "RepoContents":
         assert self.conn is None

@@ -8,7 +8,8 @@ from typing import Generator, Tuple, List, Optional
 import aiofiles.os
 from alive_progress import alive_bar, alive_it
 
-from command.repo import ProspectiveRepo, RepoHasNoContents, MissingRepo
+from command.repo import ProspectiveRepo
+from exceptions import MissingRepo, MissingRepoContents
 from contents.props import RepoFileProps, DirProps, RepoFileStatus, RepoDirProps
 from contents.repo import RepoContents
 from hashing import find_hashes, fast_hash_async
@@ -62,7 +63,7 @@ class RepoCommand(object):
         try:
             contents = connected_repo.open_contents()
             first_refresh = False
-        except RepoHasNoContents as e:
+        except MissingRepoContents as e:
             logging.warning("Repo contents missing, creating!")
             first_refresh = True
             contents = connected_repo.create_contents(current_uuid)
@@ -180,7 +181,7 @@ class RepoCommand(object):
 
         try:
             contents = connected_repo.open_contents()
-        except RepoHasNoContents:
+        except MissingRepoContents:
             return f"Repo {current_uuid} contents have not been refreshed yet!"
 
         files_same = []
