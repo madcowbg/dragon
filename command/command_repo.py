@@ -75,7 +75,6 @@ class RepoCommand(object):
             logging.info("Start updating, setting is_dirty to TRUE")
             contents.config.start_updating()
 
-            contents.config.bump_epoch()
             logging.info(f"Bumped epoch to {contents.config.epoch}")
 
             print(f"Computing diffs.")

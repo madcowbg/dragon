@@ -4,6 +4,8 @@ from datetime import datetime
 from sqlite3 import Connection, Cursor, Row
 from typing import Generator, Tuple, Optional
 
+import rtoml
+
 from exceptions import MissingRepoContents
 from contents.props import RepoFileProps, RepoDirProps, RepoFileStatus
 from util import FIRST_VALUE
@@ -109,51 +111,54 @@ class FSObjects:
 
 
 class RepoContentsConfig:
-    def __init__(self, parent: "RepoContents"):
-        self.parent = parent
+    def __init__(self, config_path: str):
+        self.config_path = config_path
+        with open(self.config_path, "r") as f:
+            self.doc = rtoml.load(f)
+
+    def write(self):
+        with open(self.config_path, "w") as f:
+            rtoml.dump(self.doc, f)
 
     def touch_updated(self) -> None:
-        self.parent.conn.execute("UPDATE config SET updated = ?", (datetime.now().isoformat(),))
+        self.doc["last_updated"] = datetime.now().isoformat()
+        self.write()
 
     @property
     def updated(self) -> datetime:
-        return datetime.fromisoformat(self._first_value_cursor().execute("SELECT updated FROM config").fetchone())
+        return datetime.fromisoformat(self.doc["last_updated"])
 
     @property
-    def is_dirty(self) -> bool:
-        return self._first_value_cursor().execute("SELECT is_dirty FROM config").fetchone()
+    def is_dirty(self) -> bool: return self.doc["is_updating"]
 
     def start_updating(self):
-        self.parent.conn.execute("UPDATE config SET is_dirty = TRUE")
+        self.doc["is_updating"] = True
+        self.doc["epoch"] = self.doc.get("epoch", 0) + 1
+        self.write()
 
     def end_updating(self):
-        self.parent.conn.execute("UPDATE config SET is_dirty = FALSE")
+        self.doc["is_updating"] = False
+        self.write()
 
     @property
-    def uuid(self) -> str:
-        return self._first_value_cursor().execute("SELECT uuid FROM config").fetchone()
+    def uuid(self) -> str: return self.doc["uuid"]
 
     @property
-    def epoch(self) -> int:
-        return self._first_value_cursor().execute("SELECT epoch FROM config").fetchone()
-
-    def bump_epoch(self):
-        self.parent.conn.execute("UPDATE config SET epoch = (SELECT MAX(epoch) FROM config) + 1")
-        self.parent.conn.commit()
-
-    def _first_value_cursor(self) -> Cursor:
-        curr = self.parent.conn.cursor()
-        curr.row_factory = FIRST_VALUE
-        return curr
+    def epoch(self) -> int: return self.doc["epoch"]
 
 
 class RepoContents:
     @staticmethod
     def create(folder: str, uuid: str):
-        filepath = os.path.join(folder, f"{uuid}.contents")
+        contents_filepath = os.path.join(folder, f"{uuid}.contents")
+        config_filepath = os.path.join(folder, f"{uuid}.toml")
 
-        assert not os.path.isfile(filepath)
-        conn = sqlite3.connect(filepath)
+        assert not os.path.isfile(contents_filepath) and not os.path.isdir(config_filepath)
+
+        with open(config_filepath, "w") as f:
+            rtoml.dump({"uuid": uuid, "updated": datetime.now().isoformat()}, f)
+
+        conn = sqlite3.connect(contents_filepath)
         curr = conn.cursor()
 
         curr.execute(
@@ -167,16 +172,6 @@ class RepoContents:
             " md5 TEXT,"
             " last_status TEXT NOT NULL,"
             " last_update_epoch INTEGER NOT NULL)")
-
-        curr.execute(
-            "CREATE TABLE config("
-            "uuid text PRIMARY KEY NOT NULL, "
-            "epoch INTEGER DEFAULT 0,"
-            "updated TEXT NOT NULL,"
-            "is_dirty BOOLEAN NOT NULL)")
-        curr.execute(
-            "INSERT INTO config(uuid, updated, is_dirty) VALUES (?, ?, TRUE)",
-            (uuid, datetime.now().isoformat()))
 
         conn.commit()
         conn.close()
@@ -201,16 +196,20 @@ class RepoContents:
     @property
     def filepath(self): return os.path.join(self.folder, f"{self.uuid}.contents")
 
+    @property
+    def config_filepath(self): return os.path.join(self.folder, f"{self.uuid}.toml")
+
     def __enter__(self) -> "RepoContents":
         assert self.conn is None
         self.conn = sqlite3.connect(self.filepath)
         self.fsobjects = FSObjects(self)
-        self.config = RepoContentsConfig(self)
+        self.config = RepoContentsConfig(self.config_filepath)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
         assert self.conn is not None
         self.conn.commit()
         self.conn.close()
+        self.config.write()
 
         return False
