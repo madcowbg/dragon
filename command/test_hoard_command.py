@@ -37,12 +37,12 @@ class TestHoardCommand(unittest.TestCase):
 
         hoard_cmd = TotalCommand(path=join(self.tmpdir.name, "hoard")).hoard
         hoard_cmd.init()
-        res = hoard_cmd.remotes()
+        res = hoard_cmd.remotes(hide_paths=True)
 
         self.assertEqual("0 total remotes.\nMounts:\nDONE", res.strip())
 
         hoard_cmd.add_remote(remote_path=join(self.tmpdir.name, "repo"), name="repo-in-local", mount_point="/")
-        res = hoard_cmd.remotes()
+        res = hoard_cmd.remotes(hide_paths=True)
         self.assertEqual(
             f"1 total remotes.\n"
             f"  [repo-in-local] {repo_uuid} (partial)\n"
@@ -163,7 +163,7 @@ class TestHoardCommand(unittest.TestCase):
         res = hoard_cmd.deprecated.status_deprecated("repo-in-local")
         self.assertEqual(f"Status of {repo_uuid}:\nDF /wat\nDONE", res.strip())
 
-        res = hoard_cmd.remotes()
+        res = hoard_cmd.remotes(hide_paths=True)
         self.assertEqual(
             f"2 total remotes.\n"
             f"  [repo-in-local] {repo_uuid} (partial)\n"
@@ -351,7 +351,7 @@ class TestHoardCommand(unittest.TestCase):
             'cloned-repo/test.me.once',
             'cloned-repo/test.me.twice'], dump_file_list(self.tmpdir.name, "cloned-repo"))
 
-        res = hoard_cmd.remotes(show_paths=True)
+        res = hoard_cmd.remotes()
         self.assertEqual(
             "2 total remotes.\n"
             f"  [cloned-repo] {cloned_cave_cmd.current_uuid()} (partial) "
@@ -745,7 +745,7 @@ class TestHoardCommand(unittest.TestCase):
             "+/first-point/wat/test.me.2\n"
             "Sync'ed repo-partial-name to hoard!\nDONE", res.strip())
 
-        res = hoard_cmd.remotes()
+        res = hoard_cmd.remotes(hide_paths=True)
         self.assertEqual(
             f"1 total remotes.\n"
             f"  [repo-partial-name] {partial_cave_cmd.current_uuid()} (partial)\n"
@@ -787,7 +787,7 @@ class TestHoardCommand(unittest.TestCase):
             "/move-all-inside/first-point/wat/test.me.2 = a:1\n"
             "DONE", res)
 
-        res = hoard_cmd.remotes()
+        res = hoard_cmd.remotes(hide_paths=True)
         self.assertEqual(
             f"1 total remotes.\n"
             f"  [repo-partial-name] {partial_cave_cmd.current_uuid()} (partial)\n"
@@ -1122,7 +1122,7 @@ def init_complex_hoard(tmpdir: str):
         remote_path=join(tmpdir, "repo-incoming"), name="repo-incoming-name", mount_point="/",
         type=CaveType.INCOMING)
 
-    res = hoard_cmd.remotes()
+    res = hoard_cmd.remotes(hide_paths=True)
     assert (""
             "4 total remotes."
             f"\n  [repo-partial-name] {partial_cave_cmd.current_uuid()} (partial)"

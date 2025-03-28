@@ -38,7 +38,7 @@ def init_complex_hoard(tmpdir: str):
         remote_path=join(tmpdir, "repo-incoming"), name="repo-incoming-name", mount_point="/",
         type=CaveType.INCOMING)
 
-    res = hoard_cmd.remotes()
+    res = hoard_cmd.remotes(hide_paths=True)
     assert (""
             "3 total remotes."
             f"\n  [repo-partial-name] {partial_cave_cmd.current_uuid()} (partial)"

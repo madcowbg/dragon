@@ -156,7 +156,7 @@ class HoardCommand(object):
 
         return f"set path of {remote} to {mount_path.as_posix()}\n"
 
-    def remotes(self, show_paths: bool = False):
+    def remotes(self, hide_paths: bool = False):
         logging.info(f"Reading config in {self.hoard.hoardpath}...")
         config = self.hoard.config()
 
@@ -165,7 +165,7 @@ class HoardCommand(object):
             for remote in config.remotes.all():
                 name_prefix = f"[{remote.name}] " if remote.name != "INVALID" else ""
                 path = self.hoard.paths()[remote.uuid]
-                exact_path = f" in {path.find()} [{path.speed.value}: {path.latency.value}]" if show_paths else ""
+                exact_path = f" in {path.find()} [{path.speed.value}: {path.latency.value}]" if not hide_paths else ""
 
                 out.write(f"  {name_prefix}{remote.uuid} ({remote.type.value}){exact_path}\n")
             out.write("Mounts:\n")
