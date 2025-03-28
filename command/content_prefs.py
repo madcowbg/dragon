@@ -185,7 +185,7 @@ class ContentPrefs:
 
     def repos_to_add(
             self, hoard_file: str, local_props: RepoFileProps,
-            hoard_props: Optional[HoardFileProps] = None) -> Generator[HoardRemote, None, None]:
+            hoard_props: Optional[HoardFileProps] = None) -> Generator[str, None, None]:
         for r in self._partials_with_fetch_new:
             if is_path_available(self.pathing, hoard_file, r.uuid):
                 yield r.uuid

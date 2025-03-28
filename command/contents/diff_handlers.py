@@ -139,22 +139,36 @@ class IncomingDiffHandler(DiffHandler):
         out.write(f"<+{diff.hoard_file}\n")
 
     def _move_to_other_caves(self, diff: FileMissingInHoard | FileContentsDiffer, out: StringIO):
-        hoard_file = self.hoard.fsobjects.add_or_replace_file(diff.hoard_file, diff.local_props)
+        hoard_props = self.hoard.fsobjects.add_or_replace_file(diff.hoard_file, diff.local_props)
+
         # add status for new repos
-        hoard_file.set_status(self.content_prefs.repos_to_add(diff.hoard_file, diff.local_props), HoardFileStatus.GET)
-        logging.info(f"marking {diff.hoard_file} for cleanup from {self.remote_uuid}")
-        hoard_file.mark_for_cleanup([self.remote_uuid])
+        hoard_props.set_status(list(self.content_prefs.repos_to_add(diff.hoard_file, diff.local_props)), HoardFileStatus.GET)
+
+        self._safe_mark_for_cleanup(diff, hoard_props, out)
+
+    def _safe_mark_for_cleanup(self, diff: FileMissingInHoard | FileContentsDiffer | FileIsSame, hoard_file: HoardFileProps, out: StringIO):
+        logging.info(f"safe marking {diff.hoard_file} for cleanup from {self.remote_uuid}")
+
+        repos_to_get_file = hoard_file.by_statuses(HoardFileStatus.GET, HoardFileStatus.COPY, HoardFileStatus.AVAILABLE)
+        if self.remote_uuid in repos_to_get_file:
+            repos_to_get_file.remove(self.remote_uuid)
+        if len(repos_to_get_file) > 0:
+            logging.info(f"marking {diff.hoard_file} for cleanup from {self.remote_uuid}")
+            hoard_file.mark_for_cleanup([self.remote_uuid])
+        else:
+            logging.error(f"No place to get {diff.hoard_file}, will NOT cleanup.")
+            hoard_file.mark_available(self.remote_uuid)
+
+            out.write(f"~{diff.hoard_file}\n")
 
     def handle_file_is_same(self, diff: FileIsSame, out: StringIO):
         logging.info(f"incoming file is already recorded in hoard.")
-        logging.info(f"marking {diff.hoard_file} for cleanup from {self.remote_uuid}")
-        diff.hoard_props.mark_for_cleanup([self.remote_uuid])
-
+        self._safe_mark_for_cleanup(diff, diff.hoard_props, out)
         out.write(f"-{diff.hoard_file}\n")
 
     def handle_file_contents_differ(self, diff: FileContentsDiffer, out: StringIO):
+        logging.info(f"incoming file has different contents.")
         self._move_to_other_caves(diff, out)
-
         out.write(f"u{diff.hoard_file}\n")
 
     def handle_hoard_only(self, diff: FileMissingInLocal, out: StringIO):

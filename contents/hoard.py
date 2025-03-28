@@ -248,7 +248,7 @@ class HoardFSObjects:
             "SELECT count(1) > 0 FROM fsobject WHERE fsobject.fullpath = ?",
             (file_path,)).fetchone()
 
-    def add_or_replace_file(self, filepath: str, props: RepoFileProps):
+    def add_or_replace_file(self, filepath: str, props: RepoFileProps) -> HoardFileProps:
         curr = self.parent.conn.cursor()
         curr.row_factory = FIRST_VALUE
 
