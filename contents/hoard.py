@@ -7,7 +7,7 @@ from sqlite3 import Connection
 from typing import Dict, Any, List, Optional, Tuple, Generator, Iterator, Iterable
 
 from config import HoardConfig
-from contents.props import RepoFileProps, DirProps, FileStatus, HoardFileProps, FSObjectProps
+from contents.props import RepoFileProps, DirProps, HoardFileStatus, HoardFileProps, FSObjectProps
 from util import FIRST_VALUE
 
 
@@ -114,7 +114,7 @@ class HoardDir:
             yield from hoard_dir.walk(depth - 1)
 
 
-STATUSES_TO_FETCH = [FileStatus.COPY.value, FileStatus.GET.value]
+STATUSES_TO_FETCH = [HoardFileStatus.COPY.value, HoardFileStatus.GET.value]
 
 
 class HoardFSObjects:
@@ -193,7 +193,7 @@ class HoardFSObjects:
             "  WHERE fspresence.fsobject_id = fsobject.fsobject_id AND "
             "    uuid = ? AND "
             "    status in (?, ?, ?))",
-            (repo_uuid, FileStatus.GET.value, FileStatus.COPY.value, FileStatus.CLEANUP.value))
+            (repo_uuid, HoardFileStatus.GET.value, HoardFileStatus.COPY.value, HoardFileStatus.CLEANUP.value))
 
     def in_folder(self, folder: str) -> Iterable[Tuple[str, FSObjectProps]]:
         assert os.path.isabs(folder)
@@ -239,7 +239,7 @@ class HoardFSObjects:
         for fsobject_id, fullpath, isdir, size, fasthash in self.parent.conn.execute(
                 "SELECT fsobject.fsobject_id, fullpath, isdir, size, fasthash "
                 "FROM fsobject JOIN fspresence on fsobject.fsobject_id = fspresence.fsobject_id "
-                "WHERE fspresence.uuid = ? and fspresence.status = ?", (repo_uuid, FileStatus.CLEANUP.value)):
+                "WHERE fspresence.uuid = ? and fspresence.status = ?", (repo_uuid, HoardFileStatus.CLEANUP.value)):
             assert not isdir
             yield fullpath, HoardFileProps(self.parent, fsobject_id, size, fasthash)
 
@@ -340,10 +340,10 @@ class HoardFSObjects:
                 "SELECT fsobject_id FROM fsobject WHERE fullpath = ?",
                 (to_fullpath,)).fetchone()
 
-            previously_added_repos = props.repos_having_status(FileStatus.COPY, FileStatus.GET, FileStatus.AVAILABLE)
+            previously_added_repos = props.repos_having_status(HoardFileStatus.COPY, HoardFileStatus.GET, HoardFileStatus.AVAILABLE)
             curr.executemany(
                 "INSERT INTO fspresence(fsobject_id, uuid, status) VALUES (?, ?, ?)",
-                [(new_path_id, uuid, FileStatus.COPY.value) for uuid in previously_added_repos])
+                [(new_path_id, uuid, HoardFileStatus.COPY.value) for uuid in previously_added_repos])
         elif isinstance(props, DirProps):
             self.add_dir(to_fullpath)
         else:

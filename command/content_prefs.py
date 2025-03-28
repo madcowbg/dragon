@@ -4,7 +4,7 @@ from typing import List, Optional, Generator, Dict
 from command.pathing import HoardPathing, is_path_available
 from config import HoardRemote, HoardConfig, CaveType
 from contents.hoard import HoardContents
-from contents.props import RepoFileProps, HoardFileProps, FileStatus
+from contents.props import RepoFileProps, HoardFileProps, HoardFileStatus
 from util import format_percent, format_size
 
 MIN_REPO_PERC_FREE = 0.02
@@ -98,11 +98,11 @@ class BackupSet:
 
         def _available_are_largest(backup: HoardRemote) -> (float, str):
             current_status = hoard_props.get_status(backup.uuid)
-            if current_status == FileStatus.CLEANUP:
+            if current_status == HoardFileStatus.CLEANUP:
                 return 0.0, backup.uuid
-            elif current_status == FileStatus.GET or current_status == FileStatus.COPY:
+            elif current_status == HoardFileStatus.GET or current_status == HoardFileStatus.COPY:
                 return 1.0, backup.uuid
-            elif current_status == FileStatus.AVAILABLE:
+            elif current_status == HoardFileStatus.AVAILABLE:
                 return (
                     10 - self.backup_sizes.remaining_pct(backup),  # 9 means empty remote, 10 means full
                     backup.uuid)
@@ -170,7 +170,7 @@ class BackupSet:
         return [BackupSet(mounted_at, s, pathing, hoard) for mounted_at, s in sets.items()]
 
 
-STATUSES_DECLARED_TO_FETCH = [FileStatus.GET, FileStatus.COPY, FileStatus.AVAILABLE]
+STATUSES_DECLARED_TO_FETCH = [HoardFileStatus.GET, HoardFileStatus.COPY, HoardFileStatus.AVAILABLE]
 
 
 class ContentPrefs:

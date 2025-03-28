@@ -11,7 +11,7 @@ from command.hoard import Hoard
 from command.pathing import HoardPathing
 from config import HoardRemote
 from contents.hoard import HoardContents
-from contents.props import FileStatus, DirProps
+from contents.props import HoardFileStatus, DirProps
 from util import format_size, format_percent
 
 
@@ -47,9 +47,9 @@ class HoardCommandBackups:
                     for backup_set in backup_sets:
                         scheduled += len(backup_set.currently_scheduled_backups(hoard_file, hoard_props))
 
-                    available = sum(1 for uuid in hoard_props.by_status(FileStatus.AVAILABLE) if uuid in backup_media)
-                    get_or_copy = len(hoard_props.by_statuses(FileStatus.GET, FileStatus.COPY))
-                    cleanup = len(hoard_props.by_status(FileStatus.CLEANUP))
+                    available = sum(1 for uuid in hoard_props.by_status(HoardFileStatus.AVAILABLE) if uuid in backup_media)
+                    get_or_copy = len(hoard_props.by_statuses(HoardFileStatus.GET, HoardFileStatus.COPY))
+                    cleanup = len(hoard_props.by_status(HoardFileStatus.CLEANUP))
 
                     file_stats_copies[hoard_file] = (scheduled, available, get_or_copy, cleanup)
 
@@ -98,7 +98,7 @@ class HoardCommandBackups:
                         repos_to_clean_from = backup_set.repos_to_clean(hoard_file, hoard_props, hoard_props.size)
 
                         logging.info(f"Cleaning up {hoard_file} from {[r.uuid for r in repos_to_clean_from]}")
-                        hoard_props.set_status([repo.uuid for repo in repos_to_clean_from], FileStatus.CLEANUP)
+                        hoard_props.set_status([repo.uuid for repo in repos_to_clean_from], HoardFileStatus.CLEANUP)
 
                         for repo in repos_to_clean_from:
                             removed_cnt[repo] = removed_cnt.get(repo, 0) + 1

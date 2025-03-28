@@ -17,7 +17,7 @@ from command.pathing import HoardPathing
 from config import CaveType, HoardConfig, HoardPaths
 from contents.hoard import HoardContents, HoardFile, HoardDir
 
-from contents.props import HoardFileProps, FileStatus, RepoFileProps, DirProps
+from contents.props import HoardFileProps, HoardFileStatus, RepoFileProps, DirProps
 from contents.repo import RepoContents
 from contents_diff import FileMissingInHoard, FileIsSame, FileContentsDiffer, FileMissingInLocal, DirMissingInHoard, \
     Diff, DirIsSame, DirMissingInLocal
@@ -26,10 +26,10 @@ from util import format_size
 
 
 def _file_stats(props: HoardFileProps) -> str:
-    a = props.by_status(FileStatus.AVAILABLE)
-    g = props.by_status(FileStatus.GET)
-    c = props.by_status(FileStatus.CLEANUP)
-    x = props.by_status(FileStatus.COPY)
+    a = props.by_status(HoardFileStatus.AVAILABLE)
+    g = props.by_status(HoardFileStatus.GET)
+    c = props.by_status(HoardFileStatus.CLEANUP)
+    x = props.by_status(HoardFileStatus.COPY)
     res: List[str] = []
     if len(a) > 0:
         res.append(f'a:{len(a)}')
@@ -52,8 +52,8 @@ class HoardCommandContents:
             statuses: Dict[str, Dict[str, Dict[str, Any]]] = hoard.fsobjects.status_by_uuid
             statuses_sorted = sorted(
                 (config.remotes[uuid].name, hoard.updated(uuid), vals) for uuid, vals in statuses.items())
-            all_stats = ["total", FileStatus.AVAILABLE.value, FileStatus.GET.value, FileStatus.COPY.value,
-                         FileStatus.CLEANUP.value]
+            all_stats = ["total", HoardFileStatus.AVAILABLE.value, HoardFileStatus.GET.value, HoardFileStatus.COPY.value,
+                         HoardFileStatus.CLEANUP.value]
             with StringIO() as out:
                 out.write(f"|{'Num Files':<25}|")
                 if not hide_time:
@@ -176,21 +176,21 @@ class HoardCommandContents:
                     continue
 
                 goal_status = hoard_props.get_status(repo_uuid)
-                if goal_status == FileStatus.AVAILABLE:
+                if goal_status == HoardFileStatus.AVAILABLE:
                     logging.info(f"File {hoard_file} is available, mapping for removal from {repo_uuid}.")
 
                     hoard_props.mark_for_cleanup([repo_uuid])
                     out.write(f"DROP {hoard_file}\n")
 
                     cleaned_up += 1
-                elif goal_status == FileStatus.GET or goal_status == FileStatus.COPY:
+                elif goal_status == HoardFileStatus.GET or goal_status == HoardFileStatus.COPY:
                     logging.info(f"File {hoard_file} is already not in repo, removing status.")
 
                     hoard_props.remove_status(repo_uuid)
                     out.write(f"WONT_GET {hoard_file}\n")
 
                     wont_get += 1
-                elif goal_status == FileStatus.CLEANUP or goal_status == FileStatus.UNKNOWN:
+                elif goal_status == HoardFileStatus.CLEANUP or goal_status == HoardFileStatus.UNKNOWN:
                     logging.info(f"Skipping {hoard_file} as it is already missing.")
                     skipped += 1
                 else:
@@ -389,7 +389,7 @@ class HoardCommandContents:
                 return out.getvalue()
 
 
-STATUSES_ALREADY_ENABLED = [FileStatus.AVAILABLE, FileStatus.GET]
+STATUSES_ALREADY_ENABLED = [HoardFileStatus.AVAILABLE, HoardFileStatus.GET]
 
 
 def clean_dangling_files(hoard: HoardContents, out: StringIO):  # fixme do this when status is modified, not after

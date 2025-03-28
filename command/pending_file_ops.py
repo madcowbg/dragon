@@ -1,7 +1,7 @@
 from typing import Iterable
 
 from contents.hoard import HoardContents
-from contents.props import HoardFileProps, FileStatus
+from contents.props import HoardFileProps, HoardFileStatus
 
 type FileOp = GetFile | CopyFile | CleanupFile
 
@@ -27,11 +27,11 @@ class CleanupFile:
 def get_pending_operations(hoard: HoardContents, repo_uuid: str) -> Iterable[FileOp]:
     for hoard_file, hoard_props in hoard.fsobjects.with_pending(repo_uuid):
         goal_status = hoard_props.get_status(repo_uuid)
-        if goal_status == FileStatus.GET:
+        if goal_status == HoardFileStatus.GET:
             yield GetFile(hoard_file, hoard_props)
-        elif goal_status == FileStatus.COPY:
+        elif goal_status == HoardFileStatus.COPY:
             yield CopyFile(hoard_file, hoard_props)
-        elif goal_status == FileStatus.CLEANUP:
+        elif goal_status == HoardFileStatus.CLEANUP:
             yield CleanupFile(hoard_file, hoard_props)
         else:
             raise ValueError(f"File {hoard_file} has no pending ops, yet was selected as one that has.")

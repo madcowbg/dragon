@@ -13,7 +13,7 @@ from command.pathing import HoardPathing
 from command.pending_file_ops import get_pending_operations, CopyFile, GetFile, CleanupFile
 from config import HoardConfig, HoardPaths
 from contents.hoard import HoardContents
-from contents.props import HoardFileProps, FileStatus
+from contents.props import HoardFileProps, HoardFileStatus
 from hashing import fast_hash_async
 from resolve_uuid import resolve_remote_uuid
 from util import to_mb, run_async_in_parallel, format_size
@@ -38,7 +38,7 @@ class HoardCommandFiles:
 
                     repos_containing_what_this_one_needs: Dict[str, int] = dict()
                     for op in get_pending_operations(hoard, repo_uuid):
-                        num_available = op.hoard_props.by_status(FileStatus.AVAILABLE)
+                        num_available = op.hoard_props.by_status(HoardFileStatus.AVAILABLE)
                         if isinstance(op, GetFile):
                             out.write(f"TO_GET (from {len(num_available)}) {op.hoard_file}\n")
                             for repo in num_available:
@@ -126,11 +126,11 @@ def _fetch_files_in_repo(
                     assert isinstance(hoard_props, HoardFileProps)
 
                     goal_status = hoard_props.get_status(repo_uuid)
-                    assert goal_status != FileStatus.AVAILABLE
-                    assert goal_status != FileStatus.CLEANUP
-                    assert goal_status != FileStatus.UNKNOWN
+                    assert goal_status != HoardFileStatus.AVAILABLE
+                    assert goal_status != HoardFileStatus.CLEANUP
+                    assert goal_status != HoardFileStatus.UNKNOWN
 
-                    if goal_status == FileStatus.COPY:
+                    if goal_status == HoardFileStatus.COPY:
                         candidates_to_copy = files_requiring_copy.get(hoard_props.fasthash, [])
                         logging.info(f"# of candidates to copy: {len(candidates_to_copy)}")
 
@@ -146,7 +146,7 @@ def _fetch_files_in_repo(
                             logging.error("error restoring file from local copy!")
                             return f"E {local_filepath.as_posix()}\n"
                     else:
-                        assert goal_status == FileStatus.GET, f"Unexpected status {goal_status.value}"
+                        assert goal_status == HoardFileStatus.GET, f"Unexpected status {goal_status.value}"
 
                         hoard_filepath = pathing.in_hoard(hoard_file)
                         local_filepath = hoard_filepath.at_local(repo_uuid)
@@ -182,12 +182,12 @@ def _cleanup_files_in_repo(
 
             goal_status = hoard_props.get_status(repo_uuid)
 
-            assert goal_status != FileStatus.AVAILABLE
-            assert goal_status != FileStatus.GET
-            assert goal_status != FileStatus.UNKNOWN
+            assert goal_status != HoardFileStatus.AVAILABLE
+            assert goal_status != HoardFileStatus.GET
+            assert goal_status != HoardFileStatus.UNKNOWN
 
-            if goal_status == FileStatus.CLEANUP:
-                to_be_got = hoard_props.by_status(FileStatus.GET)
+            if goal_status == HoardFileStatus.CLEANUP:
+                to_be_got = hoard_props.by_status(HoardFileStatus.GET)
 
                 local_path = pathing.in_hoard(hoard_file).at_local(repo_uuid)
                 local_file_to_delete = local_path.as_posix()
@@ -219,7 +219,7 @@ def _cleanup_files_in_repo(
 def _find_files_to_copy(hoard: HoardContents) -> Dict[str, List[str]]:
     fasthashes_to_copy = [
         props.fasthash for filepath, props in hoard.fsobjects
-        if isinstance(props, HoardFileProps) and len(props.by_status(FileStatus.COPY)) > 0]
+        if isinstance(props, HoardFileProps) and len(props.by_status(HoardFileStatus.COPY)) > 0]
 
     files_to_copy: Dict[str, List[str]] = dict((h, []) for h in fasthashes_to_copy)
     for filepath, props in hoard.fsobjects:
@@ -235,7 +235,7 @@ async def _restore_from_another_repo(
     fullpath_to_restore = hoard_file.at_local(uuid_to_restore_to).on_device_path()
     logging.info(f"Restoring hoard file {hoard_file.as_posix()} to {fullpath_to_restore}.")
 
-    candidates = hoard_props.by_status(FileStatus.AVAILABLE) + hoard_props.by_status(FileStatus.CLEANUP)
+    candidates = hoard_props.by_status(HoardFileStatus.AVAILABLE) + hoard_props.by_status(HoardFileStatus.CLEANUP)
 
     def sort_by_speed_then_latency(uuid: str) -> int:
         cave_path = paths[uuid]
@@ -289,7 +289,7 @@ async def _restore_from_copy(
     print(f"Restoring to {to_fullpath}")
     for candidate_file in candidates_to_copy:
         other_props = hoard.fsobjects[candidate_file]
-        if other_props.get_status(repo_uuid) != FileStatus.AVAILABLE:  # file is not available here
+        if other_props.get_status(repo_uuid) != HoardFileStatus.AVAILABLE:  # file is not available here
             logging.error("trying to restore from a file that is not available!")
             continue
 

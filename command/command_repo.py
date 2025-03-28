@@ -285,8 +285,8 @@ type RepoDiffs = (
         | DirNotInFilesystem | DirIsSameInRepo | DirNotInRepo)
 
 
-def compute_diffs(contents: RepoContents, repo_path: str, skip_integrity_checks: bool) -> Generator[
-    RepoDiffs, None, None]:
+def compute_diffs(
+        contents: RepoContents, repo_path: str, skip_integrity_checks: bool) -> Generator[RepoDiffs, None, None]:
     print("Checking for deleted files and folders...")
     for obj_path, props in alive_it(list(contents.fsobjects)):
         if isinstance(props, RepoFileProps):
