@@ -11,7 +11,7 @@ from command.hoard import Hoard
 from command.pathing import HoardPathing
 from config import HoardRemote
 from contents.hoard import HoardContents
-from contents.props import HoardFileStatus, DirProps
+from contents.hoard_props import HoardDirProps, HoardFileStatus
 from util import format_size, format_percent
 
 
@@ -39,7 +39,7 @@ class HoardCommandBackups:
                 file_sizes: Dict[str, int] = dict()
                 file_stats_copies: Dict[str, Tuple[int, int, int, int]] = dict()
                 for hoard_file, hoard_props in alive_it(hoard.fsobjects):
-                    if isinstance(hoard_props, DirProps):
+                    if isinstance(hoard_props, HoardDirProps):
                         continue
 
                     file_sizes[hoard_file] = hoard_props.size
@@ -92,7 +92,7 @@ class HoardCommandBackups:
                     for hoard_file, hoard_props in alive_it(hoard.fsobjects.in_folder(backup_set.mounted_at)):
                         assert pathlib.Path(hoard_file).is_relative_to(backup_set.mounted_at)
 
-                        if isinstance(hoard_props, DirProps):
+                        if isinstance(hoard_props, HoardDirProps):
                             continue
 
                         repos_to_clean_from = backup_set.repos_to_clean(hoard_file, hoard_props, hoard_props.size)
@@ -128,7 +128,7 @@ class HoardCommandBackups:
                     for hoard_file, hoard_props in alive_it(hoard.fsobjects.in_folder(backup_set.mounted_at)):
                         assert pathlib.Path(hoard_file).is_relative_to(backup_set.mounted_at)
 
-                        if isinstance(hoard_props, DirProps):
+                        if isinstance(hoard_props, HoardDirProps):
                             continue
 
                         new_repos_to_backup_to = backup_set.repos_to_backup_to(

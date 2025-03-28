@@ -18,7 +18,7 @@ from command.repo import ConnectedRepo, OfflineRepo, ProspectiveRepo
 from exceptions import MissingRepo
 from config import HoardRemote, CavePath, CaveType, ConnectionSpeed, ConnectionLatency
 from contents.hoard import HoardContents
-from contents.props import DirProps, HoardFileProps
+from contents.hoard_props import HoardDirProps, HoardFileProps
 from contents_diff import FileMissingInHoard, FileContentsDiffer, FileMissingInLocal, \
     DirMissingInHoard, DirMissingInLocal
 from hashing import fast_hash
@@ -273,7 +273,7 @@ class HoardCommand(object):
             with StringIO() as out:
                 out.write("Moving files and folders:\n")
                 for orig_path, props in list(hoard.fsobjects):
-                    assert isinstance(props, HoardFileProps) or isinstance(props, DirProps), \
+                    assert isinstance(props, HoardFileProps) or isinstance(props, HoardDirProps), \
                         f"Unsupported props type: {type(props)}"
                     current_path = pathlib.Path(orig_path)
                     if current_path.is_relative_to(from_path):

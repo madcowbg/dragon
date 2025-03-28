@@ -13,7 +13,7 @@ from command.pathing import HoardPathing
 from command.pending_file_ops import get_pending_operations, CopyFile, GetFile, CleanupFile
 from config import HoardConfig, HoardPaths
 from contents.hoard import HoardContents
-from contents.props import HoardFileProps, HoardFileStatus
+from contents.hoard_props import HoardFileStatus, HoardFileProps
 from hashing import fast_hash_async
 from resolve_uuid import resolve_remote_uuid
 from util import to_mb, run_async_in_parallel, format_size

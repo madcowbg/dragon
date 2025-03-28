@@ -7,7 +7,7 @@ from typing import Generator, Tuple, Optional
 import rtoml
 
 from exceptions import MissingRepoContents
-from contents.props import RepoFileProps, RepoDirProps, RepoFileStatus
+from contents.repo_props import RepoFileProps, RepoDirProps, RepoFileStatus
 from util import FIRST_VALUE
 
 

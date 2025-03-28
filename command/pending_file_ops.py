@@ -1,7 +1,7 @@
 from typing import Iterable
 
 from contents.hoard import HoardContents
-from contents.props import HoardFileProps, HoardFileStatus
+from contents.hoard_props import HoardFileStatus, HoardFileProps
 
 type FileOp = GetFile | CopyFile | CleanupFile
 

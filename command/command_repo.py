@@ -10,7 +10,8 @@ from alive_progress import alive_bar, alive_it
 
 from command.repo import ProspectiveRepo
 from exceptions import MissingRepo, MissingRepoContents
-from contents.props import RepoFileProps, DirProps, RepoFileStatus, RepoDirProps
+from contents.repo_props import RepoFileProps, RepoFileStatus, RepoDirProps
+from contents.hoard_props import HoardDirProps
 from contents.repo import RepoContents
 from hashing import find_hashes, fast_hash_async
 from resolve_uuid import load_config, resolve_remote_uuid, load_paths
@@ -252,7 +253,7 @@ class FileNotInFilesystem:
 
 
 class DirNotInFilesystem:
-    def __init__(self, dirpath: str, props: DirProps):
+    def __init__(self, dirpath: str, props: HoardDirProps):
         self.dirpath = dirpath
         self.props = props
 
@@ -290,7 +291,7 @@ class RepoFileSame:
 
 
 class DirIsSameInRepo:
-    def __init__(self, dirpath: str, props: DirProps):
+    def __init__(self, dirpath: str, props: HoardDirProps):
         self.dirpath = dirpath
         self.props = props
 

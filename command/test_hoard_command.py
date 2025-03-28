@@ -9,7 +9,7 @@ from command.command_repo import RepoCommand
 from command.test_repo_command import populate, write_contents, pretty_file_writer
 from config import CaveType
 from contents.hoard import HoardContents
-from contents.props import DirProps, HoardFileProps
+from contents.hoard_props import HoardDirProps, HoardFileProps
 from dragon import TotalCommand
 from resolve_uuid import resolve_remote_uuid
 
@@ -90,7 +90,7 @@ class TestHoardCommand(unittest.TestCase):
         files = sorted(
             (f, prop.size, len(prop.available_at), prop.fasthash)
             for f, prop in hoard_contents.fsobjects if isinstance(prop, HoardFileProps))
-        dirs = sorted(f for f, prop in hoard_contents.fsobjects if isinstance(prop, DirProps))
+        dirs = sorted(f for f, prop in hoard_contents.fsobjects if isinstance(prop, HoardDirProps))
         self.assertEqual(sorted(files_exp), sorted(files))
         self.assertEqual(sorted(dirs_exp), sorted(dirs))
 

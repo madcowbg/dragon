@@ -5,7 +5,8 @@ from io import StringIO
 from command.content_prefs import ContentPrefs
 from contents_diff import FileMissingInHoard, FileIsSame, FileContentsDiffer, FileMissingInLocal
 from contents.hoard import HoardContents
-from contents.props import HoardFileStatus, RepoFileProps, HoardFileProps
+from contents.repo_props import RepoFileProps
+from contents.hoard_props import HoardFileStatus, HoardFileProps
 
 
 class DiffHandler:

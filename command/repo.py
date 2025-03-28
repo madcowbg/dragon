@@ -92,7 +92,8 @@ class ConnectedRepo(OfflineRepo):
 
     @property
     def has_contents(self):
-        return os.path.isfile(join(_config_folder(self.path), f"{self.current_uuid}.contents"))
+        return os.path.isfile(join(_config_folder(self.path), f"{self.current_uuid}.contents")) \
+            and os.path.isfile(join(_config_folder(self.path), f"{self.current_uuid}.toml"))
 
     def create_contents(self, create_for_uuid: str) -> RepoContents:
         assert not self.has_contents

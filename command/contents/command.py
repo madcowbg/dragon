@@ -18,7 +18,8 @@ from exceptions import MissingRepoContents
 from config import CaveType, HoardConfig, HoardPaths, HoardRemote
 from contents.hoard import HoardContents, HoardFile, HoardDir
 
-from contents.props import HoardFileProps, HoardFileStatus, RepoFileProps, DirProps, RepoDirProps
+from contents.repo_props import RepoFileProps, RepoDirProps
+from contents.hoard_props import HoardDirProps, HoardFileStatus, HoardFileProps
 from contents.repo import RepoContents
 from contents_diff import FileMissingInHoard, FileIsSame, FileContentsDiffer, FileMissingInLocal, DirMissingInHoard, \
     Diff, DirIsSame, DirMissingInLocal
@@ -507,7 +508,7 @@ def compare_local_to_hoard(local: RepoContents, hoard: HoardContents, config: Ho
             if not local.fsobjects.in_existing(curr_file_path_in_local.as_posix()):
                 yield FileMissingInLocal(curr_file_path_in_local.as_posix(), hoard_file, props)
             # else file is there, which is handled above
-        elif isinstance(props, DirProps):
+        elif isinstance(props, HoardDirProps):
             hoard_dir = hoard_file
             curr_dir_path_in_local = pathing.in_hoard(hoard_dir).at_local(local.config.uuid)
             assert curr_dir_path_in_local is not None  # hoard dir is not in the mounted location

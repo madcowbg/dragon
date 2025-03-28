@@ -4,7 +4,8 @@ from typing import List, Optional, Generator, Dict
 from command.pathing import HoardPathing, is_path_available
 from config import HoardRemote, HoardConfig, CaveType
 from contents.hoard import HoardContents
-from contents.props import RepoFileProps, HoardFileProps, HoardFileStatus
+from contents.repo_props import RepoFileProps
+from contents.hoard_props import HoardFileStatus, HoardFileProps
 from util import format_percent, format_size
 
 MIN_REPO_PERC_FREE = 0.02
