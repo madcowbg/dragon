@@ -8,8 +8,8 @@ from typing import Generator, Tuple, List, Optional
 import aiofiles.os
 from alive_progress import alive_bar, alive_it
 
-from command.repo import OfflineRepo
-from contents.props import RepoFileProps, DirProps, RepoFileStatus
+from command.repo import ProspectiveRepo, RepoHasNoContents, MissingRepo
+from contents.props import RepoFileProps, DirProps, RepoFileStatus, RepoDirProps
 from contents.repo import RepoContents
 from hashing import find_hashes, fast_hash_async
 from resolve_uuid import load_config, resolve_remote_uuid, load_paths
@@ -41,34 +41,35 @@ class RepoCommand(object):
             print(f"Resolved repo {name} to path {cave_path.find()}.")
             path = cave_path.find()
 
-        self.repo = OfflineRepo(pathlib.Path(path).absolute().as_posix())
+        self.repo = ProspectiveRepo(pathlib.Path(path).absolute().as_posix())
 
     def current_uuid(self) -> str:
-        return self.repo.current_uuid
+        return self.repo.open_repo().current_uuid
 
     def init(self):
         logging.info(f"Creating repo in {self.repo.path}")
-
         self.repo.init()
 
         return f"Repo initialized at {self.repo.path}"
 
     def refresh(self, skip_integrity_checks: bool = False):
         """ Refreshes the cache of the current hoard folder """
-        connected_repo = self.repo.connect(False)
+        connected_repo = self.repo.open_repo().connect(False)
         if connected_repo is None:
             return f"No initialized repo in {self.repo.path}!"
 
         current_uuid = connected_repo.current_uuid
-        contents = connected_repo.open_contents_if_present()
-        if contents is not None:
-            new_contents = False
-        else:
+        try:
+            contents = connected_repo.open_contents()
+            first_refresh = False
+        except RepoHasNoContents as e:
             logging.warning("Repo contents missing, creating!")
-            new_contents = True
-            contents = connected_repo.create(current_uuid)
+            first_refresh = True
+            contents = connected_repo.create_contents(current_uuid)
 
-        print(f"Refreshing uuid {current_uuid}, is new = {new_contents}")
+        print(f"Refreshing uuid {current_uuid}{', is first refresh' if first_refresh else ''}")
+        add_new_with_status = RepoFileStatus.ADDED if not first_refresh else RepoFileStatus.PRESENT
+
         with contents:
             logging.info("Start updating, setting is_dirty to TRUE")
             contents.config.start_updating()
@@ -77,9 +78,10 @@ class RepoCommand(object):
             logging.info(f"Bumped epoch to {contents.config.epoch}")
 
             print(f"Computing diffs.")
-            files_to_update: List[str] = []
+            files_to_add_or_update: List[Tuple[str, RepoFileStatus]] = []
             folders_to_add: List[str] = []
-            for diff in compute_difference_between_contents_and_filesystem(contents, self.repo.path, skip_integrity_checks):
+            for diff in compute_difference_between_contents_and_filesystem(
+                    contents, self.repo.path, skip_integrity_checks):
                 if isinstance(diff, FileNotInFilesystem):
                     logging.info(f"Removing file {diff.filepath}")
                     contents.fsobjects.mark_removed(diff.filepath)
@@ -92,15 +94,18 @@ class RepoCommand(object):
                 elif isinstance(diff, RepoFileWeakDifferent):
                     assert skip_integrity_checks
                     logging.info(f"File {diff.filepath} is weakly different, adding to check.")
-                    files_to_update.append(pathlib.Path(self.repo.path).joinpath(diff.filepath).as_posix())
+                    files_to_add_or_update.append(
+                        (pathlib.Path(self.repo.path).joinpath(diff.filepath).as_posix(), RepoFileStatus.MODIFIED))
                 elif isinstance(diff, RepoFileSame):
                     logging.info(f"File {diff.filepath} is same.")
                 elif isinstance(diff, RepoFileDifferent):
                     logging.info(f"File {diff.filepath} is different, adding to check.")
-                    files_to_update.append(pathlib.Path(self.repo.path).joinpath(diff.filepath).as_posix())
+                    files_to_add_or_update.append(
+                        (pathlib.Path(self.repo.path).joinpath(diff.filepath).as_posix(), RepoFileStatus.MODIFIED))
                 elif isinstance(diff, FileNotInRepo):
                     logging.info(f"File {diff.filepath} not in repo, adding.")
-                    files_to_update.append(pathlib.Path(self.repo.path).joinpath(diff.filepath).as_posix())
+                    files_to_add_or_update.append(
+                        (pathlib.Path(self.repo.path).joinpath(diff.filepath).as_posix(), add_new_with_status))
                 elif isinstance(diff, DirIsSameInRepo):
                     logging.info(f"Dir {diff.dirpath} is same, skipping")
                 elif isinstance(diff, DirNotInRepo):
@@ -109,11 +114,11 @@ class RepoCommand(object):
                 else:
                     raise ValueError(f"unknown diff type: {type(diff)}")
 
-            print(f"Hashing {len(files_to_update)} files to add:")
-            file_hashes = asyncio.run(find_hashes(files_to_update))
+            print(f"Hashing {len(files_to_add_or_update)} files to add:")
+            file_hashes = asyncio.run(find_hashes([file for file, status in files_to_add_or_update]))
 
-            print(f"Adding {len(files_to_update)} files in {self.repo.path}")
-            for fullpath in alive_it(files_to_update):
+            print(f"Adding {len(files_to_add_or_update)} files in {self.repo.path}")
+            for fullpath, requested_status in alive_it(files_to_add_or_update):
                 relpath = pathlib.Path(fullpath).relative_to(self.repo.path).as_posix()
 
                 if fullpath not in file_hashes:
@@ -123,7 +128,7 @@ class RepoCommand(object):
                     size = os.path.getsize(fullpath)
                     mtime = os.path.getmtime(fullpath)
                     contents.fsobjects.add_file(
-                        relpath, size=size, mtime=mtime, fasthash=file_hashes[fullpath], status=RepoFileStatus.ADDED)
+                        relpath, size=size, mtime=mtime, fasthash=file_hashes[fullpath], status=requested_status)
                 except FileNotFoundError as e:
                     logging.error("Error while adding file!")
                     logging.error(e)
@@ -144,29 +149,39 @@ class RepoCommand(object):
 
             return f"Refresh done!"  # fixme add more information on what happened
 
-    def show(self):  # fixme remove in favor of status
+    def status_index(self, show_files: bool = True, show_dates: bool = True):
         remote_uuid = self.current_uuid()
 
         logging.info(f"Reading repo {self.repo.path}...")
-        with self.repo.connect(False).open_contents() as contents:
+        with self.repo.open_repo().connect(False).open_contents() as contents:
             logging.info(f"Read repo!")
 
             with StringIO() as out:
+                if show_files:
+                    for file_or_dir, props in contents.fsobjects.all_status():
+                        out.write(f"{file_or_dir}: {props.last_status.value} @ {props.last_update_epoch}\n")
+                    out.write("--- SUMMARY ---\n")
+
                 stats = contents.fsobjects.stats_existing
                 out.writelines([
                     f"Result for local\n",
                     f"UUID: {remote_uuid}\n",
-                    f"Last updated on {contents.config.updated}\n",
+                    f"Last updated on {contents.config.updated}\n" if show_dates else "",
                     f"  # files = {stats.num_files} of size {format_size(stats.total_size)}\n",
                     f"  # dirs  = {stats.num_dirs}\n", ])
                 return out.getvalue()
 
     def status(self, skip_integrity_checks: bool = False):
-        connected_repo = self.repo.connect(False)
-        if connected_repo is None:
+        try:
+            connected_repo = self.repo.open_repo().connect(False)
+            current_uuid = connected_repo.current_uuid
+        except MissingRepo:
             return f"Repo is not initialized at {self.repo.path}"
 
-        current_uuid = connected_repo.current_uuid
+        try:
+            contents = connected_repo.open_contents()
+        except RepoHasNoContents:
+            return f"Repo {current_uuid} contents have not been refreshed yet!"
 
         files_same = []
         files_new = []
@@ -176,13 +191,11 @@ class RepoCommand(object):
         dir_new = []
         dir_same = []
         dir_deleted = []
-        contents = connected_repo.open_contents_if_present()
-        if contents is None:
-            return f"Repo {current_uuid} contents have not been refreshed yet!"
 
         with contents:
             print("Calculating diffs between repo and filesystem...")
-            for diff in compute_difference_between_contents_and_filesystem(contents, self.repo.path, skip_integrity_checks):
+            for diff in compute_difference_between_contents_and_filesystem(contents, self.repo.path,
+                                                                           skip_integrity_checks):
                 if isinstance(diff, FileNotInFilesystem):
                     files_del.append(diff.filepath)
                 elif isinstance(diff, RepoFileWeakSame):
@@ -305,7 +318,7 @@ def compute_difference_between_contents_and_filesystem(
         if isinstance(props, RepoFileProps):
             if not pathlib.Path(repo_path).joinpath(obj_path).is_file():
                 yield FileNotInFilesystem(obj_path, props)
-        elif isinstance(props, DirProps):
+        elif isinstance(props, RepoDirProps):
             if not pathlib.Path(repo_path).joinpath(obj_path).is_dir():
                 yield DirNotInFilesystem(obj_path, props)
         else:
@@ -332,7 +345,7 @@ def compute_difference_between_contents_and_filesystem(
                 dir_path_in_local = dir_path_full.relative_to(repo_path).as_posix()
                 if contents.fsobjects.in_existing(dir_path_in_local):
                     props = contents.fsobjects.get_existing(dir_path_in_local)
-                    assert isinstance(props, DirProps)
+                    assert isinstance(props, RepoDirProps)
                     yield DirIsSameInRepo(dir_path_in_local, props)
                 else:
                     yield DirNotInRepo(dir_path_in_local)

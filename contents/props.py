@@ -6,9 +6,9 @@ from util import FIRST_VALUE
 
 
 class RepoFileStatus(enum.Enum):
-    PRESENT = "present",
+    PRESENT = "present"
     ADDED = "added"
-    MODIFIED = "modified",
+    MODIFIED = "modified"
     DELETED = "deleted"
 
 
@@ -16,7 +16,6 @@ class RepoFileProps:
     def __init__(
             self, size: int, mtime: float, fasthash: str, md5: str | None,
             last_status: RepoFileStatus, last_update_epoch: datetime):
-        assert last_status != RepoFileStatus.DELETED
         self.size = size
         self.mtime = mtime
         self.fasthash = fasthash
@@ -25,7 +24,13 @@ class RepoFileProps:
         self.last_update_epoch = last_update_epoch
 
 
-class DirProps:  # fixme split in twain (or just remove...)
+class RepoDirProps:
+    def __init__(self, last_status: RepoFileStatus, last_update_epoch: datetime):
+        self.last_status = last_status
+        self.last_update_epoch = last_update_epoch
+
+
+class DirProps:  # fixme rename
     def __init__(self, doc: Dict[str, Any]):
         self.doc = doc
 
@@ -117,4 +122,4 @@ class HoardFileProps:
             (self.fsobject_id, *(s.value for s in statuses))).fetchall()
 
 
-type FSObjectProps = RepoFileProps | HoardFileProps | DirProps
+type FSObjectProps = HoardFileProps | DirProps

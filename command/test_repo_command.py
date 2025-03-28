@@ -13,11 +13,14 @@ def write_contents(path: str, contents: str) -> None:
         f.write(contents)
 
 
-def pretty_file_writer(tmpdir: str) -> Callable[[str, str], None]:
-    def pfw(path: str, contents: str):
-        folder, file = os.path.split(join(tmpdir, path))
-        os.makedirs(folder, exist_ok=True)
-        write_contents(join(tmpdir, path), contents)
+def pretty_file_writer(tmpdir: str) -> Callable[[str, str | None], None]:
+    def pfw(path: str, contents: str | None):
+        if contents is None:
+            os.unlink(join(tmpdir, path))
+        else:
+            folder, file = os.path.split(join(tmpdir, path))
+            os.makedirs(folder, exist_ok=True)
+            write_contents(join(tmpdir, path), contents)
 
     return pfw
 
@@ -73,11 +76,18 @@ class TestRepoCommand(unittest.TestCase):
 
         cave_cmd.refresh()
 
-        current_uuid = cave_cmd.current_uuid()
-
-        res = cave_cmd.show().split("\n")
-        self.assertEqual('Result for local', res[0])
-        self.assertEqual(['  # files = 3 of size 19', '  # dirs  = 1', ''], res[3:])
+        res = cave_cmd.status_index(show_dates=False)
+        self.assertEqual([
+            'wat: added @ 1',
+            'wat/test.me.different: present @ 1',
+            'wat/test.me.once: present @ 1',
+            'wat/test.me.twice: present @ 1',
+            '--- SUMMARY ---',
+            'Result for local',
+            f'UUID: {cave_cmd.current_uuid()}',
+            '  # files = 3 of size 19',
+            '  # dirs  = 1',
+            ''], res.split("\n"))
 
         res = cave_cmd.status()
         self.assertEqual(
@@ -95,3 +105,104 @@ class TestRepoCommand(unittest.TestCase):
             f" current: 1\n"
             f" in repo: 1\n"
             f" deleted: 0 (0.0%)\n", res)
+
+    def test_local_files_lifecycle(self):
+        cave_cmd = TotalCommand(path=join(self.tmpdir.name, "repo")).cave
+        res = cave_cmd.status()
+        self.assertEqual(f"Repo is not initialized at {pathlib.Path(self.tmpdir.name).as_posix()}/repo", res)
+
+        cave_cmd.init()
+        res = cave_cmd.status()
+        self.assertEqual(f"Repo {cave_cmd.current_uuid()} contents have not been refreshed yet!", res)
+
+        res = cave_cmd.refresh()
+        self.assertEqual(f"Refresh done!", res)
+
+        res = cave_cmd.status_index(show_dates=False)
+        self.assertEqual([
+            'wat: added @ 1',
+            'wat/test.me.different: present @ 1',
+            'wat/test.me.once: present @ 1',
+            'wat/test.me.twice: present @ 1',
+            '--- SUMMARY ---',
+            'Result for local',
+            f'UUID: {cave_cmd.current_uuid()}',
+            '  # files = 3 of size 19',
+            '  # dirs  = 1',
+            ''], res.split("\n"))
+
+        pfw = pretty_file_writer(self.tmpdir.name)
+        pfw('repo/wat/test.me.once', "lhiuwfelhiufhlu")
+        pfw('repo/wat/test.me.anew', "pkosadu")
+        pfw('repo/wat/test.me.twice', None)
+
+        res = cave_cmd.refresh()
+        self.assertEqual(f"Refresh done!", res)
+
+        res = cave_cmd.status_index(show_dates=False)
+        self.assertEqual([
+            'wat: added @ 1',
+            'wat/test.me.anew: added @ 2',
+            'wat/test.me.different: present @ 1',
+            'wat/test.me.once: modified @ 2',
+            'wat/test.me.twice: deleted @ 2',
+            '--- SUMMARY ---',
+            'Result for local',
+            f'UUID: {cave_cmd.current_uuid()}',
+            '  # files = 3 of size 27',
+            '  # dirs  = 1',
+            ''], res.split("\n"))
+
+        res = cave_cmd.status()
+        self.assertEqual(
+            f"{cave_cmd.current_uuid()}:\n"
+            f"files:\n"
+            f"    same: 3 (100.0%)\n"
+            f"     mod: 0 (0.0%)\n"
+            f"     new: 0 (0.0%)\n"
+            f" current: 3\n"
+            f" in repo: 3\n"
+            f" deleted: 0 (0.0%)\n"
+            f"dirs:\n"
+            f"    same: 1\n"
+            f"     new: 0 (0.0%)\n"
+            f" current: 1\n"
+            f" in repo: 1\n"
+            f" deleted: 0 (0.0%)\n", res)
+
+        pfw('repo/test.me.anew2', "vseer")
+
+        res = cave_cmd.status()
+        self.assertEqual(
+            f"{cave_cmd.current_uuid()}:\n"
+            f"files:\n"
+            f"    same: 3 (75.0%)\n"
+            f"     mod: 0 (0.0%)\n"
+            f"     new: 1 (25.0%)\n"
+            f" current: 4\n"
+            f" in repo: 3\n"
+            f" deleted: 0 (0.0%)\n"
+            f"dirs:\n"
+            f"    same: 1\n"
+            f"     new: 0 (0.0%)\n"
+            f" current: 1\n"
+            f" in repo: 1\n"
+            f" deleted: 0 (0.0%)\n", res)
+
+        res = cave_cmd.refresh()
+        self.assertEqual(f"Refresh done!", res)
+
+        res = cave_cmd.status_index(show_dates=False)
+        self.assertEqual([
+            'test.me.anew2: added @ 3',
+            'wat: added @ 1',
+            'wat/test.me.anew: added @ 2',
+            'wat/test.me.different: present @ 1',
+            'wat/test.me.once: modified @ 2',
+            'wat/test.me.twice: deleted @ 2',
+            '--- SUMMARY ---',
+            'Result for local',
+            f'UUID: {cave_cmd.current_uuid()}',
+            '  # files = 4 of size 32',
+            '  # dirs  = 1',
+            ''], res.split("\n"))

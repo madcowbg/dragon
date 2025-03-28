@@ -4,7 +4,7 @@ from datetime import datetime
 from sqlite3 import Connection, Cursor, Row
 from typing import Generator, Tuple, Optional
 
-from contents.props import DirProps, RepoFileProps, FSObjectProps, RepoFileStatus
+from contents.props import RepoFileProps, RepoDirProps, RepoFileStatus
 from util import FIRST_VALUE
 
 
@@ -49,15 +49,15 @@ class FSObjects:
             (RepoFileStatus.DELETED.value,)).fetchone()
 
     @staticmethod
-    def _create_fsobjectprops(cursor: Cursor, row: Row) -> Tuple[str, FSObjectProps]:
+    def _create_fsobjectprops(cursor: Cursor, row: Row) -> Tuple[str, RepoFileProps | RepoDirProps]:
         fullpath, isdir, size, mtime, fasthash, md5, last_status, last_update_epoch = row
 
         if isdir:
-            return fullpath, DirProps({})
+            return fullpath, RepoDirProps(RepoFileStatus(last_status), last_update_epoch)
         else:
             return fullpath, RepoFileProps(size, mtime, fasthash, md5, RepoFileStatus(last_status), last_update_epoch)
 
-    def get_existing(self, file_path: str) -> FSObjectProps:
+    def get_existing(self, file_path: str) -> RepoFileProps | RepoDirProps:
         curr = self.parent.conn.cursor()
         curr.row_factory = FSObjects._create_fsobjectprops
 
@@ -67,7 +67,15 @@ class FSObjects:
             (file_path, RepoFileStatus.DELETED.value)).fetchone()
         return props
 
-    def existing(self) -> Generator[Tuple[str, FSObjectProps], None, None]:
+    def all_status(self) -> Generator[Tuple[str, RepoFileProps | RepoDirProps], None, None]:
+        curr = self.parent.conn.cursor()
+        curr.row_factory = FSObjects._create_fsobjectprops
+
+        yield from curr.execute(
+            "SELECT fullpath, isdir, size, mtime, fasthash, md5, last_status, last_update_epoch "
+            "FROM fsobject ORDER BY fullpath")
+
+    def existing(self) -> Generator[Tuple[str, RepoFileProps | RepoDirProps], None, None]:
         curr = self.parent.conn.cursor()
         curr.row_factory = FSObjects._create_fsobjectprops
 

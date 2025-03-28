@@ -14,7 +14,7 @@ from command.files.command import HoardCommandFiles
 from command.hoard import Hoard
 from command.pathing import HoardPathing
 from command.command_repo import RepoCommand
-from command.repo import ConnectedRepo
+from command.repo import ConnectedRepo, OfflineRepo, ProspectiveRepo, MissingRepo
 from config import HoardRemote, CavePath, CaveType, ConnectionSpeed, ConnectionLatency
 from contents.hoard import HoardContents
 from contents.props import DirProps, HoardFileProps
@@ -103,9 +103,10 @@ class HoardCommand(object):
 
     def add_remote(
             self, remote_path: str, name: str, mount_point: str,
-            type: CaveType = CaveType.PARTIAL, fetch_new: bool = False,
+            type: str = "partial", fetch_new: bool = False,
             speed: ConnectionSpeed = ConnectionSpeed.INTERNAL_DRIVE,
             latency: ConnectionLatency = ConnectionLatency.ALWAYS):
+        repo_type = CaveType(type)
         config = self.hoard.config()
         paths = self.hoard.paths()
 
@@ -114,17 +115,17 @@ class HoardCommand(object):
 
         logging.info("Loading remote from remote_path")
 
-        repo = ConnectedRepo.connect_if_present(remote_abs_path, False)
-        if repo is None:
+        try:
+            repo = ProspectiveRepo(remote_abs_path)
+            remote_uuid = repo.current_uuid
+        except MissingRepo:
             return f"Repo not initialized at {remote_path}!"
-
-        remote_uuid = repo.current_uuid
 
         resolved_uuid = resolve_remote_uuid(self.hoard.config(), name)
         if resolved_uuid is not None and resolved_uuid != remote_uuid and resolved_uuid != name:  # fixme ugly AF
             raise ValueError(f"Remote uuid {name} already resolves to {resolved_uuid} and does not match {remote_uuid}")
 
-        config.remotes.declare(remote_uuid, name, type, mount_point, fetch_new)
+        config.remotes.declare(remote_uuid, name, repo_type, mount_point, fetch_new)
         config.write()
 
         paths[remote_uuid] = CavePath.exact(remote_abs_path, speed, latency)

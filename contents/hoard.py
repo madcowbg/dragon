@@ -4,10 +4,9 @@ import sqlite3
 import sys
 from datetime import datetime
 from sqlite3 import Connection
-from typing import Dict, Any, List, Optional, Tuple, Generator, Iterator, Iterable
+from typing import Dict, Any, Optional, Tuple, Generator, Iterator, Iterable
 
-from config import HoardConfig
-from contents.props import RepoFileProps, DirProps, HoardFileStatus, HoardFileProps, FSObjectProps
+from contents.props import RepoFileProps, DirProps, HoardFileStatus, HoardFileProps
 from util import FIRST_VALUE
 
 
@@ -26,7 +25,7 @@ class HoardContentsConfig:
 
 
 class HoardTree:
-    def __init__(self, objects: Iterator[Tuple[str, FSObjectProps]]):
+    def __init__(self, objects: Iterator[Tuple[str, HoardFileProps | DirProps]]):
         self.root = HoardDir(None, "", self)
 
         for path, props in objects:
@@ -152,7 +151,7 @@ class HoardFSObjects:
         else:
             return fullpath, HoardFileProps(self.parent, fsobject_id, size, fasthash)
 
-    def __getitem__(self, file_path: str) -> FSObjectProps:
+    def __getitem__(self, file_path: str) -> HoardFileProps | DirProps:
         curr = self.parent.conn.cursor()
         curr.row_factory = self._read_as_prop_tuple
         return curr.execute(
@@ -169,13 +168,13 @@ class HoardFSObjects:
             "FROM fsobject "
             "WHERE isdir = FALSE and fasthash = ?", (fasthash,))
 
-    def __iter__(self) -> Iterable[Tuple[str, FSObjectProps]]:
+    def __iter__(self) -> Iterable[Tuple[str, HoardFileProps | DirProps]]:
         curr = self.parent.conn.cursor()
         curr.row_factory = self._read_as_prop_tuple
         yield from curr.execute("SELECT fullpath, fsobject_id, isdir, size, fasthash FROM fsobject")
 
     @property
-    def dangling_files(self) -> Iterable[Tuple[str, FSObjectProps]]:
+    def dangling_files(self) -> Iterable[Tuple[str, HoardFileProps | DirProps]]:
         curr = self.parent.conn.cursor()
         curr.row_factory = self._read_as_prop_tuple
         yield from curr.execute(
@@ -183,7 +182,7 @@ class HoardFSObjects:
             "WHERE isdir = FALSE AND "
             "  NOT EXISTS (SELECT 1 FROM fspresence WHERE fspresence.fsobject_id = fsobject.fsobject_id)")
 
-    def with_pending(self, repo_uuid: str) -> Iterable[Tuple[str, FSObjectProps]]:
+    def with_pending(self, repo_uuid: str) -> Iterable[Tuple[str, HoardFileProps | DirProps]]:
         curr = self.parent.conn.cursor()
         curr.row_factory = self._read_as_prop_tuple
         yield from curr.execute(
@@ -195,7 +194,7 @@ class HoardFSObjects:
             "    status in (?, ?, ?))",
             (repo_uuid, HoardFileStatus.GET.value, HoardFileStatus.COPY.value, HoardFileStatus.CLEANUP.value))
 
-    def in_folder(self, folder: str) -> Iterable[Tuple[str, FSObjectProps]]:
+    def in_folder(self, folder: str) -> Iterable[Tuple[str, HoardFileProps | DirProps]]:
         assert os.path.isabs(folder)
         folder_with_trailing = folder if folder.endswith("/") else folder + "/"
         assert folder_with_trailing.endswith('/')
@@ -227,7 +226,7 @@ class HoardFSObjects:
             stats[uuid][status] = {"nfiles": nfiles, "size": size}
         return stats
 
-    def to_fetch(self, repo_uuid: str) -> Generator[Tuple[str, FSObjectProps], None, None]:
+    def to_fetch(self, repo_uuid: str) -> Generator[Tuple[str, HoardFileProps | DirProps], None, None]:
         for fsobject_id, fullpath, isdir, size, fasthash in self.parent.conn.execute(
                 "SELECT fsobject.fsobject_id, fullpath, isdir, size, fasthash "
                 "FROM fsobject JOIN fspresence on fsobject.fsobject_id = fspresence.fsobject_id "
@@ -235,7 +234,7 @@ class HoardFSObjects:
             assert not isdir
             yield fullpath, HoardFileProps(self.parent, fsobject_id, size, fasthash)
 
-    def to_cleanup(self, repo_uuid: str) -> Generator[Tuple[str, FSObjectProps], None, None]:
+    def to_cleanup(self, repo_uuid: str) -> Generator[Tuple[str, HoardFileProps | DirProps], None, None]:
         for fsobject_id, fullpath, isdir, size, fasthash in self.parent.conn.execute(
                 "SELECT fsobject.fsobject_id, fullpath, isdir, size, fasthash "
                 "FROM fsobject JOIN fspresence on fsobject.fsobject_id = fspresence.fsobject_id "

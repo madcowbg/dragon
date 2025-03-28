@@ -14,10 +14,11 @@ from command.contents.diff_handlers import DiffHandler, PartialDiffHandler, Back
     reset_local_as_current
 from command.content_prefs import ContentPrefs
 from command.pathing import HoardPathing
+from command.repo import RepoHasNoContents
 from config import CaveType, HoardConfig, HoardPaths, HoardRemote
 from contents.hoard import HoardContents, HoardFile, HoardDir
 
-from contents.props import HoardFileProps, HoardFileStatus, RepoFileProps, DirProps
+from contents.props import HoardFileProps, HoardFileStatus, RepoFileProps, DirProps, RepoDirProps
 from contents.repo import RepoContents
 from contents_diff import FileMissingInHoard, FileIsSame, FileContentsDiffer, FileMissingInLocal, DirMissingInHoard, \
     Diff, DirIsSame, DirMissingInLocal
@@ -282,12 +283,14 @@ class HoardCommandContents:
                         hoard, remote_obj, content_prefs,
                         assume_current, force_fetch_local_missing)
 
-                    repo = self.hoard.connect_to_repo(remote_uuid, require_contents=True)
-                    if repo is None:
+                    try:
+                        current_contents = self.hoard.connect_to_repo(remote_uuid, require_contents=True) \
+                            .open_contents()
+                    except RepoHasNoContents:
                         out.write(f"Repo {remote_uuid} has no current contents available!\n")
                         continue
 
-                    with repo.open_contents() as current_contents:
+                    with current_contents:
                         if current_contents.config.is_dirty:
                             logging.error(
                                 f"{remote_uuid} is_dirty = TRUE, so the refresh is not complete - can't use current repo.")
@@ -482,7 +485,7 @@ def compare_local_to_hoard(local: RepoContents, hoard: HoardContents, config: Ho
                         current_file,
                         curr_file_hoard_path.as_posix(), props, hoard.fsobjects[curr_file_hoard_path.as_posix()])
 
-            elif isinstance(props, DirProps):
+            elif isinstance(props, RepoDirProps):
                 current_dir = current_path
                 curr_dir_hoard_path = pathing.in_local(current_dir, local.config.uuid).at_hoard()
                 if curr_dir_hoard_path.as_posix() not in hoard.fsobjects:
@@ -499,7 +502,7 @@ def compare_local_to_hoard(local: RepoContents, hoard: HoardContents, config: Ho
             curr_file_path_in_local = pathing.in_hoard(hoard_file).at_local(local.config.uuid)
             assert curr_file_path_in_local is not None  # hoard file is not in the mounted location
 
-            if  not local.fsobjects.in_existing(curr_file_path_in_local.as_posix()):
+            if not local.fsobjects.in_existing(curr_file_path_in_local.as_posix()):
                 yield FileMissingInLocal(curr_file_path_in_local.as_posix(), hoard_file, props)
             # else file is there, which is handled above
         elif isinstance(props, DirProps):

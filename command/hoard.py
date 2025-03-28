@@ -25,7 +25,7 @@ class Hoard:
     def connect_to_repo(self, remote_uuid: str, require_contents: bool) -> ConnectedRepo | None:
         remote_path = self.paths()[remote_uuid].find()
         logging.info(f"Using repo contents {remote_uuid} in {remote_path}...")
-        return ConnectedRepo.connect_if_present(remote_path, require_contents)
+        return ConnectedRepo(remote_path, remote_uuid, require_contents)
 
     def hoard_contents_filename(self):
         return os.path.join(self.hoardpath, HOARD_CONTENTS_FILENAME)
