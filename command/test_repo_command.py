@@ -64,7 +64,13 @@ class TestRepoCommand(unittest.TestCase):
 
     def test_show_repo(self):
         cave_cmd = TotalCommand(path=join(self.tmpdir.name, "repo")).cave
+        res = cave_cmd.status()
+        self.assertEqual(f"Repo is not initialized at {pathlib.Path(self.tmpdir.name).as_posix()}/repo", res)
+
         cave_cmd.init()
+        res = cave_cmd.status()
+        self.assertEqual(f"Repo {cave_cmd.current_uuid()} contents have not been refreshed yet!", res)
+
         cave_cmd.refresh()
 
         current_uuid = cave_cmd.current_uuid()

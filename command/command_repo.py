@@ -60,9 +60,16 @@ class RepoCommand(object):
             return f"No initialized repo in {self.repo.path}!"
 
         current_uuid = connected_repo.current_uuid
-        print(f"Refreshing uuid {current_uuid}")
+        contents = connected_repo.open_contents_if_present()
+        if contents is not None:
+            new_contents = False
+        else:
+            logging.warning("Repo contents missing, creating!")
+            new_contents = True
+            contents = connected_repo.create(current_uuid)
 
-        with connected_repo.create_if_missing(current_uuid) as contents:
+        print(f"Refreshing uuid {current_uuid}, is new = {new_contents}")
+        with contents:
             logging.info("Start updating, setting is_dirty to TRUE")
             contents.config.start_updating()
 
@@ -168,7 +175,11 @@ class RepoCommand(object):
         dir_new = []
         dir_same = []
         dir_deleted = []
-        with connected_repo.create_if_missing(current_uuid) as contents:
+        contents = connected_repo.open_contents_if_present()
+        if contents is None:
+            return f"Repo {current_uuid} contents have not been refreshed yet!"
+
+        with contents:
             print("Calculating diffs between repo and filesystem...")
             for diff in compute_diffs(contents, self.repo.path, skip_integrity_checks):
                 if isinstance(diff, FileNotInFilesystem):

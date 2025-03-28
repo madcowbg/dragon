@@ -31,12 +31,13 @@ class ConnectedRepo:
             else:
                 return ConnectedRepo(remote_path, has_contents=has_contents)
 
-    def create_if_missing(self, create_for_uuid: str) -> RepoContents:
-        if self.has_contents:
-            return RepoContents.load_existing(os.path.join(self.config_folder(), f"{self.current_uuid}.contents"))
-        else:  # fixme remove - either open or create
-            return RepoContents.create(
-                os.path.join(self.config_folder(), f"{self.current_uuid}.contents"), create_for_uuid)
+    def create(self, create_for_uuid: str) -> RepoContents:
+        assert not self.has_contents
+        return RepoContents.create(
+            os.path.join(self.config_folder(), f"{self.current_uuid}.contents"), create_for_uuid)
+
+    def open_contents_if_present(self) -> RepoContents | None:
+        return self.open_contents() if self.has_contents else None
 
     def open_contents(self) -> RepoContents:
         assert self.has_contents
