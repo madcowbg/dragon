@@ -28,7 +28,7 @@ def walk_repo(repo: str) -> Generator[Tuple[str, List[str], List[str]], None, No
 
 
 class ConnectedRepo:
-    def __init__(self, path: str, has_contents: bool = True):  # fixme remove default value, force declaration
+    def __init__(self, path: str, has_contents: bool):
         self.path = path
         self.has_contents = has_contents
 
@@ -38,7 +38,6 @@ class ConnectedRepo:
 
     @classmethod
     def connect_if_present(cls, remote_path, require_contents) -> Optional["ConnectedRepo"]:
-
         if not _has_uuid_filename(remote_path):
             logging.info(f"Repo UUID file not found: {_uuid_filename(remote_path)}")
             return None
@@ -50,11 +49,16 @@ class ConnectedRepo:
             else:
                 return ConnectedRepo(remote_path, has_contents=has_contents)
 
-    def open_contents(self, create_for_uuid: Optional[str] = None) -> RepoContents:
-        assert self.has_contents or create_for_uuid is not None
-        return RepoContents.load(
-            os.path.join(self.config_folder(), f"{self.current_uuid}.contents"),
-            create_for_uuid)
+    def create_if_missing(self, create_for_uuid: str) -> RepoContents:
+        if self.has_contents:
+            return RepoContents.load_existing(os.path.join(self.config_folder(), f"{self.current_uuid}.contents"))
+        else:
+            return RepoContents.create(
+                os.path.join(self.config_folder(), f"{self.current_uuid}.contents"), create_for_uuid)
+
+    def open_contents(self) -> RepoContents:
+        assert self.has_contents
+        return RepoContents.load_existing(os.path.join(self.config_folder(), f"{self.current_uuid}.contents"))
 
     def config_folder(self):
         return _config_folder(self.path)
@@ -77,6 +81,47 @@ def _has_uuid_filename(path: str) -> bool:
     return os.path.isfile(_uuid_filename(path))
 
 
+class OfflineRepo:
+    def __init__(self, path: str):
+        self.path = path
+
+    @property
+    def current_uuid(self) -> str:
+        return ConnectedRepo.connect_if_present(self.path, False).current_uuid
+
+    def _init_uuid(self):
+        with open(os.path.join(self.config_folder, CURRENT_UUID_FILENAME), "w") as f:
+            f.write(str(uuid.uuid4()))
+
+    def _validate_repo(self):
+        logging.info(f"Validating {self.path}")
+        if not os.path.isdir(self.path):
+            raise ValueError(f"folder {self.path} does not exist")
+        if not os.path.isdir(self.config_folder):
+            raise ValueError(f"no repo folder in {self.path}")
+        if not os.path.isfile(os.path.join(self.config_folder, CURRENT_UUID_FILENAME)):
+            raise ValueError(f"no repo guid in {self.path}/.hoard/{CURRENT_UUID_FILENAME}")
+
+    def init(self):
+        if not os.path.isdir(self.path):
+            raise ValueError(f"folder {self.path} does not exist")
+
+        if not os.path.isdir(self.config_folder):
+            os.mkdir(self.config_folder)
+
+        if not os.path.isfile(os.path.join(self.config_folder, CURRENT_UUID_FILENAME)):
+            self._init_uuid()
+
+        self._validate_repo()
+
+    @property
+    def config_folder(self):
+        return _config_folder(self.path)
+
+    def connect(self, require_contents: bool) -> ConnectedRepo:
+        return ConnectedRepo.connect_if_present(self.path, require_contents)
+
+
 class RepoCommand(object):
     def __init__(self, path: str = ".", name: Optional[str] = None):
         if name is not None:  # assume path is a hoard, and the name to use is the provided
@@ -94,47 +139,28 @@ class RepoCommand(object):
             print(f"Resolved repo {name} to path {cave_path.find()}.")
             path = cave_path.find()
 
-        self.repo = ConnectedRepo(pathlib.Path(path).absolute().as_posix())
+        self.repo = OfflineRepo(pathlib.Path(path).absolute().as_posix())
 
     def current_uuid(self) -> str:
         return self.repo.current_uuid
 
-    def _init_uuid(self):
-        with open(os.path.join(self.repo.config_folder(), CURRENT_UUID_FILENAME), "w") as f:
-            f.write(str(uuid.uuid4()))
-
-    def _validate_repo(self):
-        logging.info(f"Validating {self.repo.path}")
-        if not os.path.isdir(self.repo.path):
-            raise ValueError(f"folder {self.repo.path} does not exist")
-        if not os.path.isdir(self.repo.config_folder()):
-            raise ValueError(f"no hoard folder in {self.repo.path}")
-        if not os.path.isfile(os.path.join(self.repo.config_folder(), CURRENT_UUID_FILENAME)):
-            raise ValueError(f"no hoard guid in {self.repo.path}/.hoard/{CURRENT_UUID_FILENAME}")
-
     def init(self):
         logging.info(f"Creating repo in {self.repo.path}")
 
-        if not os.path.isdir(self.repo.path):
-            raise ValueError(f"folder {self.repo.path} does not exist")
+        self.repo.init()
 
-        if not os.path.isdir(self.repo.config_folder()):
-            os.mkdir(self.repo.config_folder())
-
-        if not os.path.isfile(os.path.join(self.repo.config_folder(), CURRENT_UUID_FILENAME)):
-            self._init_uuid()
-
-        self._validate_repo()
         return f"Repo initialized at {self.repo.path}"
 
     def refresh(self, skip_integrity_checks: bool = False):
         """ Refreshes the cache of the current hoard folder """
-        self._validate_repo()
+        connected_repo = self.repo.connect(False)
+        if connected_repo is None:
+            return f"No initialized repo in {self.repo.path}!"
 
-        current_uuid = self.current_uuid()
+        current_uuid = connected_repo.current_uuid
         print(f"Refreshing uuid {current_uuid}")
 
-        with self.repo.open_contents(current_uuid) as contents:
+        with connected_repo.create_if_missing(current_uuid) as contents:
 
             logging.info("Start updating, setting is_dirty to TRUE")
             contents.config.start_updating()
@@ -213,7 +239,7 @@ class RepoCommand(object):
         remote_uuid = self.current_uuid()
 
         logging.info(f"Reading repo {self.repo.path}...")
-        with self.repo.open_contents() as contents:
+        with self.repo.connect(False).open_contents() as contents:
             logging.info(f"Read repo!")
 
             with StringIO() as out:
@@ -226,9 +252,11 @@ class RepoCommand(object):
                 return out.getvalue()
 
     def status(self, skip_integrity_checks: bool = False):
-        self._validate_repo()
+        connected_repo = self.repo.connect(False)
+        if connected_repo is None:
+            return f"Repo is not initialized at {self.repo.path}"
 
-        current_uuid = self.current_uuid()
+        current_uuid = connected_repo.current_uuid
 
         files_same = []
         files_new = []
@@ -238,7 +266,7 @@ class RepoCommand(object):
         dir_new = []
         dir_same = []
         dir_deleted = []
-        with self.repo.open_contents(current_uuid) as contents:
+        with connected_repo.create_if_missing(current_uuid) as contents:
             print("Calculating diffs between repo and filesystem...")
             for diff in compute_diffs(contents, self.repo.path, skip_integrity_checks):
                 if isinstance(diff, FileNotInFilesystem):

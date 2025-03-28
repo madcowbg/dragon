@@ -114,36 +114,39 @@ class RepoContentsConfig:
 
 class RepoContents:
     @staticmethod
-    def load(filepath: str, create_for_uuid: Optional[str] = None):
+    def create(filepath: str, create_for_uuid: Optional[str] = None):
+        assert not os.path.isfile(filepath)
+        conn = sqlite3.connect(filepath)
+        curr = conn.cursor()
+
+        curr.execute(
+            "CREATE TABLE fsobject("
+            " fsobject_id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            " fullpath TEXT NOT NULL UNIQUE,"
+            " isdir BOOL NOT NULL,"
+            " size INTEGER,"
+            " mtime REAL,"
+            " fasthash TEXT)")
+
+        curr.execute(
+            "CREATE TABLE config("
+            "uuid text PRIMARY KEY NOT NULL, "
+            "epoch INTEGER DEFAULT 0,"
+            "updated TEXT NOT NULL,"
+            "is_dirty BOOLEAN NOT NULL)")
+        curr.execute(
+            "INSERT INTO config(uuid, updated, is_dirty) VALUES (?, ?, TRUE)",
+            (create_for_uuid, datetime.now().isoformat()))
+
+        conn.commit()
+        conn.close()
+
+        return RepoContents.load_existing(filepath)
+
+    @staticmethod
+    def load_existing(filepath: str):
         if not os.path.isfile(filepath):
-            if create_for_uuid is not None:
-                conn = sqlite3.connect(filepath)
-                curr = conn.cursor()
-
-                curr.execute(
-                    "CREATE TABLE fsobject("
-                    " fsobject_id INTEGER PRIMARY KEY AUTOINCREMENT,"
-                    " fullpath TEXT NOT NULL UNIQUE,"
-                    " isdir BOOL NOT NULL,"
-                    " size INTEGER,"
-                    " mtime REAL,"
-                    " fasthash TEXT)")
-
-                curr.execute(
-                    "CREATE TABLE config("
-                    "uuid text PRIMARY KEY NOT NULL, "
-                    "epoch INTEGER DEFAULT 0,"
-                    "updated TEXT NOT NULL,"
-                    "is_dirty BOOLEAN NOT NULL)")
-                curr.execute(
-                    "INSERT INTO config(uuid, updated, is_dirty) VALUES (?, ?, TRUE)",
-                    (create_for_uuid, datetime.now().isoformat()))
-
-                conn.commit()
-                conn.close()
-            else:
-                raise ValueError(f"File {filepath} does not exist, need to pass create=True to create.")
-
+            raise ValueError(f"File {filepath} does not exist, need to pass create=True to create.")
         return RepoContents(filepath)
 
     conn: Connection
