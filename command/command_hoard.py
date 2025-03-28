@@ -40,7 +40,8 @@ class HoardCommandDeprecated:
         logging.info(f"Reading current contents of {remote_uuid}...")
         with self.hoard.connect_to_repo(remote_uuid, require_contents=True).open_contents() as current_contents:
             logging.info(f"Loading hoard TOML...")
-            with HoardContents.load(self.hoard.hoard_contents_filename()) as hoard:
+            hoard1 = self.hoard
+            with HoardContents.load(hoard1.hoardpath) as hoard:
                 logging.info(f"Loaded hoard TOML!")
                 logging.info(f"Computing status ...")
 
@@ -187,7 +188,8 @@ class HoardCommand(object):
         config = self.hoard.config()
 
         logging.info(f"Loading hoard TOML...")
-        with HoardContents.load(self.hoard.hoard_contents_filename()) as hoard:
+        hoard1 = self.hoard
+        with HoardContents.load(hoard1.hoardpath) as hoard:
             logging.info(f"Loaded hoard TOML!")
 
             repo_health: Dict[str, Dict[int, int]] = dict()
@@ -267,7 +269,8 @@ class HoardCommand(object):
             return f"No repos to move!"
 
         logging.info(f"Loading hoard...")
-        with HoardContents.load(self.hoard.hoard_contents_filename()) as hoard:
+        hoard1 = self.hoard
+        with HoardContents.load(hoard1.hoardpath) as hoard:
             logging.info(f"Loaded hoard.")
 
             with StringIO() as out:

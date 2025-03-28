@@ -10,6 +10,9 @@ from contents.repo_props import RepoFileProps
 from contents.hoard_props import HoardDirProps, HoardFileStatus, HoardFileProps
 from util import FIRST_VALUE
 
+HOARD_CONTENTS_FILENAME = "hoard.contents"
+HOARD_CONTENTS_TOML = "hoard.contents.toml"
+
 
 class HoardContentsConfig:
     def __init__(self, parent: "HoardContents"):
@@ -340,7 +343,8 @@ class HoardFSObjects:
                 "SELECT fsobject_id FROM fsobject WHERE fullpath = ?",
                 (to_fullpath,)).fetchone()
 
-            previously_added_repos = props.repos_having_status(HoardFileStatus.COPY, HoardFileStatus.GET, HoardFileStatus.AVAILABLE)
+            previously_added_repos = props.repos_having_status(HoardFileStatus.COPY, HoardFileStatus.GET,
+                                                               HoardFileStatus.AVAILABLE)
             curr.executemany(
                 "INSERT INTO fspresence(fsobject_id, uuid, status) VALUES (?, ?, ?)",
                 [(new_path_id, uuid, HoardFileStatus.COPY.value) for uuid in previously_added_repos])
@@ -352,7 +356,9 @@ class HoardFSObjects:
 
 class HoardContents:
     @staticmethod
-    def load(filename: str) -> "HoardContents":
+    def load(folder: str) -> "HoardContents":
+        filename = os.path.join(folder, HOARD_CONTENTS_FILENAME)
+
         if not os.path.isfile(filename):
             conn = sqlite3.connect(filename)
             curr = conn.cursor()
@@ -392,24 +398,24 @@ class HoardContents:
             conn.commit()
             conn.close()
 
-        return HoardContents(filename)
+        return HoardContents(folder)
 
     conn: Connection
     config: HoardContentsConfig
     fsobjects: HoardFSObjects
 
-    def __init__(self, filepath: str):
-        self.filepath = filepath
+    def __init__(self, folder: str):
+        self.folder = folder
 
         self.config = None
         self.fsobjects = None
         self.conn = None
 
     def __enter__(self):
-        self.conn = sqlite3.connect(self.filepath)
+        self.conn = sqlite3.connect(os.path.join(self.folder, HOARD_CONTENTS_FILENAME))
 
         self.config = HoardContentsConfig(self)
-        self.fsobjects = HoardFSObjects(self)
+        self.fsobjects = HoardFSObjects(self) #os.path.join(self.folder, HOARD_CONTENTS_TOML))
 
         return self
 

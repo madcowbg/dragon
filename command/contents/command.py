@@ -50,7 +50,8 @@ class HoardCommandContents:
 
     def status(self, hide_time: bool = False):
         config = self.hoard.config()
-        with HoardContents.load(self.hoard.hoard_contents_filename()) as hoard:
+        hoard1 = self.hoard
+        with HoardContents.load(hoard1.hoardpath) as hoard:
             statuses: Dict[str, Dict[str, Dict[str, Any]]] = hoard.fsobjects.status_by_uuid
             statuses_sorted = sorted(
                 (config.remotes[uuid].name, hoard.updated(uuid), vals) for uuid, vals in statuses.items())
@@ -99,7 +100,8 @@ class HoardCommandContents:
             self, selected_path: Optional[str] = None, depth: int = None,
             skip_folders: bool = False, show_remotes: int = False):
         logging.info(f"Loading hoard TOML...")
-        with HoardContents.load(self.hoard.hoard_contents_filename()) as hoard:
+        hoard1 = self.hoard
+        with HoardContents.load(hoard1.hoardpath) as hoard:
             if depth is None:
                 depth = sys.maxsize if selected_path is None else 1
 
@@ -139,7 +141,8 @@ class HoardCommandContents:
         assert os.path.isabs(to_path), f"To path {to_path} must be absolute path."
 
         print(f"Marking files for copy {from_path} to {to_path}...")
-        with HoardContents.load(self.hoard.hoard_contents_filename()) as hoard:
+        hoard1 = self.hoard
+        with HoardContents.load(hoard1.hoardpath) as hoard:
             with StringIO() as out:
                 with alive_bar(len(hoard.fsobjects)) as bar:
                     for hoard_obj, _ in hoard.fsobjects:
@@ -242,7 +245,8 @@ class HoardCommandContents:
             return f"Path {path} must be relative, but is absolute."
 
         logging.info(f"Loading hoard TOML...")
-        with HoardContents.load(self.hoard.hoard_contents_filename()) as hoard:
+        hoard1 = self.hoard
+        with HoardContents.load(hoard1.hoardpath) as hoard:
             repo_uuid = resolve_remote_uuid(self.hoard.config(), repo)
             repo_mounted_at = config.remotes[repo_uuid].mounted_at
             logging.info(f"repo {repo} mounted at {repo_mounted_at}")
@@ -278,7 +282,8 @@ class HoardCommandContents:
                 print(f"Pulling contents of {remote_obj.name}[{remote_uuid}].")
 
                 logging.info(f"Loading hoard TOML...")
-                with HoardContents.load(self.hoard.hoard_contents_filename()) as hoard:
+                hoard1 = self.hoard
+                with HoardContents.load(hoard1.hoardpath) as hoard:
                     logging.info(f"Loaded hoard TOML!")
                     content_prefs = ContentPrefs(config, pathing, hoard)
 
@@ -346,7 +351,8 @@ class HoardCommandContents:
         remote = config.remotes[repo_uuid]
 
         logging.info(f"Loading hoard contents...")
-        with HoardContents.load(self.hoard.hoard_contents_filename()) as hoard:
+        hoard1 = self.hoard
+        with HoardContents.load(hoard1.hoardpath) as hoard:
             content_prefs = ContentPrefs(config, pathing, hoard)
 
             remote_op_handler = init_handler(
@@ -389,7 +395,8 @@ class HoardCommandContents:
         repo_uuid = resolve_remote_uuid(config, repo)
 
         logging.info(f"Loading hoard contents...")
-        with HoardContents.load(self.hoard.hoard_contents_filename()) as hoard:
+        hoard1 = self.hoard
+        with HoardContents.load(hoard1.hoardpath) as hoard:
             with StringIO() as out:
                 out.write(f"{config.remotes[repo_uuid].name}:\n")
 

@@ -3,10 +3,8 @@ import os
 
 from command.repo import ConnectedRepo
 from config import HoardConfig, HoardPaths
-from contents.hoard import HoardContents
+from contents.hoard import HoardContents, HOARD_CONTENTS_FILENAME
 from resolve_uuid import load_config, load_paths, CONFIG_FILE
-
-HOARD_CONTENTS_FILENAME = "hoard.contents"
 
 
 class Hoard:
@@ -27,14 +25,12 @@ class Hoard:
         logging.info(f"Using repo contents {remote_uuid} in {remote_path}...")
         return ConnectedRepo(remote_path, remote_uuid, require_contents)
 
-    def hoard_contents_filename(self):
-        return os.path.join(self.hoardpath, HOARD_CONTENTS_FILENAME)
-
     def open_contents(self, create_missing: bool = False):
+        hoard_contents_filename = os.path.join(self.hoardpath, HOARD_CONTENTS_FILENAME)
         if not os.path.isfile(os.path.join(self.hoardpath, CONFIG_FILE)):
             raise ValueError(f"Hoard is not configured in {self.hoardpath}!")
-        if not os.path.isfile(self.hoard_contents_filename()) and not create_missing:
+        if not os.path.isfile(hoard_contents_filename) and not create_missing:
             raise ValueError(
-                f"Hoard contents file {self.hoard_contents_filename()} is not available,"
+                f"Hoard contents file {hoard_contents_filename} is not available,"
                 f" but --create-missing = False")
-        return HoardContents.load(self.hoard_contents_filename())
+        return HoardContents.load(self.hoardpath)
