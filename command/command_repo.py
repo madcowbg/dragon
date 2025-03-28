@@ -79,7 +79,7 @@ class RepoCommand(object):
             print(f"Computing diffs.")
             files_to_update: List[str] = []
             folders_to_add: List[str] = []
-            for diff in compute_diffs(contents, self.repo.path, skip_integrity_checks):
+            for diff in compute_difference_between_contents_and_filesystem(contents, self.repo.path, skip_integrity_checks):
                 if isinstance(diff, FileNotInFilesystem):
                     logging.info(f"Removing file {diff.filepath}")
                     contents.fsobjects.mark_removed(diff.filepath)
@@ -152,12 +152,13 @@ class RepoCommand(object):
             logging.info(f"Read repo!")
 
             with StringIO() as out:
+                stats = contents.fsobjects.stats_existing
                 out.writelines([
                     f"Result for local\n",
                     f"UUID: {remote_uuid}\n",
                     f"Last updated on {contents.config.updated}\n",
-                    f"  # files = {contents.fsobjects.num_files} of size {format_size(contents.fsobjects.total_size)}\n",
-                    f"  # dirs  = {contents.fsobjects.num_dirs}\n", ])
+                    f"  # files = {stats.num_files} of size {format_size(stats.total_size)}\n",
+                    f"  # dirs  = {stats.num_dirs}\n", ])
                 return out.getvalue()
 
     def status(self, skip_integrity_checks: bool = False):
@@ -181,7 +182,7 @@ class RepoCommand(object):
 
         with contents:
             print("Calculating diffs between repo and filesystem...")
-            for diff in compute_diffs(contents, self.repo.path, skip_integrity_checks):
+            for diff in compute_difference_between_contents_and_filesystem(contents, self.repo.path, skip_integrity_checks):
                 if isinstance(diff, FileNotInFilesystem):
                     files_del.append(diff.filepath)
                 elif isinstance(diff, RepoFileWeakSame):
@@ -211,6 +212,7 @@ class RepoCommand(object):
             files_current = len(files_new) + len(files_same) + len(files_mod)
             dirs_current = len(dir_same) + len(dir_new)
             with StringIO() as out:
+                stats = contents.fsobjects.stats_existing
                 out.write(
                     f"{current_uuid}:\n"
                     f"files:\n"
@@ -218,14 +220,14 @@ class RepoCommand(object):
                     f"     mod: {len(files_mod)} ({format_percent(len(files_mod) / files_current)})\n"
                     f"     new: {len(files_new)} ({format_percent(len(files_new) / files_current)})\n"
                     f" current: {files_current}\n"
-                    f" in repo: {contents.fsobjects.num_files}\n"
-                    f" deleted: {len(files_del)} ({format_percent(len(files_del) / contents.fsobjects.num_files)})\n"
+                    f" in repo: {stats.num_files}\n"
+                    f" deleted: {len(files_del)} ({format_percent(len(files_del) / stats.num_files)})\n"
                     f"dirs:\n"
                     f"    same: {len(dir_same)}\n"
                     f"     new: {len(dir_new)} ({format_percent(len(dir_new) / dirs_current)})\n"
                     f" current: {dirs_current}\n"
-                    f" in repo: {contents.fsobjects.num_dirs}\n"
-                    f" deleted: {len(dir_deleted)} ({format_percent(len(dir_deleted) / contents.fsobjects.num_dirs)})\n")
+                    f" in repo: {stats.num_dirs}\n"
+                    f" deleted: {len(dir_deleted)} ({format_percent(len(dir_deleted) / stats.num_dirs)})\n")
 
                 return out.getvalue()
 
@@ -296,10 +298,10 @@ type RepoDiffs = (
         | DirNotInFilesystem | DirIsSameInRepo | DirNotInRepo)
 
 
-def compute_diffs(
+def compute_difference_between_contents_and_filesystem(
         contents: RepoContents, repo_path: str, skip_integrity_checks: bool) -> Generator[RepoDiffs, None, None]:
     print("Checking for deleted files and folders...")
-    for obj_path, props in alive_it(list(contents.fsobjects)):
+    for obj_path, props in alive_it(list(contents.fsobjects.existing())):
         if isinstance(props, RepoFileProps):
             if not pathlib.Path(repo_path).joinpath(obj_path).is_file():
                 yield FileNotInFilesystem(obj_path, props)
@@ -311,7 +313,7 @@ def compute_diffs(
 
     print("Walking filesystem for added files and changed dirs...")
     file_path_matches: List[str] = list()
-    with alive_bar(total=len(contents.fsobjects)) as bar:
+    with alive_bar(total=contents.fsobjects.len_existing()) as bar:
         for dirpath_s, dirnames, filenames in walk_repo(repo_path):
             dirpath = pathlib.Path(dirpath_s)
             for filename in filenames:
@@ -319,7 +321,7 @@ def compute_diffs(
 
                 file_path_local = file_path_full.relative_to(repo_path).as_posix()
                 logging.info(f"Checking {file_path_local} for existence...")
-                if file_path_local in contents.fsobjects:  # file is already in index
+                if contents.fsobjects.in_existing(file_path_local):  # file is already in index
                     logging.info(f"File is in contents, adding to check")  # checking size and mtime.")
                     file_path_matches.append(file_path_full.as_posix())
                 else:
@@ -328,8 +330,8 @@ def compute_diffs(
             for dirname in dirnames:
                 dir_path_full = dirpath.joinpath(dirname)
                 dir_path_in_local = dir_path_full.relative_to(repo_path).as_posix()
-                if dir_path_in_local in contents.fsobjects:
-                    props = contents.fsobjects[dir_path_in_local]
+                if contents.fsobjects.in_existing(dir_path_in_local):
+                    props = contents.fsobjects.get_existing(dir_path_in_local)
                     assert isinstance(props, DirProps)
                     yield DirIsSameInRepo(dir_path_in_local, props)
                 else:
@@ -343,7 +345,7 @@ def compute_diffs(
                 stats = await aiofiles.os.stat(file_fullpath)
 
                 file_path_local = pathlib.Path(file_fullpath).relative_to(repo_path).as_posix()
-                props = contents.fsobjects[file_path_local]
+                props = contents.fsobjects.get_existing(file_path_local)
                 if skip_integrity_checks:
                     if props.mtime == stats.st_mtime and props.size == stats.st_size:
                         return RepoFileWeakSame(file_path_local, props)

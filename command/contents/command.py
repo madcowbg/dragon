@@ -352,7 +352,7 @@ class HoardCommandContents:
 
                 logging.info(f"Iterating over pending ops in {repo_uuid} to reset pending ops")
                 with self.hoard.connect_to_repo(repo_uuid, True).open_contents() as current_contents:
-                    for local_file, local_props in alive_it(current_contents.fsobjects):
+                    for local_file, local_props in alive_it(current_contents.fsobjects.existing()):
                         if not isinstance(local_props, RepoFileProps):
                             continue
 
@@ -461,8 +461,8 @@ def compare_local_to_hoard(local: RepoContents, hoard: HoardContents, config: Ho
     pathing = HoardPathing(config, paths)
 
     print("Comparing current files to hoard:")
-    with alive_bar(len(local.fsobjects)) as bar:
-        for current_path, props in local.fsobjects:
+    with alive_bar(local.fsobjects.len_existing()) as bar:
+        for current_path, props in local.fsobjects.existing():
             bar()
             if isinstance(props, RepoFileProps):
                 current_file = current_path
@@ -471,7 +471,7 @@ def compare_local_to_hoard(local: RepoContents, hoard: HoardContents, config: Ho
                     logging.info(f"local file not in hoard: {curr_file_hoard_path.as_posix()}")
                     yield FileMissingInHoard(current_file, curr_file_hoard_path.as_posix(), props)
                 elif is_same_file(
-                        local.fsobjects[current_file],
+                        local.fsobjects.get_existing(current_file),
                         hoard.fsobjects[curr_file_hoard_path.as_posix()]):
                     logging.info(f"same in hoard {current_file}!")
                     yield FileIsSame(current_file, curr_file_hoard_path.as_posix(), props, hoard.fsobjects[
@@ -499,7 +499,7 @@ def compare_local_to_hoard(local: RepoContents, hoard: HoardContents, config: Ho
             curr_file_path_in_local = pathing.in_hoard(hoard_file).at_local(local.config.uuid)
             assert curr_file_path_in_local is not None  # hoard file is not in the mounted location
 
-            if curr_file_path_in_local.as_posix() not in local.fsobjects:
+            if  not local.fsobjects.in_existing(curr_file_path_in_local.as_posix()):
                 yield FileMissingInLocal(curr_file_path_in_local.as_posix(), hoard_file, props)
             # else file is there, which is handled above
         elif isinstance(props, DirProps):

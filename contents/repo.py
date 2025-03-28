@@ -9,33 +9,41 @@ from util import FIRST_VALUE
 
 
 class FSObjects:
+    class Stats:
+        def __init__(self, parent: "FSObjects"):
+            self.parent = parent
+
+        @property
+        def num_files(self) -> int:
+            return self.parent._first_value_cursor().execute(
+                "SELECT count(1) FROM fsobject WHERE isdir=FALSE AND last_status != ?",
+                (RepoFileStatus.DELETED.value,)).fetchone()
+
+        @property
+        def num_dirs(self) -> int:
+            return self.parent._first_value_cursor().execute(
+                "SELECT count(1) FROM fsobject WHERE isdir=TRUE AND last_status != ?",
+                (RepoFileStatus.DELETED.value,)).fetchone()
+
+        @property
+        def total_size(self) -> int:
+            return self.parent._first_value_cursor().execute(
+                "SELECT sum(size) FROM fsobject WHERE isdir=FALSE AND last_status != ?",
+                (RepoFileStatus.DELETED.value,)).fetchone()
+
     def __init__(self, parent: "RepoContents"):
         self.parent = parent
 
     @property
-    def num_files(self) -> int:
-        return self._first_value_cursor().execute(
-            "SELECT count(1) FROM fsobject WHERE isdir=FALSE AND last_status != ?",
-            (RepoFileStatus.DELETED.value,)).fetchone()
+    def stats_existing(self):
+        return FSObjects.Stats(self)
 
     def _first_value_cursor(self):
         curr = self.parent.conn.cursor()
         curr.row_factory = FIRST_VALUE
         return curr
 
-    @property
-    def num_dirs(self) -> int:
-        return self._first_value_cursor().execute(
-            "SELECT count(1) FROM fsobject WHERE isdir=TRUE AND last_status != ?",
-            (RepoFileStatus.DELETED.value,)).fetchone()
-
-    @property
-    def total_size(self) -> int:
-        return self._first_value_cursor().execute(
-            "SELECT sum(size) FROM fsobject WHERE isdir=FALSE AND last_status != ?",
-            (RepoFileStatus.DELETED.value,)).fetchone()
-
-    def __len__(self) -> int:
+    def len_existing(self) -> int:
         return self._first_value_cursor().execute(
             "SELECT count(1) FROM fsobject WHERE last_status != ?",
             (RepoFileStatus.DELETED.value,)).fetchone()
@@ -49,7 +57,7 @@ class FSObjects:
         else:
             return fullpath, RepoFileProps(size, mtime, fasthash, md5, RepoFileStatus(last_status), last_update_epoch)
 
-    def __getitem__(self, file_path: str) -> FSObjectProps:
+    def get_existing(self, file_path: str) -> FSObjectProps:
         curr = self.parent.conn.cursor()
         curr.row_factory = FSObjects._create_fsobjectprops
 
@@ -59,7 +67,7 @@ class FSObjects:
             (file_path, RepoFileStatus.DELETED.value)).fetchone()
         return props
 
-    def __iter__(self) -> Generator[Tuple[str, FSObjectProps], None, None]:
+    def existing(self) -> Generator[Tuple[str, FSObjectProps], None, None]:
         curr = self.parent.conn.cursor()
         curr.row_factory = FSObjects._create_fsobjectprops
 
@@ -68,7 +76,7 @@ class FSObjects:
             "FROM fsobject WHERE last_status != ?",
             (RepoFileStatus.DELETED.value,))  # fixme should not be filtering maybe?
 
-    def __contains__(self, file_path: str) -> bool:
+    def in_existing(self, file_path: str) -> bool:
         return self._first_value_cursor().execute(
             "SELECT count(1) FROM fsobject WHERE fsobject.fullpath = ? AND last_status != ?",
             (file_path, RepoFileStatus.DELETED.value)).fetchone() > 0  # fixme should not be filtering maybe?
