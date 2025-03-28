@@ -24,6 +24,9 @@ class Size:
         except FileNotFoundError as e:
             self.total_size = 1
             self.current_free_size = 0
+        except PermissionError as e:
+            self.total_size = 1
+            self.current_free_size = 0
 
         logging.debug(
             f"Space for {backup.name}: "
@@ -78,7 +81,8 @@ class BackupSet:
 
         return self.reserve_new_backups(hoard_file, file_size, past_backups)
 
-    def repos_to_clean(self, hoard_file: str, hoard_props: Optional[HoardFileProps], file_size: int) -> List[HoardRemote]:
+    def repos_to_clean(self, hoard_file: str, hoard_props: Optional[HoardFileProps], file_size: int) -> List[
+        HoardRemote]:
         past_backups = self.currently_scheduled_backups(hoard_file, hoard_props) if hoard_props is not None else []
 
         logging.info(f"Got {len(past_backups)} currently requested backups for {hoard_file}.")
@@ -139,15 +143,19 @@ class BackupSet:
             f"from requested {num_backups_to_request}.")
 
         reserved_remotes = new_possible_backups[:num_backups_to_request]
+        good_remotes = []
         for remote in reserved_remotes:
             self.backup_sizes.reserve_size(remote, file_size)
             projected_free_space = self.backup_sizes.remaining_pct(remote)
             if projected_free_space < MIN_REPO_PERC_FREE:
                 logging.error(
                     f"Free space on {remote.name} projected to become {format_percent(projected_free_space)}!")
-                raise ValueError(
+                logging.error(
                     f"Not enough free space to reserve on {remote.name}, "
                     f"projected {format_percent(projected_free_space)}!")
+                self.backup_sizes.reserve_size(remote, -file_size)  # unreserve space ...
+            else:
+                good_remotes.append(remote)
 
         return reserved_remotes
 
