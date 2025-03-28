@@ -140,10 +140,7 @@ class RepoCommand(object):
                 contents.fsobjects.add_dir(relpath, status=RepoFileStatus.ADDED)
 
             logging.info(f"Files read!")
-
-            contents.config.touch_updated()
-
-            logging.info("Start updating, setting is_dirty to FALSE")
+            logging.info("Ends updating, setting is_dirty to FALSE")
             contents.config.end_updating()
 
             assert not contents.config.is_dirty
@@ -166,6 +163,7 @@ class RepoCommand(object):
                 stats = contents.fsobjects.stats_existing
                 out.writelines([
                     f"Result for local\n",
+                    f"Max size: {format_size(contents.config.max_size)}\n"
                     f"UUID: {remote_uuid}\n",
                     f"Last updated on {contents.config.updated}\n" if show_dates else "",
                     f"  # files = {stats.num_files} of size {format_size(stats.total_size)}\n",

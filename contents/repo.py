@@ -1,4 +1,5 @@
 import os
+import shutil
 import sqlite3
 from datetime import datetime
 from sqlite3 import Connection, Cursor, Row
@@ -121,7 +122,6 @@ class RepoContentsConfig:
             rtoml.dump(self.doc, f)
 
     def touch_updated(self) -> None:
-        self.doc["last_updated"] = datetime.now().isoformat()
         self.write()
 
     @property
@@ -138,6 +138,7 @@ class RepoContentsConfig:
 
     def end_updating(self):
         self.doc["is_updating"] = False
+        self.doc["last_updated"] = datetime.now().isoformat()
         self.write()
 
     @property
@@ -145,6 +146,15 @@ class RepoContentsConfig:
 
     @property
     def epoch(self) -> int: return self.doc["epoch"]
+
+    @property
+    def max_size(self) -> int:
+        return self.doc["max_size"]
+
+    @max_size.setter
+    def max_size(self, value: int) -> None:
+        self.doc["max_size"] = value
+        self.write()
 
 
 class RepoContents:
@@ -156,7 +166,11 @@ class RepoContents:
         assert not os.path.isfile(contents_filepath) and not os.path.isdir(config_filepath)
 
         with open(config_filepath, "w") as f:
-            rtoml.dump({"uuid": uuid, "updated": datetime.now().isoformat()}, f)
+            rtoml.dump({
+                "uuid": uuid,
+                "updated": datetime.now().isoformat(),
+                "max_size": shutil.disk_usage(folder).total
+            }, f)
 
         conn = sqlite3.connect(contents_filepath)
         curr = conn.cursor()
