@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from os.path import join
 
-from command.repo_command import RepoCommand
+from command.command_repo import RepoCommand
 from command.test_repo_command import pretty_file_writer
 from config import CaveType
 from dragon import TotalCommand

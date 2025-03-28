@@ -3,8 +3,8 @@ from typing import Optional
 import fire
 import logging
 
-from command.hoard_command import HoardCommand
-from command.repo_command import RepoCommand
+from command.command_hoard import HoardCommand
+from command.command_repo import RepoCommand
 
 NONE_TOML = "MISSING"
 

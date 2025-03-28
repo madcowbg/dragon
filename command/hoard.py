@@ -1,7 +1,7 @@
 import logging
 import os
 
-from command.repo_command import ConnectedRepo
+from command.repo import ConnectedRepo
 from config import HoardConfig, HoardPaths
 from contents.hoard import HoardContents
 from resolve_uuid import load_config, load_paths, CONFIG_FILE

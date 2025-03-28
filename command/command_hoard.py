@@ -13,7 +13,8 @@ from command.contents.command import HoardCommandContents, compare_local_to_hoar
 from command.files.command import HoardCommandFiles
 from command.hoard import Hoard
 from command.pathing import HoardPathing
-from command.repo_command import RepoCommand, ConnectedRepo
+from command.command_repo import RepoCommand
+from command.repo import ConnectedRepo
 from config import HoardRemote, CavePath, CaveType, ConnectionSpeed, ConnectionLatency
 from contents.hoard import HoardContents
 from contents.props import DirProps, HoardFileProps

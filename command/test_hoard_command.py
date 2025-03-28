@@ -5,7 +5,7 @@ import unittest
 from os.path import join
 from typing import Tuple, List, Dict
 
-from command.repo_command import RepoCommand
+from command.command_repo import RepoCommand
 from command.test_repo_command import populate, write_contents, pretty_file_writer
 from config import CaveType
 from contents.hoard import HoardContents
