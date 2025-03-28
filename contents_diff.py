@@ -6,8 +6,8 @@ class Diff:
 
 
 class FileMissingInHoard(Diff):
-    def __init__(self, current_file: str, curr_file_hoard_path: str, local_props: RepoFileProps):
-        self.local_file = current_file
+    def __init__(self, local_file: str, curr_file_hoard_path: str, local_props: RepoFileProps):
+        self.local_file = local_file
         self.hoard_file = curr_file_hoard_path
         self.local_props = local_props
 

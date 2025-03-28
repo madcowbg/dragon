@@ -614,8 +614,34 @@ class TestFileChangingFlows(unittest.TestCase):
             "repo-changed-cave-name:\n"
             "DONE", res)
 
-        # resetting back to what repo-full-name should contain!
+        # resetting pending ops
         res = hoard_cmd.contents.reset("repo-full-name")
+        self.assertEqual(
+            "repo-full-name:\n"
+            "WONT_GET /test.me.1\n"
+            "WONT_GET /wat/test.me.3\n"
+            "DONE", res)
+
+        res = hoard_cmd.files.pending()
+        self.assertEqual(
+            "repo-partial-name:\n"
+            "TO_GET (from 1) /test.me.1\n"
+            " repo-changed-cave-name has 1 files\n"
+            "repo-full-name:\n"
+            "repo-backup-name:\n"
+            "TO_GET (from 3) /wat/test.me.2\n"
+            "TO_GET (from 2) /test.me.4\n"
+            "TO_GET (from 1) /test.me.1\n"
+            "TO_GET (from 1) /wat/test.me.3\n"
+            " repo-changed-cave-name has 4 files\n"
+            " repo-full-name has 2 files\n"
+            " repo-partial-name has 1 files\n"
+            "repo-incoming-name:\n"
+            "repo-changed-cave-name:\n"
+            "DONE", res)
+
+        # resetting existing contents to what repo-full-name should contain!
+        res = hoard_cmd.contents.reset_with_existing("repo-full-name")
         self.assertEqual(
             "repo-full-name:\n"
             "RESET /test.me.1\n"
