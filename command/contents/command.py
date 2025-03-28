@@ -104,6 +104,8 @@ class HoardCommandContents:
 
             if selected_path is None:
                 selected_path = "/"
+            if not os.path.isabs(selected_path):
+                return f"Use absolute paths, {selected_path} is relative."
 
             pathing = HoardPathing(self.hoard.config(), self.hoard.paths())
 

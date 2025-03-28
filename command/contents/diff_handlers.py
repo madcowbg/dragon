@@ -163,11 +163,22 @@ class IncomingDiffHandler(DiffHandler):
 
     def handle_file_is_same(self, diff: FileIsSame, out: StringIO):
         logging.info(f"incoming file is already recorded in hoard.")
+
+        # add status for new repos
+        already_available = diff.hoard_props.by_status(HoardFileStatus.AVAILABLE)
+        repos_to_add = [
+            uuid for uuid in self.content_prefs.repos_to_add(diff.hoard_file, diff.local_props)
+            if uuid not in already_available]
+
+        # add status for new repos
+        diff.hoard_props.set_status(repos_to_add, HoardFileStatus.GET)
+
         self._safe_mark_for_cleanup(diff, diff.hoard_props, out)
         out.write(f"-{diff.hoard_file}\n")
 
     def handle_file_contents_differ(self, diff: FileContentsDiffer, out: StringIO):
         logging.info(f"incoming file has different contents.")
+
         self._move_to_other_caves(diff, out)
         out.write(f"u{diff.hoard_file}\n")
 

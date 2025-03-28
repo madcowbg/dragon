@@ -157,7 +157,7 @@ class BackupSet:
             else:
                 good_remotes.append(remote)
 
-        return reserved_remotes
+        return good_remotes
 
     @staticmethod
     def all(config: HoardConfig, pathing: HoardPathing, hoard: HoardContents) -> List["BackupSet"]:
