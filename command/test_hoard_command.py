@@ -1006,7 +1006,7 @@ class TestHoardCommand(unittest.TestCase):
         res = hoard_cmd.add_remote(
             remote_path=join(tmpdir, "repo-partial"), name="repo-partial-name", mount_point="/",
             type=CaveType.PARTIAL)
-        self.assertEqual(f"Repo does not exist at {join(tmpdir, 'repo-partial')}!", res)
+        self.assertEqual(f"Repo not initialized at {join(tmpdir, 'repo-partial')}!", res)
 
         partial_cave_cmd = TotalCommand(path=join(tmpdir, "repo-partial")).cave
         partial_cave_cmd.init()

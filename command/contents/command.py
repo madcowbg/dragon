@@ -289,11 +289,12 @@ class HoardCommandContents:
                     else:
                         raise ValueError(f"FIXME unsupported remote type: {remote_obj.type}")
 
-                    if not self.hoard[remote_uuid].has_contents():
+                    repo = self.hoard.connect_to_repo(remote_uuid, require_contents=True)
+                    if repo is None:
                         out.write(f"Repo {remote_uuid} has no current contents available!\n")
                         continue
 
-                    with self.hoard[remote_uuid].open_contents() as current_contents:
+                    with repo.open_contents() as current_contents:
                         if current_contents.config.is_dirty:
                             logging.error(
                                 f"{remote_uuid} is_dirty = TRUE, so the refresh is not complete - can't use current repo.")
@@ -351,7 +352,7 @@ class HoardCommandContents:
 
                 logging.info(f"Iterating over pending ops in {repo_uuid} to reset pending ops")
 
-                with self.hoard[repo_uuid].open_contents() as current_contents:
+                with self.hoard.connect_to_repo(repo_uuid, True).open_contents() as current_contents:
                     ops = list(get_pending_operations(hoard, repo_uuid))
                     print("Clearing pending operations...")
                     for op in alive_it(ops):

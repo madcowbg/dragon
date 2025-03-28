@@ -13,7 +13,7 @@ from command.contents.command import HoardCommandContents, compare_local_to_hoar
 from command.files.command import HoardCommandFiles
 from command.hoard import Hoard
 from command.pathing import HoardPathing
-from command.repo_command import RepoCommand, Repo
+from command.repo_command import RepoCommand, ConnectedRepo
 from config import HoardRemote, CavePath, CaveType, ConnectionSpeed, ConnectionLatency
 from contents.hoard import HoardContents
 from contents.props import DirProps, HoardFileProps
@@ -36,7 +36,7 @@ class HoardCommandDeprecated:
         remote_uuid = resolve_remote_uuid(self.hoard.config(), remote)
 
         logging.info(f"Reading current contents of {remote_uuid}...")
-        with self.hoard[remote_uuid].open_contents() as current_contents:
+        with self.hoard.connect_to_repo(remote_uuid, require_contents=True).open_contents() as current_contents:
             logging.info(f"Loading hoard TOML...")
             with HoardContents.load(self.hoard.hoard_contents_filename()) as hoard:
                 logging.info(f"Loaded hoard TOML!")
@@ -69,7 +69,7 @@ class HoardCommandDeprecated:
         remote_uuid = resolve_remote_uuid(self.hoard.config(), remote)
 
         logging.info(f"Reading repo {remote_uuid}...")
-        with self.hoard[remote_uuid].open_contents() as contents:
+        with self.hoard.connect_to_repo(remote_uuid, True).open_contents() as contents:
             logging.info(f"Read repo!")
 
             config = self.hoard.config()
@@ -112,9 +112,10 @@ class HoardCommand(object):
         logging.info(f"Adding remote {remote_abs_path} to config...")
 
         logging.info("Loading remote from remote_path")
-        repo = Repo(remote_abs_path)
-        if not repo.has_uuid():
-            return f"Repo does not exist at {remote_path}!"
+
+        repo = ConnectedRepo.connect_if_present(remote_abs_path, False)
+        if repo is None:
+            return f"Repo not initialized at {remote_path}!"
 
         remote_uuid = repo.current_uuid
 

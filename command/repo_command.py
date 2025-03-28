@@ -4,6 +4,7 @@ import os
 import pathlib
 import uuid
 from io import StringIO
+from os.path import join
 from typing import Generator, Tuple, List, Optional
 
 import aiofiles.os
@@ -26,37 +27,54 @@ def walk_repo(repo: str) -> Generator[Tuple[str, List[str], List[str]], None, No
         yield dirpath, dirnames, filenames
 
 
-class Repo:
-    def __init__(self, path: str):
+class ConnectedRepo:
+    def __init__(self, path: str, has_contents: bool = True):  # fixme remove default value, force declaration
         self.path = path
-        self._uuid_filename = os.path.join(self.hoard_folder(), CURRENT_UUID_FILENAME)
+        self.has_contents = has_contents
 
     @property
     def current_uuid(self):
-        with open(self._uuid_filename, "r") as f:
-            return f.readline()
+        return _current_uuid(self.path)
+
+    @classmethod
+    def connect_if_present(cls, remote_path, require_contents) -> Optional["ConnectedRepo"]:
+
+        if not _has_uuid_filename(remote_path):
+            logging.info(f"Repo UUID file not found: {_uuid_filename(remote_path)}")
+            return None
+        else:
+            has_contents = os.path.isfile(join(_config_folder(remote_path), f"{_current_uuid(remote_path)}.contents"))
+            if require_contents and not has_contents:
+                logging.info(f"Contents file not found.")
+                return None
+            else:
+                return ConnectedRepo(remote_path, has_contents=has_contents)
 
     def open_contents(self, create_for_uuid: Optional[str] = None) -> RepoContents:
-        assert self.has_contents() or create_for_uuid is not None
+        assert self.has_contents or create_for_uuid is not None
         return RepoContents.load(
-            os.path.join(self.hoard_folder(), f"{self.current_uuid}.contents"),
+            os.path.join(self.config_folder(), f"{self.current_uuid}.contents"),
             create_for_uuid)
 
-    def has_uuid(self):
-        return os.path.isfile(self._uuid_filename)
+    def config_folder(self):
+        return _config_folder(self.path)
 
-    def has_contents(self):
-        if not self.has_uuid():
-            logging.info(f"Repo UUID file not found: {self._uuid_filename}")
-            return False
-        elif not os.path.isfile(os.path.join(self.hoard_folder(), f"{self.current_uuid}.contents")):
-            logging.info(f"Contents file not found.")
-            return False
-        else:
-            return True
 
-    def hoard_folder(self):
-        return os.path.join(self.path, ".hoard")
+def _current_uuid(path: str) -> str:
+    with open(_uuid_filename(path), "r") as f:
+        return f.readline()
+
+
+def _config_folder(path: str) -> str:
+    return os.path.join(path, ".hoard")
+
+
+def _uuid_filename(path: str) -> str:
+    return os.path.join(_config_folder(path), CURRENT_UUID_FILENAME)
+
+
+def _has_uuid_filename(path: str) -> bool:
+    return os.path.isfile(_uuid_filename(path))
 
 
 class RepoCommand(object):
@@ -76,22 +94,22 @@ class RepoCommand(object):
             print(f"Resolved repo {name} to path {cave_path.find()}.")
             path = cave_path.find()
 
-        self.repo = Repo(pathlib.Path(path).absolute().as_posix())
+        self.repo = ConnectedRepo(pathlib.Path(path).absolute().as_posix())
 
     def current_uuid(self) -> str:
         return self.repo.current_uuid
 
     def _init_uuid(self):
-        with open(os.path.join(self.repo.hoard_folder(), CURRENT_UUID_FILENAME), "w") as f:
+        with open(os.path.join(self.repo.config_folder(), CURRENT_UUID_FILENAME), "w") as f:
             f.write(str(uuid.uuid4()))
 
     def _validate_repo(self):
         logging.info(f"Validating {self.repo.path}")
         if not os.path.isdir(self.repo.path):
             raise ValueError(f"folder {self.repo.path} does not exist")
-        if not os.path.isdir(self.repo.hoard_folder()):
+        if not os.path.isdir(self.repo.config_folder()):
             raise ValueError(f"no hoard folder in {self.repo.path}")
-        if not os.path.isfile(os.path.join(self.repo.hoard_folder(), CURRENT_UUID_FILENAME)):
+        if not os.path.isfile(os.path.join(self.repo.config_folder(), CURRENT_UUID_FILENAME)):
             raise ValueError(f"no hoard guid in {self.repo.path}/.hoard/{CURRENT_UUID_FILENAME}")
 
     def init(self):
@@ -100,10 +118,10 @@ class RepoCommand(object):
         if not os.path.isdir(self.repo.path):
             raise ValueError(f"folder {self.repo.path} does not exist")
 
-        if not os.path.isdir(self.repo.hoard_folder()):
-            os.mkdir(self.repo.hoard_folder())
+        if not os.path.isdir(self.repo.config_folder()):
+            os.mkdir(self.repo.config_folder())
 
-        if not os.path.isfile(os.path.join(self.repo.hoard_folder(), CURRENT_UUID_FILENAME)):
+        if not os.path.isfile(os.path.join(self.repo.config_folder(), CURRENT_UUID_FILENAME)):
             self._init_uuid()
 
         self._validate_repo()

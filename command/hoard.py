@@ -1,7 +1,7 @@
 import logging
 import os
 
-from command.repo_command import Repo
+from command.repo_command import ConnectedRepo
 from config import HoardConfig, HoardPaths
 from contents.hoard import HoardContents
 from resolve_uuid import load_config, load_paths, CONFIG_FILE
@@ -22,10 +22,10 @@ class Hoard:
     def paths(self) -> HoardPaths:
         return load_paths(self.hoardpath)
 
-    def __getitem__(self, remote_uuid: str) -> Repo:
+    def connect_to_repo(self, remote_uuid: str, require_contents: bool) -> ConnectedRepo | None:
         remote_path = self.paths()[remote_uuid].find()
         logging.info(f"Using repo contents {remote_uuid} in {remote_path}...")
-        return Repo(remote_path)
+        return ConnectedRepo.connect_if_present(remote_path, require_contents)
 
     def hoard_contents_filename(self):
         return os.path.join(self.hoardpath, HOARD_CONTENTS_FILENAME)
