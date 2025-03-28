@@ -34,7 +34,7 @@ class ConnectedRepo:
     def create_if_missing(self, create_for_uuid: str) -> RepoContents:
         if self.has_contents:
             return RepoContents.load_existing(os.path.join(self.config_folder(), f"{self.current_uuid}.contents"))
-        else:
+        else:  # fixme remove - either open or create
             return RepoContents.create(
                 os.path.join(self.config_folder(), f"{self.current_uuid}.contents"), create_for_uuid)
 

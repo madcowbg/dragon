@@ -4,6 +4,13 @@ from typing import Dict, Any, List
 from util import FIRST_VALUE
 
 
+class RepoFileStatus(enum.Enum):
+    PRESENT = "present",
+    ADDED = "added"
+    MODIFIED = "modified",
+    DELETED = "deleted"
+
+
 class RepoFileProps:
     def __init__(self, doc: Dict[str, Any]):
         self.doc = doc
@@ -19,6 +26,14 @@ class RepoFileProps:
     @property
     def fasthash(self) -> str:
         return self.doc["fasthash"]
+
+    @property
+    def last_status(self) -> RepoFileStatus:
+        return RepoFileStatus(self.doc["last_status"])
+
+    @property
+    def last_update_epoch(self) -> int:
+        return self.doc["last_update_epoch"]
 
 
 class DirProps:  # fixme split in twain (or just remove...)

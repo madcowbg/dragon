@@ -9,7 +9,7 @@ import aiofiles.os
 from alive_progress import alive_bar, alive_it
 
 from command.repo import OfflineRepo
-from contents.props import RepoFileProps, DirProps
+from contents.props import RepoFileProps, DirProps, RepoFileStatus
 from contents.repo import RepoContents
 from hashing import find_hashes, fast_hash_async
 from resolve_uuid import load_config, resolve_remote_uuid, load_paths
@@ -63,9 +63,11 @@ class RepoCommand(object):
         print(f"Refreshing uuid {current_uuid}")
 
         with connected_repo.create_if_missing(current_uuid) as contents:
-
             logging.info("Start updating, setting is_dirty to TRUE")
             contents.config.start_updating()
+
+            contents.config.bump_epoch()
+            logging.info(f"Bumped epoch to {contents.config.epoch}")
 
             print(f"Computing diffs.")
             files_to_update: List[str] = []
@@ -113,7 +115,8 @@ class RepoCommand(object):
                 try:
                     size = os.path.getsize(fullpath)
                     mtime = os.path.getmtime(fullpath)
-                    contents.fsobjects.add_file(relpath, size=size, mtime=mtime, fasthash=file_hashes[fullpath])
+                    contents.fsobjects.add_file(
+                        relpath, size=size, mtime=mtime, fasthash=file_hashes[fullpath], status=RepoFileStatus.ADDED)
                 except FileNotFoundError as e:
                     logging.error("Error while adding file!")
                     logging.error(e)
@@ -121,14 +124,11 @@ class RepoCommand(object):
             print(f"Adding {len(folders_to_add)} folders in {self.repo.path}")
             for fullpath in alive_it(folders_to_add):
                 relpath = pathlib.Path(fullpath).relative_to(self.repo.path).as_posix()
-                contents.fsobjects.add_dir(relpath)
+                contents.fsobjects.add_dir(relpath, status=RepoFileStatus.ADDED)
 
             logging.info(f"Files read!")
 
             contents.config.touch_updated()
-            contents.config.bump_epoch()
-
-            logging.info(f"Bumped epoch to {contents.config.epoch}")
 
             logging.info("Start updating, setting is_dirty to FALSE")
             contents.config.end_updating()

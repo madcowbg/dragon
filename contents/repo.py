@@ -4,7 +4,7 @@ from datetime import datetime
 from sqlite3 import Connection, Cursor, Row
 from typing import Generator, Tuple, Optional
 
-from contents.props import DirProps, RepoFileProps, FSObjectProps
+from contents.props import DirProps, RepoFileProps, FSObjectProps, RepoFileStatus
 from util import FIRST_VALUE
 
 
@@ -61,13 +61,16 @@ class FSObjects:
             "SELECT count(1) FROM fsobject WHERE fsobject.fullpath = ?",
             (file_path,)).fetchone() > 0
 
-    def add_file(self, filepath: str, size: int, mtime: float, fasthash: str) -> None:
+    def add_file(self, filepath: str, size: int, mtime: float, fasthash: str, status: RepoFileStatus) -> None:
         self.parent.conn.execute(
-            "INSERT OR REPLACE INTO fsobject(fullpath, isdir, size, mtime, fasthash) VALUES (?, FALSE, ?, ?, ?)",
-            (filepath, size, mtime, fasthash))
+            "INSERT OR REPLACE INTO fsobject(fullpath, isdir, size, mtime, fasthash, last_status, last_update_epoch) "
+            "VALUES (?, FALSE, ?, ?, ?, ?, ?)",
+            (filepath, size, mtime, fasthash, status.value, self.parent.config.epoch))
 
-    def add_dir(self, dirpath: str):
-        self.parent.conn.execute("INSERT OR REPLACE INTO fsobject(fullpath, isdir) VALUES (?, TRUE)", (dirpath,))
+    def add_dir(self, dirpath: str, status: RepoFileStatus):
+        self.parent.conn.execute(
+            "INSERT OR REPLACE INTO fsobject(fullpath, isdir, last_status, last_update_epoch) VALUES (?, TRUE, ?, ?)",
+            (dirpath, status.value, self.parent.config.epoch))
 
     def remove(self, path: str):
         self.parent.conn.execute("DELETE FROM fsobject WHERE fsobject.fullpath = ?", (path,))
@@ -126,7 +129,10 @@ class RepoContents:
             " isdir BOOL NOT NULL,"
             " size INTEGER,"
             " mtime REAL,"
-            " fasthash TEXT)")
+            " fasthash TEXT,"
+            " md5 TEXT,"
+            " last_status TEXT NOT NULL,"
+            " last_update_epoch INTEGER NOT NULL)")
 
         curr.execute(
             "CREATE TABLE config("
