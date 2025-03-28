@@ -82,10 +82,10 @@ class RepoCommand(object):
             for diff in compute_diffs(contents, self.repo.path, skip_integrity_checks):
                 if isinstance(diff, FileNotInFilesystem):
                     logging.info(f"Removing file {diff.filepath}")
-                    contents.fsobjects.remove(diff.filepath)
+                    contents.fsobjects.mark_removed(diff.filepath)
                 elif isinstance(diff, DirNotInFilesystem):
                     logging.info(f"Removing dir {diff.dirpath}")
-                    contents.fsobjects.remove(diff.dirpath)
+                    contents.fsobjects.mark_removed(diff.dirpath)
                 elif isinstance(diff, RepoFileWeakSame):
                     assert skip_integrity_checks
                     logging.info("Skipping file as size and mtime is the same!!!")

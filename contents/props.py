@@ -1,4 +1,5 @@
 import enum
+from datetime import datetime
 from typing import Dict, Any, List
 
 from util import FIRST_VALUE
@@ -12,28 +13,16 @@ class RepoFileStatus(enum.Enum):
 
 
 class RepoFileProps:
-    def __init__(self, doc: Dict[str, Any]):
-        self.doc = doc
-
-    @property
-    def size(self) -> int:
-        return self.doc["size"]
-
-    @property
-    def mtime(self) -> float:
-        return self.doc["mtime"]
-
-    @property
-    def fasthash(self) -> str:
-        return self.doc["fasthash"]
-
-    @property
-    def last_status(self) -> RepoFileStatus:
-        return RepoFileStatus(self.doc["last_status"])
-
-    @property
-    def last_update_epoch(self) -> int:
-        return self.doc["last_update_epoch"]
+    def __init__(
+            self, size: int, mtime: float, fasthash: str, md5: str | None,
+            last_status: RepoFileStatus, last_update_epoch: datetime):
+        assert last_status != RepoFileStatus.DELETED
+        self.size = size
+        self.mtime = mtime
+        self.fasthash = fasthash
+        self.md5 = md5
+        self.last_status = last_status
+        self.last_update_epoch = last_update_epoch
 
 
 class DirProps:  # fixme split in twain (or just remove...)
