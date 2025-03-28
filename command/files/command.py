@@ -10,6 +10,7 @@ from alive_progress import alive_bar
 from command.contents.command import clean_dangling_files
 from command.hoard import Hoard
 from command.pathing import HoardPathing
+from command.pending_file_ops import get_pending_operations, CopyFile, GetFile, CleanupFile
 from config import HoardConfig, HoardPaths
 from contents.hoard import HoardContents
 from contents.props import HoardFileProps, FileStatus
@@ -21,6 +22,44 @@ from util import to_mb, run_async_in_parallel, format_size
 class HoardCommandFiles:
     def __init__(self, hoard: Hoard):
         self.hoard = hoard
+
+    def pending(self, repo: Optional[str] = None):
+        config = self.hoard.config()
+
+        repo_uuids: List[str] = [resolve_remote_uuid(config, repo)] \
+            if repo is not None else [r.uuid for r in config.remotes.all()]
+
+        logging.info(f"Loading hoard contents...")
+        with HoardContents.load(self.hoard.hoard_contents_filename()) as hoard:
+            with StringIO() as out:
+                for repo_uuid in repo_uuids:
+                    logging.info(f"Iterating over pending ops in {repo_uuid}")
+                    out.write(f"{config.remotes[repo_uuid].name}:\n")
+
+                    repos_containing_what_this_one_needs: Dict[str, int] = dict()
+                    for op in get_pending_operations(hoard, repo_uuid):
+                        num_available = op.hoard_props.by_status(FileStatus.AVAILABLE)
+                        if isinstance(op, GetFile):
+                            out.write(f"TO_GET (from {len(num_available)}) {op.hoard_file}\n")
+                            for repo in num_available:
+                                repos_containing_what_this_one_needs[repo] = \
+                                    repos_containing_what_this_one_needs.get(repo, 0) + 1
+                        elif isinstance(op, CopyFile):
+                            out.write(f"TO_COPY (from {len(num_available)}+?) {op.hoard_file}\n")
+                            for repo in num_available:
+                                repos_containing_what_this_one_needs[repo] = \
+                                    repos_containing_what_this_one_needs.get(repo, 0) + 1
+                        elif isinstance(op, CleanupFile):
+                            out.write(f"TO_CLEANUP (is in {len(num_available)}) {op.hoard_file}\n")
+                        else:
+                            raise ValueError(f"Unhandled op type: {type(op)}")
+                    nc = sorted(map(
+                        lambda uc: (config.remotes[uc[0]].name, uc[1]),  # uuid, count -> name, count
+                        repos_containing_what_this_one_needs.items()))
+                    for name, count in nc:
+                        out.write(f" {name} has {count} files\n")
+                out.write("DONE")
+                return out.getvalue()
 
     def push(self, repo: Optional[str] = None, all: bool = False):
         config = self.hoard.config()
@@ -81,7 +120,7 @@ def _fetch_files_in_repo(
                 self.current_size_mb = 0
 
             async def copy_or_get_file(self, hoard_file: str, hoard_props: HoardFileProps) -> Optional[str]:
-                if hoard_props.size > (5 * (1 << 30)): # >5G
+                if hoard_props.size > (5 * (1 << 30)):  # >5G
                     logging.warning(f"Copying large file {format_size(hoard_props.size)}: {hoard_file}")
                 try:
                     assert isinstance(hoard_props, HoardFileProps)

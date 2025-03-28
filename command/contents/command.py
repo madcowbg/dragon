@@ -3,11 +3,12 @@ import os
 import pathlib
 import sys
 from io import StringIO
-from typing import List, Dict, Any, Optional, Generator, Iterable, Callable
+from typing import List, Dict, Any, Optional, Generator, Callable
 
 import humanize
 from alive_progress import alive_bar, alive_it
 
+from command.pending_file_ops import GetFile, CopyFile, CleanupFile, get_pending_operations
 from command.hoard import Hoard
 from command.contents.diff_handlers import DiffHandler, PartialDiffHandler, BackupDiffHandler, IncomingDiffHandler, \
     reset_local_as_current
@@ -39,27 +40,6 @@ def _file_stats(props: HoardFileProps) -> str:
     if len(x) > 0:
         res.append(f'x:{len(x)}')
     return " ".join(res)
-
-
-type FileOp = GetFile | CopyFile | CleanupFile
-
-
-class GetFile:  # fixme needs to know if we would fetch or update a current file
-    def __init__(self, hoard_file: str, hoard_props: HoardFileProps):
-        self.hoard_file = hoard_file
-        self.hoard_props = hoard_props
-
-
-class CopyFile:
-    def __init__(self, hoard_file: str, hoard_props: HoardFileProps):
-        self.hoard_file = hoard_file
-        self.hoard_props = hoard_props
-
-
-class CleanupFile:
-    def __init__(self, hoard_file: str, hoard_props: HoardFileProps):
-        self.hoard_file = hoard_file
-        self.hoard_props = hoard_props
 
 
 class HoardCommandContents:
@@ -358,44 +338,6 @@ class HoardCommandContents:
             out.write("DONE")
             return out.getvalue()
 
-    def pending(self, repo: Optional[str] = None):
-        config = self.hoard.config()
-
-        repo_uuids: List[str] = [resolve_remote_uuid(config, repo)] \
-            if repo is not None else [r.uuid for r in config.remotes.all()]
-
-        logging.info(f"Loading hoard contents...")
-        with HoardContents.load(self.hoard.hoard_contents_filename()) as hoard:
-            with StringIO() as out:
-                for repo_uuid in repo_uuids:
-                    logging.info(f"Iterating over pending ops in {repo_uuid}")
-                    out.write(f"{config.remotes[repo_uuid].name}:\n")
-
-                    repos_containing_what_this_one_needs: Dict[str, int] = dict()
-                    for op in _get_pending_operations(hoard, repo_uuid):
-                        num_available = op.hoard_props.by_status(FileStatus.AVAILABLE)
-                        if isinstance(op, GetFile):
-                            out.write(f"TO_GET (from {len(num_available)}) {op.hoard_file}\n")
-                            for repo in num_available:
-                                repos_containing_what_this_one_needs[repo] = \
-                                    repos_containing_what_this_one_needs.get(repo, 0) + 1
-                        elif isinstance(op, CopyFile):
-                            out.write(f"TO_COPY (from {len(num_available)}+?) {op.hoard_file}\n")
-                            for repo in num_available:
-                                repos_containing_what_this_one_needs[repo] = \
-                                    repos_containing_what_this_one_needs.get(repo, 0) + 1
-                        elif isinstance(op, CleanupFile):
-                            out.write(f"TO_CLEANUP (is in {len(num_available)}) {op.hoard_file}\n")
-                        else:
-                            raise ValueError(f"Unhandled op type: {type(op)}")
-                    nc = sorted(map(
-                        lambda uc: (config.remotes[uc[0]].name, uc[1]),  # uuid, count -> name, count
-                        repos_containing_what_this_one_needs.items()))
-                    for name, count in nc:
-                        out.write(f" {name} has {count} files\n")
-                out.write("DONE")
-                return out.getvalue()
-
     def reset(self, repo: str):
         config = self.hoard.config()
         pathing = HoardPathing(config, self.hoard.paths())
@@ -410,7 +352,7 @@ class HoardCommandContents:
                 logging.info(f"Iterating over pending ops in {repo_uuid} to reset pending ops")
 
                 with self.hoard[repo_uuid].open_contents() as current_contents:
-                    ops = list(_get_pending_operations(hoard, repo_uuid))
+                    ops = list(get_pending_operations(hoard, repo_uuid))
                     print("Clearing pending operations...")
                     for op in alive_it(ops):
                         local_file = pathing.in_hoard(op.hoard_file).at_local(repo_uuid).as_posix()
@@ -444,19 +386,6 @@ class HoardCommandContents:
 
                 out.write("DONE")
                 return out.getvalue()
-
-
-def _get_pending_operations(hoard: HoardContents, repo_uuid: str) -> Iterable[FileOp]:
-    for hoard_file, hoard_props in hoard.fsobjects.with_pending(repo_uuid):
-        goal_status = hoard_props.get_status(repo_uuid)
-        if goal_status == FileStatus.GET:
-            yield GetFile(hoard_file, hoard_props)
-        elif goal_status == FileStatus.COPY:
-            yield CopyFile(hoard_file, hoard_props)
-        elif goal_status == FileStatus.CLEANUP:
-            yield CleanupFile(hoard_file, hoard_props)
-        else:
-            raise ValueError(f"File {hoard_file} has no pending ops, yet was selected as one that has.")
 
 
 STATUSES_ALREADY_ENABLED = [FileStatus.AVAILABLE, FileStatus.GET]

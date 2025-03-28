@@ -128,7 +128,7 @@ class TestBackups(unittest.TestCase):
             "/wat/test.me.6 = g:1 c:1\n"
             "DONE", res)
 
-        res = hoard_cmd.contents.pending(repo=incoming_cave_cmd.current_uuid())
+        res = hoard_cmd.files.pending(repo=incoming_cave_cmd.current_uuid())
         self.assertEqual(
             "repo-incoming-name:\n"
             "TO_CLEANUP (is in 1) /test.me.4\n"
@@ -158,7 +158,7 @@ class TestBackups(unittest.TestCase):
             "d wat/test.me.6\n"
             "DONE", res)
 
-        res = hoard_cmd.contents.pending(repo=incoming_cave_cmd.current_uuid())
+        res = hoard_cmd.files.pending(repo=incoming_cave_cmd.current_uuid())
         self.assertEqual(
             "repo-incoming-name:\n"
             "DONE", res)
