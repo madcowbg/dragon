@@ -57,12 +57,6 @@ class HoardPathing:
                 paths[remote] = relative_local_path.as_posix()
         return paths
 
-    def total_size_on(self, uuid: str):  # fixme remove
-        return shutil.disk_usage(self._paths[uuid].find()).total
-
-    def free_size_on(self, uuid): # fixme remove
-        return shutil.disk_usage(self._paths[uuid].find()).free
-
 
 def is_path_available(pathing: HoardPathing, hoard_file: str, repo: str) -> bool:
     return pathing.in_hoard(hoard_file).at_local(repo) is not None

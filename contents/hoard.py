@@ -61,6 +61,15 @@ class HoardContentsConfig:
     def max_size(self, uuid: str):
         return self._remote_config(uuid).get("config", {}).get("max_size", 0)
 
+    def set_max_size_fallback(self, uuid: str, max_size: int):
+        # fixme remove when all unit tests that rely on size are fixed
+        remote = self._remote_config(uuid)
+        if 'config' not in remote:
+            remote["config"] = {}
+        if 'max_size' not in remote["config"]:
+            remote["config"]["max_size"] = max_size
+            self.write()
+
 
 class HoardTree:
     def __init__(self, objects: Iterator[Tuple[str, HoardFileProps | HoardDirProps]]):
@@ -386,6 +395,24 @@ class HoardFSObjects:
             self.add_dir(to_fullpath)
         else:
             raise ValueError(f"props type unrecognized: {type(props)}")
+
+    def used_size(self, repo_uuid: str) -> int:
+        used_size = self.parent.conn.execute(
+            "SELECT SUM(fsobject.size) "
+            "FROM fsobject "
+            "WHERE isdir = FALSE AND EXISTS ("
+            "  SELECT 1 FROM fspresence "
+            "  WHERE fspresence.fsobject_id = fsobject.fsobject_id AND "
+            "    uuid = ? AND "
+            f"    status in ({', '.join(['?'] * len(STATUSES_THAT_USE_SIZE))}))",
+            (repo_uuid, *STATUSES_THAT_USE_SIZE)) \
+            .fetchone()[0]
+        return used_size if used_size is not None else 0
+
+
+STATUSES_THAT_USE_SIZE = [
+    HoardFileStatus.AVAILABLE.value, HoardFileStatus.GET.value, HoardFileStatus.COPY.value,
+    HoardFileStatus.CLEANUP.value]
 
 
 class HoardContents:

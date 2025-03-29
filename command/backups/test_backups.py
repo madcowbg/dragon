@@ -225,17 +225,15 @@ class TestBackups(unittest.TestCase):
             "|Num Files                |total     |available |get       |copy      |cleanup   |\n"
             "|backup-1                 |         2|         1|         1|          |          |\n"
             "|backup-2                 |         3|         1|         2|          |          |\n"
-            "|backup-3                 |         1|          |         1|          |          |\n"
-            "|backup-4                 |         1|          |         1|          |          |\n"
+            "|backup-3                 |         3|          |         3|          |          |\n"
             "|repo-full-name           |         6|         3|         3|          |          |\n"
             "|repo-incoming-name       |         4|          |          |          |         4|\n"
             "|repo-partial-name        |         2|         2|          |          |          |\n"
             "\n"
             "|Size                     |total     |available |get       |copy      |cleanup   |\n"
-            "|backup-1                 |       137|        60|        77|          |          |\n"
-            "|backup-2                 |       136|        60|        76|          |          |\n"
-            "|backup-3                 |         9|          |         9|          |          |\n"
-            "|backup-4                 |        77|          |        77|          |          |\n"
+            "|backup-1                 |       120|        60|        60|          |          |\n"
+            "|backup-2                 |       153|        60|        93|          |          |\n"
+            "|backup-3                 |       163|          |       163|          |          |\n"
             "|repo-full-name           |       299|       153|       146|          |          |\n"
             "|repo-incoming-name       |       223|          |          |          |       223|\n"
             "|repo-partial-name        |        76|        76|          |          |          |\n", res)
@@ -245,15 +243,15 @@ class TestBackups(unittest.TestCase):
             "# backup sets: 1\n"
             "# backups: 4\n"
             "scheduled count:\n"
-            " 1: 5 files (239)\n"
-            " 2: 1 files (60)\n"
+            " 1: 4 files (162)\n"
+            " 2: 2 files (137)\n"
             "available count:\n"
             " 0: 5 files (239)\n"
             " 2: 1 files (60)\n"
             "get_or_copy count:\n"
             " 0: 1 files (60)\n"
-            " 1: 2 files (93)\n"
-            " 2: 3 files (146)\n"
+            " 1: 1 files (16)\n"
+            " 2: 4 files (223)\n"
             "cleanup count:\n"
             " 0: 2 files (76)\n"
             " 1: 4 files (223)\n"
@@ -268,14 +266,15 @@ class TestBackups(unittest.TestCase):
             "+ wat/test.me.6\n"
             "repo-incoming-name:\n"
             "backup-1:\n"
-            "+ test.me.4\n"
-            "backup-2:\n"
             "+ test.me.5\n"
+            "backup-2:\n"
+            "+ test.me.4\n"
             "+ wat/test.me.2\n"
             "backup-3:\n"
+            "+ test.me.4\n"
             "+ wat/test.me.3\n"
-            "backup-4:\n"
             "+ wat/test.me.6\n"
+            "backup-4:\n"
             "repo-partial-name:\n"
             "repo-full-name:\n"
             "repo-incoming-name:\n"
@@ -294,11 +293,11 @@ class TestBackups(unittest.TestCase):
             "# backup sets: 1\n"
             "# backups: 4\n"
             "scheduled count:\n"
-            " 1: 5 files (239)\n"
-            " 2: 1 files (60)\n"
+            " 1: 4 files (162)\n"
+            " 2: 2 files (137)\n"
             "available count:\n"
-            " 1: 5 files (239)\n"
-            " 2: 1 files (60)\n"
+            " 1: 4 files (162)\n"
+            " 2: 2 files (137)\n"
             "get_or_copy count:\n"
             " 0: 6 files (299)\n"
             "cleanup count:\n"
@@ -316,16 +315,14 @@ class TestBackups(unittest.TestCase):
             '|Num Files                |total     |available |get       |copy      |cleanup   |\n'
             '|backup-1                 |         2|         2|          |          |          |\n'
             '|backup-2                 |         3|         2|          |          |         1|\n'
-            '|backup-3                 |         1|         1|          |          |          |\n'
-            "|backup-4                 |         1|         1|          |          |          |\n"
+            '|backup-3                 |         3|         3|          |          |          |\n'
             '|repo-full-name           |         6|         6|          |          |          |\n'
             '|repo-partial-name        |         2|         2|          |          |          |\n'
             '\n'
             '|Size                     |total     |available |get       |copy      |cleanup   |\n'
-            '|backup-1                 |       137|       137|          |          |          |\n'
-            '|backup-2                 |       136|       120|          |          |        16|\n'
-            '|backup-3                 |         9|         9|          |          |          |\n'
-            '|backup-4                 |        77|        77|          |          |          |\n'
+            '|backup-1                 |       120|       120|          |          |          |\n'
+            '|backup-2                 |       153|       137|          |          |        16|\n'
+            '|backup-3                 |       163|       163|          |          |          |\n'
             '|repo-full-name           |       299|       299|          |          |          |\n'
             '|repo-partial-name        |        76|        76|          |          |          |\n', res)
 
@@ -404,10 +401,10 @@ class TestBackups(unittest.TestCase):
         print(nice_dump(res))
         self.assertEqual(
             'set: / with 4 media\n'
-            ' backup-1 <- 1 files (16)\n'
+            ' backup-1 <- 1 files (9)\n'
             ' backup-2 <- 1 files (77)\n'
-            ' backup-3 <- 1 files (60)\n'
-            ' backup-4 <- 2 files (86)\n'
+            ' backup-3 <- 2 files (76)\n'
+            ' backup-4 <- 1 files (77)\n'
             'DONE', res)
 
         res = hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
@@ -415,24 +412,24 @@ class TestBackups(unittest.TestCase):
             "|Num Files                |total     |available |get       |copy      |cleanup   |\n"
             "|backup-1                 |         2|         1|         1|          |          |\n"
             "|backup-2                 |         2|         1|         1|          |          |\n"
-            "|backup-3                 |         1|          |         1|          |          |\n"
-            "|backup-4                 |         2|          |         2|          |          |\n"
+            "|backup-3                 |         2|          |         2|          |          |\n"
+            "|backup-4                 |         1|          |         1|          |          |\n"
             "|repo-full-name           |         6|         3|         3|          |          |\n"
             "|repo-incoming-name       |         4|          |          |          |         4|\n"
             "|repo-partial-name        |         2|         2|          |          |          |\n"
             "\n"
             "|Size                     |total     |available |get       |copy      |cleanup   |\n"
-            "|backup-1                 |        76|        60|        16|          |          |\n"
+            "|backup-1                 |        69|        60|         9|          |          |\n"
             "|backup-2                 |       137|        60|        77|          |          |\n"
-            "|backup-3                 |        60|          |        60|          |          |\n"
-            "|backup-4                 |        86|          |        86|          |          |\n"
+            "|backup-3                 |        76|          |        76|          |          |\n"
+            "|backup-4                 |        77|          |        77|          |          |\n"
             "|repo-full-name           |       299|       153|       146|          |          |\n"
             "|repo-incoming-name       |       223|          |          |          |       223|\n"
             "|repo-partial-name        |        76|        76|          |          |          |\n", res)
 
         res = hoard_cmd.contents.drop(repo="backup-1", path="wat")
         self.assertEqual(
-            'WONT_GET /wat/test.me.2\n'  # fixme wrong
+            'WONT_GET /wat/test.me.3\n'  # fixme wrong
             "Considered 6 files, 0 marked for cleanup, 1 won't be downloaded, 2 are skipped.\n"
             'DONE', res)
 
@@ -441,8 +438,8 @@ class TestBackups(unittest.TestCase):
             '|Num Files                |total     |available |get       |copy      |cleanup   |\n'
             '|backup-1                 |         1|         1|          |          |          |\n'
             '|backup-2                 |         2|         1|         1|          |          |\n'
-            '|backup-3                 |         1|          |         1|          |          |\n'
-            '|backup-4                 |         2|          |         2|          |          |\n'
+            '|backup-3                 |         2|          |         2|          |          |\n'
+            '|backup-4                 |         1|          |         1|          |          |\n'
             '|repo-full-name           |         6|         3|         3|          |          |\n'
             '|repo-incoming-name       |         4|          |          |          |         4|\n'
             '|repo-partial-name        |         2|         2|          |          |          |\n'
@@ -450,8 +447,8 @@ class TestBackups(unittest.TestCase):
             '|Size                     |total     |available |get       |copy      |cleanup   |\n'
             '|backup-1                 |        60|        60|          |          |          |\n'
             '|backup-2                 |       137|        60|        77|          |          |\n'
-            '|backup-3                 |        60|          |        60|          |          |\n'
-            '|backup-4                 |        86|          |        86|          |          |\n'
+            '|backup-3                 |        76|          |        76|          |          |\n'
+            '|backup-4                 |        77|          |        77|          |          |\n'
             '|repo-full-name           |       299|       153|       146|          |          |\n'
             '|repo-incoming-name       |       223|          |          |          |       223|\n'
             '|repo-partial-name        |        76|        76|          |          |          |\n', res)
@@ -461,16 +458,16 @@ class TestBackups(unittest.TestCase):
             '# backup sets: 1\n'
             '# backups: 4\n'
             'scheduled count:\n'
-            ' 0: 1 files (16)\n'
-            ' 1: 4 files (223)\n'
+            ' 0: 1 files (9)\n'
+            ' 1: 4 files (230)\n'
             ' 2: 1 files (60)\n'
             'available count:\n'
             ' 0: 5 files (239)\n'
             ' 2: 1 files (60)\n'
             'get_or_copy count:\n'
-            ' 0: 2 files (76)\n'
-            ' 1: 1 files (77)\n'
-            ' 2: 3 files (146)\n'
+            ' 0: 1 files (60)\n'
+            ' 1: 3 files (102)\n'
+            ' 2: 2 files (137)\n'
             'cleanup count:\n'
             ' 0: 2 files (76)\n'
             ' 1: 4 files (223)\n'
@@ -488,15 +485,15 @@ class TestBackups(unittest.TestCase):
             '# backup sets: 1\n'
             '# backups: 4\n'
             'scheduled count:\n'
-            ' 0: 1 files (16)\n'
-            ' 1: 5 files (283)\n'
+            ' 0: 1 files (9)\n'
+            ' 1: 5 files (290)\n'
             'available count:\n'
             ' 0: 5 files (239)\n'
             ' 1: 1 files (60)\n'
             'get_or_copy count:\n'
-            ' 0: 2 files (76)\n'
-            ' 1: 1 files (77)\n'
-            ' 2: 3 files (146)\n'
+            ' 0: 1 files (60)\n'
+            ' 1: 3 files (102)\n'
+            ' 2: 2 files (137)\n'
             'cleanup count:\n'
             ' 0: 1 files (16)\n'
             ' 1: 5 files (283)\n'

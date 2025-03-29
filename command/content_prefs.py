@@ -12,22 +12,14 @@ MIN_REPO_PERC_FREE = 0.02
 
 
 class Size:
-    def __init__(self, backup: HoardRemote, pathing: HoardPathing):
+    def __init__(self, backup: HoardRemote, hoard: HoardContents):
         self.backup = backup
 
-        # fixme make it independent of whether we have the media available
-        # fixme make it work with multiple caves on a single media, to be per-media instead of per-cave
         # fixme make it more dynamic, as usage can change over time
         self.reserved = 0
-        try:
-            self.total_size = pathing.total_size_on(backup.uuid)
-            self.current_free_size = pathing.free_size_on(backup.uuid)
-        except FileNotFoundError as e:
-            self.total_size = 1
-            self.current_free_size = 0
-        except PermissionError as e:
-            self.total_size = 1
-            self.current_free_size = 0
+        self.total_size = hoard.config.max_size(backup.uuid)
+        used_size = hoard.fsobjects.used_size(backup.uuid)
+        self.current_free_size = self.total_size - used_size
 
         logging.debug(
             f"Space for {backup.name}: "
@@ -43,9 +35,9 @@ class Size:
 
 
 class BackupSizes:
-    def __init__(self, backups: Dict[str, HoardRemote], pathing: HoardPathing, hoard: HoardContents):
+    def __init__(self, backups: Dict[str, HoardRemote], hoard: HoardContents):
         self.backups = backups
-        self.sizes = dict((b.uuid, Size(b, pathing)) for b in self.backups.values())
+        self.sizes = dict((b.uuid, Size(b, hoard)) for b in self.backups.values())
 
     def reserve_size(self, remote: HoardRemote, size: int):
         logging.debug(f"Reserving {format_size(size)} on {remote}")
@@ -61,7 +53,7 @@ class BackupSet:
         self.uuids = sorted(list(self.backups.keys()))
         self.pathing = pathing
 
-        self.backup_sizes = BackupSizes(self.backups, self.pathing, hoard)
+        self.backup_sizes = BackupSizes(self.backups, hoard)
 
         self.mounted_at = mounted_at
 

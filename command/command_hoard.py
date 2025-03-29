@@ -133,6 +133,9 @@ class HoardCommand(object):
         paths[remote_uuid] = CavePath.exact(remote_abs_path, speed, latency)
         paths.write()
 
+        with self.hoard.open_contents(create_missing=True) as hoard:  # fixme remove when unit tests are updated
+            hoard.config.set_max_size_fallback(remote_uuid, shutil.disk_usage(remote_path).total)
+
         return f"Added {name}[{remote_uuid}] at {remote_path}!"
 
     def mount_remote(self, remote: str, mount_point: str, force: bool = False):

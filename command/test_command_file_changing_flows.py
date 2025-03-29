@@ -429,13 +429,13 @@ class TestFileChangingFlows(unittest.TestCase):
         res = hoard_cmd.contents.status()
         self.assertEqual(
             "|Num Files                |             updated|     max|total     |available |get       |copy      |cleanup   |\n"
-            "|repo-backup-name         |               never|       0|         2|          |         2|          |          |\n"
-            "|repo-full-name           |               never|       0|         2|          |         2|          |          |\n"
+            "|repo-backup-name         |               never|   3.6TB|         2|          |         2|          |          |\n"
+            "|repo-full-name           |               never|   3.6TB|         2|          |         2|          |          |\n"
             "|repo-partial-name        |                 now|   3.6TB|         2|         2|          |          |          |\n"
             "\n"
             "|Size                     |             updated|     max|total     |available |get       |copy      |cleanup   |\n"
-            "|repo-backup-name         |               never|       0|        14|          |        14|          |          |\n"
-            "|repo-full-name           |               never|       0|        14|          |        14|          |          |\n"
+            "|repo-backup-name         |               never|   3.6TB|        14|          |        14|          |          |\n"
+            "|repo-full-name           |               never|   3.6TB|        14|          |        14|          |          |\n"
             "|repo-partial-name        |                 now|   3.6TB|        14|        14|          |          |          |\n"
             "", res)
 
