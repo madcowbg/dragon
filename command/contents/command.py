@@ -58,9 +58,12 @@ class HoardCommandContents:
                 [(remote.name, remote.uuid, hoard.config.updated(remote.uuid), {})  # those lacking a recorded file
                  for remote in config.remotes.all() if show_empty and remote.uuid not in statuses]
             statuses_sorted = sorted(statuses_present)
-            all_stats = ["total", HoardFileStatus.AVAILABLE.value, HoardFileStatus.GET.value,
-                         HoardFileStatus.COPY.value,
-                         HoardFileStatus.CLEANUP.value]
+
+            available_states = set(sum((list(stats.keys()) for _, _, _, stats in statuses_sorted), []))
+
+            all_stats = ["total", *(s for s in (HoardFileStatus.AVAILABLE.value, HoardFileStatus.GET.value,
+                         HoardFileStatus.COPY.value, HoardFileStatus.MOVE.value,
+                         HoardFileStatus.CLEANUP.value) if s in available_states)]
             with StringIO() as out:
                 out.write(f"|{'Num Files':<25}|")
                 if not hide_time:

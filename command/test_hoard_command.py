@@ -554,17 +554,17 @@ class TestHoardCommand(unittest.TestCase):
         res = hoard_cmd.contents.status(hide_disk_sizes=True)
         self.assertEqual(
             ""
-            "|Num Files                |             updated|total     |available |get       |copy      |cleanup   |\n"
-            "|repo-backup-name         |                 now|         6|         1|         5|          |          |\n"
-            "|repo-full-name           |                 now|         6|         3|         3|          |          |\n"
-            "|repo-incoming-name       |                 now|         4|          |          |          |         4|\n"
-            "|repo-partial-name        |                 now|         2|         2|          |          |          |\n"
+            "|Num Files                |             updated|total     |available |get       |cleanup   |\n"
+            "|repo-backup-name         |                 now|         6|         1|         5|          |\n"
+            "|repo-full-name           |                 now|         6|         3|         3|          |\n"
+            "|repo-incoming-name       |                 now|         4|          |          |         4|\n"
+            "|repo-partial-name        |                 now|         2|         2|          |          |\n"
             "\n"
-            "|Size                     |             updated|total     |available |get       |copy      |cleanup   |\n"
-            "|repo-backup-name         |                 now|        46|         6|        40|          |          |\n"
-            "|repo-full-name           |                 now|        46|        25|        21|          |          |\n"
-            "|repo-incoming-name       |                 now|        32|          |          |          |        32|\n"
-            "|repo-partial-name        |                 now|        14|        14|          |          |          |\n",
+            "|Size                     |             updated|total     |available |get       |cleanup   |\n"
+            "|repo-backup-name         |                 now|        46|         6|        40|          |\n"
+            "|repo-full-name           |                 now|        46|        25|        21|          |\n"
+            "|repo-incoming-name       |                 now|        32|          |          |        32|\n"
+            "|repo-partial-name        |                 now|        14|        14|          |          |\n",
             res)
 
     def test_sync_hoard_file_contents_all(self):
@@ -580,17 +580,17 @@ class TestHoardCommand(unittest.TestCase):
         res = hoard_cmd.contents.status(hide_disk_sizes=True)
         self.assertEqual(
             ""
-            "|Num Files                |             updated|total     |available |get       |copy      |cleanup   |\n"
-            "|repo-backup-name         |                 now|         6|         1|         5|          |          |\n"
-            "|repo-full-name           |                 now|         6|         3|         3|          |          |\n"
-            "|repo-incoming-name       |                 now|         4|          |          |          |         4|\n"
-            "|repo-partial-name        |                 now|         2|         2|          |          |          |\n"
+            "|Num Files                |             updated|total     |available |get       |cleanup   |\n"
+            "|repo-backup-name         |                 now|         6|         1|         5|          |\n"
+            "|repo-full-name           |                 now|         6|         3|         3|          |\n"
+            "|repo-incoming-name       |                 now|         4|          |          |         4|\n"
+            "|repo-partial-name        |                 now|         2|         2|          |          |\n"
             "\n"
-            "|Size                     |             updated|total     |available |get       |copy      |cleanup   |\n"
-            "|repo-backup-name         |                 now|        46|         6|        40|          |          |\n"
-            "|repo-full-name           |                 now|        46|        25|        21|          |          |\n"
-            "|repo-incoming-name       |                 now|        32|          |          |          |        32|\n"
-            "|repo-partial-name        |                 now|        14|        14|          |          |          |\n",
+            "|Size                     |             updated|total     |available |get       |cleanup   |\n"
+            "|repo-backup-name         |                 now|        46|         6|        40|          |\n"
+            "|repo-full-name           |                 now|        46|        25|        21|          |\n"
+            "|repo-incoming-name       |                 now|        32|          |          |        32|\n"
+            "|repo-partial-name        |                 now|        14|        14|          |          |\n",
             res)
 
         res = hoard_cmd.files.push(all=True)

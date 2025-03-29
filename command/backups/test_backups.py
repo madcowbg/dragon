@@ -222,21 +222,21 @@ class TestBackups(unittest.TestCase):
 
         res = hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual(
-            "|Num Files                |total     |available |get       |copy      |cleanup   |\n"
-            "|backup-1                 |         2|         1|         1|          |          |\n"
-            "|backup-2                 |         3|         1|         2|          |          |\n"
-            "|backup-3                 |         3|          |         3|          |          |\n"
-            "|repo-full-name           |         6|         3|         3|          |          |\n"
-            "|repo-incoming-name       |         4|          |          |          |         4|\n"
-            "|repo-partial-name        |         2|         2|          |          |          |\n"
+            "|Num Files                |total     |available |get       |cleanup   |\n"
+            "|backup-1                 |         2|         1|         1|          |\n"
+            "|backup-2                 |         3|         1|         2|          |\n"
+            "|backup-3                 |         3|          |         3|          |\n"
+            "|repo-full-name           |         6|         3|         3|          |\n"
+            "|repo-incoming-name       |         4|          |          |         4|\n"
+            "|repo-partial-name        |         2|         2|          |          |\n"
             "\n"
-            "|Size                     |total     |available |get       |copy      |cleanup   |\n"
-            "|backup-1                 |       120|        60|        60|          |          |\n"
-            "|backup-2                 |       153|        60|        93|          |          |\n"
-            "|backup-3                 |       163|          |       163|          |          |\n"
-            "|repo-full-name           |       299|       153|       146|          |          |\n"
-            "|repo-incoming-name       |       223|          |          |          |       223|\n"
-            "|repo-partial-name        |        76|        76|          |          |          |\n", res)
+            "|Size                     |total     |available |get       |cleanup   |\n"
+            "|backup-1                 |       120|        60|        60|          |\n"
+            "|backup-2                 |       153|        60|        93|          |\n"
+            "|backup-3                 |       163|          |       163|          |\n"
+            "|repo-full-name           |       299|       153|       146|          |\n"
+            "|repo-incoming-name       |       223|          |          |       223|\n"
+            "|repo-partial-name        |        76|        76|          |          |\n", res)
 
         res = hoard_cmd.backups.health()
         self.assertEqual(
@@ -316,19 +316,19 @@ class TestBackups(unittest.TestCase):
 
         res = hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual(
-            '|Num Files                |total     |available |get       |copy      |cleanup   |\n'
-            '|backup-1                 |         2|         2|          |          |          |\n'
-            '|backup-2                 |         3|         2|          |          |         1|\n'
-            '|backup-3                 |         3|         3|          |          |          |\n'
-            '|repo-full-name           |         6|         6|          |          |          |\n'
-            '|repo-partial-name        |         2|         2|          |          |          |\n'
+            '|Num Files                |total     |available |cleanup   |\n'
+            '|backup-1                 |         2|         2|          |\n'
+            '|backup-2                 |         3|         2|         1|\n'
+            '|backup-3                 |         3|         3|          |\n'
+            '|repo-full-name           |         6|         6|          |\n'
+            '|repo-partial-name        |         2|         2|          |\n'
             '\n'
-            '|Size                     |total     |available |get       |copy      |cleanup   |\n'
-            '|backup-1                 |       120|       120|          |          |          |\n'
-            '|backup-2                 |       153|       137|          |          |        16|\n'
-            '|backup-3                 |       163|       163|          |          |          |\n'
-            '|repo-full-name           |       299|       299|          |          |          |\n'
-            '|repo-partial-name        |        76|        76|          |          |          |\n', res)
+            '|Size                     |total     |available |cleanup   |\n'
+            '|backup-1                 |       120|       120|          |\n'
+            '|backup-2                 |       153|       137|        16|\n'
+            '|backup-3                 |       163|       163|          |\n'
+            '|repo-full-name           |       299|       299|          |\n'
+            '|repo-partial-name        |        76|        76|          |\n', res)
 
     def test_add_backup_repos_over_time(self):
         hoard_cmd, partial_cave_cmd, full_cave_cmd, incoming_cave_cmd = init_complex_hoard(self.tmpdir.name)
@@ -369,19 +369,19 @@ class TestBackups(unittest.TestCase):
 
         res = hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual(
-            "|Num Files                |total     |available |get       |copy      |cleanup   |\n"
-            "|backup-1                 |         1|         1|          |          |          |\n"
-            "|backup-2                 |         1|         1|          |          |          |\n"
-            "|repo-full-name           |         6|         3|         3|          |          |\n"
-            "|repo-incoming-name       |         4|          |          |          |         4|\n"
-            "|repo-partial-name        |         2|         2|          |          |          |\n"
+            "|Num Files                |total     |available |get       |cleanup   |\n"
+            "|backup-1                 |         1|         1|          |          |\n"
+            "|backup-2                 |         1|         1|          |          |\n"
+            "|repo-full-name           |         6|         3|         3|          |\n"
+            "|repo-incoming-name       |         4|          |          |         4|\n"
+            "|repo-partial-name        |         2|         2|          |          |\n"
             "\n"
-            "|Size                     |total     |available |get       |copy      |cleanup   |\n"
-            "|backup-1                 |        60|        60|          |          |          |\n"
-            "|backup-2                 |        60|        60|          |          |          |\n"
-            "|repo-full-name           |       299|       153|       146|          |          |\n"
-            "|repo-incoming-name       |       223|          |          |          |       223|\n"
-            "|repo-partial-name        |        76|        76|          |          |          |\n", res)
+            "|Size                     |total     |available |get       |cleanup   |\n"
+            "|backup-1                 |        60|        60|          |          |\n"
+            "|backup-2                 |        60|        60|          |          |\n"
+            "|repo-full-name           |       299|       153|       146|          |\n"
+            "|repo-incoming-name       |       223|          |          |       223|\n"
+            "|repo-partial-name        |        76|        76|          |          |\n", res)
 
         res = hoard_cmd.backups.health()
         self.assertEqual(
@@ -415,23 +415,23 @@ class TestBackups(unittest.TestCase):
 
         res = hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual(
-            "|Num Files                |total     |available |get       |copy      |cleanup   |\n"
-            "|backup-1                 |         2|         1|         1|          |          |\n"
-            "|backup-2                 |         2|         1|         1|          |          |\n"
-            "|backup-3                 |         2|          |         2|          |          |\n"
-            "|backup-4                 |         1|          |         1|          |          |\n"
-            "|repo-full-name           |         6|         3|         3|          |          |\n"
-            "|repo-incoming-name       |         4|          |          |          |         4|\n"
-            "|repo-partial-name        |         2|         2|          |          |          |\n"
+            "|Num Files                |total     |available |get       |cleanup   |\n"
+            "|backup-1                 |         2|         1|         1|          |\n"
+            "|backup-2                 |         2|         1|         1|          |\n"
+            "|backup-3                 |         2|          |         2|          |\n"
+            "|backup-4                 |         1|          |         1|          |\n"
+            "|repo-full-name           |         6|         3|         3|          |\n"
+            "|repo-incoming-name       |         4|          |          |         4|\n"
+            "|repo-partial-name        |         2|         2|          |          |\n"
             "\n"
-            "|Size                     |total     |available |get       |copy      |cleanup   |\n"
-            "|backup-1                 |        69|        60|         9|          |          |\n"
-            "|backup-2                 |       137|        60|        77|          |          |\n"
-            "|backup-3                 |        76|          |        76|          |          |\n"
-            "|backup-4                 |        77|          |        77|          |          |\n"
-            "|repo-full-name           |       299|       153|       146|          |          |\n"
-            "|repo-incoming-name       |       223|          |          |          |       223|\n"
-            "|repo-partial-name        |        76|        76|          |          |          |\n", res)
+            "|Size                     |total     |available |get       |cleanup   |\n"
+            "|backup-1                 |        69|        60|         9|          |\n"
+            "|backup-2                 |       137|        60|        77|          |\n"
+            "|backup-3                 |        76|          |        76|          |\n"
+            "|backup-4                 |        77|          |        77|          |\n"
+            "|repo-full-name           |       299|       153|       146|          |\n"
+            "|repo-incoming-name       |       223|          |          |       223|\n"
+            "|repo-partial-name        |        76|        76|          |          |\n", res)
 
         res = hoard_cmd.contents.drop(repo="backup-1", path="wat")
         self.assertEqual(
@@ -441,23 +441,23 @@ class TestBackups(unittest.TestCase):
 
         res = hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual(
-            '|Num Files                |total     |available |get       |copy      |cleanup   |\n'
-            '|backup-1                 |         1|         1|          |          |          |\n'
-            '|backup-2                 |         2|         1|         1|          |          |\n'
-            '|backup-3                 |         2|          |         2|          |          |\n'
-            '|backup-4                 |         1|          |         1|          |          |\n'
-            '|repo-full-name           |         6|         3|         3|          |          |\n'
-            '|repo-incoming-name       |         4|          |          |          |         4|\n'
-            '|repo-partial-name        |         2|         2|          |          |          |\n'
+            '|Num Files                |total     |available |get       |cleanup   |\n'
+            '|backup-1                 |         1|         1|          |          |\n'
+            '|backup-2                 |         2|         1|         1|          |\n'
+            '|backup-3                 |         2|          |         2|          |\n'
+            '|backup-4                 |         1|          |         1|          |\n'
+            '|repo-full-name           |         6|         3|         3|          |\n'
+            '|repo-incoming-name       |         4|          |          |         4|\n'
+            '|repo-partial-name        |         2|         2|          |          |\n'
             '\n'
-            '|Size                     |total     |available |get       |copy      |cleanup   |\n'
-            '|backup-1                 |        60|        60|          |          |          |\n'
-            '|backup-2                 |       137|        60|        77|          |          |\n'
-            '|backup-3                 |        76|          |        76|          |          |\n'
-            '|backup-4                 |        77|          |        77|          |          |\n'
-            '|repo-full-name           |       299|       153|       146|          |          |\n'
-            '|repo-incoming-name       |       223|          |          |          |       223|\n'
-            '|repo-partial-name        |        76|        76|          |          |          |\n', res)
+            '|Size                     |total     |available |get       |cleanup   |\n'
+            '|backup-1                 |        60|        60|          |          |\n'
+            '|backup-2                 |       137|        60|        77|          |\n'
+            '|backup-3                 |        76|          |        76|          |\n'
+            '|backup-4                 |        77|          |        77|          |\n'
+            '|repo-full-name           |       299|       153|       146|          |\n'
+            '|repo-incoming-name       |       223|          |          |       223|\n'
+            '|repo-partial-name        |        76|        76|          |          |\n', res)
 
         res = hoard_cmd.backups.health()
         self.assertEqual(
