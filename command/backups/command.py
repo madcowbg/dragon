@@ -38,7 +38,7 @@ class HoardCommandBackups:
                 print("Iterating over hoard files")
 
                 file_sizes: Dict[str, int] = dict()
-                file_stats_copies: Dict[str, Tuple[int, int, int, int]] = dict()
+                file_stats_copies: Dict[str, Tuple[int, int, int, int, int]] = dict()
                 for hoard_file, hoard_props in alive_it(hoard.fsobjects):
                     if isinstance(hoard_props, HoardDirProps):
                         continue
@@ -49,10 +49,11 @@ class HoardCommandBackups:
                         scheduled += len(backup_set.currently_scheduled_backups(hoard_file, hoard_props))
 
                     available = sum(1 for uuid in hoard_props.by_status(HoardFileStatus.AVAILABLE) if uuid in backup_media)
-                    get_or_copy = len(hoard_props.by_statuses(HoardFileStatus.GET, HoardFileStatus.COPY))
+                    get_or_copy = len(hoard_props.by_statuses(HoardFileStatus.GET, HoardFileStatus.COPY, HoardFileStatus.MOVE))
+                    move = len(hoard_props.by_status(HoardFileStatus.MOVE))
                     cleanup = len(hoard_props.by_status(HoardFileStatus.CLEANUP))
 
-                    file_stats_copies[hoard_file] = (scheduled, available, get_or_copy, cleanup)
+                    file_stats_copies[hoard_file] = (scheduled, available, get_or_copy, move, cleanup)
 
                 def pivot_stat(stat_idx, fun: Callable[[str], int]) -> Dict[int, int]:
                     return dict(
@@ -64,7 +65,7 @@ class HoardCommandBackups:
                             lambda stat_file_tuple: stat_file_tuple[0],
                         ))
 
-                for idx, name in [(0, "scheduled"), (1, "available"), (2, "get_or_copy"), (3, "cleanup")]:
+                for idx, name in [(0, "scheduled"), (1, "available"), (2, "get_or_copy"), (3, "move"), (4, "cleanup")]:
                     out.write(f"{name} count:\n")
                     sizes = pivot_stat(idx, lambda f: file_sizes[f])
                     for num_copies, cnt in sorted(pivot_stat(idx, lambda _: 1).items(), key=lambda x: x[0]):

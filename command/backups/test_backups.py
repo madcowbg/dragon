@@ -252,6 +252,8 @@ class TestBackups(unittest.TestCase):
             " 0: 1 files (60)\n"
             " 1: 1 files (16)\n"
             " 2: 4 files (223)\n"
+            "move count:\n"
+            " 0: 6 files (299)\n"
             "cleanup count:\n"
             " 0: 2 files (76)\n"
             " 1: 4 files (223)\n"
@@ -299,6 +301,8 @@ class TestBackups(unittest.TestCase):
             " 1: 4 files (162)\n"
             " 2: 2 files (137)\n"
             "get_or_copy count:\n"
+            " 0: 6 files (299)\n"
+            "move count:\n"
             " 0: 6 files (299)\n"
             "cleanup count:\n"
             " 0: 6 files (299)\n"
@@ -392,6 +396,8 @@ class TestBackups(unittest.TestCase):
             "get_or_copy count:\n"
             " 0: 3 files (153)\n"
             " 1: 3 files (146)\n"
+            "move count:\n"
+            " 0: 6 files (299)\n"
             "cleanup count:\n"
             " 0: 2 files (76)\n"
             " 1: 4 files (223)\n"
@@ -468,6 +474,8 @@ class TestBackups(unittest.TestCase):
             ' 0: 1 files (60)\n'
             ' 1: 3 files (102)\n'
             ' 2: 2 files (137)\n'
+            "move count:\n"
+            " 0: 6 files (299)\n"
             'cleanup count:\n'
             ' 0: 2 files (76)\n'
             ' 1: 4 files (223)\n'
@@ -494,6 +502,8 @@ class TestBackups(unittest.TestCase):
             ' 0: 1 files (60)\n'
             ' 1: 3 files (102)\n'
             ' 2: 2 files (137)\n'
+            "move count:\n"
+            " 0: 6 files (299)\n"
             'cleanup count:\n'
             ' 0: 1 files (16)\n'
             ' 1: 5 files (283)\n'
