@@ -17,7 +17,7 @@ class Size:
 
         # fixme make it more dynamic, as usage can change over time
         self.reserved = 0
-        self.total_size = hoard.config.max_size(backup.uuid)
+        self.total_size = max(1, hoard.config.max_size(backup.uuid))
         used_size = hoard.fsobjects.used_size(backup.uuid)
         self.current_free_size = self.total_size - used_size
 
