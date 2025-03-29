@@ -48,12 +48,16 @@ class HoardCommandContents:
     def __init__(self, hoard: Hoard):
         self.hoard = hoard
 
-    def status(self, hide_time: bool = False, hide_disk_sizes: bool = False):
+    def status(self, hide_time: bool = False, hide_disk_sizes: bool = False, show_empty: bool = False):
         config = self.hoard.config()
         with HoardContents.load(self.hoard.hoardpath) as hoard:
             statuses: Dict[str, Dict[str, Dict[str, Any]]] = hoard.fsobjects.status_by_uuid
-            statuses_sorted = sorted(
-                (config.remotes[uuid].name, uuid, hoard.config.updated(uuid), vals) for uuid, vals in statuses.items())
+            statuses_present = \
+                [(config.remotes[uuid].name, uuid, hoard.config.updated(uuid), vals)  # those that have files recorded
+                 for uuid, vals in statuses.items()] + \
+                [(remote.name, remote.uuid, hoard.config.updated(remote.uuid), {})  # those lacking a recorded file
+                 for remote in config.remotes.all() if show_empty and remote.uuid not in statuses]
+            statuses_sorted = sorted(statuses_present)
             all_stats = ["total", HoardFileStatus.AVAILABLE.value, HoardFileStatus.GET.value,
                          HoardFileStatus.COPY.value,
                          HoardFileStatus.CLEANUP.value]
