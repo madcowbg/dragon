@@ -57,7 +57,7 @@ class TestRepoCommand(unittest.TestCase):
         self.assertEqual(['current.uuid'], os.listdir(join(self.tmpdir.name, "repo", ".hoard")))
 
         cave_cmd = TotalCommand(path=join(self.tmpdir.name, "repo")).cave
-        res = cave_cmd.refresh()
+        res = cave_cmd.refresh(show_details=False)
         self.assertEqual(f"Refresh done!", res)
 
         current_uuid = cave_cmd.current_uuid()
@@ -74,7 +74,7 @@ class TestRepoCommand(unittest.TestCase):
         res = cave_cmd.status()
         self.assertEqual(f"Repo {cave_cmd.current_uuid()} contents have not been refreshed yet!", res)
 
-        cave_cmd.refresh()
+        cave_cmd.refresh(show_details=False)
 
         res = cave_cmd.status_index(show_dates=False)
         self.assertEqual([
@@ -116,7 +116,7 @@ class TestRepoCommand(unittest.TestCase):
         res = cave_cmd.status()
         self.assertEqual(f"Repo {cave_cmd.current_uuid()} contents have not been refreshed yet!", res)
 
-        res = cave_cmd.refresh()
+        res = cave_cmd.refresh(show_details=False)
         self.assertEqual(f"Refresh done!", res)
 
         res = cave_cmd.status_index(show_dates=False)
@@ -138,7 +138,7 @@ class TestRepoCommand(unittest.TestCase):
         pfw('repo/wat/test.me.anew', "pkosadu")
         pfw('repo/wat/test.me.twice', None)
 
-        res = cave_cmd.refresh()
+        res = cave_cmd.refresh(show_details=False)
         self.assertEqual(f"Refresh done!", res)
 
         res = cave_cmd.status_index(show_dates=False)
@@ -192,7 +192,7 @@ class TestRepoCommand(unittest.TestCase):
             f" in repo: 1\n"
             f" deleted: 0 (0.0%)\n", res)
 
-        res = cave_cmd.refresh()
+        res = cave_cmd.refresh(show_details=False)
         self.assertEqual(f"Refresh done!", res)
 
         res = cave_cmd.status_index(show_dates=False)

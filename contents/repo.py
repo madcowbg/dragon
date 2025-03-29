@@ -20,20 +20,20 @@ class FSObjects:
         @property
         def num_files(self) -> int:
             return self.parent._first_value_cursor().execute(
-                "SELECT count(1) FROM fsobject WHERE isdir=FALSE AND last_status != ?",
-                (RepoFileStatus.DELETED.value,)).fetchone()
+                "SELECT count(1) FROM fsobject WHERE isdir=FALSE AND last_status NOT IN (?, ?)",
+                (RepoFileStatus.DELETED.value, RepoFileStatus.MOVED_FROM.value)).fetchone()
 
         @property
         def num_dirs(self) -> int:
             return self.parent._first_value_cursor().execute(
-                "SELECT count(1) FROM fsobject WHERE isdir=TRUE AND last_status != ?",
-                (RepoFileStatus.DELETED.value,)).fetchone()
+                "SELECT count(1) FROM fsobject WHERE isdir=TRUE AND last_status NOT IN (?, ?)",
+                (RepoFileStatus.DELETED.value, RepoFileStatus.MOVED_FROM.value)).fetchone()
 
         @property
         def total_size(self) -> int:
             return self.parent._first_value_cursor().execute(
-                "SELECT sum(size) FROM fsobject WHERE isdir=FALSE AND last_status != ?",
-                (RepoFileStatus.DELETED.value,)).fetchone()
+                "SELECT sum(size) FROM fsobject WHERE isdir=FALSE AND last_status NOT IN (?, ?)",
+                (RepoFileStatus.DELETED.value, RepoFileStatus.MOVED_FROM.value)).fetchone()
 
     def __init__(self, parent: "RepoContents"):
         self.parent = parent
@@ -49,26 +49,27 @@ class FSObjects:
 
     def len_existing(self) -> int:
         return self._first_value_cursor().execute(
-            "SELECT count(1) FROM fsobject WHERE last_status != ?",
-            (RepoFileStatus.DELETED.value,)).fetchone()
+            "SELECT count(1) FROM fsobject WHERE last_status NOT IN (?, ?)",
+            (RepoFileStatus.DELETED.value, RepoFileStatus.MOVED_FROM.value)).fetchone()
 
     @staticmethod
     def _create_fsobjectprops(cursor: Cursor, row: Row) -> Tuple[str, RepoFileProps | RepoDirProps]:
-        fullpath, isdir, size, mtime, fasthash, md5, last_status, last_update_epoch = row
+        fullpath, isdir, size, mtime, fasthash, md5, last_status, last_update_epoch, last_related_fullpath = row
 
         if isdir:
             return fullpath, RepoDirProps(RepoFileStatus(last_status), last_update_epoch)
         else:
-            return fullpath, RepoFileProps(size, mtime, fasthash, md5, RepoFileStatus(last_status), last_update_epoch)
+            return fullpath, RepoFileProps(size, mtime, fasthash, md5, RepoFileStatus(last_status), last_update_epoch, last_related_fullpath)
 
     def get_existing(self, file_path: str) -> RepoFileProps | RepoDirProps:
         curr = self.parent.conn.cursor()
         curr.row_factory = FSObjects._create_fsobjectprops
 
         _, props = curr.execute(
-            "SELECT fullpath, isdir, size, mtime, fasthash, md5, last_status, last_update_epoch FROM fsobject "
-            "WHERE fsobject.fullpath = ? AND last_status != ?",
-            (file_path, RepoFileStatus.DELETED.value)).fetchone()
+            "SELECT fullpath, isdir, size, mtime, fasthash, md5, last_status, last_update_epoch, last_related_fullpath "
+            "FROM fsobject "
+            "WHERE fsobject.fullpath = ? AND last_status NOT IN (?, ?)",
+            (file_path, RepoFileStatus.DELETED.value, RepoFileStatus.MOVED_FROM.value)).fetchone()
         return props
 
     def all_status(self) -> Generator[Tuple[str, RepoFileProps | RepoDirProps], None, None]:
@@ -76,7 +77,7 @@ class FSObjects:
         curr.row_factory = FSObjects._create_fsobjectprops
 
         yield from curr.execute(
-            "SELECT fullpath, isdir, size, mtime, fasthash, md5, last_status, last_update_epoch "
+            "SELECT fullpath, isdir, size, mtime, fasthash, md5, last_status, last_update_epoch, last_related_fullpath "
             "FROM fsobject ORDER BY fullpath")
 
     def existing(self) -> Generator[Tuple[str, RepoFileProps | RepoDirProps], None, None]:
@@ -84,30 +85,42 @@ class FSObjects:
         curr.row_factory = FSObjects._create_fsobjectprops
 
         yield from curr.execute(
-            "SELECT fullpath, isdir, size, mtime, fasthash, md5, last_status, last_update_epoch "
-            "FROM fsobject WHERE last_status != ?",
-            (RepoFileStatus.DELETED.value,))  # fixme should not be filtering maybe?
+            "SELECT fullpath, isdir, size, mtime, fasthash, md5, last_status, last_update_epoch, last_related_fullpath "
+            "FROM fsobject WHERE last_status NOT IN (?, ?)",
+            (RepoFileStatus.DELETED.value, RepoFileStatus.MOVED_FROM.value))
 
     def in_existing(self, file_path: str) -> bool:
         return self._first_value_cursor().execute(
-            "SELECT count(1) FROM fsobject WHERE fsobject.fullpath = ? AND last_status != ?",
-            (file_path, RepoFileStatus.DELETED.value)).fetchone() > 0  # fixme should not be filtering maybe?
+            "SELECT count(1) FROM fsobject WHERE fsobject.fullpath = ? AND last_status NOT IN (?, ?)",
+            (file_path, RepoFileStatus.DELETED.value, RepoFileStatus.MOVED_FROM.value)).fetchone() > 0
 
     def add_file(self, filepath: str, size: int, mtime: float, fasthash: str, status: RepoFileStatus) -> None:
         self.parent.conn.execute(
-            "INSERT OR REPLACE INTO fsobject(fullpath, isdir, size, mtime, fasthash, md5, last_status, last_update_epoch) "
-            "VALUES (?, FALSE, ?, ?, ?, NULL, ?, ?)",
+            "INSERT OR REPLACE INTO fsobject(fullpath, isdir, size, mtime, fasthash, md5, last_status, last_update_epoch, last_related_fullpath) "
+            "VALUES (?, FALSE, ?, ?, ?, NULL, ?, ?, NULL)",
             (filepath, size, mtime, fasthash, status.value, self.parent.config.epoch))
+
+    def mark_moved(self, from_file: str, to_file: str, size: int, mtime: float, fasthash: str):
+        # mark old file to refer to the new file
+        self.parent.conn.execute(
+            "UPDATE fsobject SET last_status = ?, last_update_epoch = ?, last_related_fullpath = ? "
+            "WHERE fsobject.fullpath = ?",
+            (RepoFileStatus.DELETED.value, self.parent.config.epoch, to_file, from_file))
+
+        # add the new file
+        self.add_file(to_file, size, mtime, fasthash, RepoFileStatus.ADDED)
+
 
     def add_dir(self, dirpath: str, status: RepoFileStatus):
         self.parent.conn.execute(
-            "INSERT OR REPLACE INTO fsobject(fullpath, isdir, md5, last_status, last_update_epoch) "
-            "VALUES (?, TRUE, NULL, ?, ?)",
+            "INSERT OR REPLACE INTO fsobject(fullpath, isdir, md5, last_status, last_update_epoch, last_related_fullpath) "
+            "VALUES (?, TRUE, NULL, ?, ?, NULL)",
             (dirpath, status.value, self.parent.config.epoch))
 
     def mark_removed(self, path: str):
         self.parent.conn.execute(
-            "UPDATE fsobject SET last_status = ?, last_update_epoch = ? WHERE fsobject.fullpath = ?",
+            "UPDATE fsobject SET last_status = ?, last_update_epoch = ?, last_related_fullpath = NULL "
+            "WHERE fsobject.fullpath = ?",
             (RepoFileStatus.DELETED.value, self.parent.config.epoch, path))
 
 
@@ -185,7 +198,8 @@ class RepoContents:
             " fasthash TEXT,"
             " md5 TEXT,"
             " last_status TEXT NOT NULL,"
-            " last_update_epoch INTEGER NOT NULL)")
+            " last_update_epoch INTEGER NOT NULL,"
+            " last_related_fullpath TEXT)")
 
         conn.commit()
         conn.close()

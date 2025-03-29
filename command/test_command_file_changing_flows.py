@@ -1,4 +1,6 @@
 import os
+import pathlib
+import shutil
 import tempfile
 import unittest
 from os.path import join
@@ -115,7 +117,7 @@ class TestFileChangingFlows(unittest.TestCase):
         os.remove(join(self.tmpdir.name, 'repo-full/wat/test.me.3'))
         pfw('repo-full/wat/test.me.z', "whut-whut-in-the-but")
 
-        res = full_cave_cmd.refresh()
+        res = full_cave_cmd.refresh(show_details=False)
         self.assertEqual("Refresh done!", res)
 
         res = hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
@@ -151,7 +153,7 @@ class TestFileChangingFlows(unittest.TestCase):
         # new file in partial
         pfw('repo-partial/test.me.5', "adsfgasd")
 
-        res = partial_cave_cmd.refresh()
+        res = partial_cave_cmd.refresh(show_details=False)
         self.assertEqual("Refresh done!", res)
 
         res = hoard_cmd.contents.pull(partial_cave_cmd.current_uuid())
@@ -270,7 +272,7 @@ class TestFileChangingFlows(unittest.TestCase):
             "DONE", res)
 
         # do refresh and pull to detect deleted file and its state
-        res = full_cave_cmd.refresh()
+        res = full_cave_cmd.refresh(show_details=False)
         self.assertEqual("Refresh done!", res)
 
         res = hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
@@ -325,7 +327,7 @@ class TestFileChangingFlows(unittest.TestCase):
         # remove backed up file
         os.remove(join(self.tmpdir.name, 'repo-full/wat/test.me.2'))
 
-        res = full_cave_cmd.refresh()
+        res = full_cave_cmd.refresh(show_details=False)
         self.assertEqual("Refresh done!", res)
 
         res = hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
@@ -420,7 +422,7 @@ class TestFileChangingFlows(unittest.TestCase):
 
         new_content_cmd = TotalCommand(path=join(self.tmpdir.name, "new-contents")).cave
         new_content_cmd.init()
-        new_content_cmd.refresh()
+        new_content_cmd.refresh(show_details=False)
 
         hoard_cmd.add_remote(
             remote_path=join(self.tmpdir.name, "new-contents"), name="repo-new-contents-name",
@@ -481,7 +483,7 @@ class TestFileChangingFlows(unittest.TestCase):
             "|repo-partial-name        |        14|        14|          |          |          |\n",
             res)
 
-        res = new_content_cmd.refresh()
+        res = new_content_cmd.refresh(show_details=False)
         self.assertEqual("Refresh done!", res)
 
         res = hoard_cmd.contents.pull(new_content_cmd.current_uuid())
@@ -534,7 +536,7 @@ class TestFileChangingFlows(unittest.TestCase):
 
         changed_cave_cmd = TotalCommand(path=join(self.tmpdir.name, "changed-cave")).cave
         changed_cave_cmd.init()
-        res = changed_cave_cmd.refresh()
+        res = changed_cave_cmd.refresh(show_details=False)
         self.assertEqual("Refresh done!", res)
 
         res = hoard_cmd.add_remote(
@@ -682,3 +684,69 @@ class TestFileChangingFlows(unittest.TestCase):
             "|repo-changed-cave-name   |        35|        19|        16|          |          |\n"
             "|repo-full-name           |        35|        35|          |          |          |\n"
             "|repo-partial-name        |        14|         8|         6|          |          |\n", res)
+
+    def test_moving_of_files_in_hoard(self):
+        hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = \
+            init_complex_hoard(self.tmpdir.name)
+        pfw = pretty_file_writer(self.tmpdir.name)
+
+        res = hoard_cmd.contents.pull(partial_cave_cmd.current_uuid())
+        self.assertEqual(f"+/test.me.1\n+/wat/test.me.2\nSync'ed repo-partial-name to hoard!\nDONE", res)
+
+        res = hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
+        self.assertEqual(
+            f"=/test.me.1\n+/test.me.4\n=/wat/test.me.2\n+/wat/test.me.3"
+            f"\nSync'ed repo-full-name to hoard!\nDONE", res)
+
+        res = hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
+        self.assertEqual(
+            "|Num Files                |total     |available |get       |copy      |cleanup   |\n"
+            "|repo-backup-name         |         4|          |         4|          |          |\n"
+            "|repo-full-name           |         4|         4|          |          |          |\n"
+            "|repo-partial-name        |         2|         2|          |          |          |\n"
+            "\n"
+            "|Size                     |total     |available |get       |copy      |cleanup   |\n"
+            "|repo-backup-name         |        35|          |        35|          |          |\n"
+            "|repo-full-name           |        35|        35|          |          |          |\n"
+            "|repo-partial-name        |        14|        14|          |          |          |\n",
+            res)
+
+        res = full_cave_cmd.refresh()
+        self.assertEqual("NO CHANGES\nRefresh done!", res)
+
+        pathlib.Path(join(self.tmpdir.name, 'repo-full/lets_get_it_started')).mkdir(parents=True)
+
+        pfw('repo-full/test.me.1', "age44")
+        pfw('repo-full/test.me.added', "fhagf")
+        shutil.move(
+            join(self.tmpdir.name, 'repo-full/test.me.4'),
+            join(self.tmpdir.name, 'repo-full/lets_get_it_started/test.me.4-renamed'))
+
+        pfw('repo-full/lets_get_it_started/test.me.2-butnew', "gsadf3dq")
+        shutil.move(
+            join(self.tmpdir.name, 'repo-full/wat/test.me.2'),
+            join(self.tmpdir.name, 'repo-full/lets_get_it_started/test.me.2-butsecond'))
+
+        res = full_cave_cmd.refresh()
+        self.assertEqual(
+            "MOVED test.me.4 TO lets_get_it_started/test.me.4-renamed\n"
+            "REMOVED_FILE_FALLBACK_TOO_MANY wat/test.me.2\n"
+            "ADDED_FILE test.me.added\n"
+            "ADDED_FILE lets_get_it_started/test.me.2-butnew\n"
+            "ADDED_FILE lets_get_it_started/test.me.2-butsecond\n"
+            "MODIFIED_FILE test.me.1\n"
+            "ADDED_DIR lets_get_it_started\n"
+            "Refresh done!", res)
+
+        res = hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
+        self.assertEqual(
+            "+/lets_get_it_started/test.me.4-renamed\n"  # fixme bad - should MOVE instead of add
+            "+/test.me.added\n"
+            "+/lets_get_it_started/test.me.2-butnew\n"
+            "+/lets_get_it_started/test.me.2-butsecond\n"
+            "u/test.me.1\n"
+            "-/wat/test.me.2\n"
+            "-/test.me.4\n"
+            "remove dangling /test.me.4\n"
+            "Sync'ed repo-full-name to hoard!\n"
+            "DONE", res)

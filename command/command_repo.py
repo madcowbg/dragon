@@ -3,7 +3,8 @@ import logging
 import os
 import pathlib
 from io import StringIO
-from typing import Generator, Tuple, List, Optional
+from itertools import groupby
+from typing import Generator, Tuple, List, Optional, Dict
 
 import aiofiles.os
 from alive_progress import alive_bar, alive_it
@@ -54,7 +55,7 @@ class RepoCommand(object):
 
         return f"Repo initialized at {self.repo.path}"
 
-    def refresh(self, skip_integrity_checks: bool = False):
+    def refresh(self, skip_integrity_checks: bool = False, show_details: bool = True):
         """ Refreshes the cache of the current hoard folder """
         connected_repo = self.repo.open_repo().connect(False)
         if connected_repo is None:
@@ -78,74 +79,127 @@ class RepoCommand(object):
 
             logging.info(f"Bumped epoch to {contents.config.epoch}")
 
-            print(f"Computing diffs.")
-            files_to_add_or_update: List[Tuple[str, RepoFileStatus]] = []
-            folders_to_add: List[str] = []
-            for diff in compute_difference_between_contents_and_filesystem(
-                    contents, self.repo.path, skip_integrity_checks):
-                if isinstance(diff, FileNotInFilesystem):
-                    logging.info(f"Removing file {diff.filepath}")
-                    contents.fsobjects.mark_removed(diff.filepath)
-                elif isinstance(diff, DirNotInFilesystem):
-                    logging.info(f"Removing dir {diff.dirpath}")
-                    contents.fsobjects.mark_removed(diff.dirpath)
-                elif isinstance(diff, RepoFileWeakSame):
-                    assert skip_integrity_checks
-                    logging.info("Skipping file as size and mtime is the same!!!")
-                elif isinstance(diff, RepoFileWeakDifferent):
-                    assert skip_integrity_checks
-                    logging.info(f"File {diff.filepath} is weakly different, adding to check.")
-                    files_to_add_or_update.append(
-                        (pathlib.Path(self.repo.path).joinpath(diff.filepath).as_posix(), RepoFileStatus.MODIFIED))
-                elif isinstance(diff, RepoFileSame):
-                    logging.info(f"File {diff.filepath} is same.")
-                elif isinstance(diff, RepoFileDifferent):
-                    logging.info(f"File {diff.filepath} is different, adding to check.")
-                    files_to_add_or_update.append(
-                        (pathlib.Path(self.repo.path).joinpath(diff.filepath).as_posix(), RepoFileStatus.MODIFIED))
-                elif isinstance(diff, FileNotInRepo):
-                    logging.info(f"File {diff.filepath} not in repo, adding.")
-                    files_to_add_or_update.append(
-                        (pathlib.Path(self.repo.path).joinpath(diff.filepath).as_posix(), add_new_with_status))
-                elif isinstance(diff, DirIsSameInRepo):
-                    logging.info(f"Dir {diff.dirpath} is same, skipping")
-                elif isinstance(diff, DirNotInRepo):
-                    logging.info(f"Dir {diff.dirpath} is different, adding...")
-                    folders_to_add.append(pathlib.Path(self.repo.path).joinpath(diff.dirpath).as_posix())
-                else:
-                    raise ValueError(f"unknown diff type: {type(diff)}")
+            with StringIO() as out:
+                print_maybe = (lambda line: out.write(line + "\n")) if show_details else print
+                print(f"Computing diffs.")
+                files_to_add_or_update: Dict[str, RepoFileStatus] = {}
+                files_maybe_removed: List[Tuple[str, RepoFileProps]] = []
+                folders_to_add: List[str] = []
+                for diff in compute_difference_between_contents_and_filesystem(
+                        contents, self.repo.path, skip_integrity_checks):
+                    if isinstance(diff, FileNotInFilesystem):
+                        logging.info(f"File not found, marking for removal: {diff.filepath}")
+                        files_maybe_removed.append((diff.filepath, diff.props))
+                    elif isinstance(diff, DirNotInFilesystem):
+                        logging.info(f"Removing dir {diff.dirpath}")
+                        print_maybe("REMOVED_DIR {diff.dirpath}")
+                        contents.fsobjects.mark_removed(diff.dirpath)
+                    elif isinstance(diff, RepoFileWeakSame):
+                        assert skip_integrity_checks
+                        logging.info("Skipping file as size and mtime is the same!!!")
+                    elif isinstance(diff, RepoFileWeakDifferent):
+                        assert skip_integrity_checks
+                        logging.info(f"File {diff.filepath} is weakly different, adding to check.")
+                        files_to_add_or_update[pathlib.Path(self.repo.path).joinpath(diff.filepath).as_posix()] = \
+                            RepoFileStatus.MODIFIED
+                    elif isinstance(diff, RepoFileSame):
+                        logging.info(f"File {diff.filepath} is same.")
+                    elif isinstance(diff, RepoFileDifferent):
+                        logging.info(f"File {diff.filepath} is different, adding to check.")
+                        files_to_add_or_update[pathlib.Path(self.repo.path).joinpath(diff.filepath).as_posix()] = \
+                            RepoFileStatus.MODIFIED
+                    elif isinstance(diff, FileNotInRepo):
+                        logging.info(f"File {diff.filepath} not in repo, adding.")
+                        files_to_add_or_update[pathlib.Path(self.repo.path).joinpath(diff.filepath).as_posix()] = \
+                            add_new_with_status
+                    elif isinstance(diff, DirIsSameInRepo):
+                        logging.info(f"Dir {diff.dirpath} is same, skipping")
+                    elif isinstance(diff, DirNotInRepo):
+                        logging.info(f"Dir {diff.dirpath} is different, adding...")
+                        folders_to_add.append(pathlib.Path(self.repo.path).joinpath(diff.dirpath).as_posix())
+                    else:
+                        raise ValueError(f"unknown diff type: {type(diff)}")
 
-            print(f"Hashing {len(files_to_add_or_update)} files to add:")
-            file_hashes = asyncio.run(find_hashes([file for file, status in files_to_add_or_update]))
+                print(f"Detected {len(files_maybe_removed)} possible deletions.")
 
-            print(f"Adding {len(files_to_add_or_update)} files in {self.repo.path}")
-            for fullpath, requested_status in alive_it(files_to_add_or_update):
-                relpath = pathlib.Path(fullpath).relative_to(self.repo.path).as_posix()
+                print(f"Hashing {len(files_to_add_or_update)} files to add:")
+                file_hashes = asyncio.run(find_hashes([file for file, status in files_to_add_or_update.items()]))
 
-                if fullpath not in file_hashes:
-                    logging.warning(f"Skipping {fullpath} as it doesn't have a computed hash!")
-                    continue
-                try:
-                    size = os.path.getsize(fullpath)
-                    mtime = os.path.getmtime(fullpath)
-                    contents.fsobjects.add_file(
-                        relpath, size=size, mtime=mtime, fasthash=file_hashes[fullpath], status=requested_status)
-                except FileNotFoundError as e:
-                    logging.error("Error while adding file!")
-                    logging.error(e)
+                inverse_hashes: Dict[str, str] = dict((fasthash, list(files)) for fasthash, files in groupby(
+                    sorted(file_hashes.items(), key=lambda file_to_hash: file_to_hash[1]),
+                    key=lambda file_to_hash: file_to_hash[1]))
 
-            print(f"Adding {len(folders_to_add)} folders in {self.repo.path}")
-            for fullpath in alive_it(folders_to_add):
-                relpath = pathlib.Path(fullpath).relative_to(self.repo.path).as_posix()
-                contents.fsobjects.add_dir(relpath, status=RepoFileStatus.ADDED)
+                print("Detecting moves...")
+                for missing_relpath, missing_file_props in files_maybe_removed:
+                    candidates_file_to_hash = [
+                        (file, fasthash) for (file, fasthash) in inverse_hashes.get(missing_file_props.fasthash, [])
+                        if files_to_add_or_update[file] == RepoFileStatus.ADDED]
 
-            logging.info(f"Files read!")
-            logging.info("Ends updating, setting is_dirty to FALSE")
-            contents.config.end_updating()
+                    if len(candidates_file_to_hash) == 0:
+                        logging.info(f"File {missing_relpath} has no suitable copy, marking as deleted.")
+                        print_maybe(f"REMOVED_FILE {missing_relpath}")
+                        contents.fsobjects.mark_removed(missing_relpath)
+                    elif len(candidates_file_to_hash) == 1:
+                        moved_to_file, moved_file_hash = candidates_file_to_hash[0]
+                        assert missing_file_props.fasthash == moved_file_hash
+                        assert files_to_add_or_update[moved_to_file] == RepoFileStatus.ADDED
 
-            assert not contents.config.is_dirty
+                        moved_to_relpath = pathlib.Path(moved_to_file).relative_to(self.repo.path).as_posix()
+                        logging.info(f"{missing_relpath} is moved to {moved_to_relpath} ")
 
-            return f"Refresh done!"  # fixme add more information on what happened
+                        try:
+                            size = os.path.getsize(moved_to_file)
+                            mtime = os.path.getmtime(moved_to_file)
+                            contents.fsobjects.mark_moved(
+                                missing_relpath, moved_to_relpath, size=size, mtime=mtime, fasthash=moved_file_hash)
+
+                            del files_to_add_or_update[moved_to_file]  # was fixed above
+                            print_maybe(f"MOVED {missing_relpath} TO {moved_to_relpath}")
+                        except FileNotFoundError as e:
+                            logging.error(
+                                f"File not found: {moved_to_file}, fallbacks to delete/new")
+                            contents.fsobjects.mark_removed(missing_relpath)
+                            print_maybe(f"REMOVED_FILE_FALLBACK_ON_ERROR {missing_relpath}")
+                    else:
+                        logging.error(
+                            f"Multiple new file candidates for {missing_relpath}, fallbacks to delete/new")
+                        contents.fsobjects.mark_removed(missing_relpath)
+                        print_maybe(f"REMOVED_FILE_FALLBACK_TOO_MANY {missing_relpath}")
+
+                print(f"Adding {len(files_to_add_or_update)} files in {self.repo.path}")
+                for fullpath, requested_status in alive_it(files_to_add_or_update.items()):
+                    relpath = pathlib.Path(fullpath).relative_to(self.repo.path).as_posix()
+
+                    if fullpath not in file_hashes:
+                        logging.warning(f"Skipping {fullpath} as it doesn't have a computed hash!")
+                        continue
+                    try:
+                        size = os.path.getsize(fullpath)
+                        mtime = os.path.getmtime(fullpath)
+                        contents.fsobjects.add_file(
+                            relpath, size=size, mtime=mtime, fasthash=file_hashes[fullpath], status=requested_status)
+
+                        print_maybe(f"{requested_status.value.upper()}_FILE {relpath}")
+                    except FileNotFoundError as e:
+                        logging.error("Error while adding file!")
+                        logging.error(e)
+
+                print(f"Adding {len(folders_to_add)} folders in {self.repo.path}")
+                for fullpath in alive_it(folders_to_add):
+                    relpath = pathlib.Path(fullpath).relative_to(self.repo.path).as_posix()
+                    contents.fsobjects.add_dir(relpath, status=RepoFileStatus.ADDED)
+                    print_maybe(f"ADDED_DIR {relpath}")
+
+                logging.info(f"Files read!")
+                logging.info("Ends updating, setting is_dirty to FALSE")
+                contents.config.end_updating()
+
+                assert not contents.config.is_dirty
+
+                if len(out.getvalue()) == 0:
+                    print_maybe("NO CHANGES")
+                out.write(f"Refresh done!")
+                return out.getvalue()
 
     def status_index(self, show_files: bool = True, show_dates: bool = True):
         remote_uuid = self.current_uuid()

@@ -13,15 +13,15 @@ from test_util import nice_dump
 def init_complex_hoard(tmpdir: str):
     partial_cave_cmd = TotalCommand(path=join(tmpdir, "repo-partial")).cave
     partial_cave_cmd.init()
-    partial_cave_cmd.refresh()
+    partial_cave_cmd.refresh(show_details=False)
 
     full_cave_cmd = TotalCommand(path=join(tmpdir, "repo-full")).cave
     full_cave_cmd.init()
-    full_cave_cmd.refresh()
+    full_cave_cmd.refresh(show_details=False)
 
     incoming_cave_cmd = TotalCommand(path=join(tmpdir, "repo-incoming")).cave
     incoming_cave_cmd.init()
-    incoming_cave_cmd.refresh()
+    incoming_cave_cmd.refresh(show_details=False)
 
     hoard_cmd = TotalCommand(path=join(tmpdir, "hoard")).hoard
     hoard_cmd.init()
@@ -137,9 +137,9 @@ class TestBackups(unittest.TestCase):
             "TO_CLEANUP (is in 0) /wat/test.me.6\n"
             "DONE", res)
 
-        partial_cave_cmd.refresh()
-        full_cave_cmd.refresh()
-        incoming_cave_cmd.refresh()
+        partial_cave_cmd.refresh(show_details=False)
+        full_cave_cmd.refresh(show_details=False)
+        incoming_cave_cmd.refresh(show_details=False)
 
         res = hoard_cmd.files.push(all=True)
         self.assertEqual(
@@ -502,6 +502,6 @@ class TestBackups(unittest.TestCase):
     def _init_and_refresh_repo(self, backup_folder: str) -> RepoCommand:
         backup_1_cmd = TotalCommand(path=join(self.tmpdir.name, backup_folder)).cave
         backup_1_cmd.init()
-        backup_1_cmd.refresh()
+        backup_1_cmd.refresh(show_details=False)
 
         return backup_1_cmd

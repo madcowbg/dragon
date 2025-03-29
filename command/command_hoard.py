@@ -236,7 +236,7 @@ class HoardCommand(object):
 
         cave_cmd = RepoCommand(path=to_path)
         cave_cmd.init()
-        cave_cmd.refresh()
+        cave_cmd.refresh(show_details=False)
 
         self.add_remote(to_path, name=name, mount_point=mount_at, fetch_new=fetch_new)
         return f"DONE"
