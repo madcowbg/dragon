@@ -3,7 +3,7 @@ from abc import abstractmethod
 from io import StringIO
 
 from command.content_prefs import ContentPrefs
-from contents_diff import FileMissingInHoard, FileIsSame, FileContentsDiffer, FileMissingInLocal
+from contents_diff import FileOnlyInLocal, FileIsSame, FileContentsDiffer, FileOnlyInHoard
 from contents.hoard import HoardContents
 from contents.repo_props import RepoFileProps
 from contents.hoard_props import HoardFileStatus, HoardFileProps
@@ -15,7 +15,7 @@ class DiffHandler:
         self.hoard = hoard
 
     @abstractmethod
-    def handle_local_only(self, diff: "FileMissingInHoard", out: StringIO): pass
+    def handle_local_only(self, diff: "FileOnlyInLocal", out: StringIO): pass
 
     @abstractmethod
     def handle_file_is_same(self, diff: "FileIsSame", out: StringIO): pass
@@ -24,7 +24,7 @@ class DiffHandler:
     def handle_file_contents_differ(self, diff: FileContentsDiffer, out: StringIO): pass
 
     @abstractmethod
-    def handle_hoard_only(self, diff: FileMissingInLocal, out: StringIO): pass
+    def handle_hoard_only(self, diff: FileOnlyInHoard, out: StringIO): pass
 
 
 def reset_local_as_current(
@@ -46,7 +46,7 @@ class PartialDiffHandler(DiffHandler):
         self.force_fetch_local_missing = force_fetch_local_missing
         self.assume_current = assume_current
 
-    def handle_local_only(self, diff: "FileMissingInHoard", out: StringIO):
+    def handle_local_only(self, diff: "FileOnlyInLocal", out: StringIO):
         hoard_props = self.hoard.fsobjects.add_or_replace_file(diff.hoard_file, diff.local_props)
 
         # add status for new repos
@@ -105,7 +105,7 @@ class PartialDiffHandler(DiffHandler):
                 logging.info(f"current file is out of date and was marked for restore: {diff.hoard_file}")
                 out.write(f"g{diff.hoard_file}\n")
 
-    def handle_hoard_only(self, diff: FileMissingInLocal, out: StringIO):
+    def handle_hoard_only(self, diff: FileOnlyInHoard, out: StringIO):
         goal_status = diff.hoard_props.get_status(self.remote_uuid)
         if goal_status == HoardFileStatus.CLEANUP:
             logging.info(f"file had been deleted.")
@@ -134,12 +134,12 @@ class IncomingDiffHandler(DiffHandler):
         super().__init__(remote_uuid, hoard)
         self.content_prefs = content_prefs
 
-    def handle_local_only(self, diff: FileMissingInHoard, out: StringIO):
+    def handle_local_only(self, diff: FileOnlyInLocal, out: StringIO):
         self._move_to_other_caves(diff, out)
 
         out.write(f"<+{diff.hoard_file}\n")
 
-    def _move_to_other_caves(self, diff: FileMissingInHoard | FileContentsDiffer, out: StringIO):
+    def _move_to_other_caves(self, diff: FileOnlyInLocal | FileContentsDiffer, out: StringIO):
         hoard_props = self.hoard.fsobjects.add_or_replace_file(diff.hoard_file, diff.local_props)
 
         # add status for new repos
@@ -147,7 +147,7 @@ class IncomingDiffHandler(DiffHandler):
 
         self._safe_mark_for_cleanup(diff, hoard_props, out)
 
-    def _safe_mark_for_cleanup(self, diff: FileMissingInHoard | FileContentsDiffer | FileIsSame, hoard_file: HoardFileProps, out: StringIO):
+    def _safe_mark_for_cleanup(self, diff: FileOnlyInLocal | FileContentsDiffer | FileIsSame, hoard_file: HoardFileProps, out: StringIO):
         logging.info(f"safe marking {diff.hoard_file} for cleanup from {self.remote_uuid}")
 
         repos_to_get_file = hoard_file.by_statuses(HoardFileStatus.GET, HoardFileStatus.COPY, HoardFileStatus.AVAILABLE)
@@ -183,7 +183,7 @@ class IncomingDiffHandler(DiffHandler):
         self._move_to_other_caves(diff, out)
         out.write(f"u{diff.hoard_file}\n")
 
-    def handle_hoard_only(self, diff: FileMissingInLocal, out: StringIO):
+    def handle_hoard_only(self, diff: FileOnlyInHoard, out: StringIO):
         logging.info(f"skipping file not in local.")
         goal_status = diff.hoard_props.get_status(self.remote_uuid)
         if goal_status == HoardFileStatus.CLEANUP:
@@ -196,7 +196,7 @@ class IncomingDiffHandler(DiffHandler):
 
 
 class BackupDiffHandler(DiffHandler):
-    def handle_local_only(self, diff: FileMissingInHoard, out: StringIO):
+    def handle_local_only(self, diff: FileOnlyInLocal, out: StringIO):
         logging.info(f"skipping obsolete file from backup: {diff.hoard_file}")
         out.write(f"?{diff.hoard_file}\n")
 
@@ -216,7 +216,7 @@ class BackupDiffHandler(DiffHandler):
 
             out.write(f"g{diff.hoard_file}\n")
 
-    def handle_hoard_only(self, diff: FileMissingInLocal, out: StringIO):
+    def handle_hoard_only(self, diff: FileOnlyInHoard, out: StringIO):
         goal_status = diff.hoard_props.get_status(self.remote_uuid)
         if goal_status == HoardFileStatus.AVAILABLE:  # was backed-up here, get it again
             props = diff.hoard_props

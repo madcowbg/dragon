@@ -6,7 +6,7 @@ class Diff:
     pass
 
 
-class FileMissingInHoard(Diff):
+class FileOnlyInLocal(Diff):
     def __init__(self, local_file: str, curr_file_hoard_path: str, local_props: RepoFileProps):
         self.local_file = local_file
         self.hoard_file = curr_file_hoard_path
@@ -32,7 +32,7 @@ class FileContentsDiffer(Diff):
         self.hoard_props = hoard_props
 
 
-class FileMissingInLocal(Diff):
+class FileOnlyInHoard(Diff):
     def __init__(self, current_file: str, curr_file_hoard_path: str, hoard_props: HoardFileProps):
         self.local_file = current_file
         self.hoard_file = curr_file_hoard_path

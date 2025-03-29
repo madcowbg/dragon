@@ -19,7 +19,7 @@ from exceptions import MissingRepo
 from config import HoardRemote, CavePath, CaveType, ConnectionSpeed, ConnectionLatency
 from contents.hoard import HoardContents
 from contents.hoard_props import HoardDirProps, HoardFileProps
-from contents_diff import FileMissingInHoard, FileContentsDiffer, FileMissingInLocal, \
+from contents_diff import FileOnlyInLocal, FileContentsDiffer, FileOnlyInHoard, \
     DirMissingInHoard, DirMissingInLocal
 from hashing import fast_hash
 from resolve_uuid import resolve_remote_uuid
@@ -50,11 +50,11 @@ class HoardCommandDeprecated:
 
                     for diff in compare_local_to_hoard(current_contents, hoard, self.hoard.config(),
                                                        self.hoard.paths()):
-                        if isinstance(diff, FileMissingInHoard):
+                        if isinstance(diff, FileOnlyInLocal):
                             out.write(f"A {diff.hoard_file}\n")
                         elif isinstance(diff, FileContentsDiffer):
                             out.write(f"M {diff.hoard_file}\n")
-                        elif isinstance(diff, FileMissingInLocal):
+                        elif isinstance(diff, FileOnlyInHoard):
                             out.write(f"D {diff.hoard_file}\n")
                         elif isinstance(diff, DirMissingInHoard):
                             out.write(f"AF {diff.hoard_dir}\n")
