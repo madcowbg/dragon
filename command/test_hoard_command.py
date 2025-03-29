@@ -551,7 +551,7 @@ class TestHoardCommand(unittest.TestCase):
             "Sync'ed repo-incoming-name to hoard!\n"
             "DONE", res)
 
-        res = hoard_cmd.contents.status()
+        res = hoard_cmd.contents.status(hide_disk_sizes=True)
         self.assertEqual(
             ""
             "|Num Files                |             updated|total     |available |get       |copy      |cleanup   |\n"
@@ -577,7 +577,7 @@ class TestHoardCommand(unittest.TestCase):
         hoard_cmd.contents.pull("repo-backup-name")  # just registers the files already in backup
         hoard_cmd.contents.pull("repo-incoming-name")
 
-        res = hoard_cmd.contents.status()
+        res = hoard_cmd.contents.status(hide_disk_sizes=True)
         self.assertEqual(
             ""
             "|Num Files                |             updated|total     |available |get       |copy      |cleanup   |\n"

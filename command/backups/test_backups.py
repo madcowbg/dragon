@@ -220,7 +220,7 @@ class TestBackups(unittest.TestCase):
             "Sync'ed backup-4 to hoard!\n"
             "DONE", res)
 
-        res = hoard_cmd.contents.status(hide_time=True)
+        res = hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual(
             "|Num Files                |total     |available |get       |copy      |cleanup   |\n"
             "|backup-1                 |         2|         1|         1|          |          |\n"
@@ -311,7 +311,7 @@ class TestBackups(unittest.TestCase):
             "Considered 6 files, 1 marked for cleanup, 0 won't be downloaded, 2 are skipped.\n"
             'DONE', res)
 
-        res = hoard_cmd.contents.status(hide_time=True)
+        res = hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual(
             '|Num Files                |total     |available |get       |copy      |cleanup   |\n'
             '|backup-1                 |         2|         2|          |          |          |\n'
@@ -366,7 +366,7 @@ class TestBackups(unittest.TestCase):
             "Sync'ed backup-4 to hoard!\n"
             "DONE", res)
 
-        res = hoard_cmd.contents.status(hide_time=True)
+        res = hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual(
             "|Num Files                |total     |available |get       |copy      |cleanup   |\n"
             "|backup-1                 |         1|         1|          |          |          |\n"
@@ -410,7 +410,7 @@ class TestBackups(unittest.TestCase):
             ' backup-4 <- 2 files (86)\n'
             'DONE', res)
 
-        res = hoard_cmd.contents.status(hide_time=True)
+        res = hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual(
             "|Num Files                |total     |available |get       |copy      |cleanup   |\n"
             "|backup-1                 |         2|         1|         1|          |          |\n"
@@ -436,7 +436,7 @@ class TestBackups(unittest.TestCase):
             "Considered 6 files, 0 marked for cleanup, 1 won't be downloaded, 2 are skipped.\n"
             'DONE', res)
 
-        res = hoard_cmd.contents.status(hide_time=True)
+        res = hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual(
             '|Num Files                |total     |available |get       |copy      |cleanup   |\n'
             '|backup-1                 |         1|         1|          |          |          |\n'

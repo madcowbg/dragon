@@ -6,7 +6,7 @@ from typing import List, Tuple, Any, Callable, Coroutine, Dict, TypeVar
 import queue
 
 
-def format_size(size: int) -> str:
+def format_size(size: int | None) -> str:
     if size < 2 ** 10:
         return f"{size}"
     elif size < 2 ** 20:

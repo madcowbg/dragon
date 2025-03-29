@@ -48,13 +48,12 @@ class HoardCommandContents:
     def __init__(self, hoard: Hoard):
         self.hoard = hoard
 
-    def status(self, hide_time: bool = False):
+    def status(self, hide_time: bool = False, hide_disk_sizes: bool = False):
         config = self.hoard.config()
-        hoard1 = self.hoard
-        with HoardContents.load(hoard1.hoardpath) as hoard:
+        with HoardContents.load(self.hoard.hoardpath) as hoard:
             statuses: Dict[str, Dict[str, Dict[str, Any]]] = hoard.fsobjects.status_by_uuid
             statuses_sorted = sorted(
-                (config.remotes[uuid].name, hoard.config.updated(uuid), vals) for uuid, vals in statuses.items())
+                (config.remotes[uuid].name, uuid, hoard.config.updated(uuid), vals) for uuid, vals in statuses.items())
             all_stats = ["total", HoardFileStatus.AVAILABLE.value, HoardFileStatus.GET.value,
                          HoardFileStatus.COPY.value,
                          HoardFileStatus.CLEANUP.value]
@@ -62,15 +61,21 @@ class HoardCommandContents:
                 out.write(f"|{'Num Files':<25}|")
                 if not hide_time:
                     out.write(f"{'updated':>20}|")
+                if not hide_disk_sizes:
+                    out.write(f"{'max':>8}|")
+
                 for col in all_stats:
                     out.write(f"{col:<10}|")
                 out.write("\n")
 
-                for name, updated_maybe, uuid_stats in statuses_sorted:
+                for name, uuid, updated_maybe, uuid_stats in statuses_sorted:
                     out.write(f"|{name:<25}|")
                     if not hide_time:
                         updated = humanize.naturaltime(updated_maybe) if updated_maybe is not None else "never"
                         out.write(f"{updated:>20}|")
+                    if not hide_disk_sizes:
+                        out.write(f"{format_size(hoard.config.max_size(uuid)):>8}|")
+
                     for stat in all_stats:
                         nfiles = uuid_stats[stat]["nfiles"] if stat in uuid_stats else ""
                         out.write(f"{nfiles:>10}|")
@@ -81,14 +86,19 @@ class HoardCommandContents:
                 out.write(f"|{'Size':<25}|")
                 if not hide_time:
                     out.write(f"{'updated':>20}|")
+                if not hide_disk_sizes:
+                    out.write(f"{'max':>8}|")
+
                 for col in all_stats:
                     out.write(f"{col:<10}|")
                 out.write("\n")
-                for name, updated_maybe, uuid_stats in statuses_sorted:
+                for name, uuid, updated_maybe, uuid_stats in statuses_sorted:
                     out.write(f"|{name:<25}|")
                     if not hide_time:
                         updated = humanize.naturaltime(updated_maybe) if updated_maybe is not None else "never"
                         out.write(f"{updated:>20}|")
+                    if not hide_disk_sizes:
+                        out.write(f"{format_size(hoard.config.max_size(uuid)):>8}|")
                     for stat in all_stats:
                         size = format_size(uuid_stats[stat]["size"]) if stat in uuid_stats else ""
                         out.write(f"{size:>10}|")
@@ -310,6 +320,9 @@ class HoardCommandContents:
                                       f"is not after hoard epoch {hoard.config.epoch(remote_uuid)}\n")
                             continue
 
+                        logging.info(f"Saving config of remote {remote_uuid}...")
+                        hoard.config.save_remote_config(current_contents.config)
+
                         remote_doc = config.remotes[remote_uuid]
                         if remote_doc is None or remote_doc.mounted_at is None:
                             out.write(f"Remote {remote_uuid} is not mounted!\n")
@@ -332,7 +345,8 @@ class HoardCommandContents:
                                 logging.info(f"skipping diff of type {type(diff)}")
 
                         logging.info(f"Updating epoch of {remote_uuid} to {current_contents.config.epoch}")
-                        hoard.config.set_epoch(remote_uuid, current_contents.config.epoch, current_contents.config.updated)
+                        hoard.config.set_epoch(remote_uuid, current_contents.config.epoch,
+                                               current_contents.config.updated)
 
                     clean_dangling_files(hoard, out)
                     logging.info("Writing updated hoard contents...")

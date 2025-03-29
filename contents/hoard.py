@@ -8,6 +8,7 @@ from typing import Dict, Any, Optional, Tuple, Generator, Iterator, Iterable
 
 import rtoml
 
+from contents.repo import RepoContentsConfig
 from contents.repo_props import RepoFileProps
 from contents.hoard_props import HoardDirProps, HoardFileStatus, HoardFileProps
 from util import FIRST_VALUE
@@ -52,6 +53,13 @@ class HoardContentsConfig:
     def updated(self, remote_uuid: str) -> Optional[datetime]:
         remote = self._remote_config(remote_uuid)
         return datetime.fromisoformat(remote["updated"]) if "updated" in remote else None
+
+    def save_remote_config(self, config: RepoContentsConfig):
+        self._remote_config(config.uuid)["config"] = config.doc
+        self.write()
+
+    def max_size(self, uuid: str):
+        return self._remote_config(uuid).get("config", {}).get("max_size", 0)
 
 
 class HoardTree:
