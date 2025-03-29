@@ -54,7 +54,7 @@ class HoardCommandContents:
         with HoardContents.load(hoard1.hoardpath) as hoard:
             statuses: Dict[str, Dict[str, Dict[str, Any]]] = hoard.fsobjects.status_by_uuid
             statuses_sorted = sorted(
-                (config.remotes[uuid].name, hoard.updated(uuid), vals) for uuid, vals in statuses.items())
+                (config.remotes[uuid].name, hoard.config.updated(uuid), vals) for uuid, vals in statuses.items())
             all_stats = ["total", HoardFileStatus.AVAILABLE.value, HoardFileStatus.GET.value,
                          HoardFileStatus.COPY.value,
                          HoardFileStatus.CLEANUP.value]
@@ -305,9 +305,9 @@ class HoardCommandContents:
                             out.write(f"Skipping update as {remote_uuid} is not fully calculated!\n")
                             continue
 
-                        if not ignore_epoch and hoard.epoch(remote_uuid) >= current_contents.config.epoch:
+                        if not ignore_epoch and hoard.config.epoch(remote_uuid) >= current_contents.config.epoch:
                             out.write(f"Skipping update as past epoch {current_contents.config.epoch} "
-                                      f"is not after hoard epoch {hoard.epoch(remote_uuid)}\n")
+                                      f"is not after hoard epoch {hoard.config.epoch(remote_uuid)}\n")
                             continue
 
                         remote_doc = config.remotes[remote_uuid]
@@ -332,7 +332,7 @@ class HoardCommandContents:
                                 logging.info(f"skipping diff of type {type(diff)}")
 
                         logging.info(f"Updating epoch of {remote_uuid} to {current_contents.config.epoch}")
-                        hoard.set_epoch(remote_uuid, current_contents.config.epoch, current_contents.config.updated)
+                        hoard.config.set_epoch(remote_uuid, current_contents.config.epoch, current_contents.config.updated)
 
                     clean_dangling_files(hoard, out)
                     logging.info("Writing updated hoard contents...")

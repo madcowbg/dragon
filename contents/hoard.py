@@ -6,6 +6,8 @@ from datetime import datetime
 from sqlite3 import Connection
 from typing import Dict, Any, Optional, Tuple, Generator, Iterator, Iterable
 
+import rtoml
+
 from contents.repo_props import RepoFileProps
 from contents.hoard_props import HoardDirProps, HoardFileStatus, HoardFileProps
 from util import FIRST_VALUE
@@ -15,17 +17,41 @@ HOARD_CONTENTS_TOML = "hoard.contents.toml"
 
 
 class HoardContentsConfig:
-    def __init__(self, parent: "HoardContents"):
-        self.parent = parent
+    def __init__(self, file: str):
+        self.file = file
+
+        with open(file, "r") as f:
+            self.doc = rtoml.load(f)
+
+    def write(self):
+        with open(self.file, "w") as f:
+            rtoml.dump(self.doc, f)
 
     def touch_updated(self) -> None:
-        self.parent.conn.execute("UPDATE config SET updated = ?", (datetime.now().isoformat(),))
+        self.doc["updated"] = datetime.now().isoformat()
+        self.write()
 
-    @property
-    def updated(self) -> datetime:
-        curr = self.parent.conn.cursor()
-        curr.row_factory = FIRST_VALUE
-        return datetime.fromisoformat(curr.execute("SELECT updated FROM config").fetchone())
+    def _remote_config(self, remote_uuid: str) -> Dict[str, Any]:
+        if "remotes" not in self.doc:
+            self.doc["remotes"] = {}
+
+        if remote_uuid not in self.doc["remotes"]:
+            self.doc["remotes"][remote_uuid] = {}
+            self.write()
+
+        return self.doc["remotes"][remote_uuid]
+
+    def epoch(self, remote_uuid: str) -> int:
+        return self._remote_config(remote_uuid).get("epoch", -1)
+
+    def set_epoch(self, remote_uuid: str, epoch: int, updated: datetime):
+        self._remote_config(remote_uuid)["epoch"] = epoch
+        self._remote_config(remote_uuid)["updated"] = updated.isoformat()
+        self.write()
+
+    def updated(self, remote_uuid: str) -> Optional[datetime]:
+        remote = self._remote_config(remote_uuid)
+        return datetime.fromisoformat(remote["updated"]) if "updated" in remote else None
 
 
 class HoardTree:
@@ -357,10 +383,10 @@ class HoardFSObjects:
 class HoardContents:
     @staticmethod
     def load(folder: str) -> "HoardContents":
-        filename = os.path.join(folder, HOARD_CONTENTS_FILENAME)
+        config_filename = os.path.join(folder, HOARD_CONTENTS_FILENAME)
 
-        if not os.path.isfile(filename):
-            conn = sqlite3.connect(filename)
+        if not os.path.isfile(config_filename):
+            conn = sqlite3.connect(config_filename)
             curr = conn.cursor()
 
             curr.execute(
@@ -383,20 +409,15 @@ class HoardContents:
             )
             curr.execute("CREATE UNIQUE INDEX fspresence_fsobject_id__uuid ON fspresence(fsobject_id, uuid)")
 
-            curr.execute(
-                "CREATE TABLE config(updated TEXT NOT NULL)")
-            curr.execute(
-                "INSERT INTO config(updated) VALUES (?)",
-                (datetime.now().isoformat(),))
-
-            curr.execute(
-                "CREATE TABLE epoch("
-                " uuid TEXT PRIMARY KEY,"
-                " epoch INTEGER NOT NULL DEFAULT -1,"
-                " updated TEXT)")
-
             conn.commit()
             conn.close()
+
+        toml_filename = os.path.join(folder, HOARD_CONTENTS_TOML)
+        if not os.path.isfile(toml_filename):
+            with open(toml_filename, "w") as f:
+                rtoml.dump({
+                    "updated": datetime.now().isoformat()
+                }, f)
 
         return HoardContents(folder)
 
@@ -414,8 +435,8 @@ class HoardContents:
     def __enter__(self):
         self.conn = sqlite3.connect(os.path.join(self.folder, HOARD_CONTENTS_FILENAME))
 
-        self.config = HoardContentsConfig(self)
-        self.fsobjects = HoardFSObjects(self) #os.path.join(self.folder, HOARD_CONTENTS_TOML))
+        self.config = HoardContentsConfig(os.path.join(self.folder, HOARD_CONTENTS_TOML))
+        self.fsobjects = HoardFSObjects(self)
 
         return self
 
@@ -430,23 +451,4 @@ class HoardContents:
         return False
 
     def write(self):
-        self.conn.commit()
-
-    def epoch(self, remote_uuid: str) -> int:
-        curr = self.conn.cursor()
-        curr.row_factory = FIRST_VALUE
-        result = curr.execute("SELECT epoch FROM epoch WHERE uuid = ?", (remote_uuid,)).fetchone()
-        return result if result is not None else -1
-
-    def updated(self, remote_uuid: str) -> Optional[datetime]:
-        curr = self.conn.cursor()
-        curr.row_factory = FIRST_VALUE
-        result = curr.execute("SELECT updated FROM epoch WHERE uuid = ?", (remote_uuid,)).fetchone()
-        return datetime.fromisoformat(result) if result is not None else None
-
-    def set_epoch(self, remote_uuid: str, epoch: int, updated: str):
-        curr = self.conn.cursor()
-        curr.execute(
-            "INSERT OR REPLACE INTO epoch(uuid, epoch, updated) VALUES (?, ?, ?)",
-            (remote_uuid, epoch, updated))
         self.conn.commit()
