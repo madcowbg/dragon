@@ -1,8 +1,9 @@
 import asyncio
 import threading
 from asyncio import Queue, TaskGroup
+from itertools import groupby
 from sqlite3 import Cursor, Row
-from typing import List, Tuple, Any, Callable, Coroutine, Dict, TypeVar
+from typing import List, Tuple, Any, Callable, Coroutine, Dict, TypeVar, Iterable
 import queue
 
 
@@ -86,3 +87,18 @@ FIRST_VALUE: Callable[[Cursor, Row], Any] = lambda cursor, row: row[0] if row is
 
 
 def format_percent(num: float): return f"{100 * num:.1f}%"
+
+
+T = TypeVar('T')
+C = TypeVar('C')
+U = TypeVar('U')
+
+
+def group_to_dict(
+        objs: Iterable[T], key: Callable[[T], R],
+        map_to: Callable[[T], U] = (lambda x: x),
+        order_by: Callable[[T], C] = str) -> Dict[R, List[U]]:
+    """ Produces map of keys to lists of objects."""
+    return dict(
+        (obj_key, list(map(map_to, some_objects)))
+        for obj_key, some_objects in groupby(sorted(objs, key=lambda o: order_by(key(o))), key=key))

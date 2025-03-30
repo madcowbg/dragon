@@ -3,31 +3,30 @@ import os
 import pathlib
 import sys
 from io import StringIO
-from itertools import groupby
-from typing import List, Dict, Any, Optional, Generator, Callable, Type, TypeVar
+from typing import List, Dict, Any, Optional, Generator, Callable
 
 import humanize
 from alive_progress import alive_bar, alive_it
 
-from command.pending_file_ops import GetFile, CopyFile, CleanupFile, get_pending_operations
-from command.hoard import Hoard
+from command.content_prefs import ContentPrefs
 from command.contents.diff_handlers import DiffHandler, PartialDiffHandler, BackupDiffHandler, IncomingDiffHandler, \
     reset_local_as_current
-from command.content_prefs import ContentPrefs
+from command.hoard import Hoard
 from command.pathing import HoardPathing
-from exceptions import MissingRepoContents
+from command.pending_file_ops import GetFile, CopyFile, CleanupFile, get_pending_operations
 from config import CaveType, HoardConfig, HoardPaths, HoardRemote
 from contents.hoard import HoardContents, HoardFile, HoardDir
-
-from contents.repo_props import RepoFileProps, RepoDirProps, RepoFileStatus
 from contents.hoard_props import HoardDirProps, HoardFileStatus, HoardFileProps
 from contents.repo import RepoContents
+from contents.repo_props import RepoFileProps, RepoDirProps, RepoFileStatus
 from contents_diff import FileIsSame, FileContentsDiffer, FileOnlyInHoardLocalDeleted, \
     DirMissingInHoard, \
     Diff, DirIsSame, DirMissingInLocal, FileOnlyInHoardLocalUnknown, FileOnlyInHoardLocalMoved, FileOnlyInLocalAdded, \
     FileOnlyInLocalPresent
+from exceptions import MissingRepoContents
 from resolve_uuid import resolve_remote_uuid
 from util import format_size
+from util import group_to_dict
 
 
 def _file_stats(props: HoardFileProps) -> str:
@@ -544,19 +543,6 @@ class HoardCommandContents:
 
                 out.write("DONE")
                 return out.getvalue()
-
-
-T = TypeVar('T')
-R = TypeVar('R')
-
-
-def group_to_dict(objects: List[T], key: Callable[[T], R]) -> Dict[R, List[T]]:
-    """ Produces map of keys to lists of objects."""
-    return dict(
-        (obj_key, list(some_objects))
-        for obj_key, some_objects in groupby(
-            sorted(objects, key=lambda o: str(key(o))),
-            key=key))
 
 
 def _execute_pull_of_repo(

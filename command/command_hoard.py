@@ -3,7 +3,6 @@ import os
 import pathlib
 import shutil
 from io import StringIO
-from itertools import groupby
 from typing import Dict, List, Tuple
 
 from alive_progress import alive_bar
@@ -21,6 +20,7 @@ from contents.hoard_props import HoardDirProps, HoardFileProps
 from exceptions import MissingRepo
 from hashing import fast_hash
 from resolve_uuid import resolve_remote_uuid
+from util import group_to_dict
 
 
 def path_in_local(hoard_file: str, mounted_at: str) -> str:
@@ -113,13 +113,9 @@ class HoardCommand(object):
                 out.write(f"  {name_prefix}{remote.uuid} ({remote.type.value}){exact_path}\n")
             out.write("Mounts:\n")
 
-            mounts = [
-                (m, [r.name for r in rs]) for m, rs in
-                groupby(
-                    sorted(config.remotes.all(), key=lambda r: r.mounted_at),
-                    lambda r: r.mounted_at)]
-            for mount, remotes in mounts:
-                out.write(f"  {mount} -> {', '.join(remotes)}\n")
+            mount_point_to_mount = group_to_dict(config.remotes.all(), key=lambda r: r.mounted_at)
+            for mount, remotes in sorted(mount_point_to_mount.items()):
+                out.write(f"  {mount} -> {', '.join(r.name for r in remotes)}\n")
             out.write("DONE\n")
             return out.getvalue()
 

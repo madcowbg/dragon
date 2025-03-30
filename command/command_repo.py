@@ -3,7 +3,6 @@ import logging
 import os
 import pathlib
 from io import StringIO
-from itertools import groupby
 from typing import Generator, Tuple, List, Optional, Dict
 
 import aiofiles.os
@@ -16,7 +15,7 @@ from contents.hoard_props import HoardDirProps
 from contents.repo import RepoContents
 from hashing import find_hashes, fast_hash_async
 from resolve_uuid import load_config, resolve_remote_uuid, load_paths
-from util import format_size, run_async_in_parallel, format_percent
+from util import format_size, run_async_in_parallel, format_percent, group_to_dict
 
 
 def walk_repo(repo: str) -> Generator[Tuple[str, List[str], List[str]], None, None]:
@@ -125,9 +124,9 @@ class RepoCommand(object):
                 print(f"Hashing {len(files_to_add_or_update)} files to add:")
                 file_hashes = asyncio.run(find_hashes([file for file, status in files_to_add_or_update.items()]))
 
-                inverse_hashes: Dict[str, str] = dict((fasthash, list(files)) for fasthash, files in groupby(
-                    sorted(file_hashes.items(), key=lambda file_to_hash: file_to_hash[1]),
-                    key=lambda file_to_hash: file_to_hash[1]))
+                inverse_hashes: Dict[str, List[Tuple[str, str]]] = group_to_dict(
+                    file_hashes.items(),
+                    key=lambda file_to_hash: file_to_hash[1])
 
                 print("Detecting moves...")
                 for missing_relpath, missing_file_props in files_maybe_removed:

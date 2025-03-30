@@ -1,7 +1,6 @@
 import logging
 import pathlib
 from io import StringIO
-from itertools import groupby
 from typing import Dict, Tuple, Callable
 
 from alive_progress import alive_it
@@ -12,7 +11,7 @@ from command.pathing import HoardPathing
 from config import HoardRemote
 from contents.hoard import HoardContents
 from contents.hoard_props import HoardDirProps, HoardFileStatus
-from util import format_size, format_percent
+from util import format_size, format_percent, group_to_dict
 
 
 class HoardCommandBackups:
@@ -57,13 +56,10 @@ class HoardCommandBackups:
 
                 def pivot_stat(stat_idx, fun: Callable[[str], int]) -> Dict[int, int]:
                     return dict(
-                        (stat_value, sum(fun(stat_file_tuple[1]) for stat_file_tuple in files))
-                        for stat_value, files in groupby(
-                            sorted(map(
-                                lambda file_fstats: (file_fstats[1][stat_idx], file_fstats[0]),
-                                file_stats_copies.items())),
-                            lambda stat_file_tuple: stat_file_tuple[0],
-                        ))
+                        (stat_value, sum(fun(file) for file, _ in file_stats_fstat))
+                        for stat_value, file_stats_fstat in group_to_dict(
+                            file_stats_copies.items(),
+                            key=lambda file_to_fstats: file_to_fstats[1][stat_idx]).items())
 
                 for idx, name in [(0, "scheduled"), (1, "available"), (2, "get_or_copy"), (3, "move"), (4, "cleanup")]:
                     out.write(f"{name} count:\n")
