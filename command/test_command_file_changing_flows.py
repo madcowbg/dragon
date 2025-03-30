@@ -86,7 +86,7 @@ class TestFileChangingFlows(unittest.TestCase):
 
         res = hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
         self.assertEqual(
-            f"=/test.me.1\n+/test.me.4\n=/wat/test.me.2\n+/wat/test.me.3"
+            f"=/test.me.1\n=/wat/test.me.2\n+/test.me.4\n+/wat/test.me.3"
             f"\nSync'ed repo-full-name to hoard!\nDONE", res)
 
         res = hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
@@ -555,8 +555,8 @@ class TestFileChangingFlows(unittest.TestCase):
         res = hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
         self.assertEqual(
             "=/test.me.1\n"
-            "+/test.me.4\n"
             "=/wat/test.me.2\n"
+            "+/test.me.4\n"
             "+/wat/test.me.3\n"
             "Sync'ed repo-full-name to hoard!\n"
             "DONE", res)
@@ -575,9 +575,9 @@ class TestFileChangingFlows(unittest.TestCase):
 
         res = hoard_cmd.contents.pull(changed_cave_cmd.current_uuid(), assume_current=True)
         self.assertEqual(
-            "RESETTING /test.me.1\n"
             "=/test.me.4\n"
             "=/wat/test.me.2\n"
+            "RESETTING /test.me.1\n"
             "RESETTING /wat/test.me.3\n"
             "Sync'ed repo-changed-cave-name to hoard!\nDONE", res)
 
@@ -715,7 +715,7 @@ class TestFileChangingFlows(unittest.TestCase):
 
         res = hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
         self.assertEqual(
-            f"=/test.me.1\n+/test.me.4\n=/wat/test.me.2\n+/wat/test.me.3"
+            f"=/test.me.1\n=/wat/test.me.2\n+/test.me.4\n+/wat/test.me.3"
             f"\nSync'ed repo-full-name to hoard!\nDONE", res)
 
         res = hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)

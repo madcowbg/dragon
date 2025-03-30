@@ -410,8 +410,8 @@ class TestHoardCommand(unittest.TestCase):
         res = hoard_cmd.contents.pull("repo-full-name")
         self.assertEqual(
             "=/test.me.1\n"
-            "+/test.me.4\n"
             "=/wat/test.me.2\n"
+            "+/test.me.4\n"
             "+/wat/test.me.3\n"
             "Sync'ed repo-full-name to hoard!\nDONE", res.strip())
 
@@ -541,8 +541,8 @@ class TestHoardCommand(unittest.TestCase):
             "+/wat/test.me.2\n"
             "Sync'ed repo-partial-name to hoard!\n"
             "=/test.me.1\n"
-            "+/test.me.4\n"
             "=/wat/test.me.2\n"
+            "+/test.me.4\n"
             "+/wat/test.me.3\n"
             "Sync'ed repo-full-name to hoard!\n"
             "=/test.me.1\n"
@@ -1049,8 +1049,8 @@ class TestHoardCommand(unittest.TestCase):
         self.assertEqual(
             "Skipping update as past epoch 1 is not after hoard epoch 1\n"
             "=/test.me.1\n"
-            "+/test.me.4\n"
             "=/wat/test.me.2\n"
+            "+/test.me.4\n"
             "+/wat/test.me.3\n"
             "Sync'ed repo-full-name to hoard!\n"
             "DONE", res)
