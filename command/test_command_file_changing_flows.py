@@ -442,10 +442,21 @@ class TestFileChangingFlows(unittest.TestCase):
             "", res)
 
         # refresh new contents file
-        hoard_cmd.contents.pull(new_content_cmd.current_uuid())
+        res = hoard_cmd.contents.pull(new_content_cmd.current_uuid())
+        self.assertEqual(
+            "+/wat/one-new.file\n"
+            "Sync'ed repo-new-contents-name to hoard!\n"
+            "DONE", res)
 
         # pull full as well - its files will be added to the new repop
-        hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
+        res = hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
+        self.assertEqual(
+            "=/test.me.1\n"
+            "=/wat/test.me.2\n"
+            "+/test.me.4\n"
+            "+/wat/test.me.3\n"
+            "Sync'ed repo-full-name to hoard!\n"
+            "DONE", res)
 
         res = hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual(
