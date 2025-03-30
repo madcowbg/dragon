@@ -32,7 +32,6 @@ class PullBehavior(enum.Enum):
 class PullPreferences:
     def __init__(
             self, local_uuid: str, content_prefs: ContentPrefs,
-            force_fetch_local_missing: bool, deprecated_type: CaveType,
             on_same_file_is_present: PullBehavior,
             on_file_added_or_present: PullBehavior,
             on_file_is_different_and_modified: PullBehavior,
@@ -43,9 +42,6 @@ class PullPreferences:
             on_hoard_only_local_moved: PullBehavior):
         self.local_uuid = local_uuid
         self.content_prefs = content_prefs
-        self.deprecated_type = deprecated_type
-
-        self.force_fetch_local_missing = force_fetch_local_missing
 
         self.on_same_file_is_present = on_same_file_is_present
         self.on_file_added_or_present = on_file_added_or_present
@@ -165,7 +161,6 @@ def _handle_file_contents_differ(
         else:
             raise ValueError(f"Invalid goal status:{goal_status}")
     elif behavior == PullBehavior.ADD:
-        assert preferences.deprecated_type == CaveType.PARTIAL
         reset_local_as_current(hoard, preferences.local_uuid, diff.hoard_file, diff.hoard_props, diff.local_props)
 
         if goal_status == HoardFileStatus.AVAILABLE:

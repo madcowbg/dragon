@@ -369,8 +369,7 @@ class HoardCommandContents:
 
                         if remote_obj.type == CaveType.INCOMING:
                             preferences = PullPreferences(
-                                remote_uuid, content_prefs, force_fetch_local_missing,
-                                remote_obj.type,
+                                remote_uuid, content_prefs,
                                 on_same_file_is_present=PullBehavior.MOVE_AND_CLEANUP,
                                 on_file_added_or_present=PullBehavior.MOVE_AND_CLEANUP,
                                 on_file_is_different_and_modified=PullBehavior.MOVE_AND_CLEANUP,
@@ -381,8 +380,7 @@ class HoardCommandContents:
                                 on_hoard_only_local_unknown=PullBehavior.IGNORE)
                         elif remote_obj.type == CaveType.BACKUP:
                             preferences = PullPreferences(
-                                remote_uuid, content_prefs, force_fetch_local_missing,
-                                remote_obj.type,
+                                remote_uuid, content_prefs,
                                 on_same_file_is_present=PullBehavior.ADD,
                                 on_file_added_or_present=PullBehavior.IGNORE,
                                 on_file_is_different_and_modified=PullBehavior.RESTORE,
@@ -394,8 +392,7 @@ class HoardCommandContents:
                         else:
                             assert remote_obj.type == CaveType.PARTIAL
                             preferences = PullPreferences(
-                                remote_uuid, content_prefs, force_fetch_local_missing,
-                                remote_obj.type,
+                                remote_uuid, content_prefs,
                                 on_same_file_is_present=PullBehavior.ADD,
                                 on_file_added_or_present=PullBehavior.ADD,
                                 on_file_is_different_and_modified=PullBehavior.ADD,
@@ -448,7 +445,6 @@ class HoardCommandContents:
                             _handle_local_only(
                                 PullPreferences(
                                     remote.uuid, content_prefs,
-                                    force_fetch_local_missing=False, deprecated_type=remote.type,
                                     on_same_file_is_present=PullBehavior.ADD,
                                     on_file_added_or_present=PullBehavior.FAIL,
                                     on_file_is_different_and_modified=PullBehavior.FAIL,
