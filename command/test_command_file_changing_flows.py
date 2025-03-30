@@ -905,3 +905,329 @@ class TestFileChangingFlows(unittest.TestCase):
         res = hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
         self.assertEqual("Sync'ed repo-full-name to hoard!\nDONE", res)
 
+    def test_moving_of_files_in_hoard_with_backups(self):
+        hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = \
+            init_complex_hoard(self.tmpdir.name)
+
+        os.mkdir(join(self.tmpdir.name, 'repo-copy'))
+        copy_cave_cmd = TotalCommand(path=join(self.tmpdir.name, 'repo-copy')).cave
+        copy_cave_cmd.init()
+        copy_cave_cmd.refresh()
+
+        res = hoard_cmd.add_remote(
+            join(self.tmpdir.name, 'repo-copy'), name="repo-copy-name", mount_point="/",
+            type=CaveType.PARTIAL, fetch_new=True)
+        self.assertEqual(
+            fr"Added repo-copy-name[{copy_cave_cmd.current_uuid()}] at {self.tmpdir.name}\repo-copy!", res)
+
+        pfw = pretty_file_writer(self.tmpdir.name)
+
+        res = hoard_cmd.contents.pull(partial_cave_cmd.current_uuid())
+        self.assertEqual(f"+/test.me.1\n+/wat/test.me.2\nSync'ed repo-partial-name to hoard!\nDONE", res)
+
+        res = hoard_cmd.contents.pending(full_cave_cmd.current_uuid())
+        self.assertEqual(
+            "Status of repo-full-name:\n"
+            "PRESENT /test.me.4\n"
+            "PRESENT /wat/test.me.3\n"
+            "DELETED_DIR /wat\n"
+            "DONE", res)
+
+        res = hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
+        self.assertEqual(
+            f"=/test.me.1\n=/wat/test.me.2\n+/test.me.4\n+/wat/test.me.3"
+            f"\nSync'ed repo-full-name to hoard!\nDONE", res)
+
+        res = hoard_cmd.contents.pull(backup_cave_cmd.current_uuid())
+        self.assertEqual(
+            f"=/test.me.1\n"
+            f"=/wat/test.me.3\n"
+            f"Sync'ed repo-backup-name to hoard!\n"
+            f"DONE", res)
+
+        res = hoard_cmd.files.push(backup_cave_cmd.current_uuid())
+        self.assertEqual(
+            "repo-backup-name:\n"
+            "+ test.me.4\n"
+            "+ wat/test.me.2\n"
+            "repo-backup-name:\n"
+            "DONE", res)
+
+        res = hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
+        self.assertEqual(
+            "|Num Files                |total     |available |get       |\n"
+            "|repo-backup-name         |         4|         4|          |\n"
+            "|repo-copy-name           |         4|          |         4|\n"
+            "|repo-full-name           |         4|         4|          |\n"
+            "|repo-partial-name        |         2|         2|          |\n"
+            "\n"
+            "|Size                     |total     |available |get       |\n"
+            "|repo-backup-name         |        35|        35|          |\n"
+            "|repo-copy-name           |        35|          |        35|\n"
+            "|repo-full-name           |        35|        35|          |\n"
+            "|repo-partial-name        |        14|        14|          |\n",
+            res)
+
+        res = hoard_cmd.files.push(copy_cave_cmd.current_uuid())
+        self.assertEqual(
+            "repo-copy-name:\n"
+            "+ test.me.1\n"
+            "+ test.me.4\n"
+            "+ wat/test.me.2\n"
+            "+ wat/test.me.3\n"
+            "repo-copy-name:\n"
+            "DONE", res)
+
+        res = full_cave_cmd.refresh()
+        self.assertEqual("NO CHANGES\nRefresh done!", res)
+
+        pathlib.Path(join(self.tmpdir.name, 'repo-full/lets_get_it_started')).mkdir(parents=True)
+
+        pfw('repo-full/test.me.1', "age44")
+        pfw('repo-full/test.me.added', "fhagf")
+        shutil.move(
+            join(self.tmpdir.name, 'repo-full/test.me.4'),
+            join(self.tmpdir.name, 'repo-full/lets_get_it_started/test.me.4-renamed'))
+
+        pfw('repo-full/lets_get_it_started/test.me.2-butnew', "gsadf3dq")
+        shutil.move(
+            join(self.tmpdir.name, 'repo-full/wat/test.me.2'),
+            join(self.tmpdir.name, 'repo-full/lets_get_it_started/test.me.2-butsecond'))
+
+        res = full_cave_cmd.refresh()
+        self.assertEqual(
+            "MOVED test.me.4 TO lets_get_it_started/test.me.4-renamed\n"
+            "REMOVED_FILE_FALLBACK_TOO_MANY wat/test.me.2\n"
+            "ADDED_FILE test.me.added\n"
+            "ADDED_FILE lets_get_it_started/test.me.2-butnew\n"
+            "ADDED_FILE lets_get_it_started/test.me.2-butsecond\n"
+            "MODIFIED_FILE test.me.1\n"
+            "ADDED_DIR lets_get_it_started\n"
+            "Refresh done!", res)
+
+        res = hoard_cmd.contents.pending(full_cave_cmd.current_uuid())
+        self.assertEqual(
+            "Status of repo-full-name:\n"
+            "ADDED /lets_get_it_started/test.me.4-renamed\n"
+            "ADDED /test.me.added\n"
+            "ADDED /lets_get_it_started/test.me.2-butnew\n"
+            "ADDED /lets_get_it_started/test.me.2-butsecond\n"
+            "MODIFIED /test.me.1\n"
+            "ADDED_DIR /lets_get_it_started\n"
+            "DELETED /wat/test.me.2\n"
+            "DELETED_DIR /wat\n"
+            "MOVED /test.me.4\n"
+            "DONE", res)
+
+        res = hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
+        self.assertEqual(
+            "+/lets_get_it_started/test.me.4-renamed\n"  # todo should not be logged, as we move it
+            "+/test.me.added\n"
+            "+/lets_get_it_started/test.me.2-butnew\n"
+            "+/lets_get_it_started/test.me.2-butsecond\n"
+            "u/test.me.1\n"
+            "-/wat/test.me.2\n"
+            "MOVE repo-backup-name: /test.me.4 to /lets_get_it_started/test.me.4-renamed\n"
+            "MOVE repo-copy-name: /test.me.4 to /lets_get_it_started/test.me.4-renamed\n"
+            "CLEANUP_MOVED /test.me.4\n"
+            "Sync'ed repo-full-name to hoard!\n"
+            "DONE", res)
+
+        res = hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
+        self.assertEqual(
+            "|Num Files                |total     |available |get       |move      |cleanup   |\n"
+            "|repo-backup-name         |         8|         1|         4|         1|         2|\n"
+            "|repo-copy-name           |         8|         1|         4|         1|         2|\n"
+            "|repo-full-name           |         6|         6|          |          |          |\n"
+            "|repo-partial-name        |         2|          |         1|          |         1|\n"
+            "\n"
+            "|Size                     |total     |available |get       |move      |cleanup   |\n"
+            "|repo-backup-name         |        66|        10|        26|        11|        19|\n"
+            "|repo-copy-name           |        66|        10|        26|        11|        19|\n"
+            "|repo-full-name           |        47|        47|          |          |          |\n"
+            "|repo-partial-name        |        13|          |         5|          |         8|\n",
+            res)
+
+        res = hoard_cmd.files.push(full_cave_cmd.current_uuid())
+        self.assertEqual("repo-full-name:\nrepo-full-name:\nDONE", res)
+
+        res = hoard_cmd.files.pending(copy_cave_cmd.current_uuid())
+        self.assertEqual(
+            "repo-copy-name:\n"
+            "TO_CLEANUP (is in 0) /wat/test.me.2\n"
+            "TO_CLEANUP (is in 0) /test.me.4\n"
+            "TO_MOVE /lets_get_it_started/test.me.4-renamed from /test.me.4\n"
+            "TO_GET (from 1) /test.me.added\n"
+            "TO_GET (from 1) /lets_get_it_started/test.me.2-butnew\n"
+            "TO_GET (from 1) /lets_get_it_started/test.me.2-butsecond\n"
+            "TO_GET (from 1) /test.me.1\n"
+            " repo-full-name has 4 files\n"
+            "DONE", res)
+
+        res = hoard_cmd.files.push(copy_cave_cmd.current_uuid())
+        self.assertEqual(
+            "repo-copy-name:\n"
+            "+ lets_get_it_started/test.me.2-butnew\n"
+            "+ lets_get_it_started/test.me.2-butsecond\n"
+            "MOVED /test.me.4 to /lets_get_it_started/test.me.4-renamed\n"
+            "+ test.me.1\n"
+            "+ test.me.added\n"
+            "repo-copy-name:\n"
+            "d test.me.4\n"
+            "d wat/test.me.2\n"
+            "DONE", res)
+
+        res = hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
+        self.assertEqual(
+            "|Num Files                |total     |available |get       |move      |cleanup   |\n"
+            "|repo-backup-name         |         8|         1|         4|         1|         2|\n"
+            "|repo-copy-name           |         6|         6|          |          |          |\n"
+            "|repo-full-name           |         6|         6|          |          |          |\n"
+            "|repo-partial-name        |         2|          |         1|          |         1|\n"
+            "\n"
+            "|Size                     |total     |available |get       |move      |cleanup   |\n"
+            "|repo-backup-name         |        66|        10|        26|        11|        19|\n"
+            "|repo-copy-name           |        47|        47|          |          |          |\n"
+            "|repo-full-name           |        47|        47|          |          |          |\n"
+            "|repo-partial-name        |        13|          |         5|          |         8|\n",
+            res)
+
+        res = hoard_cmd.files.pending(backup_cave_cmd.current_uuid())
+        self.assertEqual(
+            'repo-backup-name:\n'
+            'TO_CLEANUP (is in 0) /wat/test.me.2\n'
+            'TO_CLEANUP (is in 0) /test.me.4\n'
+            'TO_MOVE /lets_get_it_started/test.me.4-renamed from /test.me.4\n'
+            'TO_GET (from 2) /test.me.added\n'
+            'TO_GET (from 2) /lets_get_it_started/test.me.2-butnew\n'
+            'TO_GET (from 2) /lets_get_it_started/test.me.2-butsecond\n'
+            'TO_GET (from 2) /test.me.1\n'
+            ' repo-copy-name has 4 files\n'
+            ' repo-full-name has 4 files\n'
+            'DONE', res)
+
+        res = hoard_cmd.files.push(copy_cave_cmd.current_uuid())
+        self.assertEqual("repo-copy-name:\nrepo-copy-name:\nDONE", res)
+
+        res = copy_cave_cmd.refresh()
+        self.assertEqual(
+            "ADDED_FILE test.me.1\n"
+            "ADDED_FILE test.me.added\n"
+            "ADDED_FILE lets_get_it_started/test.me.2-butnew\n"
+            "ADDED_FILE lets_get_it_started/test.me.2-butsecond\n"
+            "ADDED_FILE lets_get_it_started/test.me.4-renamed\n"
+            "ADDED_FILE wat/test.me.3\n"
+            "ADDED_DIR lets_get_it_started\n"
+            "ADDED_DIR wat\n"
+            "Refresh done!", res)
+
+        res = hoard_cmd.files.push(backup_cave_cmd.current_uuid())
+        self.assertEqual(
+            "repo-backup-name:\n"
+            "+ lets_get_it_started/test.me.2-butnew\n"
+            "+ lets_get_it_started/test.me.2-butsecond\n"
+            "MOVED /test.me.4 to /lets_get_it_started/test.me.4-renamed\n"
+            "+ test.me.1\n"
+            "+ test.me.added\n"
+            "repo-backup-name:\n"
+            "d test.me.4\n"
+            "d wat/test.me.2\n"
+            "remove dangling /test.me.4\n"
+            "DONE", res)
+
+        res = backup_cave_cmd.refresh()
+        self.assertEqual(
+            "ADDED_FILE test.me.added\n"
+            "ADDED_FILE lets_get_it_started/test.me.2-butnew\n"
+            "ADDED_FILE lets_get_it_started/test.me.2-butsecond\n"
+            "ADDED_FILE lets_get_it_started/test.me.4-renamed\n"
+            "MODIFIED_FILE test.me.1\n"
+            "ADDED_DIR lets_get_it_started\n"
+            "Refresh done!", res)
+
+        res = full_cave_cmd.refresh()
+        self.assertEqual("NO CHANGES\nRefresh done!", res)
+
+        res = hoard_cmd.contents.pull(copy_cave_cmd.current_uuid())
+        self.assertEqual("Sync'ed repo-copy-name to hoard!\nDONE", res)
+
+        res = hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
+        self.assertEqual("Sync'ed repo-full-name to hoard!\nDONE", res)
+
+        res = hoard_cmd.files.pending(partial_cave_cmd.current_uuid())
+        self.assertEqual(
+            'repo-partial-name:\n'
+            'TO_CLEANUP (is in 0) /wat/test.me.2\n'
+            'TO_GET (from 3) /test.me.1\n'
+            ' repo-backup-name has 1 files\n'
+            ' repo-copy-name has 1 files\n'
+            ' repo-full-name has 1 files\n'
+            'DONE', res)
+
+        res = hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
+        self.assertEqual(
+            "|Num Files                |total     |available |get       |cleanup   |\n"
+            "|repo-backup-name         |         6|         6|          |          |\n"
+            "|repo-copy-name           |         6|         6|          |          |\n"
+            "|repo-full-name           |         6|         6|          |          |\n"
+            "|repo-partial-name        |         2|          |         1|         1|\n"  # fixme error!
+            "\n"
+            "|Size                     |total     |available |get       |cleanup   |\n"
+            "|repo-backup-name         |        47|        47|          |          |\n"
+            "|repo-copy-name           |        47|        47|          |          |\n"
+            "|repo-full-name           |        47|        47|          |          |\n"
+            "|repo-partial-name        |        13|          |         5|         8|\n", res)
+
+        # move file before being synch-ed
+        shutil.move(
+            join(self.tmpdir.name, 'repo-partial/test.me.1'),
+            join(self.tmpdir.name, 'repo-partial/test.me.1-newlocation'))
+
+        res = partial_cave_cmd.refresh()
+        self.assertEqual("MOVED test.me.1 TO test.me.1-newlocation\nRefresh done!", res)
+
+        res = hoard_cmd.contents.pull(partial_cave_cmd.current_uuid())
+        self.assertEqual(
+            "?/wat/test.me.2\n"
+            "+/test.me.1-newlocation\n"
+            # expected error - move will fail, but the fallback is to just get it
+            "ERROR_ON_MOVE bad current status = HoardFileStatus.GET, won't move.\n"
+            "Sync'ed repo-partial-name to hoard!\n"
+            "DONE", res)
+
+        res = hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
+        self.assertEqual(
+            "|Num Files                |total     |available |get       |cleanup   |\n"
+            "|repo-backup-name         |         7|         6|         1|          |\n"
+            "|repo-copy-name           |         7|         6|         1|          |\n"
+            "|repo-full-name           |         7|         6|         1|          |\n"
+            "|repo-partial-name        |         3|         1|         1|         1|\n"
+            "\n"
+            "|Size                     |total     |available |get       |cleanup   |\n"
+            "|repo-backup-name         |        53|        47|         6|          |\n"
+            "|repo-copy-name           |        53|        47|         6|          |\n"
+            "|repo-full-name           |        53|        47|         6|          |\n"
+            "|repo-partial-name        |        19|         6|         5|         8|\n", res)
+
+        res = hoard_cmd.files.push(partial_cave_cmd.current_uuid())
+        self.assertEqual(
+            "repo-partial-name:\n"
+            "+ test.me.1\n"
+            "repo-partial-name:\n"
+            "d wat/test.me.2\n"
+            "remove dangling /wat/test.me.2\n"
+            "DONE", res)
+
+        res = hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
+        self.assertEqual(
+            "|Num Files                |total     |available |get       |\n"
+            "|repo-backup-name         |         7|         6|         1|\n"
+            "|repo-copy-name           |         7|         6|         1|\n"
+            "|repo-full-name           |         7|         6|         1|\n"
+            "|repo-partial-name        |         2|         2|          |\n"
+            "\n"
+            "|Size                     |total     |available |get       |\n"
+            "|repo-backup-name         |        53|        47|         6|\n"
+            "|repo-copy-name           |        53|        47|         6|\n"
+            "|repo-full-name           |        53|        47|         6|\n"
+            "|repo-partial-name        |        11|        11|          |\n", res)

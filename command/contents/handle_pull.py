@@ -281,7 +281,7 @@ def _handle_hoard_only_moved(
         elif goal_status == HoardFileStatus.UNKNOWN:
             logging.info(f"File {diff.hoard_file} is unknown, can't move!")
         else:
-            out.write(f"ERROR_ON_MOVE unrecognized current status {goal_status}")
+            out.write(f"ERROR_ON_MOVE bad current status = {goal_status}, won't move.\n")
     else:
         _handle_hoard_only_with_behavior(preferences, diff, preferences.on_hoard_only_local_moved, out)
 
