@@ -373,72 +373,9 @@ class HoardCommandContents:
                             continue
 
                         if remote_obj.type == CaveType.PARTIAL:
-
-                            all_diffs = list(
-                                compare_local_to_hoard(current_contents, hoard_contents, config, self.hoard.paths()))
-                            diffs_by_type = group_to_dict(all_diffs, key=lambda diff: type(diff))
-                            for dt, diffs in diffs_by_type.items():
-                                print(f"{dt}: {len(diffs)}")
-
-                            remote_op_handler: DiffHandler = PartialDiffHandler(
-                                remote_obj.uuid, hoard_contents, content_prefs,
-                                force_fetch_local_missing=force_fetch_local_missing,
-                                assume_current=assume_current)
-
-                            for diff in diffs_by_type.pop(FileIsSame, []):
-                                assert isinstance(diff, FileIsSame)
-                                remote_op_handler.handle_file_is_same(diff, out)
-
-                            for diff in diffs_by_type.pop(FileOnlyInLocalAdded, []) \
-                                    + diffs_by_type.pop(FileOnlyInLocalPresent, []):
-                                assert isinstance(diff, FileOnlyInLocalAdded) | isinstance(diff, FileOnlyInLocalPresent)
-                                remote_op_handler.handle_local_only(diff, out)
-
-                            for diff in diffs_by_type.pop(FileContentsDiffer, []):
-                                assert isinstance(diff, FileContentsDiffer)
-                                remote_op_handler.handle_file_contents_differ(diff, out)
-
-                            for diff in diffs_by_type.pop(FileOnlyInHoardLocalDeleted, []):
-                                assert isinstance(diff, FileOnlyInHoardLocalDeleted)
-                                remote_op_handler.handle_hoard_only_deleted(diff, out)
-
-                            for diff in diffs_by_type.pop(FileOnlyInHoardLocalUnknown, []):
-                                assert isinstance(diff, FileOnlyInHoardLocalUnknown)
-                                remote_op_handler.handle_hoard_only_unknown(diff, out)
-
-                            for diff in diffs_by_type.pop(DirMissingInHoard, []):
-                                assert isinstance(diff, DirMissingInHoard)
-                                logging.info(f"new dir found: {diff.local_dir}")
-                                hoard_contents.fsobjects.add_dir(diff.hoard_dir)
-
-                            dir_missing_in_local = diffs_by_type.pop(DirMissingInLocal, [])
-                            logging.info(f"# dir missing in local = {len(dir_missing_in_local)}")
-
-                            dir_is_same = diffs_by_type.pop(DirIsSame, [])
-                            logging.info(f"# dir missing in local = {len(dir_is_same)}")
-
-                            logging.info(f"Handling moves, after the other ops have been done.")
-                            for diff in diffs_by_type.pop(FileOnlyInHoardLocalMoved, []):
-                                assert isinstance(diff, FileOnlyInHoardLocalMoved)
-                                hoard_new_path = pathing.in_local(diff.local_props.last_related_fullpath,
-                                                                  remote_obj.uuid) \
-                                    .at_hoard().as_posix()
-                                hoard_new_path_props = hoard_contents.fsobjects[hoard_new_path]
-                                assert isinstance(hoard_new_path_props, HoardFileProps)
-                                assert hoard_new_path_props.fasthash == diff.hoard_props.fasthash and \
-                                       hoard_new_path_props.fasthash == diff.local_props.fasthash
-
-                                logging.info(f"Marking moving of {diff.hoard_file} to {hoard_new_path}.")
-                                other_remotes_wanting_file = hoard_new_path_props.by_statuses(
-                                    HoardFileStatus.GET, HoardFileStatus.COPY, HoardFileStatus.MOVE)
-                                remote_op_handler.handle_hoard_only_moved(
-                                    diff, hoard_new_path, hoard_new_path_props, other_remotes_wanting_file, out)
-
-                            for unrecognized_type, unrecognized_diffs in diffs_by_type.items():
-                                logging.error(f"Unrecognized {len(unrecognized_diffs)} of type: {unrecognized_type}")
-                            if len(diffs_by_type) > 0:
-                                raise ValueError(f"Unrecognized diffs of types {list(diffs_by_type.keys())}")
-
+                            _pull_diff_contents(config, hoard_contents, self.hoard.paths(), pathing, content_prefs,
+                                                remote_obj, current_contents, assume_current, force_fetch_local_missing,
+                                                out)
 
                         else:
                             _execute_pull_of_repo(
@@ -545,7 +482,77 @@ class HoardCommandContents:
                 return out.getvalue()
 
 
-def _execute_pull_of_repo(
+def _pull_diff_contents(
+        config: HoardConfig, hoard_contents: HoardContents, paths: HoardPaths, pathing: HoardPathing,
+        content_prefs: ContentPrefs, remote_obj: HoardRemote, current_contents: RepoContents,
+        assume_current: bool, force_fetch_local_missing: bool, out: StringIO):
+    all_diffs = list(
+        compare_local_to_hoard(current_contents, hoard_contents, config, paths))
+    diffs_by_type = group_to_dict(all_diffs, key=lambda diff: type(diff))
+
+    for dt, diffs in diffs_by_type.items():
+        print(f"{dt}: {len(diffs)}")  # fixme move to log
+
+    remote_op_handler: DiffHandler = PartialDiffHandler(
+        remote_obj.uuid, hoard_contents, content_prefs,
+        force_fetch_local_missing=force_fetch_local_missing,
+        assume_current=assume_current)
+
+    for diff in diffs_by_type.pop(FileIsSame, []):
+        assert isinstance(diff, FileIsSame)
+        remote_op_handler.handle_file_is_same(diff, out)
+
+    for diff in diffs_by_type.pop(FileOnlyInLocalAdded, []) \
+                + diffs_by_type.pop(FileOnlyInLocalPresent, []):
+        assert isinstance(diff, FileOnlyInLocalAdded) | isinstance(diff, FileOnlyInLocalPresent)
+        remote_op_handler.handle_local_only(diff, out)
+
+    for diff in diffs_by_type.pop(FileContentsDiffer, []):
+        assert isinstance(diff, FileContentsDiffer)
+        remote_op_handler.handle_file_contents_differ(diff, out)
+
+    for diff in diffs_by_type.pop(FileOnlyInHoardLocalDeleted, []):
+        assert isinstance(diff, FileOnlyInHoardLocalDeleted)
+        remote_op_handler.handle_hoard_only_deleted(diff, out)
+
+    for diff in diffs_by_type.pop(FileOnlyInHoardLocalUnknown, []):
+        assert isinstance(diff, FileOnlyInHoardLocalUnknown)
+        remote_op_handler.handle_hoard_only_unknown(diff, out)
+
+    for diff in diffs_by_type.pop(DirMissingInHoard, []):
+        assert isinstance(diff, DirMissingInHoard)
+        logging.info(f"new dir found: {diff.local_dir}")
+        hoard_contents.fsobjects.add_dir(diff.hoard_dir)
+
+    dir_missing_in_local = diffs_by_type.pop(DirMissingInLocal, [])
+    logging.info(f"# dir missing in local = {len(dir_missing_in_local)}")
+
+    dir_is_same = diffs_by_type.pop(DirIsSame, [])
+    logging.info(f"# dir missing in local = {len(dir_is_same)}")
+    logging.info(f"Handling moves, after the other ops have been done.")
+
+    for diff in diffs_by_type.pop(FileOnlyInHoardLocalMoved, []):
+        assert isinstance(diff, FileOnlyInHoardLocalMoved)
+        hoard_new_path = pathing.in_local(diff.local_props.last_related_fullpath,
+                                          remote_obj.uuid) \
+            .at_hoard().as_posix()
+        hoard_new_path_props = hoard_contents.fsobjects[hoard_new_path]
+        assert isinstance(hoard_new_path_props, HoardFileProps)
+        assert hoard_new_path_props.fasthash == diff.hoard_props.fasthash and \
+               hoard_new_path_props.fasthash == diff.local_props.fasthash
+
+        logging.info(f"Marking moving of {diff.hoard_file} to {hoard_new_path}.")
+        other_remotes_wanting_file = hoard_new_path_props.by_statuses(
+            HoardFileStatus.GET, HoardFileStatus.COPY, HoardFileStatus.MOVE)
+        remote_op_handler.handle_hoard_only_moved(
+            diff, hoard_new_path, hoard_new_path_props, other_remotes_wanting_file, out)
+    for unrecognized_type, unrecognized_diffs in diffs_by_type.items():
+        logging.error(f"Unrecognized {len(unrecognized_diffs)} of type: {unrecognized_type}")
+    if len(diffs_by_type) > 0:
+        raise ValueError(f"Unrecognized diffs of types {list(diffs_by_type.keys())}")
+
+
+def _execute_pull_of_repo(  # fixme deprecated, use general handler
         config: HoardConfig, hoard_contents: HoardContents, pathing: HoardPathing,
         remote_obj: HoardRemote, hoard_paths: HoardPaths, current_contents: RepoContents,
         content_prefs: ContentPrefs, assume_current: bool, force_fetch_local_missing: bool,
