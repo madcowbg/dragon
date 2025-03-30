@@ -10,7 +10,7 @@ from config import CaveType
 from contents.hoard import HoardContents
 from contents.hoard_props import HoardFileStatus, HoardFileProps
 from contents.repo import RepoContents
-from contents.repo_props import RepoFileProps
+from contents.repo_props import RepoFileProps, RepoFileStatus
 from contents_diff import FileIsSame, FileOnlyInLocal, FileContentsDiffer, \
     FileOnlyInHoardLocalDeleted, FileOnlyInHoardLocalUnknown, FileOnlyInHoardLocalMoved, DirMissingInHoard, \
     DirMissingInLocal, DirIsSame
@@ -18,25 +18,34 @@ from util import group_to_dict
 
 
 class PullBehavior(enum.Enum):
+    FAIL = None
     ADD = "add"
     IGNORE = "ignore"
     MOVE_AND_CLEANUP = "move_and_cleanup"
+    RESTORE = "restore"
 
 
 class PullPreferences:
     def __init__(
             self, local_uuid: str, content_prefs: ContentPrefs,
-            assume_current: bool, force_fetch_local_missing: bool, deprecated_type: CaveType,
-            on_same_file_is_present: PullBehavior, on_file_added_or_present: PullBehavior):
+            force_fetch_local_missing: bool, deprecated_type: CaveType,
+            on_same_file_is_present: PullBehavior,
+            on_file_added_or_present: PullBehavior,
+            on_file_is_different_and_modified: PullBehavior,
+            on_file_is_different_and_added: PullBehavior,
+            on_file_is_different_but_present: PullBehavior):
         self.local_uuid = local_uuid
         self.content_prefs = content_prefs
         self.deprecated_type = deprecated_type
 
-        self.assume_current = assume_current
         self.force_fetch_local_missing = force_fetch_local_missing
 
         self.on_same_file_is_present = on_same_file_is_present
         self.on_file_added_or_present = on_file_added_or_present
+
+        self.on_file_is_different_and_modified = on_file_is_different_and_modified
+        self.on_file_is_different_and_added = on_file_is_different_and_added
+        self.on_file_is_different_but_present = on_file_is_different_but_present
 
 
 def _handle_file_is_same(preferences: PullPreferences, diff: "FileIsSame", out: StringIO):
@@ -105,9 +114,19 @@ def _handle_local_only(
 
 def _handle_file_contents_differ(
         preferences: PullPreferences, diff: FileContentsDiffer, hoard: HoardContents, out: StringIO):
+    if diff.local_props.last_status == RepoFileStatus.PRESENT:
+        behavior = preferences.on_file_is_different_but_present
+    elif diff.local_props.last_status == RepoFileStatus.ADDED:
+        behavior = preferences.on_file_is_different_and_added
+    elif diff.local_props.last_status == RepoFileStatus.MODIFIED:
+        behavior = preferences.on_file_is_different_and_modified
+    else:
+        raise ValueError(f"Unallowed local_props.last_status={diff.local_props.last_status}")
+    assert behavior in (PullBehavior.RESTORE, PullBehavior.ADD, PullBehavior.MOVE_AND_CLEANUP)
+    logging.info(f"Behavior for differing file: {behavior}")
 
     goal_status = diff.hoard_props.get_status(preferences.local_uuid)
-    if preferences.deprecated_type == CaveType.INCOMING:
+    if behavior == PullBehavior.MOVE_AND_CLEANUP:
         logging.info(f"incoming file has different contents.")
         hoard_props = hoard.fsobjects.add_or_replace_file(diff.hoard_file, diff.local_props)
 
@@ -118,45 +137,38 @@ def _handle_file_contents_differ(
 
         _incoming__safe_mark_for_cleanup(preferences, diff, hoard_props, out)
         out.write(f"u{diff.hoard_file}\n")
-    elif preferences.deprecated_type == CaveType.BACKUP:
+    elif behavior == PullBehavior.RESTORE:
         if goal_status == HoardFileStatus.AVAILABLE:  # was backed-up here, get it again
-            props = diff.hoard_props
-            props.mark_to_get([preferences.local_uuid])
-
+            diff.hoard_props.mark_to_get([preferences.local_uuid])
             out.write(f"g{diff.hoard_file}\n")
-    else:
+        elif goal_status in (HoardFileStatus.GET, HoardFileStatus.COPY, HoardFileStatus.MOVE):
+            logging.info(f"current file is out of date and had been marked to be obtained: {diff.hoard_file}")
+            out.write(f"ALREADY_MARKED_{goal_status.value.upper()} {diff.hoard_file}\n")
+        elif goal_status == HoardFileStatus.CLEANUP:
+            logging.info(f"skipping {diff.hoard_file} as is marked for deletion")
+            out.write(f"?{diff.hoard_file}\n")
+        elif goal_status == HoardFileStatus.UNKNOWN:
+            logging.info(f"Current file is not marked in hoard, but will restore it.")
+            diff.hoard_props.mark_to_get([preferences.local_uuid])
+            out.write(f"RESTORE {diff.hoard_file}\n")
+        else:
+            raise ValueError(f"Invalid goal status:{goal_status}")
+    elif behavior == PullBehavior.ADD:
         assert preferences.deprecated_type == CaveType.PARTIAL
-        if goal_status == HoardFileStatus.AVAILABLE:
-            # file was changed in-place, but is different now FIXME should that always happen?
-            reset_local_as_current(hoard, preferences.local_uuid, diff.hoard_file, diff.hoard_props, diff.local_props)
+        reset_local_as_current(hoard, preferences.local_uuid, diff.hoard_file, diff.hoard_props, diff.local_props)
 
+        if goal_status == HoardFileStatus.AVAILABLE:
+            # file was changed in-place, but is different now
             out.write(f"u{diff.hoard_file}\n")
         elif goal_status == HoardFileStatus.UNKNOWN:  # fixme this should disappear if we track repository contents
-            if preferences.assume_current:
-                # file is added as different then what is in the hoard
-                reset_local_as_current(
-                    hoard, preferences.local_uuid, diff.hoard_file, diff.hoard_props, diff.local_props)
-
-                out.write(f"RESETTING {diff.hoard_file}\n")
-            else:
-                logging.info(f"Current file is different, but won't be added because --assume-current == False")
-                out.write(f"IGNORE_DIFF {diff.hoard_file}\n")
-        elif goal_status == HoardFileStatus.CLEANUP:
-            if preferences.assume_current:
-                reset_local_as_current(
-                    hoard, preferences.local_uuid, diff.hoard_file, diff.hoard_props, diff.local_props)
-                out.write(f"RESETTING {diff.hoard_file}\n")
-            else:
-                logging.info(f"skipping {diff.hoard_file} as is marked for deletion")
-                out.write(f"?{diff.hoard_file}\n")
-        elif goal_status in (HoardFileStatus.GET, HoardFileStatus.COPY):
-            if preferences.assume_current:
-                reset_local_as_current(
-                    hoard, preferences.local_uuid, diff.hoard_file, diff.hoard_props, diff.local_props)
-                out.write(f"RESETTING {diff.hoard_file}\n")
-            else:
-                logging.info(f"current file is out of date and was marked for restore: {diff.hoard_file}")
-                out.write(f"g{diff.hoard_file}\n")
+            # file is added as different then what is in the hoard
+            out.write(f"RESETTING {diff.hoard_file}\n")
+        elif goal_status in (HoardFileStatus.CLEANUP, HoardFileStatus.GET, HoardFileStatus.COPY, HoardFileStatus.MOVE):
+            out.write(f"RESETTING {diff.hoard_file}\n")
+        else:
+            raise ValueError(f"Invalid goal status:{goal_status}")
+    else:
+        raise ValueError(f"Invalid behavior={behavior}")
 
 
 def _handle_hoard_only_deleted(

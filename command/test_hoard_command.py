@@ -136,7 +136,7 @@ class TestHoardCommand(unittest.TestCase):
 
         res = hoard_cmd.contents.pull("repo-in-local-2")
         self.assertEqual(
-            "=/wat/test.me.twice\nSync'ed repo-in-local-2 to hoard!\nDONE", res.strip())
+            "=/wat/test.me.twice\nALREADY_MARKED_GET /wat/test.me.different\nSync'ed repo-in-local-2 to hoard!\nDONE", res.strip())
 
         with HoardContents.load(hoard_cmd.hoard.hoardpath) as hc:
             self._assert_hoard_contents(

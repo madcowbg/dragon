@@ -369,23 +369,32 @@ class HoardCommandContents:
 
                         if remote_obj.type == CaveType.INCOMING:
                             preferences = PullPreferences(
-                                remote_uuid, content_prefs, assume_current, force_fetch_local_missing,
+                                remote_uuid, content_prefs, force_fetch_local_missing,
                                 remote_obj.type,
                                 on_same_file_is_present=PullBehavior.MOVE_AND_CLEANUP,
-                                on_file_added_or_present=PullBehavior.MOVE_AND_CLEANUP)
+                                on_file_added_or_present=PullBehavior.MOVE_AND_CLEANUP,
+                                on_file_is_different_and_modified=PullBehavior.MOVE_AND_CLEANUP,
+                                on_file_is_different_and_added=PullBehavior.MOVE_AND_CLEANUP,
+                                on_file_is_different_but_present=PullBehavior.MOVE_AND_CLEANUP)
                         elif remote_obj.type == CaveType.BACKUP:
                             preferences = PullPreferences(
-                                remote_uuid, content_prefs, assume_current, force_fetch_local_missing,
+                                remote_uuid, content_prefs, force_fetch_local_missing,
                                 remote_obj.type,
                                 on_same_file_is_present=PullBehavior.ADD,
-                                on_file_added_or_present=PullBehavior.IGNORE)
+                                on_file_added_or_present=PullBehavior.IGNORE,
+                                on_file_is_different_and_modified=PullBehavior.RESTORE,
+                                on_file_is_different_and_added=PullBehavior.RESTORE,
+                                on_file_is_different_but_present=PullBehavior.RESTORE)
                         else:
                             assert remote_obj.type == CaveType.PARTIAL
                             preferences = PullPreferences(
-                                remote_uuid, content_prefs, assume_current, force_fetch_local_missing,
+                                remote_uuid, content_prefs, force_fetch_local_missing,
                                 remote_obj.type,
                                 on_same_file_is_present=PullBehavior.ADD,
-                                on_file_added_or_present=PullBehavior.ADD)
+                                on_file_added_or_present=PullBehavior.ADD,
+                                on_file_is_different_and_modified=PullBehavior.ADD,
+                                on_file_is_different_and_added=PullBehavior.ADD,
+                                on_file_is_different_but_present=PullBehavior.RESTORE if not assume_current else PullBehavior.ADD)
 
                         pull_repo_contents_to_hoard(hoard_contents, pathing, current_contents, preferences, out)
 
@@ -429,7 +438,11 @@ class HoardCommandContents:
                                 PullPreferences(
                                     remote.uuid, content_prefs,
                                     assume_current=True, force_fetch_local_missing=False, deprecated_type=remote.type,
-                                    on_same_file_is_present=PullBehavior.ADD, on_file_added_or_present=PullBehavior.ADD
+                                    on_same_file_is_present=PullBehavior.ADD,
+                                    on_file_added_or_present=PullBehavior.FAIL,
+                                    on_file_is_different_and_modified=PullBehavior.FAIL,
+                                    on_file_is_different_and_added=PullBehavior.FAIL,
+                                    on_file_is_different_but_present=PullBehavior.FAIL
                                 ),
                                 FileOnlyInLocal(
                                     local_file, hoard_file, local_props,
