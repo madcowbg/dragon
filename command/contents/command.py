@@ -10,7 +10,6 @@ from alive_progress import alive_bar, alive_it
 
 from command.content_prefs import ContentPrefs
 from command.contents.comparisons import compare_local_to_hoard
-from command.contents.diff_handlers import DiffHandler, BackupDiffHandler
 from command.contents.handle_pull import PullPreferences, pull_repo_contents_to_hoard, _handle_local_only, \
     reset_local_as_current
 from command.hoard import Hoard
@@ -370,17 +369,12 @@ class HoardCommandContents:
                             out.write(f"Remote {remote_uuid} is not mounted!\n")
                             continue
 
-                        if remote_obj.type in (CaveType.PARTIAL, CaveType.INCOMING):
-                            pull_repo_contents_to_hoard(
-                                hoard_contents, pathing, current_contents,
-                                PullPreferences(
-                                    remote_uuid, content_prefs, assume_current, force_fetch_local_missing,
-                                    remote_obj.type),
-                                out)
-                        else:
-                            _execute_pull_of_repo(
-                                hoard_contents, pathing, remote_obj, current_contents, content_prefs,
-                                assume_current, force_fetch_local_missing, out)
+                        pull_repo_contents_to_hoard(
+                            hoard_contents, pathing, current_contents,
+                            PullPreferences(
+                                remote_uuid, content_prefs, assume_current, force_fetch_local_missing,
+                                remote_obj.type),
+                            out)
 
                         logging.info(f"Updating epoch of {remote_uuid} to {current_contents.config.epoch}")
                         hoard_contents.config.set_epoch(
@@ -477,57 +471,6 @@ class HoardCommandContents:
 
                 out.write("DONE")
                 return out.getvalue()
-
-
-def _execute_pull_of_repo(  # fixme deprecated, use general handler
-        hoard_contents: HoardContents, pathing: HoardPathing,
-        remote_obj: HoardRemote, current_contents: RepoContents,
-        content_prefs: ContentPrefs, assume_current: bool, force_fetch_local_missing: bool,
-        out: StringIO):
-    assert remote_obj.type == CaveType.BACKUP
-    handler: DiffHandler = BackupDiffHandler(remote_obj.uuid, hoard_contents)
-    remote_op_handler = handler
-    moved_diffs = []
-    logging.info("Merging local changes...")
-    for diff in compare_local_to_hoard(current_contents, hoard_contents, pathing):
-        if isinstance(diff, FileOnlyInLocalAdded) | isinstance(diff, FileOnlyInLocalPresent):
-            remote_op_handler.handle_local_only(diff, out)
-        elif isinstance(diff, FileIsSame):
-            remote_op_handler.handle_file_is_same(diff, out)
-        elif isinstance(diff, FileContentsDiffer):
-            remote_op_handler.handle_file_contents_differ(diff, out)
-        elif isinstance(diff, FileOnlyInHoardLocalDeleted):
-            remote_op_handler.handle_hoard_only_deleted(diff, out)
-        elif isinstance(diff, FileOnlyInHoardLocalUnknown):
-            remote_op_handler.handle_hoard_only_unknown(diff, out)
-        elif isinstance(diff, FileOnlyInHoardLocalMoved):
-            logging.info(f"new move found: {diff.hoard_file}, save for processing last")
-            moved_diffs.append(diff)
-        elif isinstance(diff, DirMissingInHoard):
-            logging.info(f"new dir found: {diff.local_dir}")
-            hoard_contents.fsobjects.add_dir(diff.hoard_dir)
-        elif isinstance(diff, DirMissingInLocal):
-            pass
-        elif isinstance(diff, DirIsSame):
-            pass
-        else:
-            raise ValueError(f"Unrecognized diff of type {type(diff)}")
-
-    logging.info(f"Handling {len(moved_diffs)} moves, after the other ops have been done.")
-    for diff in moved_diffs:
-        assert isinstance(diff, FileOnlyInHoardLocalMoved)
-        hoard_new_path = pathing.in_local(diff.local_props.last_related_fullpath, remote_obj.uuid) \
-            .at_hoard().as_posix()
-        hoard_new_path_props = hoard_contents.fsobjects[hoard_new_path]
-        assert isinstance(hoard_new_path_props, HoardFileProps)
-        assert hoard_new_path_props.fasthash == diff.hoard_props.fasthash and \
-               hoard_new_path_props.fasthash == diff.local_props.fasthash
-
-        logging.info(f"Marking moving of {diff.hoard_file} to {hoard_new_path}.")
-        other_remotes_wanting_file = hoard_new_path_props.by_statuses(
-            HoardFileStatus.GET, HoardFileStatus.COPY, HoardFileStatus.MOVE)
-        remote_op_handler.handle_hoard_only_moved(
-            diff, hoard_new_path, hoard_new_path_props, other_remotes_wanting_file, out)
 
 
 STATUSES_ALREADY_ENABLED = [HoardFileStatus.AVAILABLE, HoardFileStatus.GET]
