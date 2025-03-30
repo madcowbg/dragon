@@ -4,7 +4,8 @@ from io import StringIO
 from typing import List
 
 from command.content_prefs import ContentPrefs
-from contents_diff import FileOnlyInLocal, FileIsSame, FileContentsDiffer, FileOnlyInHoardLocalDeleted, \
+from contents_diff import FileOnlyInLocalAdded, FileOnlyInLocalPresent, FileIsSame, FileContentsDiffer, \
+    FileOnlyInHoardLocalDeleted, \
     FileOnlyInHoardLocalUnknown, FileOnlyInHoardLocalMoved
 from contents.hoard import HoardContents
 from contents.repo_props import RepoFileProps, RepoFileStatus
@@ -17,7 +18,7 @@ class DiffHandler:
         self.hoard = hoard
 
     @abstractmethod
-    def handle_local_only(self, diff: "FileOnlyInLocal", out: StringIO): pass
+    def handle_local_only(self, diff: FileOnlyInLocalAdded | FileOnlyInLocalPresent, out: StringIO): pass
 
     @abstractmethod
     def handle_file_is_same(self, diff: "FileIsSame", out: StringIO): pass
@@ -56,7 +57,7 @@ class PartialDiffHandler(DiffHandler):
         self.force_fetch_local_missing = force_fetch_local_missing
         self.assume_current = assume_current
 
-    def handle_local_only(self, diff: "FileOnlyInLocal", out: StringIO):
+    def handle_local_only(self, diff: FileOnlyInLocalAdded | FileOnlyInLocalPresent, out: StringIO):
         hoard_props = self.hoard.fsobjects.add_or_replace_file(diff.hoard_file, diff.local_props)
 
         # add status for new repos
@@ -167,22 +168,25 @@ class IncomingDiffHandler(DiffHandler):
         super().__init__(remote_uuid, hoard)
         self.content_prefs = content_prefs
 
-    def handle_local_only(self, diff: FileOnlyInLocal, out: StringIO):
+    def handle_local_only(self, diff: FileOnlyInLocalAdded | FileOnlyInLocalPresent, out: StringIO):
         self._move_to_other_caves(diff, out)
 
         out.write(f"<+{diff.hoard_file}\n")
 
-    def _move_to_other_caves(self, diff: FileOnlyInLocal | FileContentsDiffer, out: StringIO):
+    def _move_to_other_caves(
+            self, diff: FileOnlyInLocalAdded | FileOnlyInLocalPresent | FileContentsDiffer, out: StringIO):
         hoard_props = self.hoard.fsobjects.add_or_replace_file(diff.hoard_file, diff.local_props)
 
         # add status for new repos
-        hoard_props.set_status(list(self.content_prefs.repos_to_add(diff.hoard_file, diff.local_props)),
-                               HoardFileStatus.GET)
+        hoard_props.set_status(
+            list(self.content_prefs.repos_to_add(diff.hoard_file, diff.local_props)),
+            HoardFileStatus.GET)
 
         self._safe_mark_for_cleanup(diff, hoard_props, out)
 
-    def _safe_mark_for_cleanup(self, diff: FileOnlyInLocal | FileContentsDiffer | FileIsSame,
-                               hoard_file: HoardFileProps, out: StringIO):
+    def _safe_mark_for_cleanup(
+            self, diff: FileOnlyInLocalAdded | FileOnlyInLocalPresent | FileContentsDiffer | FileIsSame,
+            hoard_file: HoardFileProps, out: StringIO):
         logging.info(f"safe marking {diff.hoard_file} for cleanup from {self.remote_uuid}")
 
         repos_to_get_file = hoard_file.by_statuses(HoardFileStatus.GET, HoardFileStatus.COPY, HoardFileStatus.AVAILABLE)
@@ -239,7 +243,7 @@ class IncomingDiffHandler(DiffHandler):
 
 
 class BackupDiffHandler(DiffHandler):
-    def handle_local_only(self, diff: FileOnlyInLocal, out: StringIO):
+    def handle_local_only(self, diff: FileOnlyInLocalAdded | FileOnlyInLocalPresent, out: StringIO):
         logging.info(f"skipping obsolete file from backup: {diff.hoard_file}")
         out.write(f"?{diff.hoard_file}\n")
 

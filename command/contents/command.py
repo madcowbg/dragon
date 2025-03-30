@@ -21,9 +21,10 @@ from contents.hoard import HoardContents, HoardFile, HoardDir
 from contents.repo_props import RepoFileProps, RepoDirProps, RepoFileStatus
 from contents.hoard_props import HoardDirProps, HoardFileStatus, HoardFileProps
 from contents.repo import RepoContents
-from contents_diff import FileOnlyInLocal, FileIsSame, FileContentsDiffer, FileOnlyInHoardLocalDeleted, \
+from contents_diff import FileIsSame, FileContentsDiffer, FileOnlyInHoardLocalDeleted, \
     DirMissingInHoard, \
-    Diff, DirIsSame, DirMissingInLocal, FileOnlyInHoardLocalUnknown, FileOnlyInHoardLocalMoved
+    Diff, DirIsSame, DirMissingInLocal, FileOnlyInHoardLocalUnknown, FileOnlyInHoardLocalMoved, FileOnlyInLocalAdded, \
+    FileOnlyInLocalPresent
 from resolve_uuid import resolve_remote_uuid
 from util import format_size
 
@@ -48,6 +49,43 @@ def _file_stats(props: HoardFileProps) -> str:
 class HoardCommandContents:
     def __init__(self, hoard: Hoard):
         self.hoard = hoard
+
+    def pending(self, remote: str):
+        remote_uuid = resolve_remote_uuid(self.hoard.config(), remote)
+
+        logging.info(f"Reading current contents of {remote_uuid}...")
+        with self.hoard.connect_to_repo(remote_uuid, require_contents=True).open_contents() as current_contents:
+            logging.info(f"Loading hoard TOML...")
+            with HoardContents.load(self.hoard.hoardpath) as hoard:
+                logging.info(f"Loaded hoard TOML!")
+                logging.info(f"Computing status ...")
+
+                with StringIO() as out:
+                    out.write(f"Status of {self.hoard.config().remotes[remote_uuid].name}:\n")
+
+                    for diff in compare_local_to_hoard(
+                            current_contents, hoard, self.hoard.config(), self.hoard.paths()):
+                        if isinstance(diff, FileOnlyInLocalAdded):
+                            out.write(f"ADDED {diff.hoard_file}\n")
+                        elif isinstance(diff, FileOnlyInLocalPresent):
+                            out.write(f"PRESENT {diff.hoard_file}\n")
+                        elif isinstance(diff, FileContentsDiffer):
+                            out.write(f"MODIFIED {diff.hoard_file}\n")
+                        elif isinstance(diff, FileOnlyInHoardLocalDeleted):
+                            out.write(f"DELETED {diff.hoard_file}\n")
+                        elif isinstance(diff, FileOnlyInHoardLocalMoved):
+                            out.write(f"MOVED {diff.hoard_file}\n")
+                        elif isinstance(diff, DirMissingInHoard):
+                            out.write(f"ADDED_DIR {diff.hoard_dir}\n")
+                        elif isinstance(diff, DirMissingInLocal):
+                            out.write(f"DELETED_DIR {diff.hoard_dir}\n")
+                        elif isinstance(diff, FileIsSame) or isinstance(diff, DirIsSame):
+                            pass
+                        else:
+                            raise ValueError(f"Unused diff class: {type(diff)}")
+
+                    out.write("DONE")
+                    return out.getvalue()
 
     def status(self, hide_time: bool = False, hide_disk_sizes: bool = False, show_empty: bool = False):
         config = self.hoard.config()
@@ -340,7 +378,7 @@ class HoardCommandContents:
                         logging.info("Merging local changes...")
                         for diff in compare_local_to_hoard(current_contents, hoard_contents, config,
                                                            self.hoard.paths()):
-                            if isinstance(diff, FileOnlyInLocal):
+                            if isinstance(diff, FileOnlyInLocalAdded) | isinstance(diff, FileOnlyInLocalPresent):
                                 remote_op_handler.handle_local_only(diff, out)
                             elif isinstance(diff, FileIsSame):
                                 remote_op_handler.handle_file_is_same(diff, out)
@@ -421,7 +459,7 @@ class HoardCommandContents:
                         if hoard_file not in hoard.fsobjects:
                             logging.info(f"Local file {local_file} will be handled to hoard.")
                             remote_op_handler.handle_local_only(
-                                FileOnlyInLocal(local_file, hoard_file, local_props),
+                                FileOnlyInLocalAdded(local_file, hoard_file, local_props),
                                 StringIO())  # fixme make it elegant
                             out.write(f"READD {hoard_file}\n")
                         else:
@@ -531,7 +569,11 @@ def compare_local_to_hoard(local: RepoContents, hoard: HoardContents, config: Ho
                 curr_file_hoard_path = pathing.in_local(current_file, local.config.uuid).at_hoard()
                 if curr_file_hoard_path.as_posix() not in hoard.fsobjects:
                     logging.info(f"local file not in hoard: {curr_file_hoard_path.as_posix()}")
-                    yield FileOnlyInLocal(current_file, curr_file_hoard_path.as_posix(), props)
+                    if props.last_status == RepoFileStatus.ADDED:
+                        yield FileOnlyInLocalAdded(current_file, curr_file_hoard_path.as_posix(), props)
+                    else:
+                        assert props.last_status == RepoFileStatus.PRESENT
+                        yield FileOnlyInLocalPresent(current_file, curr_file_hoard_path.as_posix(), props)
                 elif is_same_file(
                         local.fsobjects.get_existing(current_file),
                         hoard.fsobjects[curr_file_hoard_path.as_posix()]):

@@ -705,6 +705,14 @@ class TestFileChangingFlows(unittest.TestCase):
         res = hoard_cmd.contents.pull(partial_cave_cmd.current_uuid())
         self.assertEqual(f"+/test.me.1\n+/wat/test.me.2\nSync'ed repo-partial-name to hoard!\nDONE", res)
 
+        res = hoard_cmd.contents.pending(full_cave_cmd.current_uuid())
+        self.assertEqual(
+            "Status of repo-full-name:\n"
+            "PRESENT /test.me.4\n"
+            "PRESENT /wat/test.me.3\n"
+            "DELETED_DIR /wat\n"
+            "DONE", res)
+
         res = hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
         self.assertEqual(
             f"=/test.me.1\n+/test.me.4\n=/wat/test.me.2\n+/wat/test.me.3"
@@ -761,6 +769,20 @@ class TestFileChangingFlows(unittest.TestCase):
             "MODIFIED_FILE test.me.1\n"
             "ADDED_DIR lets_get_it_started\n"
             "Refresh done!", res)
+
+        res = hoard_cmd.contents.pending(full_cave_cmd.current_uuid())
+        self.assertEqual(
+            "Status of repo-full-name:\n"
+            "ADDED /lets_get_it_started/test.me.4-renamed\n"
+            "ADDED /test.me.added\n"
+            "ADDED /lets_get_it_started/test.me.2-butnew\n"
+            "ADDED /lets_get_it_started/test.me.2-butsecond\n"
+            "MODIFIED /test.me.1\n"
+            "ADDED_DIR /lets_get_it_started\n"
+            "DELETED /wat/test.me.2\n"
+            "DELETED_DIR /wat\n"
+            "MOVED /test.me.4\n"
+            "DONE", res)
 
         res = hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
         self.assertEqual(

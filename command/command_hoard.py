@@ -9,18 +9,19 @@ from typing import Dict, List, Tuple
 from alive_progress import alive_bar
 
 from command.backups.command import HoardCommandBackups
+from command.command_repo import RepoCommand
 from command.contents.command import HoardCommandContents, compare_local_to_hoard
 from command.files.command import HoardCommandFiles
 from command.hoard import Hoard
 from command.pathing import HoardPathing
-from command.command_repo import RepoCommand
-from command.repo import ConnectedRepo, OfflineRepo, ProspectiveRepo
-from exceptions import MissingRepo
+from command.repo import ProspectiveRepo
 from config import HoardRemote, CavePath, CaveType, ConnectionSpeed, ConnectionLatency
 from contents.hoard import HoardContents
 from contents.hoard_props import HoardDirProps, HoardFileProps
-from contents_diff import FileOnlyInLocal, FileContentsDiffer, FileOnlyInHoardLocalDeleted, \
-    DirMissingInHoard, DirMissingInLocal, DirIsSame, FileIsSame, FileOnlyInHoardLocalUnknown, FileOnlyInHoardLocalMoved
+from contents_diff import FileContentsDiffer, FileOnlyInHoardLocalDeleted, \
+    DirMissingInHoard, DirMissingInLocal, DirIsSame, FileIsSame, FileOnlyInHoardLocalUnknown, FileOnlyInHoardLocalMoved, \
+    FileOnlyInLocalAdded, FileOnlyInLocalPresent
+from exceptions import MissingRepo
 from hashing import fast_hash
 from resolve_uuid import resolve_remote_uuid
 from util import format_size
@@ -40,17 +41,16 @@ class HoardCommandDeprecated:
         logging.info(f"Reading current contents of {remote_uuid}...")
         with self.hoard.connect_to_repo(remote_uuid, require_contents=True).open_contents() as current_contents:
             logging.info(f"Loading hoard TOML...")
-            hoard1 = self.hoard
-            with HoardContents.load(hoard1.hoardpath) as hoard:
+            with HoardContents.load(self.hoard.hoardpath) as hoard:
                 logging.info(f"Loaded hoard TOML!")
                 logging.info(f"Computing status ...")
 
                 with StringIO() as out:
                     out.write(f"Status of {remote_uuid}:\n")
 
-                    for diff in compare_local_to_hoard(current_contents, hoard, self.hoard.config(),
-                                                       self.hoard.paths()):
-                        if isinstance(diff, FileOnlyInLocal):
+                    for diff in compare_local_to_hoard(
+                            current_contents, hoard, self.hoard.config(), self.hoard.paths()):
+                        if isinstance(diff, FileOnlyInLocalAdded) or isinstance(diff, FileOnlyInLocalPresent):
                             out.write(f"A {diff.hoard_file}\n")
                         elif isinstance(diff, FileContentsDiffer):
                             out.write(f"M {diff.hoard_file}\n")

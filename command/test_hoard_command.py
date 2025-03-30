@@ -61,9 +61,14 @@ class TestHoardCommand(unittest.TestCase):
 
         repo_uuid = cave_cmd.current_uuid()
 
-        res = hoard_cmd.deprecated.status_deprecated("repo-in-local")
+        res = hoard_cmd.contents.pending("repo-in-local")
         self.assertEqual(
-            f"Status of {repo_uuid}:\nA /wat/test.me.different\nA /wat/test.me.once\nA /wat/test.me.twice\nAF /wat\nDONE",
+            f"Status of repo-in-local:\n"
+            f"PRESENT /wat/test.me.different\n"
+            f"PRESENT /wat/test.me.once\n"
+            f"PRESENT /wat/test.me.twice\n"
+            f"ADDED_DIR /wat\n"
+            f"DONE",
             res.strip())
 
         res = hoard_cmd.contents.pull("repo-in-local")
@@ -83,8 +88,8 @@ class TestHoardCommand(unittest.TestCase):
                     ('/wat/test.me.twice', 6, 1, '1881f6f9784fb08bf6690e9763b76ac3')],
                 dirs_exp=["/wat"])
 
-        res = hoard_cmd.deprecated.status_deprecated("repo-in-local")
-        self.assertEqual(f"Status of {repo_uuid}:\nDF /wat\nDONE", res.strip())
+        res = hoard_cmd.contents.pending("repo-in-local")
+        self.assertEqual(f"Status of repo-in-local:\nDELETED_DIR /wat\nDONE", res.strip())
 
     def _assert_hoard_contents(
             self, hoard_contents: HoardContents, files_exp: List[Tuple[str, int, int, str]], dirs_exp: List[str]):
