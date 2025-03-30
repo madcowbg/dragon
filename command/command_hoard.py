@@ -31,69 +31,6 @@ def path_in_local(hoard_file: str, mounted_at: str) -> str:
     return pathlib.Path(hoard_file).relative_to(mounted_at).as_posix()
 
 
-class HoardCommandDeprecated:
-    def __init__(self, hoard: Hoard):
-        self.hoard = hoard
-
-    def status_deprecated(self, remote: str):  # fixme remove
-        remote_uuid = resolve_remote_uuid(self.hoard.config(), remote)
-
-        logging.info(f"Reading current contents of {remote_uuid}...")
-        with self.hoard.connect_to_repo(remote_uuid, require_contents=True).open_contents() as current_contents:
-            logging.info(f"Loading hoard TOML...")
-            with HoardContents.load(self.hoard.hoardpath) as hoard:
-                logging.info(f"Loaded hoard TOML!")
-                logging.info(f"Computing status ...")
-
-                with StringIO() as out:
-                    out.write(f"Status of {remote_uuid}:\n")
-
-                    for diff in compare_local_to_hoard(
-                            current_contents, hoard, self.hoard.config(), self.hoard.paths()):
-                        if isinstance(diff, FileOnlyInLocalAdded) or isinstance(diff, FileOnlyInLocalPresent):
-                            out.write(f"A {diff.hoard_file}\n")
-                        elif isinstance(diff, FileContentsDiffer):
-                            out.write(f"M {diff.hoard_file}\n")
-                        elif isinstance(diff, FileOnlyInHoardLocalDeleted):
-                            out.write(f"D {diff.hoard_file}\n")
-                        elif isinstance(diff, FileOnlyInHoardLocalUnknown):
-                            out.write(f"D {diff.hoard_file}\n")
-                        elif isinstance(diff, FileOnlyInHoardLocalMoved):
-                            out.write(f"MOVED {diff.hoard_file}\n")
-                        elif isinstance(diff, DirMissingInHoard):
-                            out.write(f"AF {diff.hoard_dir}\n")
-                        elif isinstance(diff, DirMissingInLocal):
-                            out.write(f"DF {diff.hoard_dir}\n")
-                        elif isinstance(diff, FileIsSame) or isinstance(diff, DirIsSame):
-                            pass
-                        else:
-                            raise ValueError(f"Unused diff class: {type(diff)}")
-                    out.write("DONE")
-
-                    logging.info("Computing status done!")
-                    return out.getvalue()
-
-    def show(self, remote: str):
-        logging.warning("`show` will be deprecated soon! Use `contents status` instead.")
-        remote_uuid = resolve_remote_uuid(self.hoard.config(), remote)
-
-        logging.info(f"Reading repo {remote_uuid}...")
-        with self.hoard.connect_to_repo(remote_uuid, True).open_contents() as contents:
-            logging.info(f"Read repo!")
-
-            config = self.hoard.config()
-
-            print(f"Result for [{remote}]")
-            print(f"UUID: {remote_uuid}.")
-            print(f"name: {config.remotes[remote_uuid].name}")
-            print(f"mount point: {config.remotes[remote_uuid].mounted_at}")
-            print(f"type: {config.remotes[remote_uuid].type.value}")
-            print(f"Last updated on {contents.config.updated}.")
-            print(f"  # files = {contents.fsobjects.num_files}"
-                  f" of size {format_size(contents.fsobjects.total_size)}")
-            print(f"  # dirs  = {contents.fsobjects.num_dirs}")
-
-
 class HoardCommand(object):
     def __init__(self, path: str):
         self.hoard = Hoard(path)
@@ -101,8 +38,6 @@ class HoardCommand(object):
         self.contents = HoardCommandContents(self.hoard)
         self.files = HoardCommandFiles(self.hoard)
         self.backups = HoardCommandBackups(self.hoard)
-
-        self.deprecated = HoardCommandDeprecated(self.hoard)
 
     def init(self):
         logging.info(f"Reading or creating config...")

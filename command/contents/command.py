@@ -73,6 +73,8 @@ class HoardCommandContents:
                             out.write(f"MODIFIED {diff.hoard_file}\n")
                         elif isinstance(diff, FileOnlyInHoardLocalDeleted):
                             out.write(f"DELETED {diff.hoard_file}\n")
+                        elif isinstance(diff, FileOnlyInHoardLocalUnknown):
+                            out.write(f"MISSING {diff.hoard_file}\n")
                         elif isinstance(diff, FileOnlyInHoardLocalMoved):
                             out.write(f"MOVED {diff.hoard_file}\n")
                         elif isinstance(diff, DirMissingInHoard):

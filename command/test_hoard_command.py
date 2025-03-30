@@ -161,16 +161,16 @@ class TestHoardCommand(unittest.TestCase):
                     ('/wat/test.me.twice', 6, 2, '1881f6f9784fb08bf6690e9763b76ac3')],
                 dirs_exp=["/wat"])
 
-        res = hoard_cmd.deprecated.status_deprecated("repo-in-local-2")
+        res = hoard_cmd.contents.pending("repo-in-local-2")
         self.assertEqual(
-            f"Status of {repo_uuid2}:\n"
-            f"M /wat/test.me.different\n"
-            f"D /wat/test.me.once\n"
-            "DF /wat\n"
+            f"Status of repo-in-local-2:\n"
+            f"MODIFIED /wat/test.me.different\n"
+            f"MISSING /wat/test.me.once\n"
+            f"DELETED_DIR /wat\n"
             f"DONE", res.strip())
 
-        res = hoard_cmd.deprecated.status_deprecated("repo-in-local")
-        self.assertEqual(f"Status of {repo_uuid}:\nDF /wat\nDONE", res.strip())
+        res = hoard_cmd.contents.pending("repo-in-local")
+        self.assertEqual(f"Status of repo-in-local:\nDELETED_DIR /wat\nDONE", res.strip())
 
         res = hoard_cmd.remotes(hide_paths=True)
         self.assertEqual(
@@ -204,8 +204,9 @@ class TestHoardCommand(unittest.TestCase):
         repo_uuid = cave_cmd.current_uuid()
         hoard_cmd.contents.pull("repo-in-local")
 
-        self.assertEqual(f"Status of {repo_uuid}:\nDF /wat\nDONE",
-                         hoard_cmd.deprecated.status_deprecated("repo-in-local").strip())
+        self.assertEqual(
+            f"Status of repo-in-local:\nDELETED_DIR /wat\nDONE",
+            hoard_cmd.contents.pending("repo-in-local").strip())
 
         os.mkdir(join(self.tmpdir.name, "repo", "newdir"))
         write_contents(join(self.tmpdir.name, "repo", "newdir", "newfile.is"), "lhiWFELHFE")
@@ -248,18 +249,19 @@ class TestHoardCommand(unittest.TestCase):
             " deleted: 0 (0.0%)\n", res)
 
         # as is not refreshed, no change in status
-        self.assertEqual(f"Status of {repo_uuid}:\nDF /wat\nDONE",
-                         hoard_cmd.deprecated.status_deprecated("repo-in-local").strip())
+        self.assertEqual(
+            f"Status of repo-in-local:\nDELETED_DIR /wat\nDONE",
+            hoard_cmd.contents.pending("repo-in-local").strip())
 
         cave_cmd.refresh(show_details=False)
         self.assertEqual(
-            f"Status of {repo_uuid}:\n"
-            f"A /newdir/newfile.is\n"
-            f"AF /newdir\n"
-            f"D /wat/test.me.different\n"
-            f"DF /wat\n"
+            f"Status of repo-in-local:\n"
+            f"ADDED /newdir/newfile.is\n"
+            f"ADDED_DIR /newdir\n"
+            f"DELETED /wat/test.me.different\n"
+            f"DELETED_DIR /wat\n"
             f"DONE",
-            hoard_cmd.deprecated.status_deprecated("repo-in-local").strip())
+            hoard_cmd.contents.pending("repo-in-local").strip())
 
         res = hoard_cmd.contents.pull("repo-in-local")
         self.assertEqual(
@@ -269,10 +271,10 @@ class TestHoardCommand(unittest.TestCase):
             "Sync'ed repo-in-local to hoard!\nDONE", res)
 
         self.assertEqual(
-            f"Status of {repo_uuid}:\n"
-            "DF /wat\n"
-            "DF /newdir\n"
-            f"DONE", hoard_cmd.deprecated.status_deprecated("repo-in-local").strip())
+            f"Status of repo-in-local:\n"
+            f"DELETED_DIR /wat\n"
+            f"DELETED_DIR /newdir\n"
+            f"DONE", hoard_cmd.contents.pending("repo-in-local").strip())
 
     def test_clone(self):
         hoard_cmd = TotalCommand(path=join(self.tmpdir.name, "hoard")).hoard
@@ -294,8 +296,8 @@ class TestHoardCommand(unittest.TestCase):
             "Hoard health stats:\n"
             "DONE", res)
 
-        res = hoard_cmd.deprecated.status_deprecated(new_uuid)
-        self.assertEqual(f"Status of {new_uuid}:\nDONE", res)
+        res = hoard_cmd.contents.pending(new_uuid)
+        self.assertEqual(f"Status of cloned-repo:\nDONE", res)
 
     def test_populate_one_repo_from_other_repo(self):
         hoard_cmd = TotalCommand(path=join(self.tmpdir.name, "hoard")).hoard
@@ -316,19 +318,19 @@ class TestHoardCommand(unittest.TestCase):
 
         # status should be still empty hoard
         new_uuid = resolve_remote_uuid(hoard_cmd.hoard.config(), "cloned-repo")
-        res = hoard_cmd.deprecated.status_deprecated(new_uuid)
-        self.assertEqual(f"Status of {new_uuid}:\nDONE", res)
+        res = hoard_cmd.contents.pending(new_uuid)
+        self.assertEqual(f"Status of cloned-repo:\nDONE", res)
 
         hoard_cmd.contents.pull("repo-in-local")
 
         # after population by other repo, it is now lacking files
-        res = hoard_cmd.deprecated.status_deprecated(new_uuid)
+        res = hoard_cmd.contents.pending(new_uuid)
         self.assertEqual(
-            f"Status of {new_uuid}:\n"
-            "D /wat/test.me.different\n"
-            "D /wat/test.me.once\n"
-            "D /wat/test.me.twice\n"
-            "DF /wat\n"
+            f"Status of cloned-repo:\n"
+            "MISSING /wat/test.me.different\n"
+            "MISSING /wat/test.me.once\n"
+            "MISSING /wat/test.me.twice\n"
+            "DELETED_DIR /wat\n"
             f"DONE", res)
 
         res = hoard_cmd.files.push(repo="cloned-repo")
@@ -343,11 +345,8 @@ class TestHoardCommand(unittest.TestCase):
         res = cloned_cave_cmd.refresh(show_details=False)
         self.assertEqual("Refresh done!", res)
 
-        res = hoard_cmd.deprecated.status_deprecated(new_uuid)
-        self.assertEqual(
-            f"Status of {new_uuid}:\n"
-            "DF /wat\n"
-            f"DONE", res.strip())
+        res = hoard_cmd.contents.pending(new_uuid)
+        self.assertEqual(f"Status of cloned-repo:\nDELETED_DIR /wat\n"            f"DONE", res.strip())
 
         res = hoard_cmd.files.push(repo="cloned-repo")
         self.assertEqual(
@@ -382,12 +381,12 @@ class TestHoardCommand(unittest.TestCase):
         hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = init_complex_hoard(
             self.tmpdir.name)
 
-        res = hoard_cmd.deprecated.status_deprecated("repo-partial-name")
+        res = hoard_cmd.contents.pending("repo-partial-name")
         self.assertEqual(
-            f"Status of {partial_cave_cmd.current_uuid()}:\n"
-            "A /test.me.1\n"
-            "A /wat/test.me.2\n"
-            "AF /wat\n"
+            f"Status of repo-partial-name:\n"
+            f"PRESENT /test.me.1\n"
+            f"PRESENT /wat/test.me.2\n"
+            f"ADDED_DIR /wat\n"
             "DONE", res.strip())
 
         res = hoard_cmd.contents.pull("repo-partial-name")
@@ -525,10 +524,10 @@ class TestHoardCommand(unittest.TestCase):
         res = full_cave_cmd.refresh(show_details=False)
         self.assertEqual("Refresh done!", res)
 
-        res = hoard_cmd.deprecated.status_deprecated("repo-full-name")
+        res = hoard_cmd.contents.pending("repo-full-name")
         self.assertEqual(
-            f"Status of {full_cave_cmd.current_uuid()}:\n"
-            f"DF /wat\n"
+            f"Status of repo-full-name:\n"
+            f"DELETED_DIR /wat\n"
             f"DONE", res)
 
     def test_pull_all(self):
