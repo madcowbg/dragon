@@ -15,15 +15,12 @@ from command.contents.handle_pull import PullPreferences, pull_repo_contents_to_
 from command.hoard import Hoard
 from command.pathing import HoardPathing
 from command.pending_file_ops import GetFile, CopyFile, CleanupFile, get_pending_operations
-from config import CaveType, HoardRemote
+from config import CaveType
 from contents.hoard import HoardContents, HoardFile, HoardDir
 from contents.hoard_props import HoardFileStatus, HoardFileProps
-from contents.repo import RepoContents
 from contents.repo_props import RepoFileProps
-from contents_diff import FileIsSame, FileContentsDiffer, FileOnlyInHoardLocalDeleted, \
-    DirMissingInHoard, \
-    DirIsSame, DirMissingInLocal, FileOnlyInHoardLocalUnknown, FileOnlyInHoardLocalMoved, FileOnlyInLocalAdded, \
-    FileOnlyInLocalPresent
+from contents_diff import FileIsSame, FileContentsDiffer, FileOnlyInHoardLocalDeleted, DirMissingInHoard, DirIsSame, \
+    DirMissingInLocal, FileOnlyInHoardLocalUnknown, FileOnlyInHoardLocalMoved, FileOnlyInLocal
 from exceptions import MissingRepoContents
 from resolve_uuid import resolve_remote_uuid
 from util import format_size
@@ -65,10 +62,11 @@ class HoardCommandContents:
 
                     for diff in compare_local_to_hoard(
                             current_contents, hoard, HoardPathing(self.hoard.config(), self.hoard.paths())):
-                        if isinstance(diff, FileOnlyInLocalAdded):
-                            out.write(f"ADDED {diff.hoard_file}\n")
-                        elif isinstance(diff, FileOnlyInLocalPresent):
-                            out.write(f"PRESENT {diff.hoard_file}\n")
+                        if isinstance(diff, FileOnlyInLocal):
+                            if diff.is_added:
+                                out.write(f"ADDED {diff.hoard_file}\n")
+                            else:
+                                out.write(f"PRESENT {diff.hoard_file}\n")
                         elif isinstance(diff, FileContentsDiffer):
                             out.write(f"MODIFIED {diff.hoard_file}\n")
                         elif isinstance(diff, FileOnlyInHoardLocalDeleted):

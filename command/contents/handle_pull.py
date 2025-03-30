@@ -10,7 +10,7 @@ from contents.hoard import HoardContents
 from contents.hoard_props import HoardFileStatus, HoardFileProps
 from contents.repo import RepoContents
 from contents.repo_props import RepoFileProps
-from contents_diff import FileIsSame, FileOnlyInLocalAdded, FileOnlyInLocalPresent, FileContentsDiffer, \
+from contents_diff import FileIsSame, FileOnlyInLocal, FileContentsDiffer, \
     FileOnlyInHoardLocalDeleted, FileOnlyInHoardLocalUnknown, FileOnlyInHoardLocalMoved, DirMissingInHoard, \
     DirMissingInLocal, DirIsSame
 from util import group_to_dict
@@ -62,10 +62,15 @@ def _handle_file_is_same(preferences: PullPreferences, diff: "FileIsSame", out: 
 
 
 def _handle_local_only(
-        preferences: PullPreferences, diff: FileOnlyInLocalAdded | FileOnlyInLocalPresent, hoard: HoardContents,
+        preferences: PullPreferences, diff: FileOnlyInLocal, hoard: HoardContents,
         out: StringIO):
     if preferences.deprecated_type == CaveType.INCOMING:
-        _incoming__move_to_other_caves(preferences, diff, hoard, out)
+        props = hoard.fsobjects.add_or_replace_file(diff.hoard_file, diff.local_props)
+        # add status for new repos
+        props.set_status(
+            list(preferences.content_prefs.repos_to_add(diff.hoard_file, diff.local_props)),
+            HoardFileStatus.GET)
+        _incoming__safe_mark_for_cleanup(preferences, diff, props, out)
         out.write(f"<+{diff.hoard_file}\n")
     elif preferences.deprecated_type == CaveType.BACKUP:
         logging.info(f"skipping obsolete file from backup: {diff.hoard_file}")
@@ -88,7 +93,12 @@ def _handle_file_contents_differ(
         preferences: PullPreferences, diff: FileContentsDiffer, hoard: HoardContents, out: StringIO):
     if preferences.deprecated_type == CaveType.INCOMING:
         logging.info(f"incoming file has different contents.")
-        _incoming__move_to_other_caves(preferences, diff, hoard, out)
+        hoard_props = hoard.fsobjects.add_or_replace_file(diff.hoard_file, diff.local_props)
+        # add status for new repos
+        hoard_props.set_status(
+            list(preferences.content_prefs.repos_to_add(diff.hoard_file, diff.local_props)),
+            HoardFileStatus.GET)
+        _incoming__safe_mark_for_cleanup(preferences, diff, hoard_props, out)
         out.write(f"u{diff.hoard_file}\n")
     elif preferences.deprecated_type == CaveType.BACKUP:
         status = diff.hoard_props.get_status(preferences.local_uuid)
@@ -233,9 +243,8 @@ def pull_repo_contents_to_hoard(
         assert isinstance(diff, FileIsSame)
         _handle_file_is_same(preferences, diff, out)
 
-    for diff in diffs_by_type.pop(FileOnlyInLocalAdded, []) \
-                + diffs_by_type.pop(FileOnlyInLocalPresent, []):
-        assert isinstance(diff, FileOnlyInLocalAdded) | isinstance(diff, FileOnlyInLocalPresent)
+    for diff in diffs_by_type.pop(FileOnlyInLocal, []):
+        assert isinstance(diff, FileOnlyInLocal)
         _handle_local_only(preferences, diff, hoard_contents, out)
 
     for diff in diffs_by_type.pop(FileContentsDiffer, []):
@@ -282,22 +291,9 @@ def pull_repo_contents_to_hoard(
         raise ValueError(f"Unrecognized diffs of types {list(diffs_by_type.keys())}")
 
 
-def _incoming__move_to_other_caves(
-        preferences: PullPreferences, diff: FileOnlyInLocalAdded | FileOnlyInLocalPresent | FileContentsDiffer,
-        hoard: HoardContents, out: StringIO):
-    hoard_props = hoard.fsobjects.add_or_replace_file(diff.hoard_file, diff.local_props)
-
-    # add status for new repos
-    hoard_props.set_status(
-        list(preferences.content_prefs.repos_to_add(diff.hoard_file, diff.local_props)),
-        HoardFileStatus.GET)
-
-    _incoming__safe_mark_for_cleanup(preferences, diff, hoard_props, out)
-
-
 def _incoming__safe_mark_for_cleanup(
         preferences: PullPreferences,
-        diff: FileOnlyInLocalAdded | FileOnlyInLocalPresent | FileContentsDiffer | FileIsSame,
+        diff: FileOnlyInLocal | FileContentsDiffer | FileIsSame,
         hoard_file: HoardFileProps, out: StringIO):
     logging.info(f"safe marking {diff.hoard_file} for cleanup from {preferences.local_uuid}")
 

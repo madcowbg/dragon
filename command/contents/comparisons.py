@@ -8,7 +8,7 @@ from contents.hoard import HoardContents
 from contents.hoard_props import HoardFileProps, HoardDirProps
 from contents.repo import RepoContents
 from contents.repo_props import RepoFileProps, RepoFileStatus, RepoDirProps
-from contents_diff import Diff, FileOnlyInLocalAdded, FileOnlyInLocalPresent, FileIsSame, FileContentsDiffer, \
+from contents_diff import Diff, FileOnlyInLocal, FileIsSame, FileContentsDiffer, \
     DirMissingInHoard, DirIsSame, FileOnlyInHoardLocalUnknown, FileOnlyInHoardLocalDeleted, FileOnlyInHoardLocalMoved, \
     DirMissingInLocal
 
@@ -34,11 +34,9 @@ def compare_local_to_hoard(local: RepoContents, hoard: HoardContents, pathing: H
                 curr_file_hoard_path = pathing.in_local(current_file, local.config.uuid).at_hoard()
                 if curr_file_hoard_path.as_posix() not in hoard.fsobjects:
                     logging.info(f"local file not in hoard: {curr_file_hoard_path.as_posix()}")
-                    if props.last_status == RepoFileStatus.ADDED:
-                        yield FileOnlyInLocalAdded(current_file, curr_file_hoard_path.as_posix(), props)
-                    else:
-                        assert props.last_status == RepoFileStatus.PRESENT
-                        yield FileOnlyInLocalPresent(current_file, curr_file_hoard_path.as_posix(), props)
+                    assert props.last_status in (RepoFileStatus.PRESENT, RepoFileStatus.ADDED)
+                    yield FileOnlyInLocal(
+                        current_file, curr_file_hoard_path.as_posix(), props, props.last_status == RepoFileStatus.ADDED)
                 elif is_same_file(
                         local.fsobjects.get_existing(current_file),
                         hoard.fsobjects[curr_file_hoard_path.as_posix()]):
