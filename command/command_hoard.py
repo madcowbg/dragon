@@ -124,8 +124,7 @@ class HoardCommand(object):
         config = self.hoard.config()
 
         logging.info(f"Loading hoard TOML...")
-        hoard1 = self.hoard
-        with HoardContents.load(hoard1.hoardpath) as hoard:
+        with HoardContents.load(self.hoard.hoardpath) as hoard:
             logging.info(f"Loaded hoard TOML!")
 
             repo_health: Dict[str, Dict[int, int]] = dict()
@@ -205,8 +204,7 @@ class HoardCommand(object):
             return f"No repos to move!"
 
         logging.info(f"Loading hoard...")
-        hoard1 = self.hoard
-        with HoardContents.load(hoard1.hoardpath) as hoard:
+        with HoardContents.load(self.hoard.hoardpath) as hoard:
             logging.info(f"Loaded hoard.")
 
             with StringIO() as out:

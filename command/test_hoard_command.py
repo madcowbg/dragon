@@ -138,8 +138,7 @@ class TestHoardCommand(unittest.TestCase):
         self.assertEqual(
             "=/wat/test.me.twice\nSync'ed repo-in-local-2 to hoard!\nDONE", res.strip())
 
-        hoard1 = hoard_cmd.hoard
-        with HoardContents.load(hoard1.hoardpath) as hc:
+        with HoardContents.load(hoard_cmd.hoard.hoardpath) as hc:
             self._assert_hoard_contents(
                 hc,
                 files_exp=[

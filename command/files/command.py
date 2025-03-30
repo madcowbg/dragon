@@ -32,8 +32,7 @@ class HoardCommandFiles:
             if repo is not None else [r.uuid for r in config.remotes.all()]
 
         logging.info(f"Loading hoard contents...")
-        hoard1 = self.hoard
-        with HoardContents.load(hoard1.hoardpath) as hoard:
+        with HoardContents.load(self.hoard.hoardpath) as hoard:
             with StringIO() as out:
                 for repo_uuid in repo_uuids:
                     logging.info(f"Iterating over pending ops in {repo_uuid}")

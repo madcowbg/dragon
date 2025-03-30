@@ -24,8 +24,7 @@ class HoardCommandBackups:
         pathing = HoardPathing(config, self.hoard.paths())
 
         logging.info(f"Loading hoard...")
-        hoard1 = self.hoard
-        with HoardContents.load(hoard1.hoardpath) as hoard:
+        with HoardContents.load(self.hoard.hoardpath) as hoard:
             backup_sets = BackupSet.all(config, pathing, hoard)
             backup_media = set(sum((list(b.backups.keys()) for b in backup_sets), []))
             count_backup_media = len(backup_media)
@@ -47,8 +46,10 @@ class HoardCommandBackups:
                     for backup_set in backup_sets:
                         scheduled += len(backup_set.currently_scheduled_backups(hoard_file, hoard_props))
 
-                    available = sum(1 for uuid in hoard_props.by_status(HoardFileStatus.AVAILABLE) if uuid in backup_media)
-                    get_or_copy = len(hoard_props.by_statuses(HoardFileStatus.GET, HoardFileStatus.COPY, HoardFileStatus.MOVE))
+                    available = sum(
+                        1 for uuid in hoard_props.by_status(HoardFileStatus.AVAILABLE) if uuid in backup_media)
+                    get_or_copy = len(
+                        hoard_props.by_statuses(HoardFileStatus.GET, HoardFileStatus.COPY, HoardFileStatus.MOVE))
                     move = len(hoard_props.by_status(HoardFileStatus.MOVE))
                     cleanup = len(hoard_props.by_status(HoardFileStatus.CLEANUP))
 
@@ -77,8 +78,7 @@ class HoardCommandBackups:
         pathing = HoardPathing(config, self.hoard.paths())
 
         logging.info(f"Loading hoard...")
-        hoard1 = self.hoard
-        with HoardContents.load(hoard1.hoardpath) as hoard:
+        with HoardContents.load(self.hoard.hoardpath) as hoard:
             backup_sets = BackupSet.all(config, pathing, hoard)
 
             with StringIO() as out:
@@ -114,8 +114,7 @@ class HoardCommandBackups:
         pathing = HoardPathing(config, self.hoard.paths())
 
         logging.info(f"Loading hoard...")
-        hoard1 = self.hoard
-        with HoardContents.load(hoard1.hoardpath) as hoard:
+        with HoardContents.load(self.hoard.hoardpath) as hoard:
             backup_sets = BackupSet.all(config, pathing, hoard)
 
             with StringIO() as out:
