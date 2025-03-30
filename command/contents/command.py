@@ -375,7 +375,10 @@ class HoardCommandContents:
                                 on_file_added_or_present=PullBehavior.MOVE_AND_CLEANUP,
                                 on_file_is_different_and_modified=PullBehavior.MOVE_AND_CLEANUP,
                                 on_file_is_different_and_added=PullBehavior.MOVE_AND_CLEANUP,
-                                on_file_is_different_but_present=PullBehavior.MOVE_AND_CLEANUP)
+                                on_file_is_different_but_present=PullBehavior.MOVE_AND_CLEANUP,
+                                on_hoard_only_local_moved=PullBehavior.IGNORE,
+                                on_hoard_only_local_deleted=PullBehavior.IGNORE,
+                                on_hoard_only_local_unknown=PullBehavior.IGNORE)
                         elif remote_obj.type == CaveType.BACKUP:
                             preferences = PullPreferences(
                                 remote_uuid, content_prefs, force_fetch_local_missing,
@@ -384,7 +387,10 @@ class HoardCommandContents:
                                 on_file_added_or_present=PullBehavior.IGNORE,
                                 on_file_is_different_and_modified=PullBehavior.RESTORE,
                                 on_file_is_different_and_added=PullBehavior.RESTORE,
-                                on_file_is_different_but_present=PullBehavior.RESTORE)
+                                on_file_is_different_but_present=PullBehavior.RESTORE,
+                                on_hoard_only_local_moved=PullBehavior.RESTORE_AS_HOARD,
+                                on_hoard_only_local_deleted=PullBehavior.RESTORE_AS_HOARD,
+                                on_hoard_only_local_unknown=PullBehavior.RESTORE_AS_HOARD)
                         else:
                             assert remote_obj.type == CaveType.PARTIAL
                             preferences = PullPreferences(
@@ -394,9 +400,14 @@ class HoardCommandContents:
                                 on_file_added_or_present=PullBehavior.ADD,
                                 on_file_is_different_and_modified=PullBehavior.ADD,
                                 on_file_is_different_and_added=PullBehavior.ADD,
-                                on_file_is_different_but_present=PullBehavior.RESTORE if not assume_current else PullBehavior.ADD)
+                                on_file_is_different_but_present=
+                                    PullBehavior.RESTORE if not assume_current else PullBehavior.ADD,
+                                on_hoard_only_local_moved=PullBehavior.MOVE_ON_HOARD,
+                                on_hoard_only_local_deleted=
+                                    PullBehavior.DELETE_FROM_HOARD if not force_fetch_local_missing else PullBehavior.RESTORE_AS_HOARD,
+                                on_hoard_only_local_unknown=PullBehavior.ACCEPT_FROM_HOARD)
 
-                        pull_repo_contents_to_hoard(hoard_contents, pathing, current_contents, preferences, out)
+                        pull_repo_contents_to_hoard(hoard_contents, pathing, config, current_contents, preferences, out)
 
                         logging.info(f"Updating epoch of {remote_uuid} to {current_contents.config.epoch}")
                         hoard_contents.config.set_epoch(
@@ -437,12 +448,15 @@ class HoardCommandContents:
                             _handle_local_only(
                                 PullPreferences(
                                     remote.uuid, content_prefs,
-                                    assume_current=True, force_fetch_local_missing=False, deprecated_type=remote.type,
+                                    force_fetch_local_missing=False, deprecated_type=remote.type,
                                     on_same_file_is_present=PullBehavior.ADD,
                                     on_file_added_or_present=PullBehavior.FAIL,
                                     on_file_is_different_and_modified=PullBehavior.FAIL,
                                     on_file_is_different_and_added=PullBehavior.FAIL,
-                                    on_file_is_different_but_present=PullBehavior.FAIL
+                                    on_file_is_different_but_present=PullBehavior.FAIL,
+                                    on_hoard_only_local_moved=PullBehavior.FAIL,
+                                    on_hoard_only_local_unknown=PullBehavior.FAIL,
+                                    on_hoard_only_local_deleted=PullBehavior.FAIL,
                                 ),
                                 FileOnlyInLocal(
                                     local_file, hoard_file, local_props,

@@ -6,7 +6,7 @@ from typing import List
 from command.content_prefs import ContentPrefs
 from command.contents.comparisons import compare_local_to_hoard
 from command.pathing import HoardPathing
-from config import CaveType
+from config import CaveType, HoardConfig
 from contents.hoard import HoardContents
 from contents.hoard_props import HoardFileStatus, HoardFileProps
 from contents.repo import RepoContents
@@ -23,6 +23,10 @@ class PullBehavior(enum.Enum):
     IGNORE = "ignore"
     MOVE_AND_CLEANUP = "move_and_cleanup"
     RESTORE = "restore"
+    RESTORE_AS_HOARD = "restore_as_hoard"
+    MOVE_ON_HOARD = "move_on_hoard"
+    DELETE_FROM_HOARD = "delete_from_hoard"
+    ACCEPT_FROM_HOARD = "accept_from_hoard"
 
 
 class PullPreferences:
@@ -33,7 +37,10 @@ class PullPreferences:
             on_file_added_or_present: PullBehavior,
             on_file_is_different_and_modified: PullBehavior,
             on_file_is_different_and_added: PullBehavior,
-            on_file_is_different_but_present: PullBehavior):
+            on_file_is_different_but_present: PullBehavior,
+            on_hoard_only_local_deleted: PullBehavior,
+            on_hoard_only_local_unknown: PullBehavior,
+            on_hoard_only_local_moved: PullBehavior):
         self.local_uuid = local_uuid
         self.content_prefs = content_prefs
         self.deprecated_type = deprecated_type
@@ -46,6 +53,10 @@ class PullPreferences:
         self.on_file_is_different_and_modified = on_file_is_different_and_modified
         self.on_file_is_different_and_added = on_file_is_different_and_added
         self.on_file_is_different_but_present = on_file_is_different_but_present
+
+        self.on_hoard_only_local_deleted = on_hoard_only_local_deleted
+        self.on_hoard_only_local_unknown = on_hoard_only_local_unknown
+        self.on_hoard_only_local_moved = on_hoard_only_local_moved
 
 
 def _handle_file_is_same(preferences: PullPreferences, diff: "FileIsSame", out: StringIO):
@@ -171,95 +182,117 @@ def _handle_file_contents_differ(
         raise ValueError(f"Invalid behavior={behavior}")
 
 
-def _handle_hoard_only_deleted(
+def _handle_hoard_only(
         preferences: PullPreferences,
         diff: FileOnlyInHoardLocalDeleted | FileOnlyInHoardLocalUnknown | FileOnlyInHoardLocalMoved,
         out: StringIO):
-    if preferences.deprecated_type == CaveType.INCOMING:
-        logging.info(f"skipping file not in local.")
-        status = diff.hoard_props.get_status(preferences.local_uuid)
-        if status == HoardFileStatus.CLEANUP:
-            diff.hoard_props.remove_status(preferences.local_uuid)
-        elif status == HoardFileStatus.UNKNOWN:
-            pass  # ignore file
-        else:
+    if isinstance(diff, FileOnlyInHoardLocalMoved):
+        behavior = preferences.on_hoard_only_local_moved
+    elif isinstance(diff, FileOnlyInHoardLocalUnknown):
+        behavior = preferences.on_hoard_only_local_unknown
+    elif isinstance(diff, FileOnlyInHoardLocalDeleted):
+        behavior = preferences.on_hoard_only_local_deleted
+    else:
+        raise ValueError(f"Invalid diff tyoe {type(diff)}")
+
+    _handle_hoard_only_with_behavior(preferences, diff, behavior, out)
+
+
+def _handle_hoard_only_with_behavior(
+        preferences: PullPreferences,
+        diff: FileOnlyInHoardLocalDeleted | FileOnlyInHoardLocalUnknown | FileOnlyInHoardLocalMoved,
+        behavior: PullBehavior,
+        out: StringIO):
+    assert behavior in (
+        PullBehavior.IGNORE, PullBehavior.RESTORE_AS_HOARD, PullBehavior.ACCEPT_FROM_HOARD,
+        PullBehavior.DELETE_FROM_HOARD)
+
+    goal_status = diff.hoard_props.get_status(preferences.local_uuid)
+    if behavior == PullBehavior.IGNORE:
+        logging.info(f"skipping file {diff.hoard_file} not in local.")
+
+        if goal_status not in (HoardFileStatus.CLEANUP, HoardFileStatus.UNKNOWN):
             logging.error(f"File in hoard only, but status is not {HoardFileStatus.CLEANUP}")
             out.write(f"E{diff.hoard_file}\n")
-    elif preferences.deprecated_type == CaveType.BACKUP:
-        status1 = diff.hoard_props.get_status(preferences.local_uuid)
-        if status1 == HoardFileStatus.AVAILABLE:  # was backed-up here, get it again
+
+        diff.hoard_props.remove_status(preferences.local_uuid)
+        if goal_status != HoardFileStatus.UNKNOWN:
+            out.write(f"IGNORED {diff.hoard_file}\n")
+    elif behavior == PullBehavior.RESTORE_AS_HOARD:
+        if goal_status == HoardFileStatus.AVAILABLE:  # was backed-up here, get it again
             props = diff.hoard_props
             props.mark_to_get([preferences.local_uuid])
 
             out.write(f"g{diff.hoard_file}\n")
-        elif status1 == HoardFileStatus.CLEANUP:  # file already deleted
+        elif goal_status == HoardFileStatus.CLEANUP:  # file already deleted
             diff.hoard_props.remove_status(preferences.local_uuid)
-        elif status1 == HoardFileStatus.GET or status1 == HoardFileStatus.COPY:
+        elif goal_status == HoardFileStatus.GET or goal_status == HoardFileStatus.COPY:
             pass
-        elif status1 == HoardFileStatus.UNKNOWN:
+        elif goal_status == HoardFileStatus.UNKNOWN:
             logging.info("File not recognized by this backup, skipping")
         else:
-            raise NotImplementedError(f"Unrecognized goal status {status1}")
-    else:
-
-        assert preferences.deprecated_type == CaveType.PARTIAL
-
-        goal_status = diff.hoard_props.get_status(preferences.local_uuid)
-        if goal_status == HoardFileStatus.CLEANUP:
-            logging.info(f"file had been deleted.")
-            diff.hoard_props.remove_status(preferences.local_uuid)
-        elif goal_status == HoardFileStatus.AVAILABLE:  # file was here, is no longer
-            if preferences.force_fetch_local_missing:
-                logging.info(f"file {diff.hoard_file} is missing, restoring due to --force-fetch-local-missing")
-
-                diff.hoard_props.mark_to_get([preferences.local_uuid])
-                out.write(f"g{diff.hoard_file}\n")
-            else:
-                logging.info(f"deleting file {diff.hoard_file} as is no longer in local")
-                diff.hoard_props.mark_to_delete_everywhere()
-                diff.hoard_props.remove_status(preferences.local_uuid)
-                out.write(f"-{diff.hoard_file}\n")
-        elif goal_status == HoardFileStatus.GET:
-            logging.info(f"file fetch had been scheduled already.")
-        elif goal_status == HoardFileStatus.UNKNOWN:
-            logging.info(f"file not related to repo, skipping!")
-        else:
             raise NotImplementedError(f"Unrecognized goal status {goal_status}")
+    elif behavior == PullBehavior.DELETE_FROM_HOARD:
+        if goal_status == HoardFileStatus.UNKNOWN:
+            logging.info(f"file not related to repo, skipping!")
+        else:  # file was here, is no longer
+            logging.info(f"deleting file {diff.hoard_file} because it was deleted in local")
 
-
-def _handle_hoard_only_unknown(preferences: PullPreferences, diff: FileOnlyInHoardLocalUnknown, out: StringIO):
-    # todo implement different case, e.g. do not add or remove
-    _handle_hoard_only_deleted(preferences, diff, out)
+            diff.hoard_props.mark_to_delete_everywhere()
+            diff.hoard_props.remove_status(preferences.local_uuid)
+            out.write(f"-{diff.hoard_file}\n")
+    elif behavior == PullBehavior.ACCEPT_FROM_HOARD:
+        if goal_status == HoardFileStatus.CLEANUP:  # file already deleted
+            diff.hoard_props.remove_status(preferences.local_uuid)
+            out.write(f"ACCEPT_CLEANUP {diff.hoard_file}\n")
+        else:
+            logging.info(f"Ignoring missing file {diff.hoard_file}, desired state={goal_status}")
+    else:
+        raise ValueError(f"Invalid behavior={behavior}")
 
 
 def _handle_hoard_only_moved(
-        preferences: PullPreferences, diff: FileOnlyInHoardLocalMoved, hoard_new_path: str,
-        hoard_new_path_props: HoardFileProps,
-        other_remotes_wanting_new_file: List[str], out: StringIO):
-    if preferences.deprecated_type == CaveType.INCOMING:
-        raise NotImplementedError()
-    elif preferences.deprecated_type == CaveType.BACKUP:
-        raise NotImplementedError()
+        preferences: PullPreferences, diff: FileOnlyInHoardLocalMoved, pathing: HoardPathing, hoard: HoardContents,
+        config: HoardConfig,
+        out: StringIO):
+    if preferences.on_hoard_only_local_moved == PullBehavior.MOVE_ON_HOARD:
+        goal_status = diff.hoard_props.get_status(preferences.local_uuid)
+        if goal_status == HoardFileStatus.AVAILABLE:
+            hoard_new_path = pathing.in_local(diff.local_props.last_related_fullpath, preferences.local_uuid) \
+                .at_hoard().as_posix()
+            hoard_new_path_props = hoard.fsobjects[hoard_new_path]
+            assert isinstance(hoard_new_path_props, HoardFileProps)
+            assert hoard_new_path_props.fasthash == diff.hoard_props.fasthash and \
+                   hoard_new_path_props.fasthash == diff.local_props.fasthash
+
+            logging.info(f"Marking moving of {diff.hoard_file} to {hoard_new_path}.")
+            named_statuses = sorted([
+                (other_uuid, old_status, config.remotes[other_uuid].name)
+                for other_uuid, old_status in diff.hoard_props.presence.items()], key=lambda x: x[2])
+            for other_uuid, old_status, name in named_statuses:
+                if other_uuid != preferences.local_uuid and old_status == HoardFileStatus.AVAILABLE:
+                    logging.info(
+                        f"File {diff.hoard_file} is available in {other_uuid}, will mark {hoard_new_path} as move!")
+
+                    hoard_new_path_props.set_to_move_from_local(other_uuid, diff.hoard_file)
+                    out.write(f"MOVE {name}: {diff.hoard_file} to {hoard_new_path}\n")
+
+            # mark to clear from old locations
+            diff.hoard_props.mark_for_cleanup(diff.hoard_props.presence.keys())
+
+            # mark already cleared from here
+            diff.hoard_props.remove_status(preferences.local_uuid)
+            out.write(f"CLEANUP_MOVED {diff.hoard_file}\n")
+        elif goal_status == HoardFileStatus.UNKNOWN:
+            logging.info(f"File {diff.hoard_file} is unknown, can't move!")
+        else:
+            out.write(f"ERROR_ON_MOVE unrecognized current status {goal_status}")
     else:
-        assert preferences.deprecated_type == CaveType.PARTIAL
-
-        out.write(f"MOVE: {diff.hoard_file} to {hoard_new_path}\n")
-        for other_remote_uuid in other_remotes_wanting_new_file:
-            if diff.hoard_props.get_status(other_remote_uuid) == HoardFileStatus.AVAILABLE:
-                logging.info(
-                    f"File {diff.hoard_file} is available in {other_remote_uuid}, will mark {hoard_new_path} as move!")
-
-                hoard_new_path_props.set_to_move_from_local(other_remote_uuid, diff.hoard_file)
-                out.write(f"MOVE {other_remote_uuid}: {diff.hoard_file} to {hoard_new_path}\n")
-            else:
-                logging.info(f"File {diff.hoard_file} is not available in {other_remote_uuid}, can't move.")
-
-        # clear from this location
-        _handle_hoard_only_deleted(preferences, diff, out)
+        _handle_hoard_only_with_behavior(preferences, diff, preferences.on_hoard_only_local_moved, out)
 
 
 def pull_repo_contents_to_hoard(
-        hoard_contents: HoardContents, pathing: HoardPathing, current_contents: RepoContents,
+        hoard_contents: HoardContents, pathing: HoardPathing, config: HoardConfig, current_contents: RepoContents,
         preferences: PullPreferences, out: StringIO):
     all_diffs = list(compare_local_to_hoard(current_contents, hoard_contents, pathing))
     diffs_by_type = group_to_dict(all_diffs, key=lambda diff: type(diff))
@@ -281,11 +314,11 @@ def pull_repo_contents_to_hoard(
 
     for diff in diffs_by_type.pop(FileOnlyInHoardLocalDeleted, []):
         assert isinstance(diff, FileOnlyInHoardLocalDeleted)
-        _handle_hoard_only_deleted(preferences, diff, out)
+        _handle_hoard_only(preferences, diff, out)
 
     for diff in diffs_by_type.pop(FileOnlyInHoardLocalUnknown, []):
         assert isinstance(diff, FileOnlyInHoardLocalUnknown)
-        _handle_hoard_only_unknown(preferences, diff, out)
+        _handle_hoard_only(preferences, diff, out)
 
     for diff in diffs_by_type.pop(DirMissingInHoard, []):
         assert isinstance(diff, DirMissingInHoard)
@@ -301,18 +334,7 @@ def pull_repo_contents_to_hoard(
 
     for diff in diffs_by_type.pop(FileOnlyInHoardLocalMoved, []):
         assert isinstance(diff, FileOnlyInHoardLocalMoved)
-        hoard_new_path = pathing.in_local(diff.local_props.last_related_fullpath, current_contents.uuid) \
-            .at_hoard().as_posix()
-        hoard_new_path_props = hoard_contents.fsobjects[hoard_new_path]
-        assert isinstance(hoard_new_path_props, HoardFileProps)
-        assert hoard_new_path_props.fasthash == diff.hoard_props.fasthash and \
-               hoard_new_path_props.fasthash == diff.local_props.fasthash
-
-        logging.info(f"Marking moving of {diff.hoard_file} to {hoard_new_path}.")
-        other_remotes_wanting_file = hoard_new_path_props.by_statuses(
-            HoardFileStatus.GET, HoardFileStatus.COPY, HoardFileStatus.MOVE)
-        _handle_hoard_only_moved(
-            preferences, diff, hoard_new_path, hoard_new_path_props, other_remotes_wanting_file, out)
+        _handle_hoard_only_moved(preferences, diff, pathing, hoard_contents, config, out)
     for unrecognized_type, unrecognized_diffs in diffs_by_type.items():
         logging.error(f"Unrecognized {len(unrecognized_diffs)} of type: {unrecognized_type}")
     if len(diffs_by_type) > 0:

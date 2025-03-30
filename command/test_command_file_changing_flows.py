@@ -803,22 +803,21 @@ class TestFileChangingFlows(unittest.TestCase):
             "+/lets_get_it_started/test.me.2-butsecond\n"
             "u/test.me.1\n"
             "-/wat/test.me.2\n"
-            "MOVE: /test.me.4 to /lets_get_it_started/test.me.4-renamed\n"
-            f"MOVE {copy_cave_cmd.current_uuid()}: /test.me.4 to /lets_get_it_started/test.me.4-renamed\n"
-            "-/test.me.4\n"
+            "MOVE repo-copy-name: /test.me.4 to /lets_get_it_started/test.me.4-renamed\n"
+            "CLEANUP_MOVED /test.me.4\n"
             "Sync'ed repo-full-name to hoard!\n"
             "DONE", res)
 
         res = hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual(
             "|Num Files                |total     |available |get       |move      |cleanup   |\n"
-            "|repo-backup-name         |         6|          |         6|          |          |\n"
+            "|repo-backup-name         |         7|          |         6|          |         1|\n"
             "|repo-copy-name           |         8|         1|         4|         1|         2|\n"
             "|repo-full-name           |         6|         6|          |          |          |\n"
             "|repo-partial-name        |         2|          |         1|          |         1|\n"
             "\n"
             "|Size                     |total     |available |get       |move      |cleanup   |\n"
-            "|repo-backup-name         |        47|          |        47|          |          |\n"
+            "|repo-backup-name         |        58|          |        47|          |        11|\n"
             "|repo-copy-name           |        66|        10|        26|        11|        19|\n"
             "|repo-full-name           |        47|        47|          |          |          |\n"
             "|repo-partial-name        |        13|          |         5|          |         8|\n",
@@ -851,19 +850,18 @@ class TestFileChangingFlows(unittest.TestCase):
             "repo-copy-name:\n"
             "d test.me.4\n"
             "d wat/test.me.2\n"
-            "remove dangling /test.me.4\n"
             "DONE", res)
 
         res = hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual(
             "|Num Files                |total     |available |get       |cleanup   |\n"
-            "|repo-backup-name         |         6|          |         6|          |\n"
+            "|repo-backup-name         |         7|          |         6|         1|\n"
             "|repo-copy-name           |         6|         6|          |          |\n"
             "|repo-full-name           |         6|         6|          |          |\n"
             "|repo-partial-name        |         2|          |         1|         1|\n"
             "\n"
             "|Size                     |total     |available |get       |cleanup   |\n"
-            "|repo-backup-name         |        47|          |        47|          |\n"
+            "|repo-backup-name         |        58|          |        47|        11|\n"
             "|repo-copy-name           |        47|        47|          |          |\n"
             "|repo-full-name           |        47|        47|          |          |\n"
             "|repo-partial-name        |        13|          |         5|         8|\n",
@@ -872,6 +870,7 @@ class TestFileChangingFlows(unittest.TestCase):
         res = hoard_cmd.files.pending(backup_cave_cmd.current_uuid())
         self.assertEqual(
             'repo-backup-name:\n'
+            'TO_CLEANUP (is in 0) /test.me.4\n'
             'TO_GET (from 2) /wat/test.me.3\n'
             'TO_GET (from 2) /lets_get_it_started/test.me.4-renamed\n'
             'TO_GET (from 2) /test.me.added\n'
@@ -905,3 +904,4 @@ class TestFileChangingFlows(unittest.TestCase):
 
         res = hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
         self.assertEqual("Sync'ed repo-full-name to hoard!\nDONE", res)
+
