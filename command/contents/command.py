@@ -11,14 +11,14 @@ from alive_progress import alive_bar, alive_it
 from command.content_prefs import ContentPrefs
 from command.contents.comparisons import compare_local_to_hoard
 from command.contents.handle_pull import PullPreferences, pull_repo_contents_to_hoard, _handle_local_only, \
-    reset_local_as_current
+    reset_local_as_current, PullBehavior
 from command.hoard import Hoard
 from command.pathing import HoardPathing
 from command.pending_file_ops import GetFile, CopyFile, CleanupFile, get_pending_operations
 from config import CaveType
 from contents.hoard import HoardContents, HoardFile, HoardDir
 from contents.hoard_props import HoardFileStatus, HoardFileProps
-from contents.repo_props import RepoFileProps
+from contents.repo_props import RepoFileProps, RepoFileStatus
 from contents_diff import FileIsSame, FileContentsDiffer, FileOnlyInHoardLocalDeleted, DirMissingInHoard, DirIsSame, \
     DirMissingInLocal, FileOnlyInHoardLocalUnknown, FileOnlyInHoardLocalMoved, FileOnlyInLocal
 from exceptions import MissingRepoContents
@@ -370,16 +370,22 @@ class HoardCommandContents:
                         if remote_obj.type == CaveType.INCOMING:
                             preferences = PullPreferences(
                                 remote_uuid, content_prefs, assume_current, force_fetch_local_missing,
-                                remote_obj.type, force_local_as_incoming=True)
+                                remote_obj.type,
+                                on_same_file_is_present=PullBehavior.MOVE_AND_CLEANUP,
+                                on_file_added_or_present=PullBehavior.MOVE_AND_CLEANUP)
                         elif remote_obj.type == CaveType.BACKUP:
                             preferences = PullPreferences(
                                 remote_uuid, content_prefs, assume_current, force_fetch_local_missing,
-                                remote_obj.type, force_local_as_incoming=False)
+                                remote_obj.type,
+                                on_same_file_is_present=PullBehavior.ADD,
+                                on_file_added_or_present=PullBehavior.IGNORE)
                         else:
                             assert remote_obj.type == CaveType.PARTIAL
                             preferences = PullPreferences(
                                 remote_uuid, content_prefs, assume_current, force_fetch_local_missing,
-                                remote_obj.type, force_local_as_incoming=False)
+                                remote_obj.type,
+                                on_same_file_is_present=PullBehavior.ADD,
+                                on_file_added_or_present=PullBehavior.ADD)
 
                         pull_repo_contents_to_hoard(hoard_contents, pathing, current_contents, preferences, out)
 
@@ -422,8 +428,12 @@ class HoardCommandContents:
                             _handle_local_only(
                                 PullPreferences(
                                     remote.uuid, content_prefs,
-                                    assume_current=True, force_fetch_local_missing=False, deprecated_type=remote.type),
-                                FileOnlyInLocalAdded(local_file, hoard_file, local_props),
+                                    assume_current=True, force_fetch_local_missing=False, deprecated_type=remote.type,
+                                    on_same_file_is_present=PullBehavior.ADD, on_file_added_or_present=PullBehavior.ADD
+                                ),
+                                FileOnlyInLocal(
+                                    local_file, hoard_file, local_props,
+                                    local_props.last_status == RepoFileStatus.ADDED),
                                 hoard,
                                 StringIO())  # fixme make it elegant
                             out.write(f"READD {hoard_file}\n")
