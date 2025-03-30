@@ -19,8 +19,10 @@ class RepoFileProps:
         self.mtime = mtime
         self.fasthash = fasthash
         self.md5 = md5
+
         self.last_status = last_status
         self.last_update_epoch = last_update_epoch
+        self.last_related_fullpath = last_related_fullpath
 
 
 class RepoDirProps:

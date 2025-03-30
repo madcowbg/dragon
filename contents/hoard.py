@@ -4,7 +4,7 @@ import sqlite3
 import sys
 from datetime import datetime
 from sqlite3 import Connection
-from typing import Dict, Any, Optional, Tuple, Generator, Iterator, Iterable
+from typing import Dict, Any, Optional, Tuple, Generator, Iterator, Iterable, List
 
 import rtoml
 
@@ -160,7 +160,7 @@ class HoardDir:
             yield from hoard_dir.walk(depth - 1)
 
 
-STATUSES_TO_FETCH = [HoardFileStatus.COPY.value, HoardFileStatus.GET.value]
+STATUSES_TO_FETCH = [HoardFileStatus.COPY.value, HoardFileStatus.GET.value, HoardFileStatus.MOVE.value]
 
 
 class HoardFSObjects:
@@ -238,8 +238,9 @@ class HoardFSObjects:
             "  SELECT 1 FROM fspresence "
             "  WHERE fspresence.fsobject_id = fsobject.fsobject_id AND "
             "    uuid = ? AND "
-            "    status in (?, ?, ?))",
-            (repo_uuid, HoardFileStatus.GET.value, HoardFileStatus.COPY.value, HoardFileStatus.CLEANUP.value))
+            "    status in (?, ?, ?, ?))",
+            (repo_uuid, HoardFileStatus.GET.value, HoardFileStatus.COPY.value, HoardFileStatus.MOVE.value,
+             HoardFileStatus.CLEANUP.value))
 
     def in_folder(self, folder: str) -> Iterable[Tuple[str, HoardFileProps | HoardDirProps]]:
         assert os.path.isabs(folder)
@@ -277,17 +278,26 @@ class HoardFSObjects:
         for fsobject_id, fullpath, isdir, size, fasthash in self.parent.conn.execute(
                 "SELECT fsobject.fsobject_id, fullpath, isdir, size, fasthash "
                 "FROM fsobject JOIN fspresence on fsobject.fsobject_id = fspresence.fsobject_id "
-                "WHERE fspresence.uuid = ? and fspresence.status in (?, ?)", (repo_uuid, *STATUSES_TO_FETCH)):
+                "WHERE fspresence.uuid = ? and fspresence.status in (?, ?, ?)", (repo_uuid, *STATUSES_TO_FETCH)):
             assert not isdir
             yield fullpath, HoardFileProps(self.parent, fsobject_id, size, fasthash)
 
     def to_cleanup(self, repo_uuid: str) -> Generator[Tuple[str, HoardFileProps | HoardDirProps], None, None]:
         for fsobject_id, fullpath, isdir, size, fasthash in self.parent.conn.execute(
                 "SELECT fsobject.fsobject_id, fullpath, isdir, size, fasthash "
-                "FROM fsobject JOIN fspresence on fsobject.fsobject_id = fspresence.fsobject_id "
-                "WHERE fspresence.uuid = ? and fspresence.status = ?", (repo_uuid, HoardFileStatus.CLEANUP.value)):
+                "FROM fsobject JOIN fspresence ON fsobject.fsobject_id = fspresence.fsobject_id "
+                "WHERE fspresence.uuid = ? AND fspresence.status = ?", (repo_uuid, HoardFileStatus.CLEANUP.value)):
             assert not isdir
             yield fullpath, HoardFileProps(self.parent, fsobject_id, size, fasthash)
+
+    def where_to_move(self, remote: str, hoard_file: str) -> List[str]:
+        curr = self.parent.conn.cursor()
+        curr.row_factory = FIRST_VALUE
+        return curr.execute(
+            f"SELECT fsobject.fullpath "
+            f"FROM fspresence JOIN fsobject on fspresence.fsobject_id = fsobject.fsobject_id "
+            f"WHERE status = ? AND move_from = ? AND uuid = ?",
+            (HoardFileStatus.MOVE.value, hoard_file, remote)).fetchall()
 
     def __contains__(self, file_path: str) -> bool:
         curr = self._first_value_curr()
@@ -335,7 +345,7 @@ class HoardFSObjects:
         curr.execute("DELETE FROM fsobject WHERE fsobject_id = ?", (fsobject_id,))
         curr.execute("DELETE FROM fspresence WHERE fsobject_id = ?", (fsobject_id,))
 
-    def move(self, orig_path: str, new_path: str, props: HoardDirProps | HoardFileProps):
+    def move_via_mounts(self, orig_path: str, new_path: str, props: HoardDirProps | HoardFileProps):
         assert orig_path != new_path
         assert isinstance(props, HoardFileProps) or isinstance(props, HoardDirProps)
 
@@ -440,6 +450,7 @@ class HoardContents:
                 " fsobject_id INTEGER,"
                 " uuid TEXT NOT NULL,"
                 " status TEXT NOT NULL,"
+                " move_from TEXT,"
                 " FOREIGN KEY (fsobject_id) REFERENCES fsobject(id) ON DELETE CASCADE)"
             )
             curr.execute("CREATE UNIQUE INDEX fspresence_fsobject_id__uuid ON fspresence(fsobject_id, uuid)")

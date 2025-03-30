@@ -1,5 +1,5 @@
 import enum
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Iterable
 
 from util import FIRST_VALUE
 
@@ -50,7 +50,7 @@ class HoardFileProps:
             f"WHERE fsobject_id = ? AND status in ({', '.join('?' * len(selected_statuses))})",
             (self.fsobject_id, *[s.value for s in selected_statuses]))]
 
-    def mark_for_cleanup(self, repos: List[str]):
+    def mark_for_cleanup(self, repos: Iterable[str]):
         self.set_status(repos, HoardFileStatus.CLEANUP)
 
     def get_status(self, repo_uuid: str) -> HoardFileStatus:
@@ -60,12 +60,13 @@ class HoardFileProps:
         ).fetchone()
         return HoardFileStatus(current[0]) if current is not None else HoardFileStatus.UNKNOWN
 
-    def set_status(self, repos: List[str], status: HoardFileStatus):
+    def set_status(self, repos: Iterable[str], status: HoardFileStatus):
+        assert status != HoardFileStatus.MOVE
         self.parent.conn.executemany(
-            "INSERT OR REPLACE INTO fspresence(fsobject_id, uuid, status) VALUES (?, ?, ?)",
+            "INSERT OR REPLACE INTO fspresence (fsobject_id, uuid, status, move_from) VALUES (?, ?, ?, NULL)",
             ((self.fsobject_id, repo_uuid, status.value) for repo_uuid in repos))
 
-    def mark_to_get(self, repos: List[str]):
+    def mark_to_get(self, repos: Iterable[str]):
         self.set_status(repos, HoardFileStatus.GET)
 
     def mark_to_delete_everywhere(self):
@@ -95,3 +96,17 @@ class HoardFileProps:
             f"SELECT uuid FROM fspresence "
             f"WHERE fsobject_id = ? AND status IN ({', '.join('?' * len(statuses))})",
             (self.fsobject_id, *(s.value for s in statuses))).fetchall()
+
+    def set_to_move_from_local(self, repo_uuid: str, old_hoard_file: str):
+        self.parent.conn.execute(
+            "INSERT OR REPLACE INTO fspresence (fsobject_id, uuid, status, move_from) VALUES (?, ?, ?, ?)",
+            (self.fsobject_id, repo_uuid, HoardFileStatus.MOVE.value, old_hoard_file))
+
+    def get_move_file(self, repo_uuid: str):
+        curr = self.parent.conn.cursor()
+        curr.row_factory = FIRST_VALUE
+
+        return curr.execute(
+            f"SELECT move_from FROM fspresence "
+            f"WHERE fsobject_id = ? AND uuid = ? ",
+            (self.fsobject_id, repo_uuid)).fetchone()

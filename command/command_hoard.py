@@ -19,8 +19,8 @@ from exceptions import MissingRepo
 from config import HoardRemote, CavePath, CaveType, ConnectionSpeed, ConnectionLatency
 from contents.hoard import HoardContents
 from contents.hoard_props import HoardDirProps, HoardFileProps
-from contents_diff import FileOnlyInLocal, FileContentsDiffer, FileOnlyInHoard, \
-    DirMissingInHoard, DirMissingInLocal
+from contents_diff import FileOnlyInLocal, FileContentsDiffer, FileOnlyInHoardLocalDeleted, \
+    DirMissingInHoard, DirMissingInLocal, DirIsSame, FileIsSame, FileOnlyInHoardLocalUnknown, FileOnlyInHoardLocalMoved
 from hashing import fast_hash
 from resolve_uuid import resolve_remote_uuid
 from util import format_size
@@ -54,14 +54,20 @@ class HoardCommandDeprecated:
                             out.write(f"A {diff.hoard_file}\n")
                         elif isinstance(diff, FileContentsDiffer):
                             out.write(f"M {diff.hoard_file}\n")
-                        elif isinstance(diff, FileOnlyInHoard):
+                        elif isinstance(diff, FileOnlyInHoardLocalDeleted):
                             out.write(f"D {diff.hoard_file}\n")
+                        elif isinstance(diff, FileOnlyInHoardLocalUnknown):
+                            out.write(f"D {diff.hoard_file}\n")
+                        elif isinstance(diff, FileOnlyInHoardLocalMoved):
+                            out.write(f"MOVED {diff.hoard_file}\n")
                         elif isinstance(diff, DirMissingInHoard):
                             out.write(f"AF {diff.hoard_dir}\n")
                         elif isinstance(diff, DirMissingInLocal):
                             out.write(f"DF {diff.hoard_dir}\n")
+                        elif isinstance(diff, FileIsSame) or isinstance(diff, DirIsSame):
+                            pass
                         else:
-                            logging.info(f"Unused diff class: {type(diff)}")
+                            raise ValueError(f"Unused diff class: {type(diff)}")
                     out.write("DONE")
 
                     logging.info("Computing status done!")
@@ -288,7 +294,7 @@ class HoardCommand(object):
                         new_path = pathlib.Path(to_path).joinpath(rel_path).as_posix()
 
                         out.write(f"{orig_path}=>{new_path}\n")
-                        hoard.fsobjects.move(orig_path, new_path, props)
+                        hoard.fsobjects.move_via_mounts(orig_path, new_path, props)
 
                 logging.info(f"Moving {', '.join(r.name for r in repos_to_move)}.")
                 out.write(f"Moving {len(repos_to_move)} repos:\n")

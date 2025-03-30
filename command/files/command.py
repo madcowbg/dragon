@@ -1,6 +1,8 @@
 import logging
 import os
+import shutil
 import sys
+import traceback
 from io import StringIO
 from typing import Optional, List, Dict
 
@@ -10,7 +12,7 @@ from alive_progress import alive_bar
 from command.contents.command import clean_dangling_files
 from command.hoard import Hoard
 from command.pathing import HoardPathing
-from command.pending_file_ops import get_pending_operations, CopyFile, GetFile, CleanupFile
+from command.pending_file_ops import get_pending_operations, CopyFile, GetFile, CleanupFile, MoveFile
 from config import HoardConfig, HoardPaths
 from contents.hoard import HoardContents
 from contents.hoard_props import HoardFileStatus, HoardFileProps
@@ -50,6 +52,8 @@ class HoardCommandFiles:
                             for repo in num_available:
                                 repos_containing_what_this_one_needs[repo] = \
                                     repos_containing_what_this_one_needs.get(repo, 0) + 1
+                        elif isinstance(op, MoveFile):
+                            out.write(f"TO_MOVE {op.hoard_file} from {op.old_hoard_file}\n")
                         elif isinstance(op, CleanupFile):
                             out.write(f"TO_CLEANUP (is in {len(num_available)}) {op.hoard_file}\n")
                         else:
@@ -146,6 +150,23 @@ def _fetch_files_in_repo(
                         else:
                             logging.error("error restoring file from local copy!")
                             return f"E {local_filepath.as_posix()}\n"
+                    elif goal_status == HoardFileStatus.MOVE:
+                        to_be_moved_from = hoard_props.get_move_file(repo_uuid)
+
+                        local_filepath_from = pathing.in_hoard(to_be_moved_from).at_local(repo_uuid).on_device_path()
+                        local_filepath = pathing.in_hoard(hoard_file).at_local(repo_uuid).on_device_path()
+                        try:
+                            logging.info(f"Moving {local_filepath_from} to {local_filepath}")
+                            dest = shutil.move(local_filepath_from, local_filepath)
+                            if dest is not None:
+                                hoard_props.mark_available(repo_uuid)
+                                return f"MOVED {to_be_moved_from} to {hoard_file}\n"
+                            else:
+                                return f"ERROR_MOVING {to_be_moved_from} to {hoard_file}\n"
+                        except Exception as e:
+                            traceback.print_exception(e)
+                            logging.error(e)
+                            return f"ERROR_MOVING [{e}] {to_be_moved_from} to {hoard_file}\n"
                     else:
                         assert goal_status == HoardFileStatus.GET, f"Unexpected status {goal_status.value}"
 
@@ -175,7 +196,7 @@ def _fetch_files_in_repo(
 
 
 def _cleanup_files_in_repo(
-        hoard: HoardContents, repo_uuid: str, pathing: HoardPathing, files_requiring_copy: List[str], out: StringIO):
+        hoard: HoardContents, repo_uuid: str, pathing: HoardPathing, files_requiring_copy: Dict[str, any], out: StringIO):
     files_to_cleanup = sorted(hoard.fsobjects.to_cleanup(repo_uuid))
     with alive_bar(to_mb(sum(f[1].size for f in files_to_cleanup)), unit="MB") as bar:
         for hoard_file, hoard_props in files_to_cleanup:
@@ -189,6 +210,7 @@ def _cleanup_files_in_repo(
 
             if goal_status == HoardFileStatus.CLEANUP:
                 to_be_got = hoard_props.by_status(HoardFileStatus.GET)
+                to_be_moved_to = hoard.fsobjects.where_to_move(repo_uuid, hoard_file)
 
                 local_path = pathing.in_hoard(hoard_file).at_local(repo_uuid)
                 local_file_to_delete = local_path.as_posix()
@@ -196,22 +218,27 @@ def _cleanup_files_in_repo(
                 if hoard_props.fasthash in files_requiring_copy:
                     logging.info(f"file with fasthash {hoard_props.fasthash} to be copied, retaining")
                     out.write(f"~h {local_file_to_delete}\n")
-                elif len(to_be_got) == 0:
+                elif len(to_be_got) > 0:
+                    logging.info(f"file needs to be copied in {len(to_be_got)} places, retaining")
+                    out.write(f"~ {local_file_to_delete}\n")
+                elif len(to_be_moved_to) > 0:
+                    logging.info(f"file needs to be moved to {to_be_moved_to}, retaining")
+                    out.write(f"NEED_TO_BE_MOVED {local_file_to_delete}\n")
+                else:
                     logging.info("file doesn't need to be copied anymore, cleaning")
                     hoard_props.remove_status(repo_uuid)
 
                     logging.info(f"deleting {local_path.on_device_path()}...")
 
                     try:
-                        os.remove(local_path.on_device_path())
+                        if os.path.exists(local_path.on_device_path()):
+                            os.remove(local_path.on_device_path())
+
                         out.write(f"d {local_file_to_delete}\n")
                         logging.info("file deleted!")
                     except FileNotFoundError as e:
                         out.write(f"E {local_file_to_delete}\n")
                         logging.error(e)
-                else:
-                    logging.info(f"file needs to be copied in {len(to_be_got)} places, retaining")
-                    out.write(f"~ {local_file_to_delete}\n")
             else:
                 raise ValueError(f"Unexpected status {goal_status.value}")
             bar(to_mb(hoard_props.size))

@@ -1,11 +1,13 @@
 import logging
 from abc import abstractmethod
 from io import StringIO
+from typing import List
 
 from command.content_prefs import ContentPrefs
-from contents_diff import FileOnlyInLocal, FileIsSame, FileContentsDiffer, FileOnlyInHoard
+from contents_diff import FileOnlyInLocal, FileIsSame, FileContentsDiffer, FileOnlyInHoardLocalDeleted, \
+    FileOnlyInHoardLocalUnknown, FileOnlyInHoardLocalMoved
 from contents.hoard import HoardContents
-from contents.repo_props import RepoFileProps
+from contents.repo_props import RepoFileProps, RepoFileStatus
 from contents.hoard_props import HoardFileStatus, HoardFileProps
 
 
@@ -24,7 +26,15 @@ class DiffHandler:
     def handle_file_contents_differ(self, diff: FileContentsDiffer, out: StringIO): pass
 
     @abstractmethod
-    def handle_hoard_only(self, diff: FileOnlyInHoard, out: StringIO): pass
+    def handle_hoard_only_deleted(self, diff: FileOnlyInHoardLocalDeleted, out: StringIO): pass
+
+    @abstractmethod
+    def handle_hoard_only_unknown(self, diff: FileOnlyInHoardLocalUnknown, out: StringIO): pass
+
+    @abstractmethod
+    def handle_hoard_only_moved(
+            self, diff: FileOnlyInHoardLocalMoved, hoard_new_path: str, hoard_new_path_props: HoardFileProps,
+            other_remotes_wanting_new_file: List[str], out: StringIO): pass
 
 
 def reset_local_as_current(
@@ -62,7 +72,7 @@ class PartialDiffHandler(DiffHandler):
         if goal_status == HoardFileStatus.CLEANUP:
             logging.info(f"skipping {diff.hoard_file} as is marked for deletion")
             out.write(f"?{diff.hoard_file}\n")
-        elif goal_status == HoardFileStatus.GET or goal_status == HoardFileStatus.COPY or goal_status == HoardFileStatus.UNKNOWN:
+        elif goal_status in (HoardFileStatus.GET, HoardFileStatus.COPY, HoardFileStatus.MOVE, HoardFileStatus.UNKNOWN):
             logging.info(f"mark {diff.hoard_file} as available here!")
             diff.hoard_props.mark_available(self.remote_uuid)
             out.write(f"={diff.hoard_file}\n")
@@ -96,7 +106,7 @@ class PartialDiffHandler(DiffHandler):
             else:
                 logging.info(f"skipping {diff.hoard_file} as is marked for deletion")
                 out.write(f"?{diff.hoard_file}\n")
-        elif goal_status == HoardFileStatus.GET or goal_status == HoardFileStatus.COPY:
+        elif goal_status in (HoardFileStatus.GET, HoardFileStatus.COPY):
             if self.assume_current:
                 reset_local_as_current(
                     self.hoard, self.remote_uuid, diff.hoard_file, diff.hoard_props, diff.local_props)
@@ -105,7 +115,9 @@ class PartialDiffHandler(DiffHandler):
                 logging.info(f"current file is out of date and was marked for restore: {diff.hoard_file}")
                 out.write(f"g{diff.hoard_file}\n")
 
-    def handle_hoard_only(self, diff: FileOnlyInHoard, out: StringIO):
+    def handle_hoard_only_deleted(
+            self, diff: FileOnlyInHoardLocalDeleted | FileOnlyInHoardLocalUnknown | FileOnlyInHoardLocalMoved,
+            out: StringIO):
         goal_status = diff.hoard_props.get_status(self.remote_uuid)
         if goal_status == HoardFileStatus.CLEANUP:
             logging.info(f"file had been deleted.")
@@ -128,6 +140,27 @@ class PartialDiffHandler(DiffHandler):
         else:
             raise NotImplementedError(f"Unrecognized goal status {goal_status}")
 
+    def handle_hoard_only_unknown(self, diff: FileOnlyInHoardLocalUnknown, out: StringIO):
+        self.handle_hoard_only_deleted(diff, out)  # todo implement different case, e.g. do not add or remove
+
+    def handle_hoard_only_moved(
+            self, diff: FileOnlyInHoardLocalMoved, hoard_new_path: str, hoard_new_path_props: HoardFileProps,
+            other_remotes_wanting_new_file: List[str], out: StringIO):
+
+        out.write(f"MOVE: {diff.hoard_file} to {hoard_new_path}\n")
+        for other_remote_uuid in other_remotes_wanting_new_file:
+            if diff.hoard_props.get_status(other_remote_uuid) == HoardFileStatus.AVAILABLE:
+                logging.info(
+                    f"File {diff.hoard_file} is available in {other_remote_uuid}, will mark {hoard_new_path} as move!")
+
+                hoard_new_path_props.set_to_move_from_local(other_remote_uuid, diff.hoard_file)
+                out.write(f"MOVE {other_remote_uuid}: {diff.hoard_file} to {hoard_new_path}\n")
+            else:
+                logging.info(f"File {diff.hoard_file} is not available in {other_remote_uuid}, can't move.")
+
+        # clear from this location
+        self.handle_hoard_only_deleted(diff, out)
+
 
 class IncomingDiffHandler(DiffHandler):
     def __init__(self, remote_uuid: str, hoard: HoardContents, content_prefs: ContentPrefs):
@@ -143,11 +176,13 @@ class IncomingDiffHandler(DiffHandler):
         hoard_props = self.hoard.fsobjects.add_or_replace_file(diff.hoard_file, diff.local_props)
 
         # add status for new repos
-        hoard_props.set_status(list(self.content_prefs.repos_to_add(diff.hoard_file, diff.local_props)), HoardFileStatus.GET)
+        hoard_props.set_status(list(self.content_prefs.repos_to_add(diff.hoard_file, diff.local_props)),
+                               HoardFileStatus.GET)
 
         self._safe_mark_for_cleanup(diff, hoard_props, out)
 
-    def _safe_mark_for_cleanup(self, diff: FileOnlyInLocal | FileContentsDiffer | FileIsSame, hoard_file: HoardFileProps, out: StringIO):
+    def _safe_mark_for_cleanup(self, diff: FileOnlyInLocal | FileContentsDiffer | FileIsSame,
+                               hoard_file: HoardFileProps, out: StringIO):
         logging.info(f"safe marking {diff.hoard_file} for cleanup from {self.remote_uuid}")
 
         repos_to_get_file = hoard_file.by_statuses(HoardFileStatus.GET, HoardFileStatus.COPY, HoardFileStatus.AVAILABLE)
@@ -183,7 +218,7 @@ class IncomingDiffHandler(DiffHandler):
         self._move_to_other_caves(diff, out)
         out.write(f"u{diff.hoard_file}\n")
 
-    def handle_hoard_only(self, diff: FileOnlyInHoard, out: StringIO):
+    def handle_hoard_only_deleted(self, diff: FileOnlyInHoardLocalDeleted | FileOnlyInHoardLocalUnknown, out: StringIO):
         logging.info(f"skipping file not in local.")
         goal_status = diff.hoard_props.get_status(self.remote_uuid)
         if goal_status == HoardFileStatus.CLEANUP:
@@ -193,6 +228,14 @@ class IncomingDiffHandler(DiffHandler):
         else:
             logging.error(f"File in hoard only, but status is not {HoardFileStatus.CLEANUP}")
             out.write(f"E{diff.hoard_file}\n")
+
+    def handle_hoard_only_unknown(self, diff: FileOnlyInHoardLocalUnknown, out: StringIO):
+        self.handle_hoard_only_deleted(diff, out)  # todo implement different case, e.g. do not add or remove
+
+    def handle_hoard_only_moved(
+            self, diff: FileOnlyInHoardLocalMoved, hoard_new_path: str, hoard_new_path_props: HoardFileProps,
+            other_remotes_wanting_new_file: List[str], out: StringIO):
+        raise NotImplementedError()
 
 
 class BackupDiffHandler(DiffHandler):
@@ -216,7 +259,7 @@ class BackupDiffHandler(DiffHandler):
 
             out.write(f"g{diff.hoard_file}\n")
 
-    def handle_hoard_only(self, diff: FileOnlyInHoard, out: StringIO):
+    def handle_hoard_only_deleted(self, diff: FileOnlyInHoardLocalDeleted | FileOnlyInHoardLocalUnknown, out: StringIO):
         goal_status = diff.hoard_props.get_status(self.remote_uuid)
         if goal_status == HoardFileStatus.AVAILABLE:  # was backed-up here, get it again
             props = diff.hoard_props
@@ -231,3 +274,11 @@ class BackupDiffHandler(DiffHandler):
             logging.info("File not recognized by this backup, skipping")
         else:
             raise NotImplementedError(f"Unrecognized goal status {goal_status}")
+
+    def handle_hoard_only_unknown(self, diff: FileOnlyInHoardLocalUnknown, out: StringIO):
+        self.handle_hoard_only_deleted(diff, out)  # todo implement different case, e.g. do not add or remove
+
+    def handle_hoard_only_moved(
+            self, diff: FileOnlyInHoardLocalMoved, hoard_new_path: str, hoard_new_path_props: HoardFileProps,
+            other_remotes_wanting_new_file: List[str], out: StringIO):
+        raise NotImplementedError()

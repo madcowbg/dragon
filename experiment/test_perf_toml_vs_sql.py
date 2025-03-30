@@ -27,6 +27,7 @@ def _create_tables(conn: Connection):
         " fsobject_id INTEGER,"
         " uuid TEXT NOT NULL,"
         " state TEXT NOT NULL,"
+        " move_from TEXT,"
         " FOREIGN KEY (fsobject_id) REFERENCES fsobject(id) ON DELETE CASCADE)"
     )
     curr.execute("CREATE UNIQUE INDEX fspresence_fsobject_id__uuid ON fspresence(fsobject_id, uuid)")

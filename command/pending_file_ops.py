@@ -3,7 +3,7 @@ from typing import Iterable
 from contents.hoard import HoardContents
 from contents.hoard_props import HoardFileStatus, HoardFileProps
 
-type FileOp = GetFile | CopyFile | CleanupFile
+type FileOp = GetFile | CopyFile | CleanupFile | MoveFile
 
 
 class GetFile:  # fixme needs to know if we would fetch or update a current file
@@ -16,6 +16,15 @@ class CopyFile:
     def __init__(self, hoard_file: str, hoard_props: HoardFileProps):
         self.hoard_file = hoard_file
         self.hoard_props = hoard_props
+
+
+class MoveFile:
+    def __init__(
+            self, hoard_file: str, hoard_props: HoardFileProps, old_hoard_file: str, old_hoard_props: HoardFileProps):
+        self.hoard_file = hoard_file
+        self.hoard_props = hoard_props
+        self.old_hoard_file = old_hoard_file
+        self.old_hoard_props = old_hoard_props
 
 
 class CleanupFile:
@@ -31,6 +40,10 @@ def get_pending_operations(hoard: HoardContents, repo_uuid: str) -> Iterable[Fil
             yield GetFile(hoard_file, hoard_props)
         elif goal_status == HoardFileStatus.COPY:
             yield CopyFile(hoard_file, hoard_props)
+        elif goal_status == HoardFileStatus.MOVE:
+            move_file = hoard_props.get_move_file(repo_uuid)
+            move_file_props = hoard.fsobjects[move_file]
+            yield MoveFile(hoard_file, hoard_props, move_file, move_file_props)
         elif goal_status == HoardFileStatus.CLEANUP:
             yield CleanupFile(hoard_file, hoard_props)
         else:

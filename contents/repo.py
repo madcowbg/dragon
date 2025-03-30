@@ -12,9 +12,9 @@ from contents.repo_props import RepoFileProps, RepoDirProps, RepoFileStatus
 from util import FIRST_VALUE
 
 
-class FSObjects:
+class RepoFSObjects:
     class Stats:
-        def __init__(self, parent: "FSObjects"):
+        def __init__(self, parent: "RepoFSObjects"):
             self.parent = parent
 
         @property
@@ -40,7 +40,7 @@ class FSObjects:
 
     @property
     def stats_existing(self):
-        return FSObjects.Stats(self)
+        return RepoFSObjects.Stats(self)
 
     def _first_value_cursor(self):
         curr = self.parent.conn.cursor()
@@ -59,11 +59,12 @@ class FSObjects:
         if isdir:
             return fullpath, RepoDirProps(RepoFileStatus(last_status), last_update_epoch)
         else:
-            return fullpath, RepoFileProps(size, mtime, fasthash, md5, RepoFileStatus(last_status), last_update_epoch, last_related_fullpath)
+            return fullpath, RepoFileProps(size, mtime, fasthash, md5, RepoFileStatus(last_status), last_update_epoch,
+                                           last_related_fullpath)
 
     def get_existing(self, file_path: str) -> RepoFileProps | RepoDirProps:
         curr = self.parent.conn.cursor()
-        curr.row_factory = FSObjects._create_fsobjectprops
+        curr.row_factory = RepoFSObjects._create_fsobjectprops
 
         _, props = curr.execute(
             "SELECT fullpath, isdir, size, mtime, fasthash, md5, last_status, last_update_epoch, last_related_fullpath "
@@ -72,9 +73,25 @@ class FSObjects:
             (file_path, RepoFileStatus.DELETED.value, RepoFileStatus.MOVED_FROM.value)).fetchone()
         return props
 
+    def get_file_with_any_status(self, file_path: str) -> RepoFileProps | RepoDirProps | None:
+        curr = self.parent.conn.cursor()
+        curr.row_factory = RepoFSObjects._create_fsobjectprops
+
+        all_pairs = curr.execute(
+            "SELECT fullpath, isdir, size, mtime, fasthash, md5, last_status, last_update_epoch, last_related_fullpath "
+            "FROM fsobject "
+            "WHERE fsobject.fullpath = ? and isdir = FALSE ",
+            (file_path,)).fetchall()
+        assert len(all_pairs) <= 1
+        if len(all_pairs) == 0:
+            return None
+        else:  # len(all_pairs) == 1:
+            _, props = all_pairs[0]
+            return props
+
     def all_status(self) -> Generator[Tuple[str, RepoFileProps | RepoDirProps], None, None]:
         curr = self.parent.conn.cursor()
-        curr.row_factory = FSObjects._create_fsobjectprops
+        curr.row_factory = RepoFSObjects._create_fsobjectprops
 
         yield from curr.execute(
             "SELECT fullpath, isdir, size, mtime, fasthash, md5, last_status, last_update_epoch, last_related_fullpath "
@@ -82,7 +99,7 @@ class FSObjects:
 
     def existing(self) -> Generator[Tuple[str, RepoFileProps | RepoDirProps], None, None]:
         curr = self.parent.conn.cursor()
-        curr.row_factory = FSObjects._create_fsobjectprops
+        curr.row_factory = RepoFSObjects._create_fsobjectprops
 
         yield from curr.execute(
             "SELECT fullpath, isdir, size, mtime, fasthash, md5, last_status, last_update_epoch, last_related_fullpath "
@@ -105,11 +122,10 @@ class FSObjects:
         self.parent.conn.execute(
             "UPDATE fsobject SET last_status = ?, last_update_epoch = ?, last_related_fullpath = ? "
             "WHERE fsobject.fullpath = ?",
-            (RepoFileStatus.DELETED.value, self.parent.config.epoch, to_file, from_file))
+            (RepoFileStatus.MOVED_FROM.value, self.parent.config.epoch, to_file, from_file))
 
         # add the new file
         self.add_file(to_file, size, mtime, fasthash, RepoFileStatus.ADDED)
-
 
     def add_dir(self, dirpath: str, status: RepoFileStatus):
         self.parent.conn.execute(
@@ -230,7 +246,7 @@ class RepoContents:
     def __enter__(self) -> "RepoContents":
         assert self.conn is None
         self.conn = sqlite3.connect(self.filepath)
-        self.fsobjects = FSObjects(self)
+        self.fsobjects = RepoFSObjects(self)
         self.config = RepoContentsConfig(self.config_filepath)
         return self
 
