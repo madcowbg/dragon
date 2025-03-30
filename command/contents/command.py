@@ -369,12 +369,21 @@ class HoardCommandContents:
                             out.write(f"Remote {remote_uuid} is not mounted!\n")
                             continue
 
-                        pull_repo_contents_to_hoard(
-                            hoard_contents, pathing, current_contents,
-                            PullPreferences(
+                        if remote_obj.type == CaveType.INCOMING:
+                            preferences = PullPreferences(
                                 remote_uuid, content_prefs, assume_current, force_fetch_local_missing,
-                                remote_obj.type),
-                            out)
+                                remote_obj.type, force_local_as_incoming=True)
+                        elif remote_obj.type == CaveType.BACKUP:
+                            preferences = PullPreferences(
+                                remote_uuid, content_prefs, assume_current, force_fetch_local_missing,
+                                remote_obj.type, force_local_as_incoming=False)
+                        else:
+                            assert remote_obj.type == CaveType.PARTIAL
+                            preferences = PullPreferences(
+                                remote_uuid, content_prefs, assume_current, force_fetch_local_missing,
+                                remote_obj.type, force_local_as_incoming=False)
+
+                        pull_repo_contents_to_hoard(hoard_contents, pathing, current_contents, preferences, out)
 
                         logging.info(f"Updating epoch of {remote_uuid} to {current_contents.config.epoch}")
                         hoard_contents.config.set_epoch(

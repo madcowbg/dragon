@@ -19,7 +19,8 @@ from util import group_to_dict
 class PullPreferences:
     def __init__(
             self, local_uuid: str, content_prefs: ContentPrefs,
-            assume_current: bool, force_fetch_local_missing: bool, deprecated_type: CaveType):
+            assume_current: bool, force_fetch_local_missing: bool, deprecated_type: CaveType,
+            force_local_as_incoming: bool):
         self.local_uuid = local_uuid
         self.content_prefs = content_prefs
         self.deprecated_type = deprecated_type
@@ -27,23 +28,33 @@ class PullPreferences:
         self.assume_current = assume_current
         self.force_fetch_local_missing = force_fetch_local_missing
 
+        self.force_local_as_incoming = force_local_as_incoming
+
 
 def _handle_file_is_same(preferences: PullPreferences, diff: "FileIsSame", out: StringIO):
-    if preferences.deprecated_type == CaveType.INCOMING:
-        _incoming_handle_file_is_same(preferences, diff, out)
-    elif preferences.deprecated_type == CaveType.BACKUP:
-        _backup_handle_file_is_same(preferences, diff, out)
-    else:
-        assert preferences.deprecated_type == CaveType.PARTIAL
+    goal_status = diff.hoard_props.get_status(preferences.local_uuid)
 
-        goal_status = diff.hoard_props.get_status(preferences.local_uuid)
-        if goal_status == HoardFileStatus.CLEANUP:
-            logging.info(f"skipping {diff.hoard_file} as is marked for deletion")
-            out.write(f"?{diff.hoard_file}\n")
-        elif goal_status in (HoardFileStatus.GET, HoardFileStatus.COPY, HoardFileStatus.MOVE, HoardFileStatus.UNKNOWN):
+    if preferences.force_local_as_incoming:
+        logging.info(f"incoming file is already recorded in hoard.")
+
+        already_available = diff.hoard_props.by_status(HoardFileStatus.AVAILABLE)
+        # content prefs want to add it, and if not in an already available repo
+        repos_to_add = [
+            uuid for uuid in preferences.content_prefs.repos_to_add(diff.hoard_file, diff.local_props)
+            if uuid not in already_available]
+
+        # add status for new repos
+        diff.hoard_props.set_status(repos_to_add, HoardFileStatus.GET)
+        _incoming__safe_mark_for_cleanup(preferences, diff, diff.hoard_props, out)
+        out.write(f"-{diff.hoard_file}\n")
+    else:
+        if goal_status in (HoardFileStatus.GET, HoardFileStatus.COPY, HoardFileStatus.MOVE, HoardFileStatus.UNKNOWN):
             logging.info(f"mark {diff.hoard_file} as available here!")
             diff.hoard_props.mark_available(preferences.local_uuid)
             out.write(f"={diff.hoard_file}\n")
+        elif goal_status == HoardFileStatus.CLEANUP:
+            logging.info(f"skipping {diff.hoard_file} as is marked for deletion")
+            out.write(f"?{diff.hoard_file}\n")
         elif goal_status == HoardFileStatus.AVAILABLE:
             pass
         else:
@@ -281,22 +292,6 @@ def _incoming__safe_mark_for_cleanup(
         out.write(f"~{diff.hoard_file}\n")
 
 
-def _incoming_handle_file_is_same(preferences: PullPreferences, diff: FileIsSame, out: StringIO):
-    logging.info(f"incoming file is already recorded in hoard.")
-
-    # add status for new repos
-    already_available = diff.hoard_props.by_status(HoardFileStatus.AVAILABLE)
-    repos_to_add = [
-        uuid for uuid in preferences.content_prefs.repos_to_add(diff.hoard_file, diff.local_props)
-        if uuid not in already_available]
-
-    # add status for new repos
-    diff.hoard_props.set_status(repos_to_add, HoardFileStatus.GET)
-
-    _incoming__safe_mark_for_cleanup(preferences, diff, diff.hoard_props, out)
-    out.write(f"-{diff.hoard_file}\n")
-
-
 def _incoming_handle_file_contents_differ(preferences: PullPreferences, diff: FileContentsDiffer, hoard: HoardContents,
                                           out: StringIO):
     logging.info(f"incoming file has different contents.")
@@ -332,15 +327,6 @@ def _backup_handle_local_only(
         preferences: PullPreferences, diff: FileOnlyInLocalAdded | FileOnlyInLocalPresent, out: StringIO):
     logging.info(f"skipping obsolete file from backup: {diff.hoard_file}")
     out.write(f"?{diff.hoard_file}\n")
-
-
-def _backup_handle_file_is_same(preferences: PullPreferences, diff: FileIsSame, out: StringIO):
-    logging.info(f"file already backed up ... skipping.")
-
-    goal_status = diff.hoard_props.get_status(preferences.local_uuid)
-    if goal_status == HoardFileStatus.GET or goal_status == HoardFileStatus.COPY or goal_status == HoardFileStatus.UNKNOWN:
-        diff.hoard_props.mark_available(preferences.local_uuid)
-        out.write(f"={diff.hoard_file}\n")
 
 
 def _backup_handle_file_contents_differ(preferences: PullPreferences, diff: FileContentsDiffer, out: StringIO):
