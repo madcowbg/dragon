@@ -370,11 +370,11 @@ class HoardCommandContents:
                         if remote_obj.type == CaveType.INCOMING:
                             preferences = PullPreferences(
                                 remote_uuid, content_prefs,
-                                on_same_file_is_present=PullBehavior.MOVE_AND_CLEANUP,
-                                on_file_added_or_present=PullBehavior.MOVE_AND_CLEANUP,
-                                on_file_is_different_and_modified=PullBehavior.MOVE_AND_CLEANUP,
-                                on_file_is_different_and_added=PullBehavior.MOVE_AND_CLEANUP,
-                                on_file_is_different_but_present=PullBehavior.MOVE_AND_CLEANUP,
+                                on_same_file_is_present=PullBehavior.ADD_TO_OTHERS_AND_CLEANUP,
+                                on_file_added_or_present=PullBehavior.ADD_TO_OTHERS_AND_CLEANUP,
+                                on_file_is_different_and_modified=PullBehavior.ADD_TO_OTHERS_AND_CLEANUP,
+                                on_file_is_different_and_added=PullBehavior.ADD_TO_OTHERS_AND_CLEANUP,
+                                on_file_is_different_but_present=PullBehavior.ADD_TO_OTHERS_AND_CLEANUP,
                                 on_hoard_only_local_moved=PullBehavior.IGNORE,
                                 on_hoard_only_local_deleted=PullBehavior.IGNORE,
                                 on_hoard_only_local_unknown=PullBehavior.IGNORE)
