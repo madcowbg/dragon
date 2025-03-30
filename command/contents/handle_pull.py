@@ -1,12 +1,11 @@
 import enum
 import logging
 from io import StringIO
-from typing import List
 
 from command.content_prefs import ContentPrefs
 from command.contents.comparisons import compare_local_to_hoard
 from command.pathing import HoardPathing
-from config import CaveType, HoardConfig
+from config import  HoardConfig
 from contents.hoard import HoardContents
 from contents.hoard_props import HoardFileStatus, HoardFileProps
 from contents.repo import RepoContents
