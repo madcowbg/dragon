@@ -75,14 +75,16 @@ def _handle_local_only(
         out: StringIO):
     if preferences.on_file_added_or_present == PullBehavior.MOVE_AND_CLEANUP:
         props = hoard.fsobjects.add_or_replace_file(diff.hoard_file, diff.local_props)
+
         # add status for new repos
         props.set_status(
             list(preferences.content_prefs.repos_to_add(diff.hoard_file, diff.local_props)),
             HoardFileStatus.GET)
+
         _incoming__safe_mark_for_cleanup(preferences, diff, props, out)
         out.write(f"<+{diff.hoard_file}\n")
     elif preferences.on_file_added_or_present == PullBehavior.IGNORE:
-        logging.info(f"behavior expected to ignore: {diff.hoard_file}")
+        logging.info(f"Ignoring local-only file {diff.hoard_file}")
         out.write(f"?{diff.hoard_file}\n")
     elif preferences.on_file_added_or_present == PullBehavior.ADD:
         hoard_props = hoard.fsobjects.add_or_replace_file(diff.hoard_file, diff.local_props)
@@ -103,25 +105,27 @@ def _handle_local_only(
 
 def _handle_file_contents_differ(
         preferences: PullPreferences, diff: FileContentsDiffer, hoard: HoardContents, out: StringIO):
+
+    goal_status = diff.hoard_props.get_status(preferences.local_uuid)
     if preferences.deprecated_type == CaveType.INCOMING:
         logging.info(f"incoming file has different contents.")
         hoard_props = hoard.fsobjects.add_or_replace_file(diff.hoard_file, diff.local_props)
+
         # add status for new repos
         hoard_props.set_status(
             list(preferences.content_prefs.repos_to_add(diff.hoard_file, diff.local_props)),
             HoardFileStatus.GET)
+
         _incoming__safe_mark_for_cleanup(preferences, diff, hoard_props, out)
         out.write(f"u{diff.hoard_file}\n")
     elif preferences.deprecated_type == CaveType.BACKUP:
-        status = diff.hoard_props.get_status(preferences.local_uuid)
-        if status == HoardFileStatus.AVAILABLE:  # was backed-up here, get it again
+        if goal_status == HoardFileStatus.AVAILABLE:  # was backed-up here, get it again
             props = diff.hoard_props
             props.mark_to_get([preferences.local_uuid])
 
             out.write(f"g{diff.hoard_file}\n")
     else:
         assert preferences.deprecated_type == CaveType.PARTIAL
-        goal_status = diff.hoard_props.get_status(preferences.local_uuid)
         if goal_status == HoardFileStatus.AVAILABLE:
             # file was changed in-place, but is different now FIXME should that always happen?
             reset_local_as_current(hoard, preferences.local_uuid, diff.hoard_file, diff.hoard_props, diff.local_props)
