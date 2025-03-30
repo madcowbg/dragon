@@ -10,9 +10,9 @@ from alive_progress import alive_bar, alive_it
 
 from command.content_prefs import ContentPrefs
 from command.contents.comparisons import compare_local_to_hoard
-from command.contents.diff_handlers import DiffHandler, PartialDiffHandler, BackupDiffHandler, IncomingDiffHandler, \
+from command.contents.diff_handlers import DiffHandler, BackupDiffHandler
+from command.contents.handle_pull import PullPreferences, pull_repo_contents_to_hoard, _handle_local_only, \
     reset_local_as_current
-from command.contents.handle_pull import PullPreferences, pull_repo_contents_to_hoard
 from command.hoard import Hoard
 from command.pathing import HoardPathing
 from command.pending_file_ops import GetFile, CopyFile, CleanupFile, get_pending_operations
@@ -370,10 +370,12 @@ class HoardCommandContents:
                             out.write(f"Remote {remote_uuid} is not mounted!\n")
                             continue
 
-                        if remote_obj.type == CaveType.PARTIAL:
+                        if remote_obj.type in (CaveType.PARTIAL, CaveType.INCOMING):
                             pull_repo_contents_to_hoard(
                                 hoard_contents, pathing, current_contents,
-                                PullPreferences(remote_uuid, content_prefs, assume_current, force_fetch_local_missing),
+                                PullPreferences(
+                                    remote_uuid, content_prefs, assume_current, force_fetch_local_missing,
+                                    remote_obj.type),
                                 out)
                         else:
                             _execute_pull_of_repo(
@@ -404,10 +406,6 @@ class HoardCommandContents:
         with HoardContents.load(self.hoard.hoardpath) as hoard:
             content_prefs = ContentPrefs(config, pathing, hoard)
 
-            remote_op_handler = init_handler(
-                hoard, remote, content_prefs,
-                assume_current=True, force_fetch_local_missing=False)
-
             with StringIO() as out:
                 out.write(f"{config.remotes[repo_uuid].name}:\n")
 
@@ -420,8 +418,12 @@ class HoardCommandContents:
                         hoard_file = pathing.in_local(local_file, repo_uuid).at_hoard().as_posix()
                         if hoard_file not in hoard.fsobjects:
                             logging.info(f"Local file {local_file} will be handled to hoard.")
-                            remote_op_handler.handle_local_only(
+                            _handle_local_only(
+                                PullPreferences(
+                                    remote.uuid, content_prefs,
+                                    assume_current=True, force_fetch_local_missing=False, deprecated_type=remote.type),
                                 FileOnlyInLocalAdded(local_file, hoard_file, local_props),
+                                hoard,
                                 StringIO())  # fixme make it elegant
                             out.write(f"READD {hoard_file}\n")
                         else:
@@ -482,9 +484,9 @@ def _execute_pull_of_repo(  # fixme deprecated, use general handler
         remote_obj: HoardRemote, current_contents: RepoContents,
         content_prefs: ContentPrefs, assume_current: bool, force_fetch_local_missing: bool,
         out: StringIO):
-    remote_op_handler = init_handler(
-        hoard_contents, remote_obj, content_prefs,
-        assume_current, force_fetch_local_missing)
+    assert remote_obj.type == CaveType.BACKUP
+    handler: DiffHandler = BackupDiffHandler(remote_obj.uuid, hoard_contents)
+    remote_op_handler = handler
     moved_diffs = []
     logging.info("Merging local changes...")
     for diff in compare_local_to_hoard(current_contents, hoard_contents, pathing):
@@ -528,23 +530,6 @@ def _execute_pull_of_repo(  # fixme deprecated, use general handler
             diff, hoard_new_path, hoard_new_path_props, other_remotes_wanting_file, out)
 
 
-def init_handler(
-        hoard: HoardContents, remote_obj: HoardRemote, content_prefs: ContentPrefs,
-        assume_current: bool, force_fetch_local_missing: bool):
-    if remote_obj.type == CaveType.PARTIAL:
-        remote_op_handler: DiffHandler = PartialDiffHandler(
-            remote_obj.uuid, hoard, content_prefs,
-            force_fetch_local_missing=force_fetch_local_missing,
-            assume_current=assume_current)
-    elif remote_obj.type == CaveType.BACKUP:
-        remote_op_handler: DiffHandler = BackupDiffHandler(remote_obj.uuid, hoard)
-    elif remote_obj.type == CaveType.INCOMING:
-        remote_op_handler: DiffHandler = IncomingDiffHandler(remote_obj.uuid, hoard, content_prefs)
-    else:
-        raise ValueError(f"FIXME unsupported remote type: {remote_obj.type}")
-    return remote_op_handler
-
-
 STATUSES_ALREADY_ENABLED = [HoardFileStatus.AVAILABLE, HoardFileStatus.GET]
 
 
@@ -556,5 +541,3 @@ def clean_dangling_files(hoard: HoardContents, out: StringIO):  # fixme do this 
         logging.warning(f"Removing dangling path {dangling_path} from hoard!")
         hoard.fsobjects.delete(dangling_path)
         out.write(f"remove dangling {dangling_path}\n")
-
-
