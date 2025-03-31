@@ -94,7 +94,8 @@ class HoardCommandContents:
         remote_uuid = resolve_remote_uuid(self.hoard.config(), remote)
 
         logging.info(f"Reading current contents of {remote_uuid}...")
-        with self.hoard.connect_to_repo(remote_uuid, require_contents=True).open_contents() as current_contents:
+        connected_repo = self.hoard.connect_to_repo(remote_uuid, require_contents=True)
+        with connected_repo.open_contents(is_readonly=True) as current_contents:
             logging.info(f"Loading hoard TOML...")
             with HoardContents.load(self.hoard.hoardpath) as hoard:
                 logging.info(f"Loaded hoard TOML!")
@@ -385,8 +386,8 @@ class HoardCommandContents:
                     content_prefs = ContentPrefs(config, pathing, hoard_contents)
 
                     try:
-                        current_contents = self.hoard.connect_to_repo(remote_uuid, require_contents=True) \
-                            .open_contents()
+                        connected_repo = self.hoard.connect_to_repo(remote_uuid, require_contents=True)
+                        current_contents = connected_repo.open_contents(is_readonly=True)
                     except MissingRepoContents as e:
                         logging.error(e)
                         out.write(f"Repo {remote_uuid} has no current contents available!\n")
@@ -452,7 +453,8 @@ class HoardCommandContents:
                 out.write(f"{config.remotes[repo_uuid].name}:\n")
 
                 logging.info(f"Iterating over pending ops in {repo_uuid} to reset pending ops")
-                with self.hoard.connect_to_repo(repo_uuid, True).open_contents() as current_contents:
+                connected_repo = self.hoard.connect_to_repo(repo_uuid, True)
+                with connected_repo.open_contents(is_readonly=True) as current_contents:
                     for local_file, local_props in alive_it(current_contents.fsobjects.existing()):
                         if not isinstance(local_props, RepoFileProps):
                             continue

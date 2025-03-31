@@ -62,7 +62,7 @@ class RepoCommand(object):
 
         current_uuid = connected_repo.current_uuid
         try:
-            contents = connected_repo.open_contents()
+            contents = connected_repo.open_contents(is_readonly=False)
             first_refresh = False
         except MissingRepoContents as e:
             logging.warning("Repo contents missing, creating!")
@@ -203,7 +203,7 @@ class RepoCommand(object):
         remote_uuid = self.current_uuid()
 
         logging.info(f"Reading repo {self.repo.path}...")
-        with self.repo.open_repo().connect(False).open_contents() as contents:
+        with self.repo.open_repo().connect(False).open_contents(is_readonly=True) as contents:
             logging.info(f"Read repo!")
 
             with StringIO() as out:
@@ -230,7 +230,7 @@ class RepoCommand(object):
             return f"Repo is not initialized at {self.repo.path}"
 
         try:
-            contents = connected_repo.open_contents()
+            contents = connected_repo.open_contents(is_readonly=True)
         except MissingRepoContents:
             return f"Repo {current_uuid} contents have not been refreshed yet!"
 

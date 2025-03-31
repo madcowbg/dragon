@@ -106,7 +106,7 @@ class ConnectedRepo(OfflineRepo):
 
         assert not self.has_contents
 
-    def open_contents(self) -> RepoContents:
+    def open_contents(self, is_readonly: bool) -> RepoContents:
         if not self.has_contents:
             raise MissingRepoContents()
-        return RepoContents.load_existing(self.config_folder, self.current_uuid)
+        return RepoContents.load_existing(self.config_folder, self.current_uuid, is_readonly)

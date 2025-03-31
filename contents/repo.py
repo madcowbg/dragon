@@ -220,17 +220,18 @@ class RepoContents:
         conn.commit()
         conn.close()
 
-        return RepoContents.load_existing(folder, uuid)
+        return RepoContents.load_existing(folder, uuid, is_readonly=False)
 
     @staticmethod
-    def load_existing(folder: str, uuid: str):
-        return RepoContents(folder, uuid)
+    def load_existing(folder: str, uuid: str, is_readonly: bool):
+        return RepoContents(folder, uuid, is_readonly)
 
     conn: Connection | None
 
-    def __init__(self, folder: str, uuid: str):
+    def __init__(self, folder: str, uuid: str, is_readonly: bool):
         self.folder = folder
         self.uuid = uuid
+        self.is_readonly = is_readonly
 
         if not os.path.isfile(self.filepath):
             raise MissingRepoContents(f"File {self.filepath} does not exist.")
@@ -245,7 +246,7 @@ class RepoContents:
 
     def __enter__(self) -> "RepoContents":
         assert self.conn is None
-        self.conn = sqlite3.connect(self.filepath)
+        self.conn = sqlite3.connect(f"file:{self.filepath}{'?mode=ro' if self.is_readonly else ''}", uri=True)
         self.fsobjects = RepoFSObjects(self)
         self.config = RepoContentsConfig(self.config_filepath)
         return self
