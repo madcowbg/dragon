@@ -61,3 +61,7 @@ get, copy and cleanup.
 files that it requests to get or copy.
 
 <img src="doc/status-example-with-sync.png"/>
+
+`dragon hoard gui` - runs a Textual-based GUI exploring a hoard's contents.
+
+<img src="doc/hoard-explorer-gui-example.png"/>
