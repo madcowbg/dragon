@@ -118,6 +118,19 @@ def _fetch_files_in_repo(
     total_size = sum(f[1].size for f in files_to_fetch)
 
     with alive_bar(to_mb(total_size), unit="MB") as bar:
+        async def _execute_get(hoard_file: str, hoard_props: HoardFileProps):
+            hoard_filepath = pathing.in_hoard(hoard_file)
+            local_filepath = hoard_filepath.at_local(repo_uuid)
+            logging.debug(f"restoring {hoard_file} to {local_filepath.as_posix()}...")
+            success, fullpath = await _restore_from_another_repo(
+                hoard_filepath, repo_uuid, hoard_props, pathing._config, pathing._paths)
+            if success:
+                hoard_props.mark_available(repo_uuid)
+                return f"+ {local_filepath.as_posix()}\n"
+            else:
+                logging.error("error restoring file!")
+                return f"E {local_filepath.as_posix()}\n"
+
         class Copier:
             def __init__(self):
                 self.current_size = 0
@@ -156,6 +169,11 @@ def _fetch_files_in_repo(
                         local_filepath = pathing.in_hoard(hoard_file).at_local(repo_uuid).on_device_path()
                         try:
                             logging.info(f"Moving {local_filepath_from} to {local_filepath}")
+
+                            dirpath, _ = os.path.split(local_filepath)
+                            logging.info(f"making necessary folders to restore: {dirpath}")
+                            os.makedirs(dirpath, exist_ok=True)
+
                             dest = shutil.move(local_filepath_from, local_filepath)
                             if dest is not None:
                                 hoard_props.mark_available(repo_uuid)
@@ -169,18 +187,7 @@ def _fetch_files_in_repo(
                     else:
                         assert goal_status == HoardFileStatus.GET, f"Unexpected status {goal_status.value}"
 
-                        hoard_filepath = pathing.in_hoard(hoard_file)
-                        local_filepath = hoard_filepath.at_local(repo_uuid)
-                        logging.debug(f"restoring {hoard_file} to {local_filepath.as_posix()}...")
-
-                        success, fullpath = await _restore_from_another_repo(
-                            hoard_filepath, repo_uuid, hoard_props, pathing._config, pathing._paths)
-                        if success:
-                            hoard_props.mark_available(repo_uuid)
-                            return f"+ {local_filepath.as_posix()}\n"
-                        else:
-                            logging.error("error restoring file!")
-                            return f"E {local_filepath.as_posix()}\n"
+                        return await _execute_get(hoard_file, hoard_props)
                 finally:
                     self.current_size += hoard_props.size
                     bar(to_mb(self.current_size) - self.current_size_mb)

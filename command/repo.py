@@ -99,6 +99,13 @@ class ConnectedRepo(OfflineRepo):
         assert not self.has_contents
         return RepoContents.create(self.config_folder, create_for_uuid)
 
+    def remove_contents(self):
+        if self.has_contents:
+            os.remove(join(_config_folder(self.path), f"{self.current_uuid}.contents"))
+            os.remove(join(_config_folder(self.path), f"{self.current_uuid}.toml"))
+
+        assert not self.has_contents
+
     def open_contents(self) -> RepoContents:
         if not self.has_contents:
             raise MissingRepoContents()

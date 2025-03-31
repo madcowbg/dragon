@@ -1,3 +1,4 @@
+import datetime
 import logging
 import os
 import pathlib
@@ -5,7 +6,7 @@ import shutil
 from io import StringIO
 from typing import Dict, List, Tuple
 
-from alive_progress import alive_bar
+from alive_progress import alive_bar, alive_it
 
 from command.backups.command import HoardCommandBackups
 from command.command_repo import RepoCommand
@@ -17,6 +18,7 @@ from command.repo import ProspectiveRepo
 from config import HoardRemote, CavePath, CaveType, ConnectionSpeed, ConnectionLatency
 from contents.hoard import HoardContents
 from contents.hoard_props import HoardDirProps, HoardFileProps
+from contents.repo_props import RepoFileStatus
 from exceptions import MissingRepo
 from hashing import fast_hash
 from resolve_uuid import resolve_remote_uuid
@@ -238,6 +240,52 @@ class HoardCommand(object):
 
                 out.write("DONE")
                 return out.getvalue()
+
+    def export_contents_to_repo(self, remote: str):
+        remote_uuid = resolve_remote_uuid(self.hoard.config(), remote)
+
+        logging.info(f"Loading hoard TOML...")
+        with HoardContents.load(self.hoard.hoardpath) as hoard:
+            logging.info(f"Removing old contents...")
+            self.hoard.connect_to_repo(remote_uuid, require_contents=False).remove_contents()
+
+            pathing = HoardPathing(self.hoard.config(), self.hoard.paths())
+            logging.info(f"Opening new contents of {remote_uuid}...")
+            with self.hoard.connect_to_repo(remote_uuid, require_contents=False) \
+                    .create_contents(remote_uuid) as current_contents:
+                current_contents.config.start_updating()
+
+                logging.info("Restoring config...")
+                hoard.config.restore_remote_config(current_contents.config)
+
+                with StringIO() as out:
+                    logging.info(f"Iterating over files marked available in {remote}...")
+                    for hoard_file, hoard_props in alive_it(
+                            hoard.fsobjects.available_in_repo(remote_uuid), title="Recreating index"):
+                        local_path_obj = pathing.in_hoard(hoard_file).at_local(remote_uuid)
+                        assert local_path_obj is not None, \
+                            f"Path {hoard_file} needs to be available in local, but isn't???"
+                        local_path = local_path_obj.as_posix()
+
+                        if isinstance(hoard_props, HoardFileProps):
+                            logging.info(f"Restoring description of file {hoard_file} to {local_path}...")
+                            current_contents.fsobjects.add_file(
+                                local_path,
+                                size=hoard_props.size,
+                                mtime=datetime.datetime.now(),
+                                fasthash=hoard_props.fasthash,
+                                status=RepoFileStatus.PRESENT)
+                            out.write(f"PRESENT {local_path}\n")
+                        elif isinstance(hoard_props, HoardDirProps):
+                            logging.info(f"Restoring description of dir {hoard_file} to {local_path}...")
+                            current_contents.fsobjects.add_dir(local_path, RepoFileStatus.PRESENT)
+                            out.write(f"PRESENT DIR {local_path}\n")
+                        else:
+                            raise ValueError(f"Unsupported hoard props type: {type(hoard_props)}")
+
+                    current_contents.config.end_updating()
+                    out.write("DONE")
+                    return out.getvalue()
 
     def meld(
             self, source: str, dest: str, move: bool = False, junk_folder: str = "_JUNK_",

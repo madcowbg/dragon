@@ -58,6 +58,11 @@ class HoardContentsConfig:
         self._remote_config(config.uuid)["config"] = config.doc
         self.write()
 
+    def restore_remote_config(self, config: RepoContentsConfig):
+        config.doc["max_size"] = self.max_size(config.uuid)
+        config.doc["epoch"] = self.epoch(config.uuid)
+        config.write()
+
     def max_size(self, uuid: str):
         return self._remote_config(uuid).get("config", {}).get("max_size", 0)
 
@@ -241,6 +246,16 @@ class HoardFSObjects:
             "    status in (?, ?, ?, ?))",
             (repo_uuid, HoardFileStatus.GET.value, HoardFileStatus.COPY.value, HoardFileStatus.MOVE.value,
              HoardFileStatus.CLEANUP.value))
+
+    def available_in_repo(self, remote_uuid: str) -> Iterable[Tuple[str, HoardFileProps | HoardDirProps]]:
+        curr = self.parent.conn.cursor()
+        curr.row_factory = self._read_as_prop_tuple
+        yield from curr.execute(
+            "SELECT fullpath, fsobject_id, isdir, size, fasthash FROM fsobject "
+            "WHERE EXISTS ("
+            "  SELECT 1 FROM fspresence "
+            "  WHERE fspresence.fsobject_id = fsobject.fsobject_id AND uuid = ? AND status = ?)",
+            (remote_uuid, HoardFileStatus.AVAILABLE.value))
 
     def in_folder(self, folder: str) -> Iterable[Tuple[str, HoardFileProps | HoardDirProps]]:
         assert os.path.isabs(folder)

@@ -220,7 +220,7 @@ def _handle_hoard_only_with_behavior(
             out.write(f"g{diff.hoard_file}\n")
         elif goal_status == HoardFileStatus.CLEANUP:  # file already deleted
             diff.hoard_props.remove_status(preferences.local_uuid)
-        elif goal_status == HoardFileStatus.GET or goal_status == HoardFileStatus.COPY:
+        elif goal_status in (HoardFileStatus.GET, HoardFileStatus.COPY, HoardFileStatus.MOVE):
             pass
         elif goal_status == HoardFileStatus.UNKNOWN:
             logging.info("File not recognized by this backup, skipping")
