@@ -434,6 +434,16 @@ class HoardFSObjects:
             .fetchone()[0]
         return used_size if used_size is not None else 0
 
+    def stats_in_folder(self, folder_path: str) -> Tuple[int, int]:
+        assert not folder_path.endswith("/")
+        if not folder_path.startswith("/"):
+            folder_path = "/" + folder_path
+
+        return self.parent.conn.execute(
+            "SELECT COUNT(1), IFNULL(SUM(fsobject.size), 0) FROM fsobject "
+            "WHERE isdir = FALSE AND ? < fullpath AND fullpath < ?",
+            (folder_path + "/", folder_path + "0")).fetchone()  # fast search using the index
+
 
 STATUSES_THAT_USE_SIZE = [
     HoardFileStatus.AVAILABLE.value, HoardFileStatus.GET.value, HoardFileStatus.COPY.value,

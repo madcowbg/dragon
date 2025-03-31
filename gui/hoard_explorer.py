@@ -6,6 +6,7 @@ import traceback
 from typing import Dict, Set
 
 import rtoml
+from rich.text import Text
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal
 from textual.css.query import NoMatches
@@ -25,22 +26,52 @@ from util import format_size
 
 class HoardTree(Tree):
     contents: HoardContents = reactive(None)
-    loaded: Set[HoardDir | HoardFile] = var(set())
+    loaded_offset: dict[HoardDir | HoardFile, int] = var(dict())
 
     def __init__(self, contents: HoardContents):
         super().__init__("Hoard", data=contents.fsobjects.tree.root, id="hoard_tree")
+        self.guide_depth = 2
+        self.auto_expand = False
         self.contents = contents
+        self.root.expand()
 
-    def _expand_hoard_dir(self, widget_node: TreeNode[HoardDir | HoardFile], hoard_dir: HoardDir):
+    def _expand_hoard_dir(self, widget_node: TreeNode[HoardDir | HoardFile], hoard_dir: HoardDir, parent_offset: int):
+        label_max_width = 45 - parent_offset * widget_node.tree.guide_depth
         for folder in hoard_dir.dirs.values():
-            widget_node.add(folder.name, allow_expand=True, data=folder)
+            count, size = self.contents.fsobjects.stats_in_folder(folder.fullname)
+            folder_label = Text().append(folder.name.ljust(label_max_width), 'bold green') \
+                .append(f"{format_count(count):>6}", "dim") \
+                .append(f"{format_size(size):>7}", "none")
+
+            widget_node.add(folder_label, allow_expand=True, data=folder)
+
         for file in hoard_dir.files.values():
-            widget_node.add(file.name, allow_expand=False, data=file)
+            size = self.contents.fsobjects[file.fullname].size
+            file_label = Text().append(file.name.ljust(label_max_width + 2)).append(f"{format_size(size):>13}", "none")
+            widget_node.add(file_label, allow_expand=False, data=file)
 
     def on_tree_node_expanded(self, event: Tree[HoardDir | HoardFile].NodeExpanded):
-        if event.node.data not in self.loaded:
-            self.loaded.add(event.node.data)
-            self._expand_hoard_dir(event.node, event.node.data)
+        if event.node.data not in self.loaded_offset:
+            self.loaded_offset[event.node.data] = 1 + (
+                self.loaded_offset[event.node.parent.data] if event.node.parent is not None else 0)
+            self._expand_hoard_dir(event.node, event.node.data, self.loaded_offset[event.node.data])
+
+
+COUNT_KILO, COUNT_MEGA, COUNT_GIGA, COUNT_TERA = 10 ** 3, 10 ** 6, 10 ** 9, 10 ** 12
+
+
+def format_count(count: int) -> str:
+    abs_count = abs(count)
+    if abs_count < COUNT_KILO:
+        return str(count)
+    elif abs_count < COUNT_MEGA:
+        return f"{count / COUNT_KILO:.1f}K"
+    elif abs_count < COUNT_GIGA:
+        return f"{count / COUNT_MEGA:.1f}M"
+    elif abs_count < COUNT_TERA:
+        return f"{count / COUNT_GIGA:.1f}G"
+    else:
+        return f"{count / COUNT_TERA:.1f}T"
 
 
 class NodeDescription(Widget):
@@ -119,7 +150,8 @@ class HoardExplorerScreen(Widget):
 
         try:
             self.notify(f"Loading hoard at {self.hoard.hoardpath}...")
-            self.hoard_contents = self.hoard.open_contents(create_missing=False, is_readonly=True)  # fixme change to editable
+            self.hoard_contents = self.hoard.open_contents(create_missing=False,
+                                                           is_readonly=True)  # fixme change to editable
             self.hoard_contents.__enter__()
         except Exception as e:
             traceback.print_exception(e)
