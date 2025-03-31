@@ -76,14 +76,20 @@ class NodeDescription(Widget):
 
             yield Label("Statuses per repo", classes="desc_section")
             for status, repos in by_presence.items():
-                yield Label(f"Repos where status={status.value.upper()}")
+                yield Label(f"Repos where status = {status.value.upper()}")
                 for repo_uuid in repos:
                     hoard_remote = self.hoard_config.remotes[repo_uuid]
                     full_local_path = self.hoard_pathing.in_hoard(hoard_file.fullname)\
                         .at_local(repo_uuid).on_device_path()
                     yield Horizontal(
-                        Label(hoard_remote.name, classes="repo_name"),
-                        Label(f"[@click=app.open_cave_file('{full_local_path}')]{repo_uuid}[/]", classes="repo_uuid"),
+                        Label(
+                            hoard_remote.name,
+                            classes=" ".join([
+                                "repo_name",
+                                "status_available" if os.path.isfile(full_local_path) else "status_not_available"])),
+                        Label(
+                            f"[@click=app.open_cave_file('{full_local_path}')]{repo_uuid}[/]",
+                            classes="repo_uuid"),
                         classes="desc_status_line")
 
         else:

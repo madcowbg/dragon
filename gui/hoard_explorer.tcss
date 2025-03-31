@@ -25,5 +25,17 @@ NodeDescription {
 }
 
 .repo_name {
- width: 20%;
+    width: 20%;
+}
+
+.status_available {
+    color: green;
+}
+
+.status_not_available {
+    text-style: strike;
+}
+
+.repo_uuid {
+    text-style: dim;
 }
