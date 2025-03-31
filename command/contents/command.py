@@ -377,7 +377,7 @@ class HoardCommandContents:
             for remote_uuid in remote_uuids:
                 remote_uuid = resolve_remote_uuid(self.hoard.config(), remote_uuid)
                 remote_obj = config.remotes[remote_uuid]
-                print(f"Pulling contents of {remote_obj.name}[{remote_uuid}].")
+                logging.info(f"Pulling contents of {remote_obj.name}[{remote_uuid}].")
 
                 logging.info(f"Loading hoard contents TOML...")
                 with HoardContents.load(self.hoard.hoardpath) as hoard_contents:
@@ -387,7 +387,8 @@ class HoardCommandContents:
                     try:
                         current_contents = self.hoard.connect_to_repo(remote_uuid, require_contents=True) \
                             .open_contents()
-                    except MissingRepoContents:
+                    except MissingRepoContents as e:
+                        logging.error(e)
                         out.write(f"Repo {remote_uuid} has no current contents available!\n")
                         continue
 

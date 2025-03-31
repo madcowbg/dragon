@@ -414,7 +414,6 @@ class TestBackups(unittest.TestCase):
             "DONE", res)
 
         res = hoard_cmd.backups.assign()
-        print(nice_dump(res))
         self.assertEqual(
             'set: / with 4 media\n'
             ' backup-2 <- 1 files (77)\n'

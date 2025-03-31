@@ -296,7 +296,7 @@ def pull_repo_contents_to_hoard(
     diffs_by_type = group_to_dict(all_diffs, key=lambda diff: type(diff))
 
     for dt, diffs in diffs_by_type.items():
-        print(f"{dt}: {len(diffs)}")  # fixme move to log
+        logging.info(f"# diffs of class {dt}={len(diffs)}")
 
     for diff in diffs_by_type.pop(FileIsSame, []):
         assert isinstance(diff, FileIsSame)

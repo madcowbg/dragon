@@ -25,8 +25,7 @@ def is_same_file(current: RepoFileProps, hoard: HoardFileProps):
 
 def compare_local_to_hoard(local: RepoContents, hoard: HoardContents, pathing: HoardPathing) \
         -> Generator[Diff, None, None]:
-    print("Comparing current files to hoard:")
-    with alive_bar(local.fsobjects.len_existing()) as bar:
+    with alive_bar(local.fsobjects.len_existing(), title="Current files vs. Hoard") as bar:
         for current_path, props in local.fsobjects.existing():
             bar()
             if isinstance(props, RepoFileProps):
@@ -60,8 +59,9 @@ def compare_local_to_hoard(local: RepoContents, hoard: HoardContents, pathing: H
             else:
                 raise ValueError(f"unknown props type: {type(props)}")
 
-    print("Comparing hoard to current files")
-    for hoard_file, props in alive_it(list(hoard.fsobjects.in_folder(pathing.mounted_at(local.config.uuid)))):
+    for hoard_file, props in alive_it(
+            list(hoard.fsobjects.in_folder(pathing.mounted_at(local.config.uuid))),
+            title="Hoard vs. Current files"):
         if isinstance(props, HoardFileProps):
             curr_file_path_in_local = pathing.in_hoard(hoard_file).at_local(local.config.uuid)
             assert curr_file_path_in_local is not None  # hoard file is not in the mounted location

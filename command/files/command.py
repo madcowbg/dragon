@@ -86,7 +86,7 @@ class HoardCommandFiles:
                 files_to_copy = _find_files_to_copy(hoard)
 
                 for repo_uuid in repo_uuids:
-                    print(f"fetching for {config.remotes[repo_uuid].name}")
+                    logging.info(f"fetching for {config.remotes[repo_uuid].name}")
                     out.write(f"{config.remotes[repo_uuid].name}:\n")
 
                     _fetch_files_in_repo(hoard, repo_uuid, pathing, files_to_copy, out)
@@ -100,7 +100,7 @@ class HoardCommandFiles:
 
                 logging.info("try cleaning unneeded files, per repo")
                 for repo_uuid in repo_uuids:
-                    print(f"cleaning repo {config.remotes[repo_uuid].name}")
+                    logging.info(f"cleaning repo {config.remotes[repo_uuid].name}")
                     out.write(f"{config.remotes[repo_uuid].name}:\n")
 
                     _cleanup_files_in_repo(hoard, repo_uuid, pathing, files_to_copy, out)
@@ -117,7 +117,7 @@ def _fetch_files_in_repo(
     files_to_fetch = sorted(hoard.fsobjects.to_fetch(repo_uuid))
     total_size = sum(f[1].size for f in files_to_fetch)
 
-    with alive_bar(to_mb(total_size), unit="MB") as bar:
+    with alive_bar(to_mb(total_size), unit="MB", title="Fetching files") as bar:
         async def _execute_get(hoard_file: str, hoard_props: HoardFileProps):
             hoard_filepath = pathing.in_hoard(hoard_file)
             local_filepath = hoard_filepath.at_local(repo_uuid)
@@ -204,7 +204,7 @@ def _fetch_files_in_repo(
 def _cleanup_files_in_repo(
         hoard: HoardContents, repo_uuid: str, pathing: HoardPathing, files_requiring_copy: Dict[str, any], out: StringIO):
     files_to_cleanup = sorted(hoard.fsobjects.to_cleanup(repo_uuid))
-    with alive_bar(to_mb(sum(f[1].size for f in files_to_cleanup)), unit="MB") as bar:
+    with alive_bar(to_mb(sum(f[1].size for f in files_to_cleanup)), unit="MB", title="Cleaning files") as bar:
         for hoard_file, hoard_props in files_to_cleanup:
             assert isinstance(hoard_props, HoardFileProps)
 

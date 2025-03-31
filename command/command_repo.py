@@ -69,7 +69,7 @@ class RepoCommand(object):
             first_refresh = True
             contents = connected_repo.create_contents(current_uuid)
 
-        print(f"Refreshing uuid {current_uuid}{', is first refresh' if first_refresh else ''}")
+        logging.info(f"Refreshing uuid {current_uuid}{', is first refresh' if first_refresh else ''}")
         add_new_with_status = RepoFileStatus.ADDED if not first_refresh else RepoFileStatus.PRESENT
 
         with contents:
@@ -79,8 +79,9 @@ class RepoCommand(object):
             logging.info(f"Bumped epoch to {contents.config.epoch}")
 
             with StringIO() as out:
-                print_maybe = (lambda line: out.write(line + "\n")) if show_details else print
-                print(f"Computing diffs.")
+                print_maybe = (lambda line: out.write(line + "\n")) if show_details else (lambda line: None)
+
+                logging.info(f"Comparing contents and filesystem...")
                 files_to_add_or_update: Dict[str, RepoFileStatus] = {}
                 files_maybe_removed: List[Tuple[str, RepoFileProps]] = []
                 folders_to_add: List[str] = []
@@ -119,20 +120,19 @@ class RepoCommand(object):
                     else:
                         raise ValueError(f"unknown diff type: {type(diff)}")
 
-                print(f"Detected {len(files_maybe_removed)} possible deletions.")
+                logging.info(f"Detected {len(files_maybe_removed)} possible deletions.")
 
-                print(f"Hashing {len(files_to_add_or_update)} files to add:")
+                logging.info(f"Hashing {len(files_to_add_or_update)} files to add:")
                 file_hashes = asyncio.run(find_hashes([file for file, status in files_to_add_or_update.items()]))
 
                 inverse_hashes: Dict[str, List[Tuple[str, str]]] = group_to_dict(
                     file_hashes.items(),
                     key=lambda file_to_hash: file_to_hash[1])
 
-                print("Detecting moves...")
-                for missing_relpath, missing_file_props in files_maybe_removed:
+                for missing_relpath, missing_file_props in alive_it(files_maybe_removed, title="Detecting moves"):
                     candidates_file_to_hash = [
                         (file, fasthash) for (file, fasthash) in inverse_hashes.get(missing_file_props.fasthash, [])
-                        if files_to_add_or_update[file] == RepoFileStatus.ADDED]
+                        if files_to_add_or_update.get(file, None) == RepoFileStatus.ADDED]
 
                     if len(candidates_file_to_hash) == 0:
                         logging.info(f"File {missing_relpath} has no suitable copy, marking as deleted.")
@@ -165,8 +165,8 @@ class RepoCommand(object):
                         contents.fsobjects.mark_removed(missing_relpath)
                         print_maybe(f"REMOVED_FILE_FALLBACK_TOO_MANY {missing_relpath}")
 
-                print(f"Adding {len(files_to_add_or_update)} files in {self.repo.path}")
-                for fullpath, requested_status in alive_it(files_to_add_or_update.items()):
+                for fullpath, requested_status in alive_it(
+                        files_to_add_or_update.items(), title=f"Adding {len(files_to_add_or_update)} files"):
                     relpath = pathlib.Path(fullpath).relative_to(self.repo.path).as_posix()
 
                     if fullpath not in file_hashes:
@@ -183,8 +183,7 @@ class RepoCommand(object):
                         logging.error("Error while adding file!")
                         logging.error(e)
 
-                print(f"Adding {len(folders_to_add)} folders in {self.repo.path}")
-                for fullpath in alive_it(folders_to_add):
+                for fullpath in alive_it(folders_to_add, title=f"Adding {len(folders_to_add)} folders"):
                     relpath = pathlib.Path(fullpath).relative_to(self.repo.path).as_posix()
                     contents.fsobjects.add_dir(relpath, status=RepoFileStatus.ADDED)
                     print_maybe(f"ADDED_DIR {relpath}")
@@ -365,8 +364,7 @@ type RepoDiffs = (
 
 def compute_difference_between_contents_and_filesystem(
         contents: RepoContents, repo_path: str, skip_integrity_checks: bool) -> Generator[RepoDiffs, None, None]:
-    print("Checking for deleted files and folders...")
-    for obj_path, props in alive_it(list(contents.fsobjects.existing())):
+    for obj_path, props in alive_it(list(contents.fsobjects.existing()), title="Checking for deleted files and folders"):
         if isinstance(props, RepoFileProps):
             if not pathlib.Path(repo_path).joinpath(obj_path).is_file():
                 yield FileNotInFilesystem(obj_path, props)
@@ -376,9 +374,8 @@ def compute_difference_between_contents_and_filesystem(
         else:
             raise ValueError(f"invalid props type: {type(props)}")
 
-    print("Walking filesystem for added files and changed dirs...")
     file_path_matches: List[str] = list()
-    with alive_bar(total=contents.fsobjects.len_existing()) as bar:
+    with alive_bar(total=contents.fsobjects.len_existing(), title="Walking filesystem") as bar:
         for dirpath_s, dirnames, filenames in walk_repo(repo_path):
             dirpath = pathlib.Path(dirpath_s)
             for filename in filenames:
@@ -403,8 +400,7 @@ def compute_difference_between_contents_and_filesystem(
                     yield DirNotInRepo(dir_path_in_local)
                 bar()
 
-    print(f"Checking {len(file_path_matches)} possibly weakly modified files...")
-    with alive_bar(len(file_path_matches)) as m_bar:
+    with alive_bar(len(file_path_matches), title="Checking maybe mod files") as m_bar:
         async def find_size_mtime_of(file_fullpath: str) -> RepoDiffs:
             try:
                 stats = await aiofiles.os.stat(file_fullpath)
@@ -431,5 +427,4 @@ def compute_difference_between_contents_and_filesystem(
 
         assert len(prop_tuples) == len(file_path_matches)
 
-    print(f"Returning file diffs for {len(file_path_matches)} files...")
-    yield from alive_it(prop_tuples)
+    yield from alive_it(prop_tuples, title="Returning file diffs")

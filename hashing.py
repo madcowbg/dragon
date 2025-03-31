@@ -39,7 +39,7 @@ async def find_hashes(filenames: List[str]) -> Dict[str, str]:
     for f in filenames:
         queue.put_nowait(f)
 
-    with alive_bar(len(filenames)) as bar:
+    with alive_bar(len(filenames), title="Computing hashes") as bar:
         async def run_queue():
             while not queue.empty():
                 fullpath = await queue.get()
