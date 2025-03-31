@@ -43,6 +43,49 @@ def _file_stats(props: HoardFileProps) -> str:
     return " ".join(res)
 
 
+def _init_pull_preferences_partial(
+        content_prefs: ContentPrefs, remote_uuid: str,
+        assume_current: bool = False, force_fetch_local_missing: bool = False) -> PullPreferences:
+    return PullPreferences(
+        remote_uuid, content_prefs,
+        on_same_file_is_present=PullBehavior.ADD,
+        on_file_added_or_present=PullBehavior.ADD,
+        on_file_is_different_and_modified=PullBehavior.ADD,
+        on_file_is_different_and_added=PullBehavior.ADD,
+        on_file_is_different_but_present=
+        PullBehavior.RESTORE if not assume_current else PullBehavior.ADD,
+        on_hoard_only_local_moved=PullBehavior.MOVE_ON_HOARD,
+        on_hoard_only_local_deleted=
+        PullBehavior.DELETE_FROM_HOARD if not force_fetch_local_missing else PullBehavior.RESTORE_AS_HOARD,
+        on_hoard_only_local_unknown=PullBehavior.ACCEPT_FROM_HOARD)
+
+
+def _init_pull_preferences_backup(content_prefs: ContentPrefs, remote_uuid: str) -> PullPreferences:
+    return PullPreferences(
+        remote_uuid, content_prefs,
+        on_same_file_is_present=PullBehavior.ADD,
+        on_file_added_or_present=PullBehavior.IGNORE,
+        on_file_is_different_and_modified=PullBehavior.RESTORE,
+        on_file_is_different_and_added=PullBehavior.RESTORE,
+        on_file_is_different_but_present=PullBehavior.RESTORE,
+        on_hoard_only_local_moved=PullBehavior.RESTORE_AS_HOARD,
+        on_hoard_only_local_deleted=PullBehavior.RESTORE_AS_HOARD,
+        on_hoard_only_local_unknown=PullBehavior.RESTORE_AS_HOARD)
+
+
+def _init_pull_preferences_incoming(content_prefs: ContentPrefs, remote_uuid: str) -> PullPreferences:
+    return PullPreferences(
+        remote_uuid, content_prefs,
+        on_same_file_is_present=PullBehavior.ADD_TO_OTHERS_AND_CLEANUP,
+        on_file_added_or_present=PullBehavior.ADD_TO_OTHERS_AND_CLEANUP,
+        on_file_is_different_and_modified=PullBehavior.ADD_TO_OTHERS_AND_CLEANUP,
+        on_file_is_different_and_added=PullBehavior.ADD_TO_OTHERS_AND_CLEANUP,
+        on_file_is_different_but_present=PullBehavior.ADD_TO_OTHERS_AND_CLEANUP,
+        on_hoard_only_local_moved=PullBehavior.IGNORE,
+        on_hoard_only_local_deleted=PullBehavior.IGNORE,
+        on_hoard_only_local_unknown=PullBehavior.IGNORE)
+
+
 class HoardCommandContents:
     def __init__(self, hoard: Hoard):
         self.hoard = hoard
@@ -370,41 +413,13 @@ class HoardCommandContents:
                             continue
 
                         if remote_obj.type == CaveType.INCOMING:
-                            preferences = PullPreferences(
-                                remote_uuid, content_prefs,
-                                on_same_file_is_present=PullBehavior.ADD_TO_OTHERS_AND_CLEANUP,
-                                on_file_added_or_present=PullBehavior.ADD_TO_OTHERS_AND_CLEANUP,
-                                on_file_is_different_and_modified=PullBehavior.ADD_TO_OTHERS_AND_CLEANUP,
-                                on_file_is_different_and_added=PullBehavior.ADD_TO_OTHERS_AND_CLEANUP,
-                                on_file_is_different_but_present=PullBehavior.ADD_TO_OTHERS_AND_CLEANUP,
-                                on_hoard_only_local_moved=PullBehavior.IGNORE,
-                                on_hoard_only_local_deleted=PullBehavior.IGNORE,
-                                on_hoard_only_local_unknown=PullBehavior.IGNORE)
+                            preferences = _init_pull_preferences_incoming(content_prefs, remote_uuid)
                         elif remote_obj.type == CaveType.BACKUP:
-                            preferences = PullPreferences(
-                                remote_uuid, content_prefs,
-                                on_same_file_is_present=PullBehavior.ADD,
-                                on_file_added_or_present=PullBehavior.IGNORE,
-                                on_file_is_different_and_modified=PullBehavior.RESTORE,
-                                on_file_is_different_and_added=PullBehavior.RESTORE,
-                                on_file_is_different_but_present=PullBehavior.RESTORE,
-                                on_hoard_only_local_moved=PullBehavior.RESTORE_AS_HOARD,
-                                on_hoard_only_local_deleted=PullBehavior.RESTORE_AS_HOARD,
-                                on_hoard_only_local_unknown=PullBehavior.RESTORE_AS_HOARD)
+                            preferences = _init_pull_preferences_backup(content_prefs, remote_uuid)
                         else:
                             assert remote_obj.type == CaveType.PARTIAL
-                            preferences = PullPreferences(
-                                remote_uuid, content_prefs,
-                                on_same_file_is_present=PullBehavior.ADD,
-                                on_file_added_or_present=PullBehavior.ADD,
-                                on_file_is_different_and_modified=PullBehavior.ADD,
-                                on_file_is_different_and_added=PullBehavior.ADD,
-                                on_file_is_different_but_present=
-                                    PullBehavior.RESTORE if not assume_current else PullBehavior.ADD,
-                                on_hoard_only_local_moved=PullBehavior.MOVE_ON_HOARD,
-                                on_hoard_only_local_deleted=
-                                    PullBehavior.DELETE_FROM_HOARD if not force_fetch_local_missing else PullBehavior.RESTORE_AS_HOARD,
-                                on_hoard_only_local_unknown=PullBehavior.ACCEPT_FROM_HOARD)
+                            preferences = _init_pull_preferences_partial(
+                                content_prefs, remote_uuid, assume_current, force_fetch_local_missing)
 
                         pull_repo_contents_to_hoard(hoard_contents, pathing, config, current_contents, preferences, out)
 
