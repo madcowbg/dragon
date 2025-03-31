@@ -130,7 +130,7 @@ class HoardCommand(object):
         config = self.hoard.config()
 
         logging.info(f"Loading hoard TOML...")
-        with HoardContents.load(self.hoard.hoardpath) as hoard:
+        with self.hoard.open_contents(create_missing=False) as hoard:
             logging.info(f"Loaded hoard TOML!")
 
             repo_health: Dict[str, Dict[int, int]] = dict()
@@ -210,7 +210,7 @@ class HoardCommand(object):
             return f"No repos to move!"
 
         logging.info(f"Loading hoard...")
-        with HoardContents.load(self.hoard.hoardpath) as hoard:
+        with self.hoard.open_contents(create_missing=False) as hoard:
             logging.info(f"Loaded hoard.")
 
             with StringIO() as out:
@@ -249,7 +249,7 @@ class HoardCommand(object):
         remote_uuid = resolve_remote_uuid(self.hoard.config(), remote)
 
         logging.info(f"Loading hoard TOML...")
-        with HoardContents.load(self.hoard.hoardpath) as hoard:
+        with self.hoard.open_contents(create_missing=False) as hoard:
             logging.info(f"Removing old contents...")
             self.hoard.connect_to_repo(remote_uuid, require_contents=False).remove_contents()
 
