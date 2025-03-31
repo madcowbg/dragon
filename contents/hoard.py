@@ -435,9 +435,7 @@ class HoardFSObjects:
         return used_size if used_size is not None else 0
 
     def stats_in_folder(self, folder_path: str) -> Tuple[int, int]:
-        assert not folder_path.endswith("/")
-        if not folder_path.startswith("/"):
-            folder_path = "/" + folder_path
+        folder_path = "" if folder_path == "/" else folder_path
 
         return self.parent.conn.execute(
             "SELECT COUNT(1), IFNULL(SUM(fsobject.size), 0) FROM fsobject "
