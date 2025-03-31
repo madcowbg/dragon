@@ -24,7 +24,7 @@ class HoardCommandBackups:
         pathing = HoardPathing(config, self.hoard.paths())
 
         logging.info(f"Loading hoard...")
-        with self.hoard.open_contents(create_missing=False) as hoard:
+        with self.hoard.open_contents(create_missing=False, is_readonly=True) as hoard:
             backup_sets = BackupSet.all(config, pathing, hoard)
             backup_media = set(sum((list(b.backups.keys()) for b in backup_sets), []))
             count_backup_media = len(backup_media)
@@ -78,7 +78,7 @@ class HoardCommandBackups:
         pathing = HoardPathing(config, self.hoard.paths())
 
         logging.info(f"Loading hoard...")
-        with self.hoard.open_contents(create_missing=False) as hoard:
+        with self.hoard.open_contents(create_missing=False, is_readonly=False) as hoard:
             backup_sets = BackupSet.all(config, pathing, hoard)
 
             with StringIO() as out:
@@ -114,7 +114,7 @@ class HoardCommandBackups:
         pathing = HoardPathing(config, self.hoard.paths())
 
         logging.info(f"Loading hoard...")
-        with self.hoard.open_contents(create_missing=False) as hoard:
+        with self.hoard.open_contents(create_missing=False, is_readonly=False) as hoard:
             backup_sets = BackupSet.all(config, pathing, hoard)
 
             with StringIO() as out:

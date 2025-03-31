@@ -442,10 +442,13 @@ STATUSES_THAT_USE_SIZE = [
 
 class HoardContents:
     @staticmethod
-    def load(folder: str) -> "HoardContents":
+    def load(folder: str, is_readonly: bool) -> "HoardContents":
         config_filename = os.path.join(folder, HOARD_CONTENTS_FILENAME)
 
         if not os.path.isfile(config_filename):
+            if is_readonly:
+                raise ValueError("Cannot create a read-only hoard!")
+
             conn = sqlite3.connect(config_filename)
             curr = conn.cursor()
 
@@ -475,26 +478,32 @@ class HoardContents:
 
         toml_filename = os.path.join(folder, HOARD_CONTENTS_TOML)
         if not os.path.isfile(toml_filename):
+            if is_readonly:
+                raise ValueError("Cannot create a read-only hoard!")
+
             with open(toml_filename, "w") as f:
                 rtoml.dump({
                     "updated": datetime.now().isoformat()
                 }, f)
 
-        return HoardContents(folder)
+        return HoardContents(folder, is_readonly)
 
     conn: Connection
     config: HoardContentsConfig
     fsobjects: HoardFSObjects
 
-    def __init__(self, folder: str):
+    def __init__(self, folder: str, is_readonly: bool):
         self.folder = folder
+        self.is_readonly = is_readonly
 
         self.config = None
         self.fsobjects = None
         self.conn = None
 
     def __enter__(self):
-        self.conn = sqlite3.connect(os.path.join(self.folder, HOARD_CONTENTS_FILENAME))
+        self.conn = sqlite3.connect(
+            f"file:{os.path.join(self.folder, HOARD_CONTENTS_FILENAME)}{'?mode=ro' if self.is_readonly else ''}",
+            uri=True)
 
         self.config = HoardContentsConfig(os.path.join(self.folder, HOARD_CONTENTS_TOML))
         self.fsobjects = HoardFSObjects(self)

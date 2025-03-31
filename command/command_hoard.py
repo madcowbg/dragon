@@ -76,7 +76,7 @@ class HoardCommand(object):
         paths[remote_uuid] = CavePath.exact(remote_abs_path, speed, latency)
         paths.write()
 
-        with self.hoard.open_contents(create_missing=True) as hoard:  # fixme remove when unit tests are updated
+        with self.hoard.open_contents(create_missing=True, is_readonly=False) as hoard:  # fixme remove when unit tests are updated
             hoard.config.set_max_size_fallback(remote_uuid, shutil.disk_usage(remote_path).total)
 
         return f"Added {name}[{remote_uuid}] at {remote_path}!"
@@ -130,7 +130,7 @@ class HoardCommand(object):
         config = self.hoard.config()
 
         logging.info(f"Loading hoard TOML...")
-        with self.hoard.open_contents(create_missing=False) as hoard:
+        with self.hoard.open_contents(create_missing=False, is_readonly=True) as hoard:
             logging.info(f"Loaded hoard TOML!")
 
             repo_health: Dict[str, Dict[int, int]] = dict()
@@ -210,7 +210,7 @@ class HoardCommand(object):
             return f"No repos to move!"
 
         logging.info(f"Loading hoard...")
-        with self.hoard.open_contents(create_missing=False) as hoard:
+        with self.hoard.open_contents(create_missing=False, is_readonly=False) as hoard:
             logging.info(f"Loaded hoard.")
 
             with StringIO() as out:
@@ -249,7 +249,7 @@ class HoardCommand(object):
         remote_uuid = resolve_remote_uuid(self.hoard.config(), remote)
 
         logging.info(f"Loading hoard TOML...")
-        with self.hoard.open_contents(create_missing=False) as hoard:
+        with self.hoard.open_contents(create_missing=False, is_readonly=True) as hoard:
             logging.info(f"Removing old contents...")
             self.hoard.connect_to_repo(remote_uuid, require_contents=False).remove_contents()
 
@@ -307,7 +307,7 @@ class HoardCommand(object):
             print("Copying files to proper locations!")
 
         logging.info(f"Loading hoard...")
-        with self.hoard.open_contents() as hoard:
+        with self.hoard.open_contents(create_missing=False, is_readonly=True) as hoard:
             logging.info(f"Loaded hoard.")
             junk_path = pathlib.Path(dest).joinpath(junk_folder)
             if move:

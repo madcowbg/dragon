@@ -25,7 +25,7 @@ class Hoard:
         logging.info(f"Using repo contents {remote_uuid} in {remote_path}...")
         return ConnectedRepo(remote_path, remote_uuid, require_contents)
 
-    def open_contents(self, create_missing: bool = False) -> HoardContents:
+    def open_contents(self, create_missing: bool = False, is_readonly: bool = True) -> HoardContents:
         hoard_contents_filename = os.path.join(self.hoardpath, HOARD_CONTENTS_FILENAME)
         if not os.path.isfile(os.path.join(self.hoardpath, CONFIG_FILE)):
             raise ValueError(f"Hoard is not configured in {self.hoardpath}!")
@@ -33,4 +33,4 @@ class Hoard:
             raise ValueError(
                 f"Hoard contents file {hoard_contents_filename} is not available,"
                 f" but --create-missing = False")
-        return HoardContents.load(self.hoardpath)
+        return HoardContents.load(self.hoardpath, is_readonly)

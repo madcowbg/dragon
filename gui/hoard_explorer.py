@@ -119,7 +119,7 @@ class HoardExplorerScreen(Widget):
 
         try:
             self.notify(f"Loading hoard at {self.hoard.hoardpath}...")
-            self.hoard_contents = self.hoard.open_contents(create_missing=False)
+            self.hoard_contents = self.hoard.open_contents(create_missing=False, is_readonly=True)  # fixme change to editable
             self.hoard_contents.__enter__()
         except Exception as e:
             traceback.print_exception(e)
