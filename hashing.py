@@ -47,6 +47,9 @@ async def find_hashes(filenames: List[str]) -> Dict[str, str]:
                     file_hashes[fullpath] = await fast_hash_async(fullpath)
                 except FileNotFoundError as e:
                     logging.error(e)
+                except OSError as e:
+                    logging.error(e)
+
                 queue.task_done()
                 bar()
 
