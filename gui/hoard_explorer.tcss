@@ -11,3 +11,19 @@ HoardTree {
     width: 50%
 }
 
+.desc_line, .desc_status_line {
+    padding-left: 1;
+    height: 1;
+}
+
+NodeDescription {
+
+}
+
+.desc_section {
+    padding-top: 1;
+}
+
+.repo_name {
+ width: 20%;
+}

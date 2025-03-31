@@ -1,6 +1,7 @@
 import logging
 import os
 import pathlib
+import subprocess
 import traceback
 from typing import Dict, Set
 
@@ -14,20 +15,22 @@ from textual.widget import Widget
 from textual.widgets import Footer, Header, Tree, Label, Input
 from textual.widgets._tree import TreeNode
 
+import util
 from command.hoard import Hoard
+from command.pathing import HoardPathing
+from config import HoardConfig
 from contents.hoard import HoardContents, HoardFile, HoardDir
+from contents.hoard_props import HoardFileProps
+from util import format_size
 
 
-class HoardTree(Widget):
+class HoardTree(Tree):
     contents: HoardContents = reactive(None)
     loaded: Set[HoardDir | HoardFile] = var(set())
 
     def __init__(self, contents: HoardContents):
-        super().__init__()
+        super().__init__("Hoard", data=contents.fsobjects.tree.root, id="hoard_tree")
         self.contents = contents
-
-    def compose(self):
-        yield Tree("Hoard", data=self.contents.fsobjects.tree.root, id="hoard_tree")
 
     def _expand_hoard_dir(self, widget_node: TreeNode[HoardDir | HoardFile], hoard_dir: HoardDir):
         for folder in hoard_dir.dirs.values():
@@ -44,15 +47,45 @@ class HoardTree(Widget):
 class NodeDescription(Widget):
     hoard_item: HoardFile | HoardDir | None = reactive(None, recompose=True)
 
+    def __init__(self, hoard_contents: HoardContents, hoard_config: HoardConfig, hoard_pathing: HoardPathing):
+        super().__init__()
+        self.hoard_contents = hoard_contents
+        self.hoard_config = hoard_config
+        self.hoard_pathing = hoard_pathing
+
     def compose(self) -> ComposeResult:
         if self.hoard_item is None:
             yield Label("Please select an item on the left")
         elif isinstance(self.hoard_item, HoardDir):
             hoard_dir = self.hoard_item
             yield Label(f"Folder name: {hoard_dir.name}")
+            yield Label(f"Hoard path: {hoard_dir.fullname}")
         elif isinstance(self.hoard_item, HoardFile):
             hoard_file = self.hoard_item
             yield Label(f"File name: {hoard_file.name}")
+            yield Label(f"Hoard path: {hoard_file.fullname}")
+
+            hoard_props = self.hoard_contents.fsobjects[hoard_file.fullname]
+            assert isinstance(hoard_props, HoardFileProps)
+
+            yield Label(f"size = {format_size(hoard_props.size)}", classes="desc_line")
+            yield Label(f"fasthash = {hoard_props.fasthash}", classes="desc_line")
+
+            presence = hoard_props.presence
+            by_presence = util.group_to_dict(presence.keys(), key=lambda uuid: presence[uuid])
+
+            yield Label("Statuses per repo", classes="desc_section")
+            for status, repos in by_presence.items():
+                yield Label(f"Repos where status={status.value.upper()}")
+                for repo_uuid in repos:
+                    hoard_remote = self.hoard_config.remotes[repo_uuid]
+                    full_local_path = self.hoard_pathing.in_hoard(hoard_file.fullname)\
+                        .at_local(repo_uuid).on_device_path()
+                    yield Horizontal(
+                        Label(hoard_remote.name, classes="repo_name"),
+                        Label(f"[@click=app.open_cave_file('{full_local_path}')]{repo_uuid}[/]", classes="repo_uuid"),
+                        classes="desc_status_line")
+
         else:
             raise ValueError(f"unknown hoard item type: {type(self.hoard_item)}")
 
@@ -67,9 +100,11 @@ class HoardExplorerScreen(Widget):
 
     def compose(self) -> ComposeResult:
         if self.hoard_contents is not None:
+            config = self.hoard.config()
+            pathing = HoardPathing(config, self.hoard.paths())
             yield Horizontal(
                 HoardTree(self.hoard_contents),
-                NodeDescription())
+                NodeDescription(self.hoard_contents, config, pathing))
         else:
             yield Label("Please select a valid hoard!")
 
@@ -138,6 +173,16 @@ class HoardExplorerApp(App):
     def action_toggle_dark(self) -> None:
         """An action to toggle dark mode."""
         self.theme = "textual-dark" if self.theme == "textual-light" else "textual-light"
+
+    def action_open_cave_file(self, filepath: str):
+        path = pathlib.WindowsPath(filepath)
+        if not path.exists():
+            self.notify(f"File {filepath} does not exist!", severity="error")
+        else:
+            self.notify(f"Opening {filepath} in Explorer.", severity="information")
+            cmd = f"explorer.exe /select,\"{pathlib.WindowsPath(filepath)}\""
+            logging.error(cmd)
+            subprocess.Popen(cmd)
 
     def _write_config(self):
         with open("hoard_explorer.toml", 'w') as f:
