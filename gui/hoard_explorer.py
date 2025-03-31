@@ -3,7 +3,7 @@ import os
 import pathlib
 import subprocess
 import traceback
-from typing import Dict, Set, List
+from typing import Dict, List
 
 import rtoml
 from rich.text import Text
@@ -20,7 +20,7 @@ from command.pathing import HoardPathing
 from config import HoardConfig, HoardRemote
 from contents.hoard import HoardContents, HoardFile, HoardDir
 from contents.hoard_props import HoardFileProps
-from util import format_size, group_to_dict
+from util import format_size, group_to_dict, format_count
 
 
 class HoardTree(Tree):
@@ -67,22 +67,6 @@ class HoardTree(Tree):
                 self.loaded_offset[event.node.parent.data] if event.node.parent is not None else 0)
             self._expand_hoard_dir(event.node, event.node.data, self.loaded_offset[event.node.data])
 
-
-COUNT_KILO, COUNT_MEGA, COUNT_GIGA, COUNT_TERA = 10 ** 3, 10 ** 6, 10 ** 9, 10 ** 12
-
-
-def format_count(count: int) -> str:
-    abs_count = abs(count)
-    if abs_count < COUNT_KILO:
-        return str(count)
-    elif abs_count < COUNT_MEGA:
-        return f"{count / COUNT_KILO:.1f}K"
-    elif abs_count < COUNT_GIGA:
-        return f"{count / COUNT_MEGA:.1f}M"
-    elif abs_count < COUNT_TERA:
-        return f"{count / COUNT_GIGA:.1f}G"
-    else:
-        return f"{count / COUNT_TERA:.1f}T"
 
 
 class NodeDescription(Widget):

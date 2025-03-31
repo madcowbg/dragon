@@ -6,6 +6,22 @@ from sqlite3 import Cursor, Row
 from typing import List, Tuple, Any, Callable, Coroutine, Dict, TypeVar, Iterable
 import queue
 
+COUNT_KILO, COUNT_MEGA, COUNT_GIGA, COUNT_TERA = 10 ** 3, 10 ** 6, 10 ** 9, 10 ** 12
+
+
+def format_count(count: int) -> str:
+    abs_count = abs(count)
+    if abs_count < COUNT_KILO:
+        return str(count)
+    elif abs_count < COUNT_MEGA:
+        return f"{count / COUNT_KILO:.1f}K"
+    elif abs_count < COUNT_GIGA:
+        return f"{count / COUNT_MEGA:.1f}M"
+    elif abs_count < COUNT_TERA:
+        return f"{count / COUNT_GIGA:.1f}G"
+    else:
+        return f"{count / COUNT_TERA:.1f}T"
+
 
 def format_size(size: int | None) -> str:
     if size < 2 ** 10:
