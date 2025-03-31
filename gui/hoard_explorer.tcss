@@ -1,0 +1,41 @@
+.horizontal_config_line {
+    height: 3;
+    align-vertical: middle;
+}
+
+.horizontal_config_line Label {
+    padding: 1;
+}
+
+HoardTree {
+    width: 50%
+}
+
+.desc_line, .desc_status_line {
+    padding-left: 1;
+    height: 1;
+}
+
+NodeDescription {
+
+}
+
+.desc_section {
+    padding-top: 1;
+}
+
+.repo_name {
+    width: 20%;
+}
+
+.status_available {
+    color: green;
+}
+
+.status_not_available {
+    text-style: strike;
+}
+
+.repo_uuid {
+    text-style: dim;
+}

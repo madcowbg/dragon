@@ -1,0 +1,8 @@
+aiofiles==24.1.0
+aioshutil==1.5
+alive-progress==3.2.0
+fire==0.7.0
+humanize==4.12.2
+pyinstaller==6.12.0
+rtoml==0.12.0
+textual==3.0.0

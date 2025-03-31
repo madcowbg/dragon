@@ -3,3 +3,5 @@ tests/
 build/
 dist/
 *.spec
+
+hoard_explorer.toml
