@@ -20,6 +20,7 @@ from contents.hoard import HoardContents
 from contents.hoard_props import HoardDirProps, HoardFileProps
 from contents.repo_props import RepoFileStatus
 from exceptions import MissingRepo
+from gui.hoard_explorer import start_hoard_explorer_gui
 from hashing import fast_hash
 from resolve_uuid import resolve_remote_uuid
 from util import group_to_dict
@@ -36,6 +37,9 @@ class HoardCommand(object):
         self.contents = HoardCommandContents(self.hoard)
         self.files = HoardCommandFiles(self.hoard)
         self.backups = HoardCommandBackups(self.hoard)
+
+    def gui(self):
+        start_hoard_explorer_gui(self.hoard.hoardpath)
 
     def init(self):
         logging.info(f"Reading or creating config...")

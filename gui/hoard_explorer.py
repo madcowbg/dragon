@@ -6,7 +6,6 @@ import traceback
 from typing import Dict, Set
 
 import rtoml
-from textual import events
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal
 from textual.css.query import NoMatches
@@ -79,7 +78,7 @@ class NodeDescription(Widget):
                 yield Label(f"Repos where status = {status.value.upper()}")
                 for repo_uuid in repos:
                     hoard_remote = self.hoard_config.remotes[repo_uuid]
-                    full_local_path = self.hoard_pathing.in_hoard(hoard_file.fullname)\
+                    full_local_path = self.hoard_pathing.in_hoard(hoard_file.fullname) \
                         .at_local(repo_uuid).on_device_path()
                     yield Horizontal(
                         Label(
@@ -195,6 +194,13 @@ class HoardExplorerApp(App):
             rtoml.dump(self.config, f)
 
 
-if __name__ == "__main__":
+def start_hoard_explorer_gui(path: str | None = None):
+    if path is not None:
+        os.chdir(path)
+
     app = HoardExplorerApp()
     app.run()
+
+
+if __name__ == "__main__":
+    start_hoard_explorer_gui()
