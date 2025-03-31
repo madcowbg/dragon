@@ -47,7 +47,7 @@ class HoardCommandContents:
     def __init__(self, hoard: Hoard):
         self.hoard = hoard
 
-    def pending(self, remote: str):
+    def pending(self, remote: str, ignore_missing: bool = False):
         remote_uuid = resolve_remote_uuid(self.hoard.config(), remote)
 
         logging.info(f"Reading current contents of {remote_uuid}...")
@@ -72,13 +72,15 @@ class HoardCommandContents:
                         elif isinstance(diff, FileOnlyInHoardLocalDeleted):
                             out.write(f"DELETED {diff.hoard_file}\n")
                         elif isinstance(diff, FileOnlyInHoardLocalUnknown):
-                            out.write(f"MISSING {diff.hoard_file}\n")
+                            if not ignore_missing:
+                                out.write(f"MISSING {diff.hoard_file}\n")
                         elif isinstance(diff, FileOnlyInHoardLocalMoved):
                             out.write(f"MOVED {diff.hoard_file}\n")
                         elif isinstance(diff, DirMissingInHoard):
                             out.write(f"ADDED_DIR {diff.hoard_dir}\n")
                         elif isinstance(diff, DirMissingInLocal):
-                            out.write(f"DELETED_DIR {diff.hoard_dir}\n")
+                            if not ignore_missing:
+                                out.write(f"DELETED_DIR {diff.hoard_dir}\n")
                         elif isinstance(diff, FileIsSame) or isinstance(diff, DirIsSame):
                             pass
                         else:
