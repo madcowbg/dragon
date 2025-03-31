@@ -1,0 +1,13 @@
+.horizontal_config_line {
+    height: 3;
+    align-vertical: middle;
+}
+
+.horizontal_config_line Label {
+    padding: 1;
+}
+
+HoardTree {
+    width: 50%
+}
+
