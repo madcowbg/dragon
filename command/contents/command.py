@@ -459,7 +459,7 @@ class HoardCommandContents:
                         if not isinstance(local_props, RepoFileProps):
                             continue
 
-                        hoard_file = pathing.in_local(local_file, repo_uuid).at_hoard().as_pure_path.as_posix()
+                        hoard_file = pathing.in_local(local_file.as_posix(), repo_uuid).at_hoard().as_pure_path.as_posix()
                         if hoard_file not in hoard.fsobjects:
                             logging.info(f"Local file {local_file} will be handled to hoard.")
                             _handle_local_only(
@@ -475,7 +475,7 @@ class HoardCommandContents:
                                     on_hoard_only_local_deleted=PullBehavior.FAIL,
                                 ),
                                 FileOnlyInLocal(
-                                    local_file, hoard_file, local_props,
+                                    local_file.as_posix(), hoard_file, local_props,
                                     local_props.last_status == RepoFileStatus.ADDED),
                                 hoard,
                                 StringIO())  # fixme make it elegant

@@ -249,7 +249,7 @@ class RepoCommand(object):
             with StringIO() as out:
                 if show_files:
                     for file_or_dir, props in contents.fsobjects.all_status():
-                        out.write(f"{file_or_dir}: {props.last_status.value} @ {props.last_update_epoch}\n")
+                        out.write(f"{file_or_dir.as_posix()}: {props.last_status.value} @ {props.last_update_epoch}\n")
                     out.write("--- SUMMARY ---\n")
 
                 stats = contents.fsobjects.stats_existing
@@ -412,10 +412,10 @@ def compute_difference_between_contents_and_filesystem(
             title="Checking for deleted files and folders"):
         if isinstance(props, RepoFileProps):
             if not pathlib.Path(repo_path).joinpath(obj_path).is_file():
-                yield FileNotInFilesystem(obj_path, props)
+                yield FileNotInFilesystem(obj_path.as_posix(), props)
         elif isinstance(props, RepoDirProps):
             if not pathlib.Path(repo_path).joinpath(obj_path).is_dir():
-                yield DirNotInFilesystem(obj_path, props)
+                yield DirNotInFilesystem(obj_path.as_posix(), props)
         else:
             raise ValueError(f"invalid props type: {type(props)}")
 

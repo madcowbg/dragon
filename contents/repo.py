@@ -54,19 +54,19 @@ class RepoFSObjects:
             (RepoFileStatus.DELETED.value, RepoFileStatus.MOVED_FROM.value)).fetchone()
 
     @staticmethod
-    def _create_fsobjectprops(cursor: Cursor, row: Row) -> Tuple[str, RepoFileProps | RepoDirProps]:
+    def _create_pair_path_props(cursor: Cursor, row: Row) -> Tuple[PurePosixPath, RepoFileProps | RepoDirProps]:
         fullpath, isdir, size, mtime, fasthash, md5, last_status, last_update_epoch, last_related_fullpath = row
 
         if isdir:
-            return fullpath, RepoDirProps(RepoFileStatus(last_status), last_update_epoch)
+            return PurePosixPath(fullpath), RepoDirProps(RepoFileStatus(last_status), last_update_epoch)
         else:
-            return fullpath, RepoFileProps(size, mtime, fasthash, md5, RepoFileStatus(last_status), last_update_epoch,
-                                           last_related_fullpath)
+            return PurePosixPath(fullpath), RepoFileProps(
+                size, mtime, fasthash, md5, RepoFileStatus(last_status), last_update_epoch, last_related_fullpath)
 
     def get_existing(self, file_path: PurePosixPath) -> RepoFileProps | RepoDirProps:
         assert not file_path.is_absolute()
         curr = self.parent.conn.cursor()
-        curr.row_factory = RepoFSObjects._create_fsobjectprops
+        curr.row_factory = RepoFSObjects._create_pair_path_props
 
         _, props = curr.execute(
             "SELECT fullpath, isdir, size, mtime, fasthash, md5, last_status, last_update_epoch, last_related_fullpath "
@@ -78,7 +78,7 @@ class RepoFSObjects:
     def get_file_with_any_status(self, file_path: PurePosixPath) -> RepoFileProps | RepoDirProps | None:
         assert not file_path.is_absolute()
         curr = self.parent.conn.cursor()
-        curr.row_factory = RepoFSObjects._create_fsobjectprops
+        curr.row_factory = RepoFSObjects._create_pair_path_props
 
         all_pairs = curr.execute(
             "SELECT fullpath, isdir, size, mtime, fasthash, md5, last_status, last_update_epoch, last_related_fullpath "
@@ -92,17 +92,17 @@ class RepoFSObjects:
             _, props = all_pairs[0]
             return props
 
-    def all_status(self) -> Iterable[Tuple[str, RepoFileProps | RepoDirProps]]:
+    def all_status(self) -> Iterable[Tuple[PurePosixPath, RepoFileProps | RepoDirProps]]:
         curr = self.parent.conn.cursor()
-        curr.row_factory = RepoFSObjects._create_fsobjectprops
+        curr.row_factory = RepoFSObjects._create_pair_path_props
 
         yield from curr.execute(
             "SELECT fullpath, isdir, size, mtime, fasthash, md5, last_status, last_update_epoch, last_related_fullpath "
             "FROM fsobject ORDER BY fullpath")
 
-    def existing(self) -> Iterable[Tuple[str, RepoFileProps | RepoDirProps]]:
+    def existing(self) -> Iterable[Tuple[PurePosixPath, RepoFileProps | RepoDirProps]]:
         curr = self.parent.conn.cursor()
-        curr.row_factory = RepoFSObjects._create_fsobjectprops
+        curr.row_factory = RepoFSObjects._create_pair_path_props
 
         yield from curr.execute(
             "SELECT fullpath, isdir, size, mtime, fasthash, md5, last_status, last_update_epoch, last_related_fullpath "

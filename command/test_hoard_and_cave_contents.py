@@ -26,7 +26,7 @@ class TestHoardCommand(unittest.TestCase):
         repo_contents = ProspectiveRepo(join(self.tmpdir.name, "repo")).open_repo().connect(False).open_contents(True)
         with repo_contents:
             all_fsobjects = [
-                (file_or_dir, props.size if isinstance(props, RepoFileProps) else True)
+                (file_or_dir.as_posix(), props.size if isinstance(props, RepoFileProps) else True)
                 for file_or_dir, props in repo_contents.fsobjects.all_status()]
 
             self.assertEqual([

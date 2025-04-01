@@ -31,23 +31,23 @@ def compare_local_to_hoard(local: RepoContents, hoard: HoardContents, pathing: H
             bar()
             if isinstance(props, RepoFileProps):
                 current_file = current_path
-                curr_file_hoard_path = pathing.in_local(current_file, local.config.uuid).at_hoard()
+                curr_file_hoard_path = pathing.in_local(current_file.as_posix(), local.config.uuid).at_hoard()
                 if curr_file_hoard_path.as_pure_path.as_posix() not in hoard.fsobjects:
                     logging.info(f"local file not in hoard: {curr_file_hoard_path}")
                     assert props.last_status in (RepoFileStatus.PRESENT, RepoFileStatus.ADDED)
                     yield FileOnlyInLocal(
-                        current_file, curr_file_hoard_path.as_pure_path.as_posix(), props,
+                        current_file.as_posix(), curr_file_hoard_path.as_pure_path.as_posix(), props,
                         props.last_status == RepoFileStatus.ADDED)
                 elif is_same_file(
-                        local.fsobjects.get_existing(pathlib.PurePosixPath(current_file)),
+                        local.fsobjects.get_existing(pathlib.PurePosixPath(current_file.as_posix())),
                         hoard.fsobjects[curr_file_hoard_path.as_pure_path.as_posix()]):
                     logging.info(f"same in hoard {current_file}!")
-                    yield FileIsSame(current_file, curr_file_hoard_path.as_pure_path.as_posix(), props, hoard.fsobjects[
+                    yield FileIsSame(current_file.as_posix(), curr_file_hoard_path.as_pure_path.as_posix(), props, hoard.fsobjects[
                         curr_file_hoard_path.as_pure_path.as_posix()])
                 else:
                     logging.info(f"file changes {current_file}")
                     yield FileContentsDiffer(
-                        current_file,
+                        current_file.as_posix(),
                         curr_file_hoard_path.as_pure_path.as_posix(), props, hoard.fsobjects[
                             curr_file_hoard_path.as_pure_path.as_posix()])
 
