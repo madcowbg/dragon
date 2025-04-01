@@ -122,3 +122,11 @@ def group_to_dict(
 
 
 def custom_isabs(folder: str): return folder.startswith("/") or os.path.isabs(folder)  # for 3.13 change in os.path
+
+
+def pretty_truncate(text: str, size: int) -> str:
+    assert size >= 5
+    if len(text) <= size:
+        return text
+    left_len = (size - 3) // 2
+    return text[:left_len] + "..." + text[-(size - 3 - left_len):]

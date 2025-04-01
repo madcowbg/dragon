@@ -7,8 +7,8 @@
     padding: 1;
 }
 
-HoardTree {
-    width: 50%
+HoardTreeWidget {
+    width: 50%;
 }
 
 .desc_line, .desc_status_line {
