@@ -275,7 +275,7 @@ class HoardCommand(object):
                             logging.info(
                                 f"Restoring description of file {hoard_file} to {local_path_obj}...")
                             current_contents.fsobjects.add_file(
-                                local_path_obj.as_pure_path.as_posix(),
+                                local_path_obj.as_pure_path,
                                 size=hoard_props.size,
                                 mtime=datetime.datetime.now(),
                                 fasthash=hoard_props.fasthash,
@@ -285,7 +285,7 @@ class HoardCommand(object):
                             logging.info(
                                 f"Restoring description of dir {hoard_file} to {local_path_obj}...")
                             current_contents.fsobjects.add_dir(
-                                local_path_obj.as_pure_path.as_posix(), RepoFileStatus.PRESENT)
+                                local_path_obj.as_pure_path, RepoFileStatus.PRESENT)
                             out.write(f"PRESENT DIR {local_path_obj}\n")
                         else:
                             raise ValueError(f"Unsupported hoard props type: {type(hoard_props)}")

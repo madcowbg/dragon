@@ -2,6 +2,7 @@ import os
 import shutil
 import sqlite3
 from datetime import datetime
+from pathlib import PurePosixPath
 from sqlite3 import Connection, Cursor, Row
 from typing import Generator, Tuple, Optional
 
@@ -106,32 +107,37 @@ class RepoFSObjects:
             "FROM fsobject WHERE last_status NOT IN (?, ?)",
             (RepoFileStatus.DELETED.value, RepoFileStatus.MOVED_FROM.value))
 
-    def in_existing(self, file_path: str) -> bool:
+    def in_existing(self, file_path: PurePosixPath) -> bool:
+        assert not file_path.is_absolute()
         return self._first_value_cursor().execute(
             "SELECT count(1) FROM fsobject WHERE fsobject.fullpath = ? AND last_status NOT IN (?, ?)",
-            (file_path, RepoFileStatus.DELETED.value, RepoFileStatus.MOVED_FROM.value)).fetchone() > 0
+            (file_path.as_posix(), RepoFileStatus.DELETED.value, RepoFileStatus.MOVED_FROM.value)).fetchone() > 0
 
-    def add_file(self, filepath: str, size: int, mtime: float, fasthash: str, status: RepoFileStatus) -> None:
+    def add_file(self, filepath: PurePosixPath, size: int, mtime: float, fasthash: str, status: RepoFileStatus) -> None:
+        assert not filepath.is_absolute()
         self.parent.conn.execute(
             "INSERT OR REPLACE INTO fsobject(fullpath, isdir, size, mtime, fasthash, md5, last_status, last_update_epoch, last_related_fullpath) "
             "VALUES (?, FALSE, ?, ?, ?, NULL, ?, ?, NULL)",
-            (filepath, size, mtime, fasthash, status.value, self.parent.config.epoch))
+            (filepath.as_posix(), size, mtime, fasthash, status.value, self.parent.config.epoch))
 
-    def mark_moved(self, from_file: str, to_file: str, size: int, mtime: float, fasthash: str):
+    def mark_moved(self, from_file: PurePosixPath, to_file: PurePosixPath, size: int, mtime: float, fasthash: str):
+        assert not from_file.is_absolute()
+        assert not to_file.is_absolute()
         # mark old file to refer to the new file
         self.parent.conn.execute(
             "UPDATE fsobject SET last_status = ?, last_update_epoch = ?, last_related_fullpath = ? "
             "WHERE fsobject.fullpath = ?",
-            (RepoFileStatus.MOVED_FROM.value, self.parent.config.epoch, to_file, from_file))
+            (RepoFileStatus.MOVED_FROM.value, self.parent.config.epoch, to_file.as_posix(), from_file.as_posix()))
 
         # add the new file
         self.add_file(to_file, size, mtime, fasthash, RepoFileStatus.ADDED)
 
-    def add_dir(self, dirpath: str, status: RepoFileStatus):
+    def add_dir(self, dirpath: PurePosixPath, status: RepoFileStatus):
+        assert not dirpath.is_absolute()
         self.parent.conn.execute(
             "INSERT OR REPLACE INTO fsobject(fullpath, isdir, md5, last_status, last_update_epoch, last_related_fullpath) "
             "VALUES (?, TRUE, NULL, ?, ?, NULL)",
-            (dirpath, status.value, self.parent.config.epoch))
+            (dirpath.as_posix(), status.value, self.parent.config.epoch))
 
     def mark_removed(self, path: str):
         self.parent.conn.execute(

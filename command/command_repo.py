@@ -9,6 +9,7 @@ from typing import Tuple, List, Optional, Dict, Iterable
 import aiofiles.os
 from alive_progress import alive_bar, alive_it
 
+from command.pathing import HoardPathing
 from command.repo import ProspectiveRepo
 from contents.repo import RepoContents
 from contents.repo_props import RepoFileProps, RepoFileStatus, RepoDirProps
@@ -186,7 +187,9 @@ class RepoCommand(object):
                             size = os.path.getsize(moved_to_file)
                             mtime = os.path.getmtime(moved_to_file)
                             contents.fsobjects.mark_moved(
-                                missing_relpath, moved_to_relpath, size=size, mtime=mtime, fasthash=moved_file_hash)
+                                pathlib.PurePosixPath(missing_relpath),
+                                pathlib.PurePosixPath(moved_to_relpath),
+                                size=size, mtime=mtime, fasthash=moved_file_hash)
 
                             del files_to_add_or_update[moved_to_file]  # was fixed above
                             print_maybe(f"MOVED {missing_relpath} TO {moved_to_relpath}")
@@ -203,7 +206,7 @@ class RepoCommand(object):
 
                 for fullpath, requested_status in alive_it(
                         files_to_add_or_update.items(), title=f"Adding {len(files_to_add_or_update)} files"):
-                    relpath = pathlib.Path(fullpath).relative_to(self.repo.path).as_posix()
+                    relpath = pathlib.PurePosixPath(fullpath).relative_to(self.repo.path)
 
                     if fullpath not in file_hashes:
                         logging.warning(f"Skipping {fullpath} as it doesn't have a computed hash!")
@@ -214,13 +217,13 @@ class RepoCommand(object):
                         contents.fsobjects.add_file(
                             relpath, size=size, mtime=mtime, fasthash=file_hashes[fullpath], status=requested_status)
 
-                        print_maybe(f"{requested_status.value.upper()}_FILE {relpath}")
+                        print_maybe(f"{requested_status.value.upper()}_FILE {relpath.as_posix()}")
                     except FileNotFoundError as e:
                         logging.error("Error while adding file!")
                         logging.error(e)
 
                 for fullpath in alive_it(folders_to_add, title=f"Adding {len(folders_to_add)} folders"):
-                    relpath = pathlib.Path(fullpath).relative_to(self.repo.path).as_posix()
+                    relpath = pathlib.PurePosixPath(fullpath).relative_to(self.repo.path)
                     contents.fsobjects.add_dir(relpath, status=RepoFileStatus.ADDED)
                     print_maybe(f"ADDED_DIR {relpath}")
 
@@ -420,23 +423,23 @@ def compute_difference_between_contents_and_filesystem(
         for file_path_full, dir_path_full in walk_repo(repo_path, hoard_ignore):
             if file_path_full is not None:
                 assert dir_path_full is None
-                file_path_local = file_path_full.relative_to(repo_path).as_posix()
+                file_path_local = file_path_full.relative_to(repo_path)
                 logging.info(f"Checking {file_path_local} for existence...")
                 if contents.fsobjects.in_existing(file_path_local):  # file is already in index
                     logging.info(f"File is in contents, adding to check")  # checking size and mtime.")
                     file_path_matches.append(file_path_full.as_posix())
                 else:
-                    yield FileNotInRepo(file_path_local)
+                    yield FileNotInRepo(file_path_local.as_posix())
                 bar()
             else:
                 assert dir_path_full is not None and file_path_full is None
-                dir_path_in_local = dir_path_full.relative_to(repo_path).as_posix()
+                dir_path_in_local = dir_path_full.relative_to(repo_path)
                 if contents.fsobjects.in_existing(dir_path_in_local):
-                    props = contents.fsobjects.get_existing(dir_path_in_local)
+                    props = contents.fsobjects.get_existing(dir_path_in_local.as_posix())
                     assert isinstance(props, RepoDirProps)
-                    yield DirIsSameInRepo(dir_path_in_local, props)
+                    yield DirIsSameInRepo(dir_path_in_local.as_posix(), props)
                 else:
-                    yield DirNotInRepo(dir_path_in_local)
+                    yield DirNotInRepo(dir_path_in_local.as_posix())
                 bar()
 
     with alive_bar(len(file_path_matches), title="Checking maybe mod files") as m_bar:
