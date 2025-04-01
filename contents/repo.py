@@ -4,7 +4,7 @@ import sqlite3
 from datetime import datetime
 from pathlib import PurePosixPath
 from sqlite3 import Connection, Cursor, Row
-from typing import Generator, Tuple, Optional
+from typing import Generator, Tuple, Optional, Iterable
 
 import rtoml
 
@@ -75,7 +75,8 @@ class RepoFSObjects:
             (file_path.as_posix(), RepoFileStatus.DELETED.value, RepoFileStatus.MOVED_FROM.value)).fetchone()
         return props
 
-    def get_file_with_any_status(self, file_path: str) -> RepoFileProps | RepoDirProps | None:
+    def get_file_with_any_status(self, file_path: PurePosixPath) -> RepoFileProps | RepoDirProps | None:
+        assert not file_path.is_absolute()
         curr = self.parent.conn.cursor()
         curr.row_factory = RepoFSObjects._create_fsobjectprops
 
@@ -83,15 +84,15 @@ class RepoFSObjects:
             "SELECT fullpath, isdir, size, mtime, fasthash, md5, last_status, last_update_epoch, last_related_fullpath "
             "FROM fsobject "
             "WHERE fsobject.fullpath = ? and isdir = FALSE ",
-            (file_path,)).fetchall()
-        assert len(all_pairs) <= 1
+            (file_path.as_posix(),)).fetchall()
         if len(all_pairs) == 0:
             return None
-        else:  # len(all_pairs) == 1:
+        else:
+            assert len(all_pairs) == 1
             _, props = all_pairs[0]
             return props
 
-    def all_status(self) -> Generator[Tuple[str, RepoFileProps | RepoDirProps], None, None]:
+    def all_status(self) -> Iterable[Tuple[str, RepoFileProps | RepoDirProps]]:
         curr = self.parent.conn.cursor()
         curr.row_factory = RepoFSObjects._create_fsobjectprops
 
@@ -99,7 +100,7 @@ class RepoFSObjects:
             "SELECT fullpath, isdir, size, mtime, fasthash, md5, last_status, last_update_epoch, last_related_fullpath "
             "FROM fsobject ORDER BY fullpath")
 
-    def existing(self) -> Generator[Tuple[str, RepoFileProps | RepoDirProps], None, None]:
+    def existing(self) -> Iterable[Tuple[str, RepoFileProps | RepoDirProps]]:
         curr = self.parent.conn.cursor()
         curr.row_factory = RepoFSObjects._create_fsobjectprops
 
@@ -140,11 +141,12 @@ class RepoFSObjects:
             "VALUES (?, TRUE, NULL, ?, ?, NULL)",
             (dirpath.as_posix(), status.value, self.parent.config.epoch))
 
-    def mark_removed(self, path: str):
+    def mark_removed(self, path: PurePosixPath):
+        assert not path.is_absolute()
         self.parent.conn.execute(
             "UPDATE fsobject SET last_status = ?, last_update_epoch = ?, last_related_fullpath = NULL "
             "WHERE fsobject.fullpath = ?",
-            (RepoFileStatus.DELETED.value, self.parent.config.epoch, path))
+            (RepoFileStatus.DELETED.value, self.parent.config.epoch, path.as_posix()))
 
 
 class RepoContentsConfig:

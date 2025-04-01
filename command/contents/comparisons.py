@@ -70,7 +70,7 @@ def compare_local_to_hoard(local: RepoContents, hoard: HoardContents, pathing: H
             assert curr_file_path_in_local is not None  # hoard file is not in the mounted location
 
             local_props: RepoFileProps | None = local.fsobjects.get_file_with_any_status(
-                curr_file_path_in_local.as_pure_path.as_posix())
+                curr_file_path_in_local.as_pure_path)
             if local_props is None:
                 yield FileOnlyInHoardLocalUnknown(curr_file_path_in_local.as_pure_path.as_posix(), hoard_file, props)
             elif local_props.last_status == RepoFileStatus.DELETED:

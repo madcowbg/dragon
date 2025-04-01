@@ -4,6 +4,7 @@ import os
 import pathlib
 import re
 from io import StringIO
+from pathlib import PurePosixPath
 from typing import Tuple, List, Optional, Dict, Iterable
 
 import aiofiles.os
@@ -130,7 +131,7 @@ class RepoCommand(object):
                     elif isinstance(diff, DirNotInFilesystem):
                         logging.info(f"Removing dir {diff.dirpath}")
                         print_maybe("REMOVED_DIR {diff.dirpath}")
-                        contents.fsobjects.mark_removed(diff.dirpath)
+                        contents.fsobjects.mark_removed(PurePosixPath(diff.dirpath))
                     elif isinstance(diff, RepoFileWeakSame):
                         assert skip_integrity_checks
                         logging.info("Skipping file as size and mtime is the same!!!")
@@ -174,7 +175,7 @@ class RepoCommand(object):
                     if len(candidates_file_to_hash) == 0:
                         logging.info(f"File {missing_relpath} has no suitable copy, marking as deleted.")
                         print_maybe(f"REMOVED_FILE {missing_relpath}")
-                        contents.fsobjects.mark_removed(missing_relpath)
+                        contents.fsobjects.mark_removed(PurePosixPath(missing_relpath))
                     elif len(candidates_file_to_hash) == 1:
                         moved_to_file, moved_file_hash = candidates_file_to_hash[0]
                         assert missing_file_props.fasthash == moved_file_hash
@@ -196,12 +197,12 @@ class RepoCommand(object):
                         except FileNotFoundError as e:
                             logging.error(
                                 f"File not found: {moved_to_file}, fallbacks to delete/new")
-                            contents.fsobjects.mark_removed(missing_relpath)
+                            contents.fsobjects.mark_removed(PurePosixPath(missing_relpath))
                             print_maybe(f"REMOVED_FILE_FALLBACK_ON_ERROR {missing_relpath}")
                     else:
                         logging.error(
                             f"Multiple new file candidates for {missing_relpath}, fallbacks to delete/new")
-                        contents.fsobjects.mark_removed(missing_relpath)
+                        contents.fsobjects.mark_removed(PurePosixPath(missing_relpath))
                         print_maybe(f"REMOVED_FILE_FALLBACK_TOO_MANY {missing_relpath}")
 
                 for fullpath, requested_status in alive_it(
