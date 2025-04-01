@@ -1,6 +1,7 @@
 import logging
 import pathlib
 from io import StringIO
+from pathlib import PurePosixPath
 from typing import Dict, Tuple, Callable
 
 from alive_progress import alive_it
@@ -89,7 +90,7 @@ class HoardCommandBackups:
 
                     print(f"Considering backup set at {backup_set.mounted_at} with {len(backup_set.backups)} media")
                     hoard_file: pathlib.PurePosixPath
-                    for hoard_file, hoard_props in alive_it(hoard.fsobjects.in_folder(backup_set.mounted_at)):
+                    for hoard_file, hoard_props in alive_it(hoard.fsobjects.in_folder(PurePosixPath(backup_set.mounted_at))):
                         assert hoard_file.is_relative_to(backup_set.mounted_at)
 
                         if isinstance(hoard_props, HoardDirProps):
@@ -126,7 +127,7 @@ class HoardCommandBackups:
 
                     print(f"Considering backup set at {backup_set.mounted_at} with {len(backup_set.backups)} media")
                     hoard_file: pathlib.PurePosixPath
-                    for hoard_file, hoard_props in alive_it(hoard.fsobjects.in_folder(backup_set.mounted_at)):
+                    for hoard_file, hoard_props in alive_it(hoard.fsobjects.in_folder(PurePosixPath(backup_set.mounted_at))):
                         assert pathlib.Path(hoard_file).is_relative_to(backup_set.mounted_at)
 
                         if isinstance(hoard_props, HoardDirProps):

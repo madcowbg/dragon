@@ -11,7 +11,7 @@ class HoardPathing:
         self._paths = paths
 
     class HoardPath:
-        def __init__(self, path: str, pathing: "HoardPathing"):
+        def __init__(self, path: str | PurePosixPath, pathing: "HoardPathing"):
             self._path = pathlib.PurePosixPath(path)
             assert self._path.is_absolute()
 
@@ -56,7 +56,7 @@ class HoardPathing:
     def mounted_at(self, repo_uuid: str) -> str:
         return self._config.remotes[repo_uuid].mounted_at
 
-    def in_hoard(self, path: str) -> HoardPath:
+    def in_hoard(self, path: str | PurePosixPath) -> HoardPath:
         return self.HoardPath(path, self)
 
     def in_local(self, path: str, repo_uuid: str) -> LocalPath:

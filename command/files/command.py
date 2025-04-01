@@ -4,6 +4,7 @@ import shutil
 import sys
 import traceback
 from io import StringIO
+from pathlib import PurePosixPath
 from typing import Optional, List, Dict
 
 import aioshutil
@@ -216,7 +217,7 @@ def _cleanup_files_in_repo(
 
             if goal_status == HoardFileStatus.CLEANUP:
                 to_be_got = hoard_props.by_status(HoardFileStatus.GET)
-                to_be_moved_to = hoard.fsobjects.where_to_move(repo_uuid, hoard_file)
+                to_be_moved_to = hoard.fsobjects.where_to_move(repo_uuid, PurePosixPath(hoard_file))
 
                 local_path = pathing.in_hoard(hoard_file).at_local(repo_uuid)
                 local_file_to_delete = local_path.as_pure_path.as_posix()
@@ -322,7 +323,7 @@ async def _restore_from_copy(
     to_fullpath = local_filepath.on_device_path()
     print(f"Restoring to {to_fullpath}")
     for candidate_file in candidates_to_copy:
-        other_props = hoard.fsobjects[candidate_file]
+        other_props = hoard.fsobjects[PurePosixPath(candidate_file)]
         if other_props.get_status(repo_uuid) != HoardFileStatus.AVAILABLE:  # file is not available here
             logging.error("trying to restore from a file that is not available!")
             continue

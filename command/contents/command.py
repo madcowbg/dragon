@@ -272,7 +272,7 @@ class HoardCommandContents:
         with StringIO() as out:
             print(f"Iterating files and folders to see what to drop...")
             hoard_file: PurePosixPath
-            for hoard_file, hoard_props in alive_it(hoard.fsobjects.in_folder(mounted_at)):
+            for hoard_file, hoard_props in alive_it(hoard.fsobjects.in_folder(PurePosixPath(mounted_at))):
                 if not isinstance(hoard_props, HoardFileProps):
                     continue
 
@@ -460,7 +460,7 @@ class HoardCommandContents:
                         if not isinstance(local_props, RepoFileProps):
                             continue
 
-                        hoard_file = pathing.in_local(local_file.as_posix(), repo_uuid).at_hoard().as_pure_path.as_posix()
+                        hoard_file = pathing.in_local(local_file.as_posix(), repo_uuid).at_hoard().as_pure_path
                         if hoard_file not in hoard.fsobjects:
                             logging.info(f"Local file {local_file} will be handled to hoard.")
                             _handle_local_only(
@@ -476,7 +476,7 @@ class HoardCommandContents:
                                     on_hoard_only_local_deleted=PullBehavior.FAIL,
                                 ),
                                 FileOnlyInLocal(
-                                    local_file, hoard_file, local_props,
+                                    local_file, hoard_file.as_posix(), local_props,
                                     local_props.last_status == RepoFileStatus.ADDED),
                                 hoard,
                                 StringIO())  # fixme make it elegant
@@ -488,7 +488,7 @@ class HoardCommandContents:
                                 logging.info(
                                     f"Local file {local_file} is not marked available, will reset its contents in repo")
 
-                                reset_local_as_current(hoard, repo_uuid, hoard_file, hoard_props, local_props)
+                                reset_local_as_current(hoard, repo_uuid, hoard_file.as_posix(), hoard_props, local_props)
                                 out.write(f"RESET {hoard_file}\n")
 
                 out.write("DONE")

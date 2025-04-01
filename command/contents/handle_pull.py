@@ -253,13 +253,13 @@ def _handle_hoard_only_moved(
         goal_status = diff.hoard_props.get_status(preferences.local_uuid)
         if goal_status == HoardFileStatus.AVAILABLE:
             hoard_new_path = pathing.in_local(diff.local_props.last_related_fullpath, preferences.local_uuid) \
-                .at_hoard().as_pure_path.as_posix()
+                .at_hoard().as_pure_path
             hoard_new_path_props = hoard.fsobjects[hoard_new_path]
             assert isinstance(hoard_new_path_props, HoardFileProps)
             assert hoard_new_path_props.fasthash == diff.hoard_props.fasthash and \
                    hoard_new_path_props.fasthash == diff.local_props.fasthash
 
-            _move_locally(preferences, config, diff, hoard_new_path, hoard_new_path_props, out)
+            _move_locally(preferences, config, diff, hoard_new_path.as_posix(), hoard_new_path_props, out)
         elif goal_status == HoardFileStatus.UNKNOWN:
             logging.info(f"File {diff.hoard_file} is unknown, can't move!")
         else:
