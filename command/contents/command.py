@@ -475,7 +475,7 @@ class HoardCommandContents:
                                     on_hoard_only_local_deleted=PullBehavior.FAIL,
                                 ),
                                 FileOnlyInLocal(
-                                    local_file.as_posix(), hoard_file, local_props,
+                                    local_file, hoard_file, local_props,
                                     local_props.last_status == RepoFileStatus.ADDED),
                                 hoard,
                                 StringIO())  # fixme make it elegant
