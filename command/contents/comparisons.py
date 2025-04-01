@@ -1,5 +1,6 @@
 import logging
 import pathlib
+from pathlib import PurePosixPath
 from typing import Generator
 
 from alive_progress import alive_bar, alive_it
@@ -62,6 +63,7 @@ def compare_local_to_hoard(local: RepoContents, hoard: HoardContents, pathing: H
             else:
                 raise ValueError(f"unknown props type: {type(props)}")
 
+    hoard_file: PurePosixPath
     for hoard_file, props in alive_it(
             list(hoard.fsobjects.in_folder(pathing.mounted_at(local.config.uuid))),
             title="Hoard vs. Current files"):
@@ -72,25 +74,25 @@ def compare_local_to_hoard(local: RepoContents, hoard: HoardContents, pathing: H
             local_props: RepoFileProps | None = local.fsobjects.get_file_with_any_status(
                 curr_file_path_in_local.as_pure_path)
             if local_props is None:
-                yield FileOnlyInHoardLocalUnknown(curr_file_path_in_local.as_pure_path, hoard_file, props)
+                yield FileOnlyInHoardLocalUnknown(curr_file_path_in_local.as_pure_path, hoard_file.as_posix(), props)
             elif local_props.last_status == RepoFileStatus.DELETED:
                 yield FileOnlyInHoardLocalDeleted(
-                    curr_file_path_in_local.as_pure_path, hoard_file, props, local_props)
+                    curr_file_path_in_local.as_pure_path, hoard_file.as_posix(), props, local_props)
             elif local_props.last_status == RepoFileStatus.MOVED_FROM:
                 yield FileOnlyInHoardLocalMoved(
-                    curr_file_path_in_local.as_pure_path, hoard_file, props, local_props)
+                    curr_file_path_in_local.as_pure_path, hoard_file.as_posix(), props, local_props)
             elif local_props.last_status in (RepoFileStatus.ADDED, RepoFileStatus.PRESENT, RepoFileStatus.MODIFIED):
                 pass  # file is there, which is handled above
             else:
                 raise ValueError(f"Unrecognized state: {local_props.last_status}")
         elif isinstance(props, HoardDirProps):
             hoard_dir = hoard_file
-            curr_dir_path_in_local = pathing.in_hoard(hoard_dir).at_local(local.config.uuid)
+            curr_dir_path_in_local = pathing.in_hoard(hoard_dir.as_posix()).at_local(local.config.uuid)
             assert curr_dir_path_in_local is not None  # hoard dir is not in the mounted location
 
             if curr_dir_path_in_local.as_pure_path.as_posix() not in hoard.fsobjects:
                 logging.info(f"missing dir found in hoard: {hoard_dir}")
-                yield DirMissingInLocal(curr_dir_path_in_local.as_pure_path, hoard_dir)
+                yield DirMissingInLocal(curr_dir_path_in_local.as_pure_path, hoard_dir.as_posix())
             else:
                 pass  # existing dirs are handled above
         else:

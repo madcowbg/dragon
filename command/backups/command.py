@@ -88,13 +88,14 @@ class HoardCommandBackups:
                     out.write(f"set: {backup_set.mounted_at} with {len(backup_set.backups)} media\n")
 
                     print(f"Considering backup set at {backup_set.mounted_at} with {len(backup_set.backups)} media")
+                    hoard_file: pathlib.PurePosixPath
                     for hoard_file, hoard_props in alive_it(hoard.fsobjects.in_folder(backup_set.mounted_at)):
-                        assert pathlib.Path(hoard_file).is_relative_to(backup_set.mounted_at)
+                        assert hoard_file.is_relative_to(backup_set.mounted_at)
 
                         if isinstance(hoard_props, HoardDirProps):
                             continue
 
-                        repos_to_clean_from = backup_set.repos_to_clean(hoard_file, hoard_props, hoard_props.size)
+                        repos_to_clean_from = backup_set.repos_to_clean(hoard_file.as_posix(), hoard_props, hoard_props.size)
 
                         logging.info(f"Cleaning up {hoard_file} from {[r.uuid for r in repos_to_clean_from]}")
                         hoard_props.set_status([repo.uuid for repo in repos_to_clean_from], HoardFileStatus.CLEANUP)
@@ -124,6 +125,7 @@ class HoardCommandBackups:
                     out.write(f"set: {backup_set.mounted_at} with {len(backup_set.backups)} media\n")
 
                     print(f"Considering backup set at {backup_set.mounted_at} with {len(backup_set.backups)} media")
+                    hoard_file: pathlib.PurePosixPath
                     for hoard_file, hoard_props in alive_it(hoard.fsobjects.in_folder(backup_set.mounted_at)):
                         assert pathlib.Path(hoard_file).is_relative_to(backup_set.mounted_at)
 
@@ -131,7 +133,7 @@ class HoardCommandBackups:
                             continue
 
                         new_repos_to_backup_to = backup_set.repos_to_backup_to(
-                            hoard_file, hoard_props, hoard_props.size)
+                            hoard_file.as_posix(), hoard_props, hoard_props.size)
 
                         if len(new_repos_to_backup_to) == 0:
                             logging.info(f"No new backups for {hoard_file}.")

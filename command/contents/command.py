@@ -3,6 +3,7 @@ import os
 import pathlib
 import sys
 from io import StringIO
+from pathlib import PurePosixPath
 from typing import List, Dict, Any, Optional, Callable
 
 import humanize
@@ -270,6 +271,7 @@ class HoardCommandContents:
         cleaned_up, wont_get, skipped = 0, 0, 0
         with StringIO() as out:
             print(f"Iterating files and folders to see what to drop...")
+            hoard_file: PurePosixPath
             for hoard_file, hoard_props in alive_it(hoard.fsobjects.in_folder(mounted_at)):
                 if not isinstance(hoard_props, HoardFileProps):
                     continue
@@ -287,14 +289,14 @@ class HoardCommandContents:
                     logging.info(f"File {hoard_file} is available, mapping for removal from {repo_uuid}.")
 
                     hoard_props.mark_for_cleanup([repo_uuid])
-                    out.write(f"DROP {hoard_file}\n")
+                    out.write(f"DROP {hoard_file.as_posix()}\n")
 
                     cleaned_up += 1
                 elif goal_status == HoardFileStatus.GET or goal_status == HoardFileStatus.COPY:
                     logging.info(f"File {hoard_file} is already not in repo, removing status.")
 
                     hoard_props.remove_status(repo_uuid)
-                    out.write(f"WONT_GET {hoard_file}\n")
+                    out.write(f"WONT_GET {hoard_file.as_posix()}\n")
 
                     wont_get += 1
                 elif goal_status == HoardFileStatus.CLEANUP or goal_status == HoardFileStatus.UNKNOWN:

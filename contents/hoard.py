@@ -197,14 +197,6 @@ class HoardFSObjects:
         curr.row_factory = FIRST_VALUE
         return curr.execute("SELECT count(1) FROM fsobject").fetchone()
 
-    # fixme delete deprecated
-    def _read_as_prop_tuple(self, cursor, row) -> Tuple[str, HoardFileProps]:
-        fullpath, fsobject_id, isdir, size, fasthash = row
-        if isdir:
-            return fullpath, HoardDirProps({})
-        else:
-            return fullpath, HoardFileProps(self.parent, fsobject_id, size, fasthash)
-
     def _read_as_path_to_props(self, cursor, row) -> Tuple[PurePosixPath, HoardFileProps | HoardDirProps]:
         fullpath, fsobject_id, isdir, size, fasthash = row
         if isdir:
@@ -256,9 +248,9 @@ class HoardFSObjects:
             (repo_uuid, HoardFileStatus.GET.value, HoardFileStatus.COPY.value, HoardFileStatus.MOVE.value,
              HoardFileStatus.CLEANUP.value))
 
-    def available_in_repo(self, remote_uuid: str) -> Iterable[Tuple[str, HoardFileProps | HoardDirProps]]:
+    def available_in_repo(self, remote_uuid: str) -> Iterable[Tuple[PurePosixPath, HoardFileProps | HoardDirProps]]:
         curr = self.parent.conn.cursor()
-        curr.row_factory = self._read_as_prop_tuple
+        curr.row_factory = self._read_as_path_to_props
         yield from curr.execute(
             "SELECT fullpath, fsobject_id, isdir, size, fasthash FROM fsobject "
             "WHERE EXISTS ("
@@ -266,13 +258,13 @@ class HoardFSObjects:
             "  WHERE fspresence.fsobject_id = fsobject.fsobject_id AND uuid = ? AND status = ?)",
             (remote_uuid, HoardFileStatus.AVAILABLE.value))
 
-    def in_folder(self, folder: str) -> Iterable[Tuple[str, HoardFileProps | HoardDirProps]]:
+    def in_folder(self, folder: str) -> Iterable[Tuple[PurePosixPath, HoardFileProps | HoardDirProps]]:
         assert custom_isabs(folder)  # from 3.13 behavior change...
         folder_with_trailing = folder if folder.endswith("/") else folder + "/"
         assert folder_with_trailing.endswith('/')
 
         curr = self.parent.conn.cursor()
-        curr.row_factory = self._read_as_prop_tuple
+        curr.row_factory = self._read_as_path_to_props
 
         yield from curr.execute(
             "SELECT fullpath, fsobject_id, isdir, size, fasthash FROM fsobject "

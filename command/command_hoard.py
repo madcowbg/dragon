@@ -267,6 +267,7 @@ class HoardCommand(object):
 
                 with StringIO() as out:
                     logging.info(f"Iterating over files marked available in {remote}...")
+                    hoard_file: PurePosixPath
                     for hoard_file, hoard_props in alive_it(
                             hoard.fsobjects.available_in_repo(remote_uuid), title="Recreating index"):
                         local_path_obj = pathing.in_hoard(hoard_file).at_local(remote_uuid)
