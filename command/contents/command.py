@@ -252,11 +252,11 @@ class HoardCommandContents:
                             continue
                         # file or dir is to be copied
                         relpath = hoard_path.relative_to(from_path)
-                        to_fullpath = pathlib.Path(to_path).joinpath(relpath).as_posix()
+                        to_fullpath = PurePosixPath(to_path).joinpath(relpath)
                         logging.info(f"Copying {hoard_path} to {to_fullpath}")
 
-                        hoard.fsobjects.copy(hoard_path.as_posix(), to_fullpath)
-                        out.write(f"c+ {to_fullpath}\n")
+                        hoard.fsobjects.copy(hoard_path, to_fullpath)
+                        out.write(f"c+ {to_fullpath.as_posix()}\n")
                 out.write("DONE")
                 return out.getvalue()
 
@@ -272,7 +272,7 @@ class HoardCommandContents:
         with StringIO() as out:
             print(f"Iterating files and folders to see what to drop...")
             hoard_file: PurePosixPath
-            for hoard_file, hoard_props in alive_it(hoard.fsobjects.in_folder(PurePosixPath(mounted_at))):
+            for hoard_file, hoard_props in alive_it(hoard.fsobjects.in_folder(mounted_at)):
                 if not isinstance(hoard_props, HoardFileProps):
                     continue
 
@@ -488,7 +488,7 @@ class HoardCommandContents:
                                 logging.info(
                                     f"Local file {local_file} is not marked available, will reset its contents in repo")
 
-                                reset_local_as_current(hoard, repo_uuid, hoard_file.as_posix(), hoard_props, local_props)
+                                reset_local_as_current(hoard, repo_uuid, hoard_file, hoard_props, local_props)
                                 out.write(f"RESET {hoard_file}\n")
 
                 out.write("DONE")
@@ -543,5 +543,5 @@ def clean_dangling_files(hoard: HoardContents, out: StringIO):  # fixme do this 
     for dangling_path, props in hoard.fsobjects.dangling_files:
         assert len(props.presence) == 0
         logging.warning(f"Removing dangling path {dangling_path} from hoard!")
-        hoard.fsobjects.delete(dangling_path.as_posix())
+        hoard.fsobjects.delete(dangling_path)
         out.write(f"remove dangling {dangling_path}\n")

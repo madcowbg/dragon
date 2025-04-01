@@ -19,7 +19,7 @@ HOARD_CONTENTS_TOML = "hoard.contents.toml"
 
 
 class HoardContentsConfig:
-    def __init__(self, file: str):
+    def __init__(self, file: pathlib.Path):
         self.file = file
 
         with open(file, "r") as f:
@@ -327,18 +327,19 @@ class HoardFSObjects:
             "SELECT count(1) > 0 FROM fsobject WHERE fsobject.fullpath = ?",
             (file_path.as_posix(),)).fetchone()
 
-    def add_or_replace_file(self, filepath: str, props: RepoFileProps) -> HoardFileProps:
+    def add_or_replace_file(self, filepath: PurePosixPath, props: RepoFileProps) -> HoardFileProps:
+        assert filepath.is_absolute()
         curr = self.parent.conn.cursor()
         curr.row_factory = FIRST_VALUE
 
         # add fsobject entry
         curr.execute(
             "INSERT OR REPLACE INTO fsobject(fullpath, isdir, size, fasthash) VALUES (?, FALSE, ?, ?)",
-            (filepath, props.size, props.fasthash))
+            (filepath.as_posix(), props.size, props.fasthash))
 
         # cleanup presence status
         fsobject_id: int = curr.execute(
-            "SELECT fsobject_id FROM fsobject WHERE fullpath = ?", (filepath,)).fetchone()
+            "SELECT fsobject_id FROM fsobject WHERE fullpath = ?", (filepath.as_posix(),)).fetchone()
         curr.execute("DELETE FROM fspresence WHERE fsobject_id = ?", (fsobject_id,))
         return HoardFileProps(self.parent, fsobject_id, props.size, props.fasthash)
 
@@ -347,27 +348,32 @@ class HoardFSObjects:
         curr.row_factory = FIRST_VALUE
         return curr
 
-    def add_dir(self, curr_dir: str):
+    def add_dir(self, curr_dir: PurePosixPath):
+        assert curr_dir.is_absolute()
         curr = self._first_value_curr()
 
         # add fsobject entry
         curr.execute(
             "INSERT OR REPLACE INTO fsobject(fullpath, isdir) VALUES (?, TRUE)",
-            (curr_dir,))
+            (curr_dir.as_posix(),))
         fsobject_id: int = curr.execute(
-            "SELECT fsobject_id FROM fsobject WHERE fullpath = ?", (curr_dir,)).fetchone()
+            "SELECT fsobject_id FROM fsobject WHERE fullpath = ?", (curr_dir.as_posix(),)).fetchone()
         curr.execute("DELETE FROM fspresence WHERE fsobject_id = ?", (fsobject_id,))
 
-    def delete(self, curr_path: str):
+    def delete(self, curr_path: PurePosixPath):
+        assert curr_path.is_absolute()
+
         curr = self._first_value_curr()
         fsobject_id: Optional[int] = curr.execute(
-            "SELECT fsobject_id FROM fsobject WHERE fullpath = ?", (curr_path,)).fetchone()
+            "SELECT fsobject_id FROM fsobject WHERE fullpath = ?", (curr_path.as_posix(),)).fetchone()
         if fsobject_id is None:
             return
         curr.execute("DELETE FROM fsobject WHERE fsobject_id = ?", (fsobject_id,))
         curr.execute("DELETE FROM fspresence WHERE fsobject_id = ?", (fsobject_id,))
 
-    def move_via_mounts(self, orig_path: str, new_path: str, props: HoardDirProps | HoardFileProps):
+    def move_via_mounts(self, orig_path: PurePosixPath, new_path: PurePosixPath, props: HoardDirProps | HoardFileProps):
+        assert orig_path.is_absolute()
+        assert new_path.is_absolute()
         assert orig_path != new_path
         assert isinstance(props, HoardFileProps) or isinstance(props, HoardDirProps)
 
@@ -381,12 +387,12 @@ class HoardFSObjects:
             # add fsobject entry
             curr.execute(
                 "INSERT OR REPLACE INTO fsobject(fullpath, isdir, size, fasthash) VALUES (?, FALSE, ?, ?)",
-                (new_path, props.size, props.fasthash))
+                (new_path.as_posix(), props.size, props.fasthash))
 
             # add old presence
             new_path_id: int = curr.execute(
                 "SELECT fsobject_id FROM fsobject WHERE fullpath = ?",
-                (new_path,)).fetchone()
+                (new_path.as_posix(),)).fetchone()
             curr.executemany(
                 "INSERT INTO fspresence(fsobject_id, uuid, status) VALUES (?, ?, ?)",
                 [(new_path_id, uuid, status.value) for uuid, status in props.presence.items()])
@@ -394,11 +400,13 @@ class HoardFSObjects:
             assert isinstance(props, HoardDirProps)
             curr.execute(
                 "INSERT OR REPLACE INTO fsobject(fullpath, isdir) VALUES (?, TRUE)",
-                (new_path,))
+                (new_path.as_posix(),))
 
         self.delete(orig_path)
 
-    def copy(self, from_fullpath: str, to_fullpath: str):
+    def copy(self, from_fullpath: PurePosixPath, to_fullpath: PurePosixPath):
+        assert from_fullpath.is_absolute()
+        assert to_fullpath.is_absolute()
         assert from_fullpath != to_fullpath
 
         self.delete(to_fullpath)
@@ -411,15 +419,15 @@ class HoardFSObjects:
             # add fsobject entry
             curr.execute(
                 "INSERT OR REPLACE INTO fsobject(fullpath, isdir, size, fasthash) VALUES (?, FALSE, ?, ?)",
-                (to_fullpath, props.size, props.fasthash))
+                (to_fullpath.as_posix(), props.size, props.fasthash))
 
             # add presence tp request
             new_path_id: int = curr.execute(
                 "SELECT fsobject_id FROM fsobject WHERE fullpath = ?",
-                (to_fullpath,)).fetchone()
+                (to_fullpath.as_posix(),)).fetchone()
 
-            previously_added_repos = props.repos_having_status(HoardFileStatus.COPY, HoardFileStatus.GET,
-                                                               HoardFileStatus.AVAILABLE)
+            previously_added_repos = props.repos_having_status(
+                HoardFileStatus.COPY, HoardFileStatus.GET, HoardFileStatus.AVAILABLE)
             curr.executemany(
                 "INSERT INTO fspresence(fsobject_id, uuid, status) VALUES (?, ?, ?)",
                 [(new_path_id, uuid, HoardFileStatus.COPY.value) for uuid in previously_added_repos])
@@ -441,13 +449,23 @@ class HoardFSObjects:
             .fetchone()[0]
         return used_size if used_size is not None else 0
 
-    def stats_in_folder(self, folder_path: str) -> Tuple[int, int]:
-        folder_path = "" if folder_path == "/" else folder_path
+    def stats_in_folder(self, folder_path: PurePosixPath) -> Tuple[int, int]:
+        assert folder_path.is_absolute()
 
         return self.parent.conn.execute(
             "SELECT COUNT(1), IFNULL(SUM(fsobject.size), 0) FROM fsobject "
-            "WHERE isdir = FALSE AND ? < fullpath AND fullpath < ?",
-            (folder_path + "/", folder_path + "0")).fetchone()  # fast search using the index
+            "WHERE isdir = FALSE AND ? < fullpath AND fullpath < ?",  # fast search using the index
+            (fast_between_filter_left(folder_path), fast_between_filter_right(folder_path))).fetchone()
+
+
+def fast_between_filter_left(folder_path: PurePosixPath):
+    folder_path = "" if folder_path.as_posix() == "/" else folder_path.as_posix()
+    return folder_path + "/"
+
+
+def fast_between_filter_right(folder_path: PurePosixPath):
+    folder_path = "" if folder_path.as_posix() == "/" else folder_path.as_posix()
+    return folder_path + "0"
 
 
 STATUSES_THAT_USE_SIZE = [
@@ -508,7 +526,7 @@ class HoardContents:
     fsobjects: HoardFSObjects
 
     def __init__(self, folder: str, is_readonly: bool):
-        self.folder = folder
+        self.folder = pathlib.Path(folder)
         self.is_readonly = is_readonly
 
         self.config = None
@@ -520,7 +538,7 @@ class HoardContents:
             f"file:{os.path.join(self.folder, HOARD_CONTENTS_FILENAME)}{'?mode=ro' if self.is_readonly else ''}",
             uri=True)
 
-        self.config = HoardContentsConfig(os.path.join(self.folder, HOARD_CONTENTS_TOML))
+        self.config = HoardContentsConfig(self.folder.joinpath(HOARD_CONTENTS_TOML))
         self.fsobjects = HoardFSObjects(self)
 
         return self

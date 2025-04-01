@@ -225,10 +225,10 @@ class HoardCommand(object):
                     if current_path.is_relative_to(from_path):
                         rel_path = current_path.relative_to(from_path)
                         logging.info(f"Relative file path to move: {rel_path}")
-                        new_path = pathlib.Path(to_path).joinpath(rel_path).as_posix()
+                        new_path = pathlib.PurePosixPath(to_path).joinpath(rel_path)
 
-                        out.write(f"{current_path}=>{new_path}\n")
-                        hoard.fsobjects.move_via_mounts(current_path.as_posix(), new_path, props)
+                        out.write(f"{current_path.as_posix()}=>{new_path.as_posix()}\n")
+                        hoard.fsobjects.move_via_mounts(current_path, new_path, props)
 
                 logging.info(f"Moving {', '.join(r.name for r in repos_to_move)}.")
                 out.write(f"Moving {len(repos_to_move)} repos:\n")

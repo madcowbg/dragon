@@ -1,6 +1,7 @@
 import enum
 import logging
 from io import StringIO
+from pathlib import PurePosixPath
 
 from command.content_prefs import ContentPrefs
 from command.contents.comparisons import compare_local_to_hoard
@@ -89,7 +90,7 @@ def _handle_local_only(
         preferences: PullPreferences, diff: FileOnlyInLocal, hoard: HoardContents,
         out: StringIO):
     if preferences.on_file_added_or_present == PullBehavior.ADD_TO_OTHERS_AND_CLEANUP:
-        props = hoard.fsobjects.add_or_replace_file(diff.hoard_file.as_posix(), diff.local_props)
+        props = hoard.fsobjects.add_or_replace_file(diff.hoard_file, diff.local_props)
 
         # add status for new repos
         props.set_status(
@@ -102,7 +103,7 @@ def _handle_local_only(
         logging.info(f"Ignoring local-only file {diff.hoard_file}")
         out.write(f"?{diff.hoard_file.as_posix()}\n")
     elif preferences.on_file_added_or_present == PullBehavior.ADD:
-        hoard_props = hoard.fsobjects.add_or_replace_file(diff.hoard_file.as_posix(), diff.local_props)
+        hoard_props = hoard.fsobjects.add_or_replace_file(diff.hoard_file, diff.local_props)
 
         # add status for new repos
         hoard_props.set_status(
@@ -134,11 +135,11 @@ def _handle_file_contents_differ(
     goal_status = diff.hoard_props.get_status(preferences.local_uuid)
     if behavior == PullBehavior.ADD_TO_OTHERS_AND_CLEANUP:
         logging.info(f"incoming file has different contents.")
-        hoard_props = hoard.fsobjects.add_or_replace_file(diff.hoard_file.as_posix(), diff.local_props)
+        hoard_props = hoard.fsobjects.add_or_replace_file(diff.hoard_file, diff.local_props)
 
         # add status for new repos
         hoard_props.set_status(
-            list(preferences.content_prefs.repos_to_add(diff.hoard_file.as_posix(), diff.local_props)),
+            list(preferences.content_prefs.repos_to_add(diff.hoard_file, diff.local_props)),
             HoardFileStatus.GET)
 
         _incoming__safe_mark_for_cleanup(preferences, diff, hoard_props, out)
@@ -160,7 +161,7 @@ def _handle_file_contents_differ(
         else:
             raise ValueError(f"Invalid goal status:{goal_status}")
     elif behavior == PullBehavior.ADD:
-        reset_local_as_current(hoard, preferences.local_uuid, diff.hoard_file.as_posix(), diff.hoard_props, diff.local_props)
+        reset_local_as_current(hoard, preferences.local_uuid, diff.hoard_file, diff.hoard_props, diff.local_props)
 
         if goal_status == HoardFileStatus.AVAILABLE:
             # file was changed in-place, but is different now
@@ -321,7 +322,7 @@ def pull_repo_contents_to_hoard(
     for diff in diffs_by_type.pop(DirMissingInHoard, []):
         assert isinstance(diff, DirMissingInHoard)
         logging.info(f"new dir found: {diff.local_dir}")
-        hoard_contents.fsobjects.add_dir(diff.hoard_dir.as_posix())
+        hoard_contents.fsobjects.add_dir(diff.hoard_dir)
 
     dir_missing_in_local = diffs_by_type.pop(DirMissingInLocal, [])
     logging.info(f"# dir missing in local = {len(dir_missing_in_local)}")
@@ -359,7 +360,7 @@ def _incoming__safe_mark_for_cleanup(
 
 
 def reset_local_as_current(
-        hoard: HoardContents, remote_uuid: str, hoard_file: str, hoard_props: HoardFileProps,
+        hoard: HoardContents, remote_uuid: str, hoard_file: PurePosixPath, hoard_props: HoardFileProps,
         local_props: RepoFileProps):
     past_available = hoard_props.by_statuses(HoardFileStatus.AVAILABLE, HoardFileStatus.GET, HoardFileStatus.COPY)
 
