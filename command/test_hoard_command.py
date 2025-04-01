@@ -88,7 +88,7 @@ class TestHoardCommand(unittest.TestCase):
                 dirs_exp=["/wat"])
 
         res = hoard_cmd.contents.pending("repo-in-local")
-        self.assertEqual(f"Status of repo-in-local:\nDELETED_DIR /wat\nDONE", res.strip())
+        self.assertEqual(f"Status of repo-in-local:\nDONE", res.strip())
 
     def _assert_hoard_contents(
             self, hoard_contents: HoardContents, files_exp: List[Tuple[str, int, int, str]], dirs_exp: List[str]):
@@ -166,7 +166,7 @@ class TestHoardCommand(unittest.TestCase):
             f"DONE", res.strip())
 
         res = hoard_cmd.contents.pending("repo-in-local")
-        self.assertEqual(f"Status of repo-in-local:\nDELETED_DIR /wat\nDONE", res.strip())
+        self.assertEqual(f"Status of repo-in-local:\nDONE", res.strip())
 
         res = hoard_cmd.remotes(hide_paths=True)
         self.assertEqual(
@@ -201,7 +201,7 @@ class TestHoardCommand(unittest.TestCase):
         hoard_cmd.contents.pull("repo-in-local")
 
         self.assertEqual(
-            f"Status of repo-in-local:\nDELETED_DIR /wat\nDONE",
+            f"Status of repo-in-local:\nDONE",
             hoard_cmd.contents.pending("repo-in-local").strip())
 
         os.mkdir(join(self.tmpdir.name, "repo", "newdir"))
@@ -246,7 +246,7 @@ class TestHoardCommand(unittest.TestCase):
 
         # as is not refreshed, no change in status
         self.assertEqual(
-            f"Status of repo-in-local:\nDELETED_DIR /wat\nDONE",
+            f"Status of repo-in-local:\nDONE",
             hoard_cmd.contents.pending("repo-in-local").strip())
 
         cave_cmd.refresh(show_details=False)
@@ -255,7 +255,6 @@ class TestHoardCommand(unittest.TestCase):
             f"ADDED /newdir/newfile.is\n"
             f"ADDED_DIR /newdir\n"
             f"DELETED /wat/test.me.different\n"
-            f"DELETED_DIR /wat\n"
             f"DONE",
             hoard_cmd.contents.pending("repo-in-local").strip())
 
@@ -268,8 +267,6 @@ class TestHoardCommand(unittest.TestCase):
 
         self.assertEqual(
             f"Status of repo-in-local:\n"
-            f"DELETED_DIR /wat\n"
-            f"DELETED_DIR /newdir\n"
             f"DONE", hoard_cmd.contents.pending("repo-in-local").strip())
 
     def test_clone(self):
@@ -523,7 +520,6 @@ class TestHoardCommand(unittest.TestCase):
         res = hoard_cmd.contents.pending("repo-full-name")
         self.assertEqual(
             f"Status of repo-full-name:\n"
-            f"DELETED_DIR /wat\n"
             f"DONE", res)
 
     def test_pull_all(self):

@@ -721,7 +721,6 @@ class TestFileChangingFlows(unittest.TestCase):
             "Status of repo-full-name:\n"
             "PRESENT /test.me.4\n"
             "PRESENT /wat/test.me.3\n"
-            "DELETED_DIR /wat\n"
             "DONE", res)
 
         res = hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
@@ -791,7 +790,6 @@ class TestFileChangingFlows(unittest.TestCase):
             "MODIFIED /test.me.1\n"
             "ADDED_DIR /lets_get_it_started\n"
             "DELETED /wat/test.me.2\n"
-            "DELETED_DIR /wat\n"
             "MOVED /test.me.4\n"
             "DONE", res)
 
@@ -930,7 +928,6 @@ class TestFileChangingFlows(unittest.TestCase):
             "Status of repo-full-name:\n"
             "PRESENT /test.me.4\n"
             "PRESENT /wat/test.me.3\n"
-            "DELETED_DIR /wat\n"
             "DONE", res)
 
         res = hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
@@ -1034,7 +1031,6 @@ class TestFileChangingFlows(unittest.TestCase):
             "MODIFIED /test.me.1\n"
             "ADDED_DIR /lets_get_it_started\n"
             "DELETED /wat/test.me.2\n"
-            "DELETED_DIR /wat\n"
             "MOVED /test.me.4\n"
             "DONE", res)
 
@@ -1449,8 +1445,6 @@ class TestFileChangingFlows(unittest.TestCase):
             "ADDED /lets_get_it_started/test.me.2-butnew\n"
             "ADDED /lets_get_it_started/test.me.2-butsecond\n"
             "DELETED /wat/test.me.2\n"
-            "DELETED_DIR /wat\n"
-            "DELETED_DIR /lets_get_it_started\n"
             "DONE", res)
 
         res = hoard_cmd.contents.pull(full_cave_cmd.current_uuid())

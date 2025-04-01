@@ -320,7 +320,7 @@ class HoardFSObjects:
             (HoardFileStatus.MOVE.value, hoard_file.as_posix(), remote)).fetchall()
 
     def __contains__(self, file_path: PurePosixPath) -> bool:
-        # assert file_path.is_absolute() # FIXME REENABLE!
+        assert file_path.is_absolute()
 
         curr = self._first_value_curr()
         return curr.execute(

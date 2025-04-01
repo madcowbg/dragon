@@ -109,7 +109,7 @@ class NodeDescription(Widget):
                         Label(
                             f"[@click=app.open_cave_dir('{local_path.on_device_path()}')]{pretty_truncate(hoard_remote.uuid, 15)}[/]",
                             classes="repo_uuid"),
-                        Label(Text(self.hoard_pathing.in_local("/", hoard_remote.uuid).on_device_path()), classes=f"remote_location {availability_status_class}"),
+                        Label(Text(self.hoard_pathing.in_local("", hoard_remote.uuid).on_device_path()), classes=f"remote_location {availability_status_class}"),
                         Label(Text(local_path.as_pure_path.as_posix()), classes="local_path"),
                         classes="desc_status_line")
 

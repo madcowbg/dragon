@@ -90,7 +90,7 @@ def compare_local_to_hoard(local: RepoContents, hoard: HoardContents, pathing: H
             curr_dir_path_in_local = pathing.in_hoard(hoard_dir.as_posix()).at_local(local.config.uuid)
             assert curr_dir_path_in_local is not None  # hoard dir is not in the mounted location
 
-            if curr_dir_path_in_local.as_pure_path not in hoard.fsobjects:  ## FIXME BAD BAD BAD
+            if not local.fsobjects.in_existing(curr_dir_path_in_local.as_pure_path):
                 logging.info(f"missing dir found in hoard: {hoard_dir}")
                 yield DirMissingInLocal(curr_dir_path_in_local.as_pure_path, hoard_dir.as_posix())
             else:
