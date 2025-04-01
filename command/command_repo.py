@@ -333,7 +333,7 @@ class RepoCommand(object):
                     f"     new: {len(dir_new)} ({format_percent(len(dir_new) / dirs_current)})\n"
                     f" current: {dirs_current}\n"
                     f" in repo: {stats.num_dirs}\n"
-                    f" deleted: {len(dir_deleted)} ({format_percent(len(dir_deleted) / stats.num_dirs)})\n")
+                    f" deleted: {len(dir_deleted)} ({format_percent(len(dir_deleted) / max(1, stats.num_dirs))})\n")
 
                 return out.getvalue()
 
@@ -418,14 +418,17 @@ type RepoDiffs = (
 def compute_difference_between_contents_and_filesystem(
         contents: RepoContents, repo_path: str, hoard_ignore: HoardIgnore,
         skip_integrity_checks: bool) -> Iterable[RepoDiffs]:
+    current_repo_path = pathlib.Path(repo_path)
     for obj_path, props in alive_it(
             list(contents.fsobjects.existing()),
             title="Checking for deleted files and folders"):
         if isinstance(props, RepoFileProps):
-            if not pathlib.Path(repo_path).joinpath(obj_path).is_file():
+            file_path = current_repo_path.joinpath(obj_path)
+            if not file_path.is_file() or hoard_ignore.matches(file_path):
                 yield FileNotInFilesystem(obj_path, props)
         elif isinstance(props, RepoDirProps):
-            if not pathlib.Path(repo_path).joinpath(obj_path).is_dir():
+            dir_path = current_repo_path.joinpath(obj_path)
+            if not dir_path.is_dir() or hoard_ignore.matches(dir_path):
                 yield DirNotInFilesystem(obj_path, props)
         else:
             raise ValueError(f"invalid props type: {type(props)}")
