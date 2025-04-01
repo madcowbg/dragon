@@ -12,7 +12,9 @@ class HoardPathing:
 
     class HoardPath:
         def __init__(self, path: str, pathing: "HoardPathing"):
-            self._path = pathlib.Path(path)
+            self._path = pathlib.PurePosixPath(path)
+            assert self._path.is_absolute()
+
             self._pathing = pathing
 
         def as_posix(self) -> str:
@@ -27,17 +29,19 @@ class HoardPathing:
 
     class LocalPath:
         def __init__(self, path: str, repo_uuid: str, pathing: "HoardPathing"):
-            self._path = pathlib.Path(path)
+            self._path = pathlib.PurePosixPath(path)
+            assert not self._path.is_absolute()
+
             self._repo_uuid = repo_uuid
             self._pathing = pathing
 
         def as_posix(self) -> str: return self._path.as_posix()
 
         def on_device_path(self) -> str:
-            return pathlib.Path(self._pathing._paths[self._repo_uuid].find()).joinpath(self._path).as_posix()
+            return pathlib.PurePosixPath(self._pathing._paths[self._repo_uuid].find()).joinpath(self._path).as_posix()
 
         def at_hoard(self) -> "HoardPathing.HoardPath":
-            joined_path = pathlib.Path(self._pathing.mounted_at(self._repo_uuid)).joinpath(self._path)
+            joined_path = pathlib.PurePosixPath(self._pathing.mounted_at(self._repo_uuid)).joinpath(self._path)
             return HoardPathing.HoardPath(joined_path.as_posix(), self._pathing)
 
     def mounted_at(self, repo_uuid: str) -> str:
