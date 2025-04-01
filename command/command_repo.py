@@ -340,24 +340,29 @@ class RepoCommand(object):
 
 class FileNotInFilesystem:
     def __init__(self, filepath: PurePosixPath, props: RepoFileProps):
+        assert not filepath.is_absolute()
         self.filepath = filepath
         self.props = props
 
 
 class DirNotInFilesystem:
     def __init__(self, dirpath: PurePosixPath, props: RepoDirProps):
+        assert not dirpath.is_absolute()
         self.dirpath = dirpath
         self.props = props
 
 
 class RepoFileWeakSame:
     def __init__(self, filepath: PurePosixPath, props: RepoFileProps):
+        assert not filepath.is_absolute()
         self.filepath = filepath
         self.props = props
 
 
 class RepoFileWeakDifferent:
     def __init__(self, filepath: PurePosixPath, props: RepoFileProps, mtime: float, size: int):
+        assert not filepath.is_absolute()
+
         self.filepath = filepath
         self.props = props
 
@@ -367,6 +372,8 @@ class RepoFileWeakDifferent:
 
 class RepoFileDifferent:
     def __init__(self, filepath: PurePosixPath, props: RepoFileProps, mtime: float, size: int, fasthash: str):
+        assert not filepath.is_absolute()
+
         self.filepath = filepath
         self.props = props
 
@@ -377,6 +384,7 @@ class RepoFileDifferent:
 
 class RepoFileSame:
     def __init__(self, filepath: PurePosixPath, props: RepoFileProps, mtime: float):
+        assert not filepath.is_absolute()
         self.filepath = filepath
         self.props = props
         self.mtime = mtime
@@ -384,17 +392,20 @@ class RepoFileSame:
 
 class DirIsSameInRepo:
     def __init__(self, dirpath: PurePosixPath, props: RepoDirProps):
+        assert not dirpath.is_absolute()
         self.dirpath = dirpath
         self.props = props
 
 
 class DirNotInRepo:
     def __init__(self, dirpath: PurePosixPath):
+        assert not dirpath.is_absolute()
         self.dirpath = dirpath
 
 
 class FileNotInRepo:
     def __init__(self, filepath: PurePosixPath):
+        assert not filepath.is_absolute()
         self.filepath = filepath
 
 
