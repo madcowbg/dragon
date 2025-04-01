@@ -435,7 +435,7 @@ def compute_difference_between_contents_and_filesystem(
                 assert dir_path_full is not None and file_path_full is None
                 dir_path_in_local = dir_path_full.relative_to(repo_path)
                 if contents.fsobjects.in_existing(dir_path_in_local):
-                    props = contents.fsobjects.get_existing(dir_path_in_local.as_posix())
+                    props = contents.fsobjects.get_existing(dir_path_in_local)
                     assert isinstance(props, RepoDirProps)
                     yield DirIsSameInRepo(dir_path_in_local.as_posix(), props)
                 else:
@@ -447,19 +447,19 @@ def compute_difference_between_contents_and_filesystem(
             try:
                 stats = await aiofiles.os.stat(file_fullpath)
 
-                file_path_local = pathlib.Path(file_fullpath).relative_to(repo_path).as_posix()
+                file_path_local = pathlib.Path(file_fullpath).relative_to(repo_path)
                 props = contents.fsobjects.get_existing(file_path_local)
                 if skip_integrity_checks:
                     if props.mtime == stats.st_mtime and props.size == stats.st_size:
-                        return RepoFileWeakSame(file_path_local, props)
+                        return RepoFileWeakSame(file_path_local.as_posix(), props)
                     else:
-                        return RepoFileWeakDifferent(file_path_local, props, stats.st_mtime, stats.st_size)
+                        return RepoFileWeakDifferent(file_path_local.as_posix(), props, stats.st_mtime, stats.st_size)
                 else:
                     fasthash = await fast_hash_async(file_fullpath)
                     if props.fasthash == fasthash:
-                        return RepoFileSame(file_path_local, props, stats.st_mtime)
+                        return RepoFileSame(file_path_local.as_posix(), props, stats.st_mtime)
                     else:
-                        return RepoFileDifferent(file_path_local, props, stats.st_mtime, stats.st_size, fasthash)
+                        return RepoFileDifferent(file_path_local.as_posix(), props, stats.st_mtime, stats.st_size, fasthash)
             finally:
                 m_bar()
 

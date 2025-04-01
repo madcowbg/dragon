@@ -63,7 +63,8 @@ class RepoFSObjects:
             return fullpath, RepoFileProps(size, mtime, fasthash, md5, RepoFileStatus(last_status), last_update_epoch,
                                            last_related_fullpath)
 
-    def get_existing(self, file_path: str) -> RepoFileProps | RepoDirProps:
+    def get_existing(self, file_path: PurePosixPath) -> RepoFileProps | RepoDirProps:
+        assert not file_path.is_absolute()
         curr = self.parent.conn.cursor()
         curr.row_factory = RepoFSObjects._create_fsobjectprops
 
@@ -71,7 +72,7 @@ class RepoFSObjects:
             "SELECT fullpath, isdir, size, mtime, fasthash, md5, last_status, last_update_epoch, last_related_fullpath "
             "FROM fsobject "
             "WHERE fsobject.fullpath = ? AND last_status NOT IN (?, ?)",
-            (file_path, RepoFileStatus.DELETED.value, RepoFileStatus.MOVED_FROM.value)).fetchone()
+            (file_path.as_posix(), RepoFileStatus.DELETED.value, RepoFileStatus.MOVED_FROM.value)).fetchone()
         return props
 
     def get_file_with_any_status(self, file_path: str) -> RepoFileProps | RepoDirProps | None:

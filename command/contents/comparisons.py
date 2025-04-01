@@ -1,4 +1,5 @@
 import logging
+import pathlib
 from typing import Generator
 
 from alive_progress import alive_bar, alive_it
@@ -38,7 +39,7 @@ def compare_local_to_hoard(local: RepoContents, hoard: HoardContents, pathing: H
                         current_file, curr_file_hoard_path.as_pure_path.as_posix(), props,
                         props.last_status == RepoFileStatus.ADDED)
                 elif is_same_file(
-                        local.fsobjects.get_existing(current_file),
+                        local.fsobjects.get_existing(pathlib.PurePosixPath(current_file)),
                         hoard.fsobjects[curr_file_hoard_path.as_pure_path.as_posix()]):
                     logging.info(f"same in hoard {current_file}!")
                     yield FileIsSame(current_file, curr_file_hoard_path.as_pure_path.as_posix(), props, hoard.fsobjects[
