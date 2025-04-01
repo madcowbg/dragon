@@ -23,7 +23,7 @@ from contents_diff import FileIsSame, FileContentsDiffer, FileOnlyInHoardLocalDe
     DirMissingInLocal, FileOnlyInHoardLocalUnknown, FileOnlyInHoardLocalMoved, FileOnlyInLocal
 from exceptions import MissingRepoContents
 from resolve_uuid import resolve_remote_uuid
-from util import format_size
+from util import format_size, custom_isabs
 
 
 def _file_stats(props: HoardFileProps) -> str:
@@ -208,7 +208,7 @@ class HoardCommandContents:
 
             if selected_path is None:
                 selected_path = "/"
-            if not os.path.isabs(selected_path):
+            if not custom_isabs(selected_path):
                 return f"Use absolute paths, {selected_path} is relative."
 
             pathing = HoardPathing(self.hoard.config(), self.hoard.paths())
@@ -238,8 +238,8 @@ class HoardCommandContents:
                 return out.getvalue()
 
     def copy(self, from_path: str, to_path: str):
-        assert os.path.isabs(from_path), f"From path {from_path} must be absolute path."
-        assert os.path.isabs(to_path), f"To path {to_path} must be absolute path."
+        assert custom_isabs(from_path), f"From path {from_path} must be absolute path."
+        assert custom_isabs(to_path), f"To path {to_path} must be absolute path."
 
         print(f"Marking files for copy {from_path} to {to_path}...")
         with self.hoard.open_contents(create_missing=False, is_readonly=False) as hoard:
@@ -341,7 +341,7 @@ class HoardCommandContents:
 
     def _run_op(self, repo: str, path: str, fun: Callable[[HoardContents, str, str], str], is_readonly: bool):
         config = self.hoard.config()
-        if os.path.isabs(path):
+        if custom_isabs(path):
             return f"Path {path} must be relative, but is absolute."
 
         logging.info(f"Loading hoard TOML...")

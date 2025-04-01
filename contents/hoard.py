@@ -11,7 +11,7 @@ import rtoml
 from contents.repo import RepoContentsConfig
 from contents.repo_props import RepoFileProps
 from contents.hoard_props import HoardDirProps, HoardFileStatus, HoardFileProps
-from util import FIRST_VALUE
+from util import FIRST_VALUE, custom_isabs
 
 HOARD_CONTENTS_FILENAME = "hoard.contents"
 HOARD_CONTENTS_TOML = "hoard.contents.toml"
@@ -83,7 +83,7 @@ class HoardTree:
         for path, props in objects:
             if isinstance(props, HoardFileProps):
                 filepath = path
-                assert os.path.isabs(filepath)
+                assert custom_isabs(filepath)
                 current = self.root
                 parts = pathlib.Path(filepath).parts
                 for folder in parts[1:-1]:
@@ -91,7 +91,7 @@ class HoardTree:
                 current.create_file(parts[-1], props)
             elif isinstance(props, HoardDirProps):
                 dirpath = path
-                assert os.path.isabs(dirpath)
+                assert custom_isabs(dirpath)
                 current = self.root
                 for folder in pathlib.Path(dirpath).parts[1:]:
                     current = current.get_or_create_dir(folder)
@@ -100,7 +100,7 @@ class HoardTree:
 
     def walk(self, from_path: str = "/", depth: int = sys.maxsize) -> \
             Generator[Tuple[Optional["HoardDir"], Optional["HoardFile"]], None, None]:
-        assert os.path.isabs(from_path)
+        assert custom_isabs(from_path)
         current = self.root
         for folder in pathlib.Path(from_path).parts[1:]:
             current = current.get_dir(folder)
@@ -258,7 +258,7 @@ class HoardFSObjects:
             (remote_uuid, HoardFileStatus.AVAILABLE.value))
 
     def in_folder(self, folder: str) -> Iterable[Tuple[str, HoardFileProps | HoardDirProps]]:
-        assert os.path.isabs(folder)
+        assert custom_isabs(folder)  # from 3.13 behavior change...
         folder_with_trailing = folder if folder.endswith("/") else folder + "/"
         assert folder_with_trailing.endswith('/')
 

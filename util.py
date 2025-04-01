@@ -1,4 +1,5 @@
 import asyncio
+import os
 import threading
 from asyncio import Queue, TaskGroup
 from itertools import groupby
@@ -118,3 +119,6 @@ def group_to_dict(
     return dict(
         (obj_key, list(map(map_to, some_objects)))
         for obj_key, some_objects in groupby(sorted(objs, key=lambda o: order_by(key(o))), key=key))
+
+
+def custom_isabs(folder: str): return folder.startswith("/") or os.path.isabs(folder)  # for 3.13 change in os.path
