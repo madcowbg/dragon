@@ -2,28 +2,62 @@ import asyncio
 import logging
 import os
 import pathlib
+import re
 from io import StringIO
-from typing import Generator, Tuple, List, Optional, Dict
+from typing import Tuple, List, Optional, Dict, Iterable
 
 import aiofiles.os
 from alive_progress import alive_bar, alive_it
 
 from command.repo import ProspectiveRepo
-from exceptions import MissingRepo, MissingRepoContents
-from contents.repo_props import RepoFileProps, RepoFileStatus, RepoDirProps
-from contents.hoard_props import HoardDirProps
 from contents.repo import RepoContents
+from contents.repo_props import RepoFileProps, RepoFileStatus, RepoDirProps
+from exceptions import MissingRepo, MissingRepoContents
 from hashing import find_hashes, fast_hash_async
 from resolve_uuid import load_config, resolve_remote_uuid, load_paths
 from util import format_size, run_async_in_parallel, format_percent, group_to_dict
 
+DEFAULT_IGNORE_GLOBS = [
+    r".hoard",
+    r"**/thumbs.db",
+    r"System Volume Information",
+    r"$Recycle.Bin",
+    r"RECYCLE?",
+]
 
-def walk_repo(repo: str) -> Generator[Tuple[str, List[str], List[str]], None, None]:
-    for dirpath, dirnames, filenames in os.walk(repo, topdown=True):
-        if ".hoard" in dirnames:
-            dirnames.remove(".hoard")
 
-        yield dirpath, dirnames, filenames
+class HoardIgnore:
+    def __init__(self, ignore_globs_list: List[str]):
+        self.ignore_globs_list = ignore_globs_list
+
+    def matches(self, fullpath: pathlib.Path) -> bool:
+        for glob in self.ignore_globs_list:
+            if fullpath.full_match(glob, case_sensitive=False):
+                return True
+        return False
+
+
+def walk_repo(repo: str, hoard_ignore: HoardIgnore) -> Iterable[Tuple[pathlib.Path | None, pathlib.Path | None]]:
+    for dirpath_s, dirnames, filenames in os.walk(repo, topdown=True):
+        dirpath = pathlib.Path(dirpath_s)
+
+        for filename in filenames:
+            fullpath_file = dirpath.joinpath(filename)
+            relpath_file = fullpath_file.relative_to(repo)
+            if not hoard_ignore.matches(relpath_file):
+                yield fullpath_file, None
+
+        ignored_dirnames = []
+        for dirname in dirnames:
+            fullpath_dir = dirpath.joinpath(dirname)
+            relpath_dir = fullpath_dir.relative_to(repo)
+            if hoard_ignore.matches(relpath_dir):
+                ignored_dirnames.append(dirname)
+            else:
+                yield None, fullpath_dir
+
+        for ignored in ignored_dirnames:
+            dirnames.remove(ignored)
 
 
 class RepoCommand(object):
@@ -72,6 +106,8 @@ class RepoCommand(object):
         logging.info(f"Refreshing uuid {current_uuid}{', is first refresh' if first_refresh else ''}")
         add_new_with_status = RepoFileStatus.ADDED if not first_refresh else RepoFileStatus.PRESENT
 
+        hoard_ignore = HoardIgnore(DEFAULT_IGNORE_GLOBS)
+
         with contents:
             logging.info("Start updating, setting is_dirty to TRUE")
             contents.config.start_updating()
@@ -86,7 +122,7 @@ class RepoCommand(object):
                 files_maybe_removed: List[Tuple[str, RepoFileProps]] = []
                 folders_to_add: List[str] = []
                 for diff in compute_difference_between_contents_and_filesystem(
-                        contents, self.repo.path, skip_integrity_checks):
+                        contents, self.repo.path, hoard_ignore, skip_integrity_checks):
                     if isinstance(diff, FileNotInFilesystem):
                         logging.info(f"File not found, marking for removal: {diff.filepath}")
                         files_maybe_removed.append((diff.filepath, diff.props))
@@ -243,10 +279,12 @@ class RepoCommand(object):
         dir_same = []
         dir_deleted = []
 
+        hoard_ignore = HoardIgnore(DEFAULT_IGNORE_GLOBS)
+
         with contents:
             print("Calculating diffs between repo and filesystem...")
-            for diff in compute_difference_between_contents_and_filesystem(contents, self.repo.path,
-                                                                           skip_integrity_checks):
+            for diff in compute_difference_between_contents_and_filesystem(
+                    contents, self.repo.path, hoard_ignore, skip_integrity_checks):
                 if isinstance(diff, FileNotInFilesystem):
                     files_del.append(diff.filepath)
                 elif isinstance(diff, RepoFileWeakSame):
@@ -303,7 +341,7 @@ class FileNotInFilesystem:
 
 
 class DirNotInFilesystem:
-    def __init__(self, dirpath: str, props: HoardDirProps):
+    def __init__(self, dirpath: str, props: RepoDirProps):
         self.dirpath = dirpath
         self.props = props
 
@@ -341,7 +379,7 @@ class RepoFileSame:
 
 
 class DirIsSameInRepo:
-    def __init__(self, dirpath: str, props: HoardDirProps):
+    def __init__(self, dirpath: str, props: RepoDirProps):
         self.dirpath = dirpath
         self.props = props
 
@@ -363,8 +401,11 @@ type RepoDiffs = (
 
 
 def compute_difference_between_contents_and_filesystem(
-        contents: RepoContents, repo_path: str, skip_integrity_checks: bool) -> Generator[RepoDiffs, None, None]:
-    for obj_path, props in alive_it(list(contents.fsobjects.existing()), title="Checking for deleted files and folders"):
+        contents: RepoContents, repo_path: str, hoard_ignore: HoardIgnore,
+        skip_integrity_checks: bool) -> Iterable[RepoDiffs]:
+    for obj_path, props in alive_it(
+            list(contents.fsobjects.existing()),
+            title="Checking for deleted files and folders"):
         if isinstance(props, RepoFileProps):
             if not pathlib.Path(repo_path).joinpath(obj_path).is_file():
                 yield FileNotInFilesystem(obj_path, props)
@@ -376,11 +417,9 @@ def compute_difference_between_contents_and_filesystem(
 
     file_path_matches: List[str] = list()
     with alive_bar(total=contents.fsobjects.len_existing(), title="Walking filesystem") as bar:
-        for dirpath_s, dirnames, filenames in walk_repo(repo_path):
-            dirpath = pathlib.Path(dirpath_s)
-            for filename in filenames:
-                file_path_full = dirpath.joinpath(filename)
-
+        for file_path_full, dir_path_full in walk_repo(repo_path, hoard_ignore):
+            if file_path_full is not None:
+                assert dir_path_full is None
                 file_path_local = file_path_full.relative_to(repo_path).as_posix()
                 logging.info(f"Checking {file_path_local} for existence...")
                 if contents.fsobjects.in_existing(file_path_local):  # file is already in index
@@ -389,8 +428,8 @@ def compute_difference_between_contents_and_filesystem(
                 else:
                     yield FileNotInRepo(file_path_local)
                 bar()
-            for dirname in dirnames:
-                dir_path_full = dirpath.joinpath(dirname)
+            else:
+                assert dir_path_full is not None and file_path_full is None
                 dir_path_in_local = dir_path_full.relative_to(repo_path).as_posix()
                 if contents.fsobjects.in_existing(dir_path_in_local):
                     props = contents.fsobjects.get_existing(dir_path_in_local)
