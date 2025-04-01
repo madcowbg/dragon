@@ -43,19 +43,19 @@ class HoardCommandFiles:
                     for op in get_pending_operations(hoard, repo_uuid):
                         num_available = op.hoard_props.by_status(HoardFileStatus.AVAILABLE)
                         if isinstance(op, GetFile):
-                            out.write(f"TO_GET (from {len(num_available)}) {op.hoard_file}\n")
+                            out.write(f"TO_GET (from {len(num_available)}) {op.hoard_file.as_posix()}\n")
                             for repo in num_available:
                                 repos_containing_what_this_one_needs[repo] = \
                                     repos_containing_what_this_one_needs.get(repo, 0) + 1
                         elif isinstance(op, CopyFile):
-                            out.write(f"TO_COPY (from {len(num_available)}+?) {op.hoard_file}\n")
+                            out.write(f"TO_COPY (from {len(num_available)}+?) {op.hoard_file.as_posix()}\n")
                             for repo in num_available:
                                 repos_containing_what_this_one_needs[repo] = \
                                     repos_containing_what_this_one_needs.get(repo, 0) + 1
                         elif isinstance(op, MoveFile):
-                            out.write(f"TO_MOVE {op.hoard_file} from {op.old_hoard_file}\n")
+                            out.write(f"TO_MOVE {op.hoard_file.as_posix()} from {op.old_hoard_file}\n")
                         elif isinstance(op, CleanupFile):
-                            out.write(f"TO_CLEANUP (is in {len(num_available)}) {op.hoard_file}\n")
+                            out.write(f"TO_CLEANUP (is in {len(num_available)}) {op.hoard_file.as_posix()}\n")
                         else:
                             raise ValueError(f"Unhandled op type: {type(op)}")
                     nc = sorted(map(

@@ -517,16 +517,16 @@ class HoardCommandContents:
                         logging.info(f"File to get {local_file} is already missing, removing status.")
                         op.hoard_props.remove_status(repo_uuid)
 
-                        out.write(f"WONT_GET {op.hoard_file}\n")
+                        out.write(f"WONT_GET {op.hoard_file.as_posix()}\n")
                     elif isinstance(op, CopyFile):
                         logging.info(
                             f"File to get {local_file} is already missing, removing status.")
                         op.hoard_props.remove_status(repo_uuid)
-                        out.write(f"WONT_COPY {op.hoard_file}\n")
+                        out.write(f"WONT_COPY {op.hoard_file.as_posix()}\n")
                     elif isinstance(op, CleanupFile):
                         op.hoard_props.remove_status(repo_uuid)
 
-                        out.write(f"WONT_CLEANUP {op.hoard_file}\n")
+                        out.write(f"WONT_CLEANUP {op.hoard_file.as_posix()}\n")
                     else:
                         raise ValueError(f"Unhandled op type: {type(op)}")
 
