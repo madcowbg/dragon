@@ -56,7 +56,7 @@ class TestHoardCommand(unittest.TestCase):
         repo_uuid = cave_cmd.current_uuid()
         with Hoard(join(self.tmpdir.name, "hoard")).open_contents(False, True) as hoard_contents:
             all_fsobjects = [
-                (file_or_dir, str([f"{repo}: {status.value}" for repo, status in props.presence.items()])
+                (file_or_dir.as_posix(), str([f"{repo}: {status.value}" for repo, status in props.presence.items()])
                 if isinstance(props, HoardFileProps) else "DIR")
                 for file_or_dir, props in hoard_contents.fsobjects]
             self.assertEqual([

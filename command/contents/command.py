@@ -245,17 +245,16 @@ class HoardCommandContents:
         with self.hoard.open_contents(create_missing=False, is_readonly=False) as hoard:
             with StringIO() as out:
                 with alive_bar(len(hoard.fsobjects)) as bar:
-                    for hoard_obj, _ in hoard.fsobjects:
-                        hoard_path = pathlib.Path(hoard_obj)
+                    for hoard_path, _ in hoard.fsobjects:
                         if not hoard_path.is_relative_to(from_path):
-                            print(f"Skip copying {hoard_obj} as is not in {from_path}...")
+                            print(f"Skip copying {hoard_path} as is not in {from_path}...")
                             continue
                         # file or dir is to be copied
                         relpath = hoard_path.relative_to(from_path)
                         to_fullpath = pathlib.Path(to_path).joinpath(relpath).as_posix()
-                        logging.info(f"Copying {hoard_obj} to {to_fullpath}")
+                        logging.info(f"Copying {hoard_path} to {to_fullpath}")
 
-                        hoard.fsobjects.copy(hoard_obj, to_fullpath)
+                        hoard.fsobjects.copy(hoard_path.as_posix(), to_fullpath)
                         out.write(f"c+ {to_fullpath}\n")
                 out.write("DONE")
                 return out.getvalue()
@@ -542,5 +541,5 @@ def clean_dangling_files(hoard: HoardContents, out: StringIO):  # fixme do this 
     for dangling_path, props in hoard.fsobjects.dangling_files:
         assert len(props.presence) == 0
         logging.warning(f"Removing dangling path {dangling_path} from hoard!")
-        hoard.fsobjects.delete(dangling_path)
+        hoard.fsobjects.delete(dangling_path.as_posix())
         out.write(f"remove dangling {dangling_path}\n")

@@ -93,9 +93,9 @@ class TestHoardCommand(unittest.TestCase):
     def _assert_hoard_contents(
             self, hoard_contents: HoardContents, files_exp: List[Tuple[str, int, int, str]], dirs_exp: List[str]):
         files = sorted(
-            (f, prop.size, len(prop.available_at), prop.fasthash)
+            (f.as_posix(), prop.size, len(prop.available_at), prop.fasthash)
             for f, prop in hoard_contents.fsobjects if isinstance(prop, HoardFileProps))
-        dirs = sorted(f for f, prop in hoard_contents.fsobjects if isinstance(prop, HoardDirProps))
+        dirs = sorted(f.as_posix() for f, prop in hoard_contents.fsobjects if isinstance(prop, HoardDirProps))
         self.assertEqual(sorted(files_exp), sorted(files))
         self.assertEqual(sorted(dirs_exp), sorted(dirs))
 

@@ -3,6 +3,7 @@ import pathlib
 import sqlite3
 import sys
 from datetime import datetime
+from pathlib import PurePosixPath
 from sqlite3 import Connection
 from typing import Dict, Any, Optional, Tuple, Generator, Iterator, Iterable, List
 
@@ -77,13 +78,13 @@ class HoardContentsConfig:
 
 
 class HoardTree:
-    def __init__(self, objects: Iterator[Tuple[str, HoardFileProps | HoardDirProps]]):
+    def __init__(self, objects: Iterator[Tuple[PurePosixPath, HoardFileProps | HoardDirProps]]):
         self.root = HoardDir(None, "", self)
 
         for path, props in objects:
             if isinstance(props, HoardFileProps):
                 filepath = path
-                assert custom_isabs(filepath)
+                assert custom_isabs(filepath.as_posix())
                 current = self.root
                 parts = pathlib.Path(filepath).parts
                 for folder in parts[1:-1]:
@@ -91,7 +92,7 @@ class HoardTree:
                 current.create_file(parts[-1], props)
             elif isinstance(props, HoardDirProps):
                 dirpath = path
-                assert custom_isabs(dirpath)
+                assert custom_isabs(dirpath.as_posix())
                 current = self.root
                 for folder in pathlib.Path(dirpath).parts[1:]:
                     current = current.get_or_create_dir(folder)
@@ -196,6 +197,7 @@ class HoardFSObjects:
         curr.row_factory = FIRST_VALUE
         return curr.execute("SELECT count(1) FROM fsobject").fetchone()
 
+    # fixme delete deprecated
     def _read_as_prop_tuple(self, cursor, row) -> Tuple[str, HoardFileProps]:
         fullpath, fsobject_id, isdir, size, fasthash = row
         if isdir:
@@ -203,40 +205,47 @@ class HoardFSObjects:
         else:
             return fullpath, HoardFileProps(self.parent, fsobject_id, size, fasthash)
 
+    def _read_as_path_to_props(self, cursor, row) -> Tuple[PurePosixPath, HoardFileProps | HoardDirProps]:
+        fullpath, fsobject_id, isdir, size, fasthash = row
+        if isdir:
+            return PurePosixPath(fullpath), HoardDirProps({})
+        else:
+            return PurePosixPath(fullpath), HoardFileProps(self.parent, fsobject_id, size, fasthash)
+
     def __getitem__(self, file_path: str) -> HoardFileProps | HoardDirProps:
         curr = self.parent.conn.cursor()
-        curr.row_factory = self._read_as_prop_tuple
+        curr.row_factory = self._read_as_path_to_props
         return curr.execute(
             "SELECT fullpath, fsobject_id, isdir, size, fasthash "
             "FROM fsobject "
             "WHERE fsobject.fullpath = ? ",
             (file_path,)).fetchone()[1]
 
-    def by_fasthash(self, fasthash: str) -> Iterable[Tuple[str, HoardFileProps]]:
+    def by_fasthash(self, fasthash: str) -> Iterable[Tuple[PurePosixPath, HoardFileProps]]:
         curr = self.parent.conn.cursor()
-        curr.row_factory = self._read_as_prop_tuple
+        curr.row_factory = self._read_as_path_to_props
         yield from curr.execute(
             "SELECT fullpath, fsobject_id, isdir, size, fasthash "
             "FROM fsobject "
             "WHERE isdir = FALSE and fasthash = ?", (fasthash,))
 
-    def __iter__(self) -> Iterable[Tuple[str, HoardFileProps | HoardDirProps]]:
+    def __iter__(self) -> Iterable[Tuple[PurePosixPath, HoardFileProps | HoardDirProps]]:
         curr = self.parent.conn.cursor()
-        curr.row_factory = self._read_as_prop_tuple
+        curr.row_factory = self._read_as_path_to_props
         yield from curr.execute("SELECT fullpath, fsobject_id, isdir, size, fasthash FROM fsobject")
 
     @property
-    def dangling_files(self) -> Iterable[Tuple[str, HoardFileProps | HoardDirProps]]:
+    def dangling_files(self) -> Iterable[Tuple[PurePosixPath, HoardFileProps | HoardDirProps]]:
         curr = self.parent.conn.cursor()
-        curr.row_factory = self._read_as_prop_tuple
+        curr.row_factory = self._read_as_path_to_props
         yield from curr.execute(
             "SELECT fullpath, fsobject_id, isdir, size, fasthash FROM fsobject "
             "WHERE isdir = FALSE AND "
             "  NOT EXISTS (SELECT 1 FROM fspresence WHERE fspresence.fsobject_id = fsobject.fsobject_id)")
 
-    def with_pending(self, repo_uuid: str) -> Iterable[Tuple[str, HoardFileProps | HoardDirProps]]:
+    def with_pending(self, repo_uuid: str) -> Iterable[Tuple[PurePosixPath, HoardFileProps | HoardDirProps]]:
         curr = self.parent.conn.cursor()
-        curr.row_factory = self._read_as_prop_tuple
+        curr.row_factory = self._read_as_path_to_props
         yield from curr.execute(
             "SELECT fullpath, fsobject_id, isdir, size, fasthash FROM fsobject "
             "WHERE isdir = FALSE AND EXISTS ("

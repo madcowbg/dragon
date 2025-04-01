@@ -4,6 +4,7 @@ import os
 import pathlib
 import shutil
 from io import StringIO
+from pathlib import PurePosixPath
 from typing import Dict, List, Tuple
 
 from alive_progress import alive_bar, alive_it
@@ -135,7 +136,7 @@ class HoardCommand(object):
             logging.info(f"Loaded hoard TOML!")
 
             repo_health: Dict[str, Dict[int, int]] = dict()
-            health_files: Dict[int, List[str]] = dict()
+            health_files: Dict[int, List[PurePosixPath]] = dict()
             for file, props in hoard.fsobjects:
                 if not isinstance(props, HoardFileProps):
                     continue  # fixme what about folders?
@@ -216,17 +217,17 @@ class HoardCommand(object):
 
             with StringIO() as out:
                 out.write("Moving files and folders:\n")
-                for orig_path, props in list(hoard.fsobjects):
+                current_path: PurePosixPath
+                for current_path, props in list(hoard.fsobjects):
                     assert isinstance(props, HoardFileProps) or isinstance(props, HoardDirProps), \
                         f"Unsupported props type: {type(props)}"
-                    current_path = pathlib.Path(orig_path)
                     if current_path.is_relative_to(from_path):
                         rel_path = current_path.relative_to(from_path)
                         logging.info(f"Relative file path to move: {rel_path}")
                         new_path = pathlib.Path(to_path).joinpath(rel_path).as_posix()
 
-                        out.write(f"{orig_path}=>{new_path}\n")
-                        hoard.fsobjects.move_via_mounts(orig_path, new_path, props)
+                        out.write(f"{current_path}=>{new_path}\n")
+                        hoard.fsobjects.move_via_mounts(current_path.as_posix(), new_path, props)
 
                 logging.info(f"Moving {', '.join(r.name for r in repos_to_move)}.")
                 out.write(f"Moving {len(repos_to_move)} repos:\n")
@@ -335,7 +336,7 @@ class HoardCommand(object):
                                 skipped += 1
                                 continue
 
-                            places: List[Tuple[str, HoardFileProps]] = list(hoard.fsobjects.by_fasthash(fasthash))
+                            places: List[Tuple[PurePosixPath, HoardFileProps]] = list(hoard.fsobjects.by_fasthash(fasthash))
                             if len(places) == 0:
                                 mismatched += 1
 
@@ -360,7 +361,7 @@ class HoardCommand(object):
                                     hoard_filepath, hoard_props = places.pop()
 
                                     # use + because hoard paths are absolute!
-                                    end_place = pathlib.Path(dest + hoard_filepath)
+                                    end_place = pathlib.Path(dest + hoard_filepath.as_posix())
                                     logging.info(f"Creating {end_place} from {fullpath}")
                                     end_place.parent.mkdir(parents=True, exist_ok=True)
 
@@ -379,7 +380,7 @@ class HoardCommand(object):
                                 hoard_filepath, hoard_props = places.pop()
 
                                 # use + because hoard paths are absolute!
-                                end_place = pathlib.Path(dest + hoard_filepath)
+                                end_place = pathlib.Path(dest + hoard_filepath.as_posix())
                                 logging.info(f"Creating {end_place} from {fullpath}")
                                 end_place.parent.mkdir(parents=True, exist_ok=True)
 
