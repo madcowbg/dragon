@@ -32,7 +32,7 @@ def compare_local_to_hoard(local: RepoContents, hoard: HoardContents, pathing: H
                 current_file = current_path
                 curr_file_hoard_path = pathing.in_local(current_file, local.config.uuid).at_hoard()
                 if curr_file_hoard_path.as_pure_path.as_posix() not in hoard.fsobjects:
-                    logging.info(f"local file not in hoard: {curr_file_hoard_path.as_pure_path.as_posix()}")
+                    logging.info(f"local file not in hoard: {curr_file_hoard_path}")
                     assert props.last_status in (RepoFileStatus.PRESENT, RepoFileStatus.ADDED)
                     yield FileOnlyInLocal(
                         current_file, curr_file_hoard_path.as_pure_path.as_posix(), props,

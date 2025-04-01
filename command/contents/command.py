@@ -280,7 +280,7 @@ class HoardCommandContents:
 
                 considered += 1
                 if not pathlib.Path(local_file.as_pure_path.as_posix()).is_relative_to(path):
-                    logging.info(f"file not in {path}: {local_file.as_pure_path.as_posix()}, skipping")
+                    logging.info(f"file not in {path}: {local_file}, skipping")
                     continue
 
                 goal_status = hoard_props.get_status(repo_uuid)
@@ -328,7 +328,7 @@ class HoardCommandContents:
                     continue
                 considered += 1
                 if not pathlib.Path(local_file.as_pure_path.as_posix()).is_relative_to(path):
-                    logging.info(f"file not in {path}: {local_file.as_pure_path.as_posix()}")
+                    logging.info(f"file not in {path}: {local_file}")
                     continue
                 if hoard_props.get_status(repo_uuid) not in STATUSES_ALREADY_ENABLED:
                     logging.info(f"enabling file {hoard_file} on {repo_uuid}")

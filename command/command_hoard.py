@@ -76,7 +76,8 @@ class HoardCommand(object):
         paths[remote_uuid] = CavePath.exact(remote_abs_path, speed, latency)
         paths.write()
 
-        with self.hoard.open_contents(create_missing=True, is_readonly=False) as hoard:  # fixme remove when unit tests are updated
+        with self.hoard.open_contents(create_missing=True,
+                                      is_readonly=False) as hoard:  # fixme remove when unit tests are updated
             hoard.config.set_max_size_fallback(remote_uuid, shutil.disk_usage(remote_path).total)
 
         return f"Added {name}[{remote_uuid}] at {remote_path}!"
@@ -196,15 +197,15 @@ class HoardCommand(object):
 
             path_in_remote = from_path_in_hoard.at_local(remote.uuid)
             if path_in_remote is None:
-                logging.info(f"Remote {remote.uuid} does not map path {from_path_in_hoard.as_pure_path.as_posix()} ... skipping")
+                logging.info(f"Remote {remote.uuid} does not map path {from_path_in_hoard} ... skipping")
                 continue
 
-            assert path_in_remote.as_pure_path.as_posix() != ".", f'{path_in_remote.as_pure_path.as_posix()} should be local folder "."'
+            assert path_in_remote.as_pure_path.as_posix() != ".", f'{path_in_remote} should be local folder "."'
 
             logging.warning(
-                f"Remote {remote.uuid} contains path {from_path_in_hoard.as_pure_path.as_posix()}"
+                f"Remote {remote.uuid} contains path {from_path_in_hoard}"
                 f" as inner {path_in_remote}, which requires moving files.")
-            return f"Can't move {from_path} to {to_path}, requires moving files in {remote.name}:{path_in_remote.as_pure_path.as_posix()}.\n"
+            return f"Can't move {from_path} to {to_path}, requires moving files in {remote.name}:{path_in_remote}.\n"
 
         if len(repos_to_move) == 0:
             return f"No repos to move!"
@@ -270,21 +271,22 @@ class HoardCommand(object):
                         local_path_obj = pathing.in_hoard(hoard_file).at_local(remote_uuid)
                         assert local_path_obj is not None, \
                             f"Path {hoard_file} needs to be available in local, but isn't???"
-                        local_path = local_path_obj.as_pure_path.as_posix()
-
                         if isinstance(hoard_props, HoardFileProps):
-                            logging.info(f"Restoring description of file {hoard_file} to {local_path}...")
+                            logging.info(
+                                f"Restoring description of file {hoard_file} to {local_path_obj}...")
                             current_contents.fsobjects.add_file(
-                                local_path,
+                                local_path_obj.as_pure_path.as_posix(),
                                 size=hoard_props.size,
                                 mtime=datetime.datetime.now(),
                                 fasthash=hoard_props.fasthash,
                                 status=RepoFileStatus.PRESENT)
-                            out.write(f"PRESENT {local_path}\n")
+                            out.write(f"PRESENT {local_path_obj}\n")
                         elif isinstance(hoard_props, HoardDirProps):
-                            logging.info(f"Restoring description of dir {hoard_file} to {local_path}...")
-                            current_contents.fsobjects.add_dir(local_path, RepoFileStatus.PRESENT)
-                            out.write(f"PRESENT DIR {local_path}\n")
+                            logging.info(
+                                f"Restoring description of dir {hoard_file} to {local_path_obj}...")
+                            current_contents.fsobjects.add_dir(
+                                local_path_obj.as_pure_path.as_posix(), RepoFileStatus.PRESENT)
+                            out.write(f"PRESENT DIR {local_path_obj}\n")
                         else:
                             raise ValueError(f"Unsupported hoard props type: {type(hoard_props)}")
 

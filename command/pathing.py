@@ -28,6 +28,9 @@ class HoardPathing:
             else:
                 return HoardPathing.LocalPath(self._path.relative_to(mounted_at).as_posix(), repo_uuid, self._pathing)
 
+        def __str__(self) -> str:
+            return self._path.as_posix()
+
     class LocalPath:
         def __init__(self, path: str, repo_uuid: str, pathing: "HoardPathing"):
             self._path = pathlib.PurePosixPath(path)
@@ -46,6 +49,9 @@ class HoardPathing:
         def at_hoard(self) -> "HoardPathing.HoardPath":
             joined_path = pathlib.PurePosixPath(self._pathing.mounted_at(self._repo_uuid)).joinpath(self._path)
             return HoardPathing.HoardPath(joined_path.as_posix(), self._pathing)
+
+        def __str__(self) -> str:
+            return self._path.as_posix()
 
     def mounted_at(self, repo_uuid: str) -> str:
         return self._config.remotes[repo_uuid].mounted_at
