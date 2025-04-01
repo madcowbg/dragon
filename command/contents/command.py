@@ -109,23 +109,23 @@ class HoardCommandContents:
                             current_contents, hoard, HoardPathing(self.hoard.config(), self.hoard.paths())):
                         if isinstance(diff, FileOnlyInLocal):
                             if diff.is_added:
-                                out.write(f"ADDED {diff.hoard_file}\n")
+                                out.write(f"ADDED {diff.hoard_file.as_posix()}\n")
                             else:
-                                out.write(f"PRESENT {diff.hoard_file}\n")
+                                out.write(f"PRESENT {diff.hoard_file.as_posix()}\n")
                         elif isinstance(diff, FileContentsDiffer):
-                            out.write(f"MODIFIED {diff.hoard_file}\n")
+                            out.write(f"MODIFIED {diff.hoard_file.as_posix()}\n")
                         elif isinstance(diff, FileOnlyInHoardLocalDeleted):
-                            out.write(f"DELETED {diff.hoard_file}\n")
+                            out.write(f"DELETED {diff.hoard_file.as_posix()}\n")
                         elif isinstance(diff, FileOnlyInHoardLocalUnknown):
                             if not ignore_missing:
-                                out.write(f"MISSING {diff.hoard_file}\n")
+                                out.write(f"MISSING {diff.hoard_file.as_posix()}\n")
                         elif isinstance(diff, FileOnlyInHoardLocalMoved):
-                            out.write(f"MOVED {diff.hoard_file}\n")
+                            out.write(f"MOVED {diff.hoard_file.as_posix()}\n")
                         elif isinstance(diff, DirMissingInHoard):
-                            out.write(f"ADDED_DIR {diff.hoard_dir}\n")
+                            out.write(f"ADDED_DIR {diff.hoard_dir.as_posix()}\n")
                         elif isinstance(diff, DirMissingInLocal):
                             if not ignore_missing:
-                                out.write(f"DELETED_DIR {diff.hoard_dir}\n")
+                                out.write(f"DELETED_DIR {diff.hoard_dir.as_posix()}\n")
                         elif isinstance(diff, FileIsSame) or isinstance(diff, DirIsSame):
                             pass
                         else:
@@ -476,7 +476,7 @@ class HoardCommandContents:
                                     on_hoard_only_local_deleted=PullBehavior.FAIL,
                                 ),
                                 FileOnlyInLocal(
-                                    local_file, hoard_file.as_posix(), local_props,
+                                    local_file, hoard_file, local_props,
                                     local_props.last_status == RepoFileStatus.ADDED),
                                 hoard,
                                 StringIO())  # fixme make it elegant
