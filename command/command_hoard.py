@@ -121,9 +121,10 @@ class HoardCommand(object):
                 out.write(f"  {name_prefix}{remote.uuid} ({remote.type.value}){exact_path}\n")
             out.write("Mounts:\n")
 
-            mount_point_to_mount = group_to_dict(config.remotes.all(), key=lambda r: r.mounted_at)
+            mount_point_to_mount: Dict[PurePosixPath, List[HoardRemote]] = \
+                group_to_dict(config.remotes.all(), key=lambda r: r.mounted_at)
             for mount, remotes in sorted(mount_point_to_mount.items()):
-                out.write(f"  {mount} -> {', '.join(r.name for r in remotes)}\n")
+                out.write(f"  {mount.as_posix()} -> {', '.join(r.name for r in remotes)}\n")
             out.write("DONE\n")
             return out.getvalue()
 
@@ -190,7 +191,7 @@ class HoardCommand(object):
 
         repos_to_move: List[HoardRemote] = []
         for remote in config.remotes.all():
-            if pathlib.Path(remote.mounted_at).is_relative_to(from_path):
+            if remote.mounted_at.is_relative_to(from_path):
                 # mounted_at is a subfolder of from_path
                 logging.info(f"{remote.name} will be moved as {remote.mounted_at} is subfolder of {from_path}")
                 repos_to_move.append(remote)
@@ -232,15 +233,14 @@ class HoardCommand(object):
                 logging.info(f"Moving {', '.join(r.name for r in repos_to_move)}.")
                 out.write(f"Moving {len(repos_to_move)} repos:\n")
                 for remote in repos_to_move:
-                    relative_repo_mounted_at = pathlib.Path(remote.mounted_at).relative_to(from_path)
+                    relative_repo_mounted_at = remote.mounted_at.relative_to(from_path)
                     logging.info(
                         f"[{remote.name} is mounted {relative_repo_mounted_at.as_posix()} rel. to {from_path}]")
-                    final_mount_path = pathlib.Path(
-                        to_path_in_hoard.as_pure_path.as_posix()).joinpath(relative_repo_mounted_at)
+                    final_mount_path = to_path_in_hoard.as_pure_path.joinpath(relative_repo_mounted_at)
                     logging.info(f"re-mounting it to {final_mount_path}")
 
-                    out.write(f"[{remote.name}] {remote.mounted_at} => {final_mount_path.as_posix()}\n")
-                    remote.mount_at(final_mount_path.as_posix())
+                    out.write(f"[{remote.name}] {remote.mounted_at.as_posix()} => {final_mount_path.as_posix()}\n")
+                    remote.mount_at(final_mount_path)
 
                 logging.info("Writing config...")
                 config.write()
@@ -337,7 +337,8 @@ class HoardCommand(object):
                                 skipped += 1
                                 continue
 
-                            places: List[Tuple[PurePosixPath, HoardFileProps]] = list(hoard.fsobjects.by_fasthash(fasthash))
+                            places: List[Tuple[PurePosixPath, HoardFileProps]] = list(
+                                hoard.fsobjects.by_fasthash(fasthash))
                             if len(places) == 0:
                                 mismatched += 1
 

@@ -64,7 +64,7 @@ def compare_local_to_hoard(local: RepoContents, hoard: HoardContents, pathing: H
 
     hoard_file: PurePosixPath
     for hoard_file, props in alive_it(
-            list(hoard.fsobjects.in_folder(PurePosixPath(pathing.mounted_at(local.config.uuid)))),
+            list(hoard.fsobjects.in_folder(pathing.mounted_at(local.config.uuid))),
             title="Hoard vs. Current files"):
         if isinstance(props, HoardFileProps):
             curr_file_path_in_local = pathing.in_hoard(hoard_file).at_local(local.config.uuid)

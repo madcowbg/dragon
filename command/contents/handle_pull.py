@@ -63,7 +63,7 @@ def _handle_file_is_same(preferences: PullPreferences, diff: "FileIsSame", out: 
         already_available = diff.hoard_props.by_status(HoardFileStatus.AVAILABLE)
         # content prefs want to add it, and if not in an already available repo
         repos_to_add = [
-            uuid for uuid in preferences.content_prefs.repos_to_add(diff.hoard_file.as_posix(), diff.local_props)
+            uuid for uuid in preferences.content_prefs.repos_to_add(diff.hoard_file, diff.local_props)
             if uuid not in already_available]
 
         # add status for new repos
@@ -93,7 +93,7 @@ def _handle_local_only(
 
         # add status for new repos
         props.set_status(
-            list(preferences.content_prefs.repos_to_add(diff.hoard_file.as_posix(), diff.local_props)),
+            list(preferences.content_prefs.repos_to_add(diff.hoard_file, diff.local_props)),
             HoardFileStatus.GET)
 
         _incoming__safe_mark_for_cleanup(preferences, diff, props, out)
@@ -106,7 +106,7 @@ def _handle_local_only(
 
         # add status for new repos
         hoard_props.set_status(
-            preferences.content_prefs.repos_to_add(diff.hoard_file.as_posix(), diff.local_props),
+            preferences.content_prefs.repos_to_add(diff.hoard_file, diff.local_props),
             HoardFileStatus.GET)
 
         # set status here

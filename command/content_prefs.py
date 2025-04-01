@@ -1,4 +1,5 @@
 import logging
+from pathlib import PurePosixPath
 from typing import List, Optional, Generator, Dict
 
 from command.pathing import HoardPathing, is_path_available
@@ -48,7 +49,7 @@ class BackupSizes:
 
 
 class BackupSet:
-    def __init__(self, mounted_at: str, backups: List[HoardRemote], pathing: HoardPathing, hoard: HoardContents):
+    def __init__(self, mounted_at: PurePosixPath, backups: List[HoardRemote], pathing: HoardPathing, hoard: HoardContents):
         self.backups = dict((backup.uuid, backup) for backup in backups)
         self.uuids = sorted(list(self.backups.keys()))
         self.pathing = pathing
@@ -62,7 +63,7 @@ class BackupSet:
             logging.warning("No backups are defined.")
 
     def repos_to_backup_to(
-            self, hoard_file: str, hoard_props: Optional[HoardFileProps], file_size: int) -> List[HoardRemote]:
+            self, hoard_file: PurePosixPath, hoard_props: Optional[HoardFileProps], file_size: int) -> List[HoardRemote]:
 
         past_backups = self.currently_scheduled_backups(hoard_file, hoard_props) if hoard_props is not None else []
 
@@ -74,8 +75,10 @@ class BackupSet:
 
         return self.reserve_new_backups(hoard_file, file_size, past_backups)
 
-    def repos_to_clean(self, hoard_file: str, hoard_props: Optional[HoardFileProps], file_size: int) -> List[
+    def repos_to_clean(self, hoard_file: PurePosixPath, hoard_props: Optional[HoardFileProps], file_size: int) -> List[
         HoardRemote]:
+        assert hoard_file.is_absolute()
+
         past_backups = self.currently_scheduled_backups(hoard_file, hoard_props) if hoard_props is not None else []
 
         logging.info(f"Got {len(past_backups)} currently requested backups for {hoard_file}.")
@@ -110,13 +113,13 @@ class BackupSet:
             self.backup_sizes.reserve_size(remote, -file_size)
         return remotes_to_remove
 
-    def currently_scheduled_backups(self, hoard_file: str, hoard_props: HoardFileProps) -> List[HoardRemote]:
+    def currently_scheduled_backups(self, hoard_file: PurePosixPath, hoard_props: HoardFileProps) -> List[HoardRemote]:
         return [
             self.backups[uuid] for uuid in hoard_props.repos_having_status(*STATUSES_DECLARED_TO_FETCH)
             if uuid in self.backups and is_path_available(self.pathing, hoard_file, uuid)]
 
     def reserve_new_backups(
-            self, hoard_file: str, file_size: int, past_backups: List[HoardRemote]) -> List[HoardRemote]:
+            self, hoard_file: PurePosixPath, file_size: int, past_backups: List[HoardRemote]) -> List[HoardRemote]:
 
         allowed_backups = [
             backup for uuid, backup in self.backups.items()
@@ -154,7 +157,7 @@ class BackupSet:
 
     @staticmethod
     def all(config: HoardConfig, pathing: HoardPathing, hoard: HoardContents) -> List["BackupSet"]:
-        sets: Dict[str, List[HoardRemote]] = dict()
+        sets: Dict[PurePosixPath, List[HoardRemote]] = dict()
         for remote in config.remotes.all():
             if remote.type == CaveType.BACKUP:
                 if remote.mounted_at not in sets:
@@ -177,7 +180,7 @@ class ContentPrefs:
         self.pathing = pathing
 
     def repos_to_add(
-            self, hoard_file: str, local_props: RepoFileProps,
+            self, hoard_file: PurePosixPath, local_props: RepoFileProps,
             hoard_props: Optional[HoardFileProps] = None) -> Generator[str, None, None]:
         for r in self._partials_with_fetch_new:
             if is_path_available(self.pathing, hoard_file, r.uuid):

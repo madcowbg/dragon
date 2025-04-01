@@ -53,7 +53,8 @@ class HoardPathing:
         def __str__(self) -> str:
             return self._path.as_posix()
 
-    def mounted_at(self, repo_uuid: str) -> str:
+    def mounted_at(self, repo_uuid: str) -> PurePosixPath:
+        assert self._config.remotes[repo_uuid].mounted_at.is_absolute()
         return self._config.remotes[repo_uuid].mounted_at
 
     def in_hoard(self, path: str | PurePosixPath) -> HoardPath:
@@ -71,5 +72,5 @@ class HoardPathing:
         return paths
 
 
-def is_path_available(pathing: HoardPathing, hoard_file: str, repo: str) -> bool:
+def is_path_available(pathing: HoardPathing, hoard_file: PurePosixPath, repo: str) -> bool:
     return pathing.in_hoard(hoard_file).at_local(repo) is not None
