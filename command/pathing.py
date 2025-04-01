@@ -1,5 +1,5 @@
 import pathlib
-import shutil
+from pathlib import PurePosixPath
 from typing import Optional, Dict
 
 from config import HoardConfig, HoardPaths, HoardRemote
@@ -17,8 +17,9 @@ class HoardPathing:
 
             self._pathing = pathing
 
-        def as_posix(self) -> str:
-            return self._path.as_posix()
+        @property
+        def as_pure_path(self) -> PurePosixPath:
+            return self._path
 
         def at_local(self, repo_uuid: str) -> Optional["HoardPathing.LocalPath"]:
             mounted_at = self._pathing.mounted_at(repo_uuid)
@@ -35,7 +36,9 @@ class HoardPathing:
             self._repo_uuid = repo_uuid
             self._pathing = pathing
 
-        def as_posix(self) -> str: return self._path.as_posix()
+        @property
+        def as_pure_path(self) -> PurePosixPath:
+            return self._path
 
         def on_device_path(self) -> str:
             return pathlib.PurePosixPath(self._pathing._paths[self._repo_uuid].find()).joinpath(self._path).as_posix()
@@ -58,7 +61,7 @@ class HoardPathing:
         for remote in self._config.remotes.all():
             relative_local_path = self.in_hoard(folder).at_local(remote.uuid)
             if relative_local_path is not None:
-                paths[remote] = relative_local_path.as_posix()
+                paths[remote] = relative_local_path.as_pure_path.as_posix()
         return paths
 
 

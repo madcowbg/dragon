@@ -196,15 +196,15 @@ class HoardCommand(object):
 
             path_in_remote = from_path_in_hoard.at_local(remote.uuid)
             if path_in_remote is None:
-                logging.info(f"Remote {remote.uuid} does not map path {from_path_in_hoard.as_posix()} ... skipping")
+                logging.info(f"Remote {remote.uuid} does not map path {from_path_in_hoard.as_pure_path.as_posix()} ... skipping")
                 continue
 
-            assert path_in_remote.as_posix() != ".", f'{path_in_remote.as_posix()} should be local folder "."'
+            assert path_in_remote.as_pure_path.as_posix() != ".", f'{path_in_remote.as_pure_path.as_posix()} should be local folder "."'
 
             logging.warning(
-                f"Remote {remote.uuid} contains path {from_path_in_hoard.as_posix()}"
+                f"Remote {remote.uuid} contains path {from_path_in_hoard.as_pure_path.as_posix()}"
                 f" as inner {path_in_remote}, which requires moving files.")
-            return f"Can't move {from_path} to {to_path}, requires moving files in {remote.name}:{path_in_remote.as_posix()}.\n"
+            return f"Can't move {from_path} to {to_path}, requires moving files in {remote.name}:{path_in_remote.as_pure_path.as_posix()}.\n"
 
         if len(repos_to_move) == 0:
             return f"No repos to move!"
@@ -233,7 +233,8 @@ class HoardCommand(object):
                     relative_repo_mounted_at = pathlib.Path(remote.mounted_at).relative_to(from_path)
                     logging.info(
                         f"[{remote.name} is mounted {relative_repo_mounted_at.as_posix()} rel. to {from_path}]")
-                    final_mount_path = pathlib.Path(to_path_in_hoard.as_posix()).joinpath(relative_repo_mounted_at)
+                    final_mount_path = pathlib.Path(
+                        to_path_in_hoard.as_pure_path.as_posix()).joinpath(relative_repo_mounted_at)
                     logging.info(f"re-mounting it to {final_mount_path}")
 
                     out.write(f"[{remote.name}] {remote.mounted_at} => {final_mount_path.as_posix()}\n")
@@ -269,7 +270,7 @@ class HoardCommand(object):
                         local_path_obj = pathing.in_hoard(hoard_file).at_local(remote_uuid)
                         assert local_path_obj is not None, \
                             f"Path {hoard_file} needs to be available in local, but isn't???"
-                        local_path = local_path_obj.as_posix()
+                        local_path = local_path_obj.as_pure_path.as_posix()
 
                         if isinstance(hoard_props, HoardFileProps):
                             logging.info(f"Restoring description of file {hoard_file} to {local_path}...")

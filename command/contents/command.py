@@ -279,8 +279,8 @@ class HoardCommandContents:
                 assert local_file is not None  # is not addressable here at all
 
                 considered += 1
-                if not pathlib.Path(local_file.as_posix()).is_relative_to(path):
-                    logging.info(f"file not in {path}: {local_file.as_posix()}, skipping")
+                if not pathlib.Path(local_file.as_pure_path.as_posix()).is_relative_to(path):
+                    logging.info(f"file not in {path}: {local_file.as_pure_path.as_posix()}, skipping")
                     continue
 
                 goal_status = hoard_props.get_status(repo_uuid)
@@ -327,8 +327,8 @@ class HoardCommandContents:
                 if local_file is None:  # is not addressable here at all
                     continue
                 considered += 1
-                if not pathlib.Path(local_file.as_posix()).is_relative_to(path):
-                    logging.info(f"file not in {path}: {local_file.as_posix()}")
+                if not pathlib.Path(local_file.as_pure_path.as_posix()).is_relative_to(path):
+                    logging.info(f"file not in {path}: {local_file.as_pure_path.as_posix()}")
                     continue
                 if hoard_props.get_status(repo_uuid) not in STATUSES_ALREADY_ENABLED:
                     logging.info(f"enabling file {hoard_file} on {repo_uuid}")
@@ -459,7 +459,7 @@ class HoardCommandContents:
                         if not isinstance(local_props, RepoFileProps):
                             continue
 
-                        hoard_file = pathing.in_local(local_file, repo_uuid).at_hoard().as_posix()
+                        hoard_file = pathing.in_local(local_file, repo_uuid).at_hoard().as_pure_path.as_posix()
                         if hoard_file not in hoard.fsobjects:
                             logging.info(f"Local file {local_file} will be handled to hoard.")
                             _handle_local_only(
@@ -509,7 +509,7 @@ class HoardCommandContents:
                 ops = list(get_pending_operations(hoard, repo_uuid))
                 print(f"Clearing {len(ops)} pending operations...")
                 for op in alive_it(ops):
-                    local_file = pathing.in_hoard(op.hoard_file).at_local(repo_uuid).as_posix()
+                    local_file = pathing.in_hoard(op.hoard_file).at_local(repo_uuid).as_pure_path.as_posix()
                     assert local_file is not None
 
                     if isinstance(op, GetFile):

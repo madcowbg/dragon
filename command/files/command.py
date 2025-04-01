@@ -121,15 +121,15 @@ def _fetch_files_in_repo(
         async def _execute_get(hoard_file: str, hoard_props: HoardFileProps):
             hoard_filepath = pathing.in_hoard(hoard_file)
             local_filepath = hoard_filepath.at_local(repo_uuid)
-            logging.debug(f"restoring {hoard_file} to {local_filepath.as_posix()}...")
+            logging.debug(f"restoring {hoard_file} to {local_filepath.as_pure_path.as_posix()}...")
             success, fullpath = await _restore_from_another_repo(
                 hoard_filepath, repo_uuid, hoard_props, pathing._config, pathing._paths)
             if success:
                 hoard_props.mark_available(repo_uuid)
-                return f"+ {local_filepath.as_posix()}\n"
+                return f"+ {local_filepath.as_pure_path.as_posix()}\n"
             else:
                 logging.error("error restoring file!")
-                return f"E {local_filepath.as_posix()}\n"
+                return f"E {local_filepath.as_pure_path.as_posix()}\n"
 
         class Copier:
             def __init__(self):
@@ -158,10 +158,10 @@ def _fetch_files_in_repo(
                             hoard, candidates_to_copy, pathing)
                         if success:
                             hoard_props.mark_available(repo_uuid)
-                            return f"c+ {local_filepath.as_posix()}\n"
+                            return f"c+ {local_filepath.as_pure_path.as_posix()}\n"
                         else:
                             logging.error("error restoring file from local copy!")
-                            return f"E {local_filepath.as_posix()}\n"
+                            return f"E {local_filepath.as_pure_path.as_posix()}\n"
                     elif goal_status == HoardFileStatus.MOVE:
                         to_be_moved_from = hoard_props.get_move_file(repo_uuid)
 
@@ -219,7 +219,7 @@ def _cleanup_files_in_repo(
                 to_be_moved_to = hoard.fsobjects.where_to_move(repo_uuid, hoard_file)
 
                 local_path = pathing.in_hoard(hoard_file).at_local(repo_uuid)
-                local_file_to_delete = local_path.as_posix()
+                local_file_to_delete = local_path.as_pure_path.as_posix()
 
                 if hoard_props.fasthash in files_requiring_copy:
                     logging.info(f"file with fasthash {hoard_props.fasthash} to be copied, retaining")
@@ -267,7 +267,7 @@ async def _restore_from_another_repo(
         hoard_file: HoardPathing.HoardPath, uuid_to_restore_to: str, hoard_props: HoardFileProps,
         config: HoardConfig, paths: HoardPaths) -> (bool, str):
     fullpath_to_restore = hoard_file.at_local(uuid_to_restore_to).on_device_path()
-    logging.info(f"Restoring hoard file {hoard_file.as_posix()} to {fullpath_to_restore}.")
+    logging.info(f"Restoring hoard file {hoard_file.as_pure_path.as_posix()} to {fullpath_to_restore}.")
 
     candidates = hoard_props.by_status(HoardFileStatus.AVAILABLE) + hoard_props.by_status(HoardFileStatus.CLEANUP)
 
@@ -278,7 +278,7 @@ async def _restore_from_another_repo(
     for remote_uuid in sorted(candidates, key=sort_by_speed_then_latency):
         logging.info(
             f"Remote: {remote_uuid} "
-            f"[{paths[remote_uuid].speed.value}: {paths[remote_uuid].latency.value}] for {hoard_file.as_posix()}")
+            f"[{paths[remote_uuid].speed.value}: {paths[remote_uuid].latency.value}] for {hoard_file.as_pure_path.as_posix()}")
         if config.remotes[remote_uuid] is None:
             logging.warning(f"remote {remote_uuid} is invalid, won't try to restore")
             continue
@@ -289,7 +289,7 @@ async def _restore_from_another_repo(
         if success:
             return True, restored_file
 
-    logging.error(f"Did not find any available for {hoard_file.as_posix()}!")
+    logging.error(f"Did not find any available for {hoard_file.as_pure_path.as_posix()}!")
     return False, fullpath_to_restore
 
 
