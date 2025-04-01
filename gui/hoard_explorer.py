@@ -32,6 +32,7 @@ class HoardTree(Tree):
         self.guide_depth = 2
         self.auto_expand = False
         self.contents = contents
+        self.select_node(self.root)
         self.root.expand()
 
         self.mounts: Dict[str, List[HoardRemote]] = group_to_dict(
@@ -68,6 +69,13 @@ class HoardTree(Tree):
             self._expand_hoard_dir(event.node, event.node.data, self.loaded_offset[event.node.data])
 
 
+def pretty_truncate(text: str, size: int) -> str:
+    assert size >= 5
+    if len(text) <= size:
+        return text
+    left_len = (size - 3) // 2
+    return text[:left_len] + "..." + text[-(size - 3 - left_len):]
+
 
 class NodeDescription(Widget):
     hoard_item: HoardFile | HoardDir | None = reactive(None, recompose=True)
@@ -85,6 +93,26 @@ class NodeDescription(Widget):
             hoard_dir = self.hoard_item
             yield Label(f"Folder name: {hoard_dir.name}")
             yield Label(f"Hoard path: {hoard_dir.fullname}")
+
+            yield Label(f"Availability on repos", classes="desc_section")
+            for hoard_remote in self.hoard_config.remotes.all():
+                local_path = self.hoard_pathing.in_hoard(hoard_dir.fullname).at_local(hoard_remote.uuid)
+                if local_path is not None:
+                    availability_status_class = "status_available" \
+                        if os.path.isdir(local_path.on_device_path()) else "status_not_available"
+                    yield Horizontal(
+                        Label(
+                            hoard_remote.name,
+                            classes=" ".join([
+                                "repo_name",
+                                availability_status_class])),
+                        Label(
+                            f"[@click=app.open_cave_dir('{local_path.on_device_path()}')]{pretty_truncate(hoard_remote.uuid, 15)}[/]",
+                            classes="repo_uuid"),
+                        Label(Text(self.hoard_pathing.in_local("/", hoard_remote.uuid).on_device_path()), classes=f"remote_location {availability_status_class}"),
+                        Label(Text(local_path.as_posix()), classes="local_path"),
+                        classes="desc_status_line")
+
         elif isinstance(self.hoard_item, HoardFile):
             hoard_file = self.hoard_item
             yield Label(f"File name: {hoard_file.name}")
@@ -212,7 +240,17 @@ class HoardExplorerApp(App):
             self.notify(f"File {filepath} does not exist!", severity="error")
         else:
             self.notify(f"Opening {filepath} in Explorer.", severity="information")
-            cmd = f"explorer.exe /select,\"{pathlib.WindowsPath(filepath)}\""
+            cmd = f"explorer.exe /select,\"{path}\""
+            logging.error(cmd)
+            subprocess.Popen(cmd)
+
+    def action_open_cave_dir(self, dirpath: str):
+        path = pathlib.WindowsPath(dirpath)
+        if not path.exists():
+            self.notify(f"Folder {dirpath} does not exist!", severity="error")
+        else:
+            self.notify(f"Opening {dirpath} in Explorer.", severity="information")
+            cmd = f"explorer.exe \"{path}\""
             logging.error(cmd)
             subprocess.Popen(cmd)
 

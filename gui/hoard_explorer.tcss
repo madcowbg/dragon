@@ -16,10 +16,6 @@ HoardTree {
     height: 1;
 }
 
-NodeDescription {
-
-}
-
 .desc_section {
     padding-top: 1;
 }
@@ -34,8 +30,14 @@ NodeDescription {
 
 .status_not_available {
     text-style: strike;
+    color: gray
 }
 
 .repo_uuid {
     text-style: dim;
 }
+
+.remote_location {
+    margin-left: 1;
+}
+
