@@ -120,9 +120,9 @@ class RepoCommand(object):
                 print_maybe = (lambda line: out.write(line + "\n")) if show_details else (lambda line: None)
 
                 logging.info(f"Comparing contents and filesystem...")
-                files_to_add_or_update: Dict[str, RepoFileStatus] = {}
-                files_maybe_removed: List[Tuple[str, RepoFileProps]] = []
-                folders_to_add: List[str] = []
+                files_to_add_or_update: Dict[pathlib.Path, RepoFileStatus] = {}
+                files_maybe_removed: List[Tuple[PurePosixPath, RepoFileProps]] = []
+                folders_to_add: List[pathlib.Path] = []
                 for diff in compute_difference_between_contents_and_filesystem(
                         contents, self.repo.path, hoard_ignore, skip_integrity_checks):
                     if isinstance(diff, FileNotInFilesystem):
@@ -138,23 +138,23 @@ class RepoCommand(object):
                     elif isinstance(diff, RepoFileWeakDifferent):
                         assert skip_integrity_checks
                         logging.info(f"File {diff.filepath} is weakly different, adding to check.")
-                        files_to_add_or_update[pathlib.Path(self.repo.path).joinpath(diff.filepath).as_posix()] = \
+                        files_to_add_or_update[pathlib.Path(self.repo.path).joinpath(diff.filepath)] = \
                             RepoFileStatus.MODIFIED
                     elif isinstance(diff, RepoFileSame):
                         logging.info(f"File {diff.filepath} is same.")
                     elif isinstance(diff, RepoFileDifferent):
                         logging.info(f"File {diff.filepath} is different, adding to check.")
-                        files_to_add_or_update[pathlib.Path(self.repo.path).joinpath(diff.filepath).as_posix()] = \
+                        files_to_add_or_update[pathlib.Path(self.repo.path).joinpath(diff.filepath)] = \
                             RepoFileStatus.MODIFIED
                     elif isinstance(diff, FileNotInRepo):
                         logging.info(f"File {diff.filepath} not in repo, adding.")
-                        files_to_add_or_update[pathlib.Path(self.repo.path).joinpath(diff.filepath).as_posix()] = \
+                        files_to_add_or_update[pathlib.Path(self.repo.path).joinpath(diff.filepath)] = \
                             add_new_with_status
                     elif isinstance(diff, DirIsSameInRepo):
                         logging.info(f"Dir {diff.dirpath} is same, skipping")
                     elif isinstance(diff, DirNotInRepo):
                         logging.info(f"Dir {diff.dirpath} is different, adding...")
-                        folders_to_add.append(pathlib.Path(self.repo.path).joinpath(diff.dirpath).as_posix())
+                        folders_to_add.append(pathlib.Path(self.repo.path).joinpath(diff.dirpath))
                     else:
                         raise ValueError(f"unknown diff type: {type(diff)}")
 
@@ -163,7 +163,7 @@ class RepoCommand(object):
                 logging.info(f"Hashing {len(files_to_add_or_update)} files to add:")
                 file_hashes = asyncio.run(find_hashes([file for file, status in files_to_add_or_update.items()]))
 
-                inverse_hashes: Dict[str, List[Tuple[str, str]]] = group_to_dict(
+                inverse_hashes: Dict[str, List[Tuple[pathlib.Path, str]]] = group_to_dict(
                     file_hashes.items(),
                     key=lambda file_to_hash: file_to_hash[1])
 
@@ -274,10 +274,10 @@ class RepoCommand(object):
         except MissingRepoContents:
             return f"Repo {current_uuid} contents have not been refreshed yet!"
 
-        files_same = []
-        files_new = []
-        files_mod = []
-        files_del = []
+        files_same: List[PurePosixPath] = []
+        files_new: List[PurePosixPath] = []
+        files_mod: List[PurePosixPath] = []
+        files_del: List[PurePosixPath] = []
 
         dir_new = []
         dir_same = []
@@ -339,25 +339,25 @@ class RepoCommand(object):
 
 
 class FileNotInFilesystem:
-    def __init__(self, filepath: str, props: RepoFileProps):
+    def __init__(self, filepath: PurePosixPath, props: RepoFileProps):
         self.filepath = filepath
         self.props = props
 
 
 class DirNotInFilesystem:
-    def __init__(self, dirpath: str, props: RepoDirProps):
+    def __init__(self, dirpath: PurePosixPath, props: RepoDirProps):
         self.dirpath = dirpath
         self.props = props
 
 
 class RepoFileWeakSame:
-    def __init__(self, filepath: str, props: RepoFileProps):
+    def __init__(self, filepath: PurePosixPath, props: RepoFileProps):
         self.filepath = filepath
         self.props = props
 
 
 class RepoFileWeakDifferent:
-    def __init__(self, filepath: str, props: RepoFileProps, mtime: float, size: int):
+    def __init__(self, filepath: PurePosixPath, props: RepoFileProps, mtime: float, size: int):
         self.filepath = filepath
         self.props = props
 
@@ -366,7 +366,7 @@ class RepoFileWeakDifferent:
 
 
 class RepoFileDifferent:
-    def __init__(self, filepath: str, props: RepoFileProps, mtime: float, size: int, fasthash: str):
+    def __init__(self, filepath: PurePosixPath, props: RepoFileProps, mtime: float, size: int, fasthash: str):
         self.filepath = filepath
         self.props = props
 
@@ -376,25 +376,25 @@ class RepoFileDifferent:
 
 
 class RepoFileSame:
-    def __init__(self, filepath: str, props: RepoFileProps, mtime: float):
+    def __init__(self, filepath: PurePosixPath, props: RepoFileProps, mtime: float):
         self.filepath = filepath
         self.props = props
         self.mtime = mtime
 
 
 class DirIsSameInRepo:
-    def __init__(self, dirpath: str, props: RepoDirProps):
+    def __init__(self, dirpath: PurePosixPath, props: RepoDirProps):
         self.dirpath = dirpath
         self.props = props
 
 
 class DirNotInRepo:
-    def __init__(self, dirpath: str):
+    def __init__(self, dirpath: PurePosixPath):
         self.dirpath = dirpath
 
 
 class FileNotInRepo:
-    def __init__(self, filepath: str):
+    def __init__(self, filepath: PurePosixPath):
         self.filepath = filepath
 
 
@@ -412,10 +412,10 @@ def compute_difference_between_contents_and_filesystem(
             title="Checking for deleted files and folders"):
         if isinstance(props, RepoFileProps):
             if not pathlib.Path(repo_path).joinpath(obj_path).is_file():
-                yield FileNotInFilesystem(obj_path.as_posix(), props)
+                yield FileNotInFilesystem(obj_path, props)
         elif isinstance(props, RepoDirProps):
             if not pathlib.Path(repo_path).joinpath(obj_path).is_dir():
-                yield DirNotInFilesystem(obj_path.as_posix(), props)
+                yield DirNotInFilesystem(obj_path, props)
         else:
             raise ValueError(f"invalid props type: {type(props)}")
 
@@ -424,23 +424,23 @@ def compute_difference_between_contents_and_filesystem(
         for file_path_full, dir_path_full in walk_repo(repo_path, hoard_ignore):
             if file_path_full is not None:
                 assert dir_path_full is None
-                file_path_local = file_path_full.relative_to(repo_path)
+                file_path_local = PurePosixPath(file_path_full.relative_to(repo_path))
                 logging.info(f"Checking {file_path_local} for existence...")
                 if contents.fsobjects.in_existing(file_path_local):  # file is already in index
                     logging.info(f"File is in contents, adding to check")  # checking size and mtime.")
                     file_path_matches.append(file_path_full.as_posix())
                 else:
-                    yield FileNotInRepo(file_path_local.as_posix())
+                    yield FileNotInRepo(file_path_local)
                 bar()
             else:
                 assert dir_path_full is not None and file_path_full is None
-                dir_path_in_local = dir_path_full.relative_to(repo_path)
+                dir_path_in_local = PurePosixPath(dir_path_full.relative_to(repo_path))
                 if contents.fsobjects.in_existing(dir_path_in_local):
                     props = contents.fsobjects.get_existing(dir_path_in_local)
                     assert isinstance(props, RepoDirProps)
-                    yield DirIsSameInRepo(dir_path_in_local.as_posix(), props)
+                    yield DirIsSameInRepo(dir_path_in_local, props)
                 else:
-                    yield DirNotInRepo(dir_path_in_local.as_posix())
+                    yield DirNotInRepo(dir_path_in_local)
                 bar()
 
     with alive_bar(len(file_path_matches), title="Checking maybe mod files") as m_bar:
@@ -448,19 +448,19 @@ def compute_difference_between_contents_and_filesystem(
             try:
                 stats = await aiofiles.os.stat(file_fullpath)
 
-                file_path_local = pathlib.Path(file_fullpath).relative_to(repo_path)
+                file_path_local = pathlib.PurePosixPath(file_fullpath).relative_to(repo_path)
                 props = contents.fsobjects.get_existing(file_path_local)
                 if skip_integrity_checks:
                     if props.mtime == stats.st_mtime and props.size == stats.st_size:
-                        return RepoFileWeakSame(file_path_local.as_posix(), props)
+                        return RepoFileWeakSame(file_path_local, props)
                     else:
-                        return RepoFileWeakDifferent(file_path_local.as_posix(), props, stats.st_mtime, stats.st_size)
+                        return RepoFileWeakDifferent(file_path_local, props, stats.st_mtime, stats.st_size)
                 else:
                     fasthash = await fast_hash_async(file_fullpath)
                     if props.fasthash == fasthash:
-                        return RepoFileSame(file_path_local.as_posix(), props, stats.st_mtime)
+                        return RepoFileSame(file_path_local, props, stats.st_mtime)
                     else:
-                        return RepoFileDifferent(file_path_local.as_posix(), props, stats.st_mtime, stats.st_size, fasthash)
+                        return RepoFileDifferent(file_path_local, props, stats.st_mtime, stats.st_size, fasthash)
             finally:
                 m_bar()
 

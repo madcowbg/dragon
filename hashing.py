@@ -2,18 +2,19 @@ import asyncio
 import hashlib
 import logging
 import os
+import pathlib
 from asyncio import Queue, TaskGroup
-from typing import Set, Dict, List
+from typing import Dict, List
 
 import aiofiles
 from alive_progress import alive_bar
 
 
-def fast_hash(fullpath: str, chunk_size: int = 1 << 16) -> str:
+def fast_hash(fullpath: pathlib.Path, chunk_size: int = 1 << 16) -> str:
     return asyncio.run(fast_hash_async(fullpath, chunk_size))
 
 
-async def fast_hash_async(fullpath: str, chunk_size: int = 1 << 16) -> str:
+async def fast_hash_async(fullpath: pathlib.Path, chunk_size: int = 1 << 16) -> str:
     async with aiofiles.open(fullpath, "rb") as f:
         await f.seek(0, os.SEEK_END)
         size = await f.tell()
@@ -32,10 +33,10 @@ async def fast_hash_async(fullpath: str, chunk_size: int = 1 << 16) -> str:
     return hashlib.md5(file_data).hexdigest()
 
 
-async def find_hashes(filenames: List[str]) -> Dict[str, str]:
-    file_hashes: Dict[str, str] = dict()
+async def find_hashes(filenames: List[pathlib.Path]) -> Dict[pathlib.Path, str]:
+    file_hashes: Dict[pathlib.Path, str] = dict()
 
-    queue: Queue[str] = asyncio.Queue()
+    queue: Queue[pathlib.Path] = asyncio.Queue()
     for f in filenames:
         queue.put_nowait(f)
 

@@ -4,12 +4,12 @@ import sqlite3
 from datetime import datetime
 from pathlib import PurePosixPath
 from sqlite3 import Connection, Cursor, Row
-from typing import Generator, Tuple, Optional, Iterable
+from typing import Tuple, Iterable
 
 import rtoml
 
-from exceptions import MissingRepoContents
 from contents.repo_props import RepoFileProps, RepoDirProps, RepoFileStatus
+from exceptions import MissingRepoContents
 from util import FIRST_VALUE
 
 
