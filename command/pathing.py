@@ -12,51 +12,55 @@ class HoardPathing:
         self._paths = paths
 
     class HoardPath:
-        def __init__(self, path: PurePosixPath, pathing: "HoardPathing"):
-            assert path.is_absolute()
+        def __init__(self, path: str, pathing: "HoardPathing"):
+            assert path.startswith("/")
 
             self._path = path
-            assert self._path.is_absolute()
-
             self._pathing = pathing
 
         @property
         def as_pure_path(self) -> PurePosixPath:
-            return self._path
+            return PurePosixPath(self._path)
 
         def at_local(self, repo_uuid: str) -> Optional["HoardPathing.LocalPath"]:
-            mounted_at = self._pathing.mounted_at(repo_uuid)
-            if not self._path.is_relative_to(mounted_at):
-                return None
-            else:
-                return HoardPathing.LocalPath(self._path.relative_to(mounted_at), repo_uuid, self._pathing)
+            mounted_at = self._pathing.smart_mounted_at_str(repo_uuid)
+            if not self._path.startswith(mounted_at):
+                return None  # is not relative
+            return HoardPathing.LocalPath(self._path[len(mounted_at) + 1:], repo_uuid, self._pathing)
 
         def __str__(self) -> str:
-            return self._path.as_posix()
+            return self._path
 
     class LocalPath:
-        def __init__(self, path: PurePosixPath, repo_uuid: str, pathing: "HoardPathing"):
-            assert not path.is_absolute()
+        def __init__(self, path: str, repo_uuid: str, pathing: "HoardPathing"):
+            assert not path.startswith("/")
 
-            self._path = pathlib.PurePosixPath(path)
-            assert not self._path.is_absolute()
+            self._path = path
 
             self._repo_uuid = repo_uuid
             self._pathing = pathing
 
         @property
         def as_pure_path(self) -> PurePosixPath:
-            return self._path
+            return PurePosixPath(self._path)
 
         def on_device_path(self) -> str:
-            return pathlib.PurePosixPath(self._pathing._paths[self._repo_uuid].find()).joinpath(self._path).as_posix()
+            return self._pathing._paths[self._repo_uuid].find() + "/" + self._path
 
         def at_hoard(self) -> "HoardPathing.HoardPath":
-            joined_path = pathlib.PurePosixPath(self._pathing.mounted_at(self._repo_uuid)).joinpath(self._path)
+            mounted_at = self._pathing.smart_mounted_at_str(self._repo_uuid)
+            joined_path = mounted_at + "/" + self._path
             return HoardPathing.HoardPath(joined_path, self._pathing)
 
         def __str__(self) -> str:
-            return self._path.as_posix()
+            return self._path
+
+    @cache
+    def smart_mounted_at_str(self, repo_uuid) -> str:
+        mounted_at = self.mounted_at(repo_uuid).as_posix()
+        if mounted_at == "/":
+            mounted_at = ""
+        return mounted_at
 
     @cache
     def mounted_at(self, repo_uuid: str) -> PurePosixPath:
@@ -64,10 +68,10 @@ class HoardPathing:
         return self._config.remotes[repo_uuid].mounted_at
 
     def in_hoard(self, path: PurePosixPath | PurePosixPath) -> HoardPath:
-        return HoardPathing.HoardPath(path, self)
+        return HoardPathing.HoardPath(path.as_posix(), self)
 
     def in_local(self, path: PurePosixPath, repo_uuid: str) -> LocalPath:
-        return HoardPathing.LocalPath(path, repo_uuid, self)
+        return HoardPathing.LocalPath(path.as_posix(), repo_uuid, self)
 
     def repos_availability(self, folder: str) -> Dict[HoardRemote, str]:
         paths: Dict[HoardRemote, str] = {}
