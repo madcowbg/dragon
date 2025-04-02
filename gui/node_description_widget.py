@@ -35,24 +35,23 @@ class NodeDescription(Widget):
             yield Label(f"Hoard path: {hoard_dir.fullname}")
 
             yield Label(f"Addressable on repos", classes="desc_section")
+            data_table = DataTable()
+            yield data_table
+            data_table.add_columns("repo", "uuid", "path")
             for hoard_remote in self.hoard_config.remotes.all():
                 local_path = self.hoard_pathing.in_hoard(hoard_dir.fullname).at_local(hoard_remote.uuid)
                 if local_path is not None:
-                    availability_status_class = "status_available" \
-                        if os.path.isdir(local_path.on_device_path()) else "status_not_available"
-                    yield Horizontal(
-                        Label(
+                    data_table.add_row(
+                        Text(
                             hoard_remote.name,
-                            classes=" ".join([
-                                "repo_name",
-                                availability_status_class])),
-                        Label(
+                            style="green" if os.path.isdir(local_path.on_device_path()) else "strike"),
+                        Text.from_markup(
                             f"[@click=app.open_cave_dir('{local_path.on_device_path()}')]{pretty_truncate(hoard_remote.uuid, 15)}[/]",
-                            classes="repo_uuid"),
-                        Label(Text(self.hoard_pathing.in_local("", hoard_remote.uuid).on_device_path()),
-                              classes=f"remote_location {availability_status_class}"),
-                        Label(Text(local_path.as_pure_path.as_posix()), classes="local_path"),
-                        classes="desc_status_line")
+                            style="u"),
+                        Text(
+                            self.hoard_pathing.in_local("", hoard_remote.uuid).on_device_path(),
+                            style="green" if os.path.isdir(local_path.on_device_path()) else "strike").append(
+                            local_path.as_pure_path.as_posix(), style="normal"))
 
             yield Label(f"Storage on repos {hoard_dir.fullname}", classes="desc_section")
             statuses = self.hoard_contents.fsobjects.status_by_uuid(PurePosixPath(hoard_dir.fullname))
@@ -65,7 +64,7 @@ class NodeDescription(Widget):
 
             data_table = DataTable()
             yield data_table
-            data_table.add_columns("name",  *all_stats)
+            data_table.add_columns("name", *all_stats)
             for name, uuid, updated_maybe, uuid_stats in statuses_sorted:
                 data_table.add_row(
                     name,
