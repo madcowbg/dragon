@@ -253,7 +253,7 @@ def _handle_hoard_only_moved(
     if preferences.on_hoard_only_local_moved == PullBehavior.MOVE_ON_HOARD:
         goal_status = diff.hoard_props.get_status(preferences.local_uuid)
         if goal_status == HoardFileStatus.AVAILABLE:
-            hoard_new_path = pathing.in_local(diff.local_props.last_related_fullpath, preferences.local_uuid) \
+            hoard_new_path = pathing.in_local(PurePosixPath(diff.local_props.last_related_fullpath), preferences.local_uuid) \
                 .at_hoard().as_pure_path
             hoard_new_path_props = hoard.fsobjects[hoard_new_path]
             assert isinstance(hoard_new_path_props, HoardFileProps)

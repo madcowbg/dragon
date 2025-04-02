@@ -102,7 +102,7 @@ class HoardFileProps:
             "INSERT OR REPLACE INTO fspresence (fsobject_id, uuid, status, move_from) VALUES (?, ?, ?, ?)",
             (self.fsobject_id, repo_uuid, HoardFileStatus.MOVE.value, old_hoard_file))
 
-    def get_move_file(self, repo_uuid: str):
+    def get_move_file(self, repo_uuid: str) -> str:
         curr = self.parent.conn.cursor()
         curr.row_factory = FIRST_VALUE
 

@@ -186,8 +186,8 @@ class HoardCommand(object):
         config = self.hoard.config()
         pathing = HoardPathing(config, self.hoard.paths())
 
-        from_path_in_hoard = pathing.in_hoard(from_path)
-        to_path_in_hoard = pathing.in_hoard(to_path)
+        from_path_in_hoard = pathing.in_hoard(PurePosixPath(from_path))
+        to_path_in_hoard = pathing.in_hoard(PurePosixPath(to_path))
 
         repos_to_move: List[HoardRemote] = []
         for remote in config.remotes.all():

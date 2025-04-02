@@ -49,7 +49,7 @@ class NodeDescription(Widget):
                             f"[@click=app.open_cave_dir('{local_path.on_device_path()}')]{pretty_truncate(hoard_remote.uuid, 15)}[/]",
                             style="u"),
                         Text(
-                            self.hoard_pathing.in_local("", hoard_remote.uuid).on_device_path(),
+                            self.hoard_pathing.in_local(PurePosixPath(""), hoard_remote.uuid).on_device_path(),
                             style="green" if os.path.isdir(local_path.on_device_path()) else "strike").append(
                             local_path.as_pure_path.as_posix(), style="normal"))
 
