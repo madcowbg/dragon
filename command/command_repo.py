@@ -5,53 +5,14 @@ from pathlib import PurePosixPath
 from typing import List, Optional
 
 from command.comparison_repo import FileDeleted, FileMoved, FileAdded, FileModified, DirAdded, DirRemoved, FileIsSame, \
-    DirIsSame, find_repo_changes, RepoChange
+    DirIsSame, find_repo_changes, _apply_repo_change_to_contents
 from command.hoard_ignore import HoardIgnore, DEFAULT_IGNORE_GLOBS
 from command.repo import ProspectiveRepo
-from contents.repo import RepoContents
 from contents.repo_props import RepoFileStatus
+from daemon.daemon import run_daemon
 from exceptions import MissingRepo, MissingRepoContents
 from resolve_uuid import load_config, resolve_remote_uuid, load_paths
 from util import format_size, format_percent
-
-
-def _apply_repo_change_to_contents(
-        change: RepoChange, contents: RepoContents, show_details: bool, out: StringIO) -> None:
-    print_maybe = (lambda line: out.write(line + "\n")) if show_details else (lambda line: None)
-
-    if isinstance(change, FileIsSame):
-        pass
-    elif isinstance(change, FileDeleted):
-        print_maybe(f"{change.details} {change.missing_relpath}")
-        contents.fsobjects.mark_removed(PurePosixPath(change.missing_relpath))
-    elif isinstance(change, FileMoved):
-        contents.fsobjects.mark_moved(
-            change.missing_relpath, change.moved_to_relpath,
-            size=change.size, mtime=change.mtime, fasthash=change.moved_file_hash)
-
-        print_maybe(f"MOVED {change.missing_relpath.as_posix()} TO {change.moved_to_relpath.as_posix()}")
-    elif isinstance(change, FileAdded):
-        contents.fsobjects.add_file(
-            change.relpath, size=change.size, mtime=change.mtime, fasthash=change.fasthash,
-            status=change.requested_status)
-
-        print_maybe(f"{change.requested_status.value.upper()}_FILE {change.relpath.as_posix()}")
-    elif isinstance(change, FileModified):
-        contents.fsobjects.add_file(
-            change.relpath, size=change.size, mtime=change.mtime, fasthash=change.fasthash,
-            status=RepoFileStatus.MODIFIED)
-
-        print_maybe(f"MODIFIED_FILE {change.relpath.as_posix()}")
-    elif isinstance(change, DirIsSame):
-        pass
-    elif isinstance(change, DirAdded):
-        contents.fsobjects.add_dir(change.relpath, status=RepoFileStatus.ADDED)
-        print_maybe(f"ADDED_DIR {change.relpath}")
-    elif isinstance(change, DirRemoved):
-        print_maybe("REMOVED_DIR {diff.dirpath}")
-        contents.fsobjects.mark_removed(PurePosixPath(change.dirpath))
-    else:
-        raise TypeError(f"Unexpected change type {type(change)}")
 
 
 class RepoCommand(object):
@@ -219,3 +180,6 @@ class RepoCommand(object):
                     f" deleted: {len(dir_deleted)} ({format_percent(len(dir_deleted) / max(1, stats.num_dirs))})\n")
 
                 return out.getvalue()
+
+    def watch(self, assume_current: bool = False):
+        run_daemon(self.repo.path, assume_current)

@@ -1,7 +1,7 @@
+import logging
 from typing import Optional
 
 import fire
-import logging
 
 from command.command_hoard import HoardCommand
 from command.command_repo import RepoCommand

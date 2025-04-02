@@ -29,6 +29,7 @@ def _has_uuid_filename(path: str) -> bool:
 class ProspectiveRepo:
     def __init__(self, path: str):
         self.path = path
+        logging.info("Opening prospective repo at path: %s", self.path)
 
     def _init_uuid(self):
         with open(os.path.join(self.config_folder, CURRENT_UUID_FILENAME), "w") as f:

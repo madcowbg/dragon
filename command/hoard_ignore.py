@@ -2,7 +2,8 @@ import pathlib
 from typing import List
 
 DEFAULT_IGNORE_GLOBS = [
-    r".hoard",  # current hoard location, but those created recursively, for some reason
+    r".hoard",
+    r".hoard/**",  # current hoard location, but those created recursively, for some reason
     r"**/thumbs.db",
     r"System Volume Information",
     r"$Recycle.Bin",
@@ -15,7 +16,7 @@ class HoardIgnore:
     def __init__(self, ignore_globs_list: List[str]):
         self.ignore_globs_list = ignore_globs_list
 
-    def matches(self, fullpath: pathlib.Path) -> bool:
+    def matches(self, fullpath: pathlib.PurePosixPath) -> bool:
         for glob in self.ignore_globs_list:
             if fullpath.full_match(glob, case_sensitive=False):
                 return True

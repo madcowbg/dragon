@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import pathlib
+from io import StringIO
 from pathlib import PurePosixPath
 from typing import Iterable, Tuple, Dict, Optional, List
 
@@ -11,7 +12,7 @@ from alive_progress import alive_it, alive_bar
 from command.hoard_ignore import HoardIgnore
 from contents.repo import RepoContents
 from contents.repo_props import RepoFileStatus, RepoFileProps, RepoDirProps
-from hashing import find_hashes, fast_hash_async
+from hashing import find_hashes, fast_hash_async, fast_hash
 from util import group_to_dict, run_async_in_parallel
 
 type RepoDiffs = (
@@ -110,46 +111,50 @@ type RepoChange = FileIsSame | FileDeleted | FileModified | FileMoved | FileAdde
 
 
 def find_repo_changes(
-        repo_path: str, contents: RepoContents,
-        hoard_ignore: HoardIgnore,
+        repo_path: str, contents: RepoContents, hoard_ignore: HoardIgnore,
         add_new_with_status: RepoFileStatus, skip_integrity_checks: bool) -> Iterable[RepoChange]:
     logging.info(f"Comparing contents and filesystem...")
+    diffs_stream = compute_difference_between_contents_and_filesystem(
+        contents, repo_path, hoard_ignore, skip_integrity_checks)
+
+    yield from compute_changes_from_diffs(diffs_stream, repo_path, add_new_with_status)
+
+
+def compute_changes_from_diffs(diffs_stream: Iterable[RepoDiffs], repo_path: str, add_new_with_status: RepoFileStatus):
     files_to_add_or_update: Dict[pathlib.Path, Tuple[RepoFileStatus, Optional[RepoFileProps]]] = {}
     files_maybe_removed: List[Tuple[PurePosixPath, RepoFileProps]] = []
     folders_to_add: List[pathlib.Path] = []
-    for diff in compute_difference_between_contents_and_filesystem(
-            contents, repo_path, hoard_ignore, skip_integrity_checks):
+
+    for diff in diffs_stream:
         if isinstance(diff, FileNotInFilesystem):
-            logging.info(f"File not found, marking for removal: {diff.filepath}")
+            logging.debug(f"File not found, marking for removal: {diff.filepath}")
             files_maybe_removed.append((diff.filepath, diff.props))
         elif isinstance(diff, DirNotInFilesystem):
-            logging.info(f"Removing dir {diff.dirpath}")
+            logging.debug(f"Removing dir {diff.dirpath}")
             yield DirRemoved(diff.dirpath)
         elif isinstance(diff, RepoFileWeakSame):
-            assert skip_integrity_checks
-            logging.info("Skipping file as size and mtime is the same!!!")
+            logging.debug("Skipping file as size and mtime is the same!!!")
             yield FileIsSame(diff.filepath)
         elif isinstance(diff, RepoFileWeakDifferent):
-            assert skip_integrity_checks
-            logging.info(f"File {diff.filepath} is weakly different, adding to check.")
+            logging.debug(f"File {diff.filepath} is weakly different, adding to check.")
             files_to_add_or_update[pathlib.Path(repo_path).joinpath(diff.filepath)] = \
                 (RepoFileStatus.MODIFIED, diff.props)
         elif isinstance(diff, RepoFileSame):
-            logging.info(f"File {diff.filepath} is same.")
+            logging.debug(f"File {diff.filepath} is same.")
             yield FileIsSame(diff.filepath)
         elif isinstance(diff, RepoFileDifferent):
-            logging.info(f"File {diff.filepath} is different, adding to check.")
+            logging.debug(f"File {diff.filepath} is different, adding to check.")
             files_to_add_or_update[pathlib.Path(repo_path).joinpath(diff.filepath)] = \
                 (RepoFileStatus.MODIFIED, diff.props)
         elif isinstance(diff, FileNotInRepo):
-            logging.info(f"File {diff.filepath} not in repo, adding.")
+            logging.debug(f"File {diff.filepath} not in repo, adding.")
             files_to_add_or_update[pathlib.Path(repo_path).joinpath(diff.filepath)] = \
                 (add_new_with_status, None)
         elif isinstance(diff, DirIsSameInRepo):
-            logging.info(f"Dir {diff.dirpath} is same, skipping")
+            logging.debug(f"Dir {diff.dirpath} is same, skipping")
             yield DirIsSame(diff.dirpath)
         elif isinstance(diff, DirNotInRepo):
-            logging.info(f"Dir {diff.dirpath} is different, adding...")
+            logging.debug(f"Dir {diff.dirpath} is different, adding...")
             folders_to_add.append(pathlib.Path(repo_path).joinpath(diff.dirpath))
         else:
             raise ValueError(f"unknown diff type: {type(diff)}")
@@ -322,9 +327,9 @@ def compute_difference_between_contents_and_filesystem(
             if file_path_full is not None:
                 assert dir_path_full is None
                 file_path_local = PurePosixPath(file_path_full.relative_to(repo_path))
-                logging.info(f"Checking {file_path_local} for existence...")
+                logging.debug(f"Checking {file_path_local} for existence...")
                 if contents.fsobjects.in_existing(file_path_local):  # file is already in index
-                    logging.info(f"File is in contents, adding to check")  # checking size and mtime.")
+                    logging.debug(f"File is in contents, adding to check")  # checking size and mtime.")
                     file_path_matches.append(file_path_full.as_posix())
                 else:
                     yield FileNotInRepo(file_path_local)
@@ -368,3 +373,83 @@ def compute_difference_between_contents_and_filesystem(
         assert len(prop_tuples) == len(file_path_matches)
 
     yield from alive_it(prop_tuples, title="Returning file diffs")
+
+
+def compute_difference_filtered_by_path(
+        contents: RepoContents, repo_path: str, hoard_ignore: HoardIgnore,
+        allowed_paths: List[str]) -> Iterable[RepoDiffs]:
+    for allowed_path in alive_it(allowed_paths, title="Checking updates"):
+        path_on_device = pathlib.Path(allowed_path).absolute()
+
+        local_path = PurePosixPath(path_on_device.relative_to(repo_path))
+        if hoard_ignore.matches(local_path):
+            logging.info("ignoring a file")
+            continue
+
+        if contents.fsobjects.in_existing(local_path):
+            logging.debug(f"{local_path} is in contents, check")
+
+            existing_prop = contents.fsobjects.get_existing(local_path)
+            if isinstance(existing_prop, RepoDirProps):
+                if not path_on_device.is_dir():
+                    yield DirNotInFilesystem(local_path, existing_prop)
+                else:
+                    yield DirIsSameInRepo(local_path, existing_prop)
+            elif isinstance(existing_prop, RepoFileProps):
+                if not path_on_device.is_file():
+                    yield FileNotInFilesystem(local_path, existing_prop)
+                else:
+                    stats = os.stat(path_on_device)
+                    fasthash = fast_hash(path_on_device)
+                    if existing_prop.fasthash == fasthash:
+                        yield RepoFileSame(local_path, existing_prop, stats.st_mtime)
+                    else:
+                        yield RepoFileDifferent(local_path, existing_prop, stats.st_mtime, stats.st_size, fasthash)
+            else:
+                raise ValueError(f"invalid props type: {type(existing_prop)}")
+        else:
+            if path_on_device.is_file():
+                yield FileNotInRepo(local_path)
+            elif path_on_device.is_dir():
+                yield DirNotInRepo(local_path)
+            else:
+                logging.error(f"Bad type of object in {local_path}.")
+
+
+def _apply_repo_change_to_contents(
+        change: RepoChange, contents: RepoContents, show_details: bool, out: StringIO) -> None:
+    print_maybe = (lambda line: out.write(line + "\n")) if show_details else (lambda line: None)
+
+    if isinstance(change, FileIsSame):
+        pass
+    elif isinstance(change, FileDeleted):
+        print_maybe(f"{change.details} {change.missing_relpath}")
+        contents.fsobjects.mark_removed(PurePosixPath(change.missing_relpath))
+    elif isinstance(change, FileMoved):
+        contents.fsobjects.mark_moved(
+            change.missing_relpath, change.moved_to_relpath,
+            size=change.size, mtime=change.mtime, fasthash=change.moved_file_hash)
+
+        print_maybe(f"MOVED {change.missing_relpath.as_posix()} TO {change.moved_to_relpath.as_posix()}")
+    elif isinstance(change, FileAdded):
+        contents.fsobjects.add_file(
+            change.relpath, size=change.size, mtime=change.mtime, fasthash=change.fasthash,
+            status=change.requested_status)
+
+        print_maybe(f"{change.requested_status.value.upper()}_FILE {change.relpath.as_posix()}")
+    elif isinstance(change, FileModified):
+        contents.fsobjects.add_file(
+            change.relpath, size=change.size, mtime=change.mtime, fasthash=change.fasthash,
+            status=RepoFileStatus.MODIFIED)
+
+        print_maybe(f"MODIFIED_FILE {change.relpath.as_posix()}")
+    elif isinstance(change, DirIsSame):
+        pass
+    elif isinstance(change, DirAdded):
+        contents.fsobjects.add_dir(change.relpath, status=RepoFileStatus.ADDED)
+        print_maybe(f"ADDED_DIR {change.relpath}")
+    elif isinstance(change, DirRemoved):
+        print_maybe("REMOVED_DIR {diff.dirpath}")
+        contents.fsobjects.mark_removed(PurePosixPath(change.dirpath))
+    else:
+        raise TypeError(f"Unexpected change type {type(change)}")
