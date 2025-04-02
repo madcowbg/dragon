@@ -14,21 +14,19 @@ from textual.widgets import Footer, Header, Label, Input
 from command.hoard import Hoard
 from gui.hoard_explorer_screen import HoardExplorerScreen
 
+config: Dict[any, any] = {}
+if os.path.isfile("hoard_explorer.toml"):
+    with open("hoard_explorer.toml", 'r') as f:
+        config = rtoml.load(f)
+
 
 class HoardExplorerApp(App):
     BINDINGS = [("d", "toggle_dark", "Toggle dark mode")]
     CSS_PATH = "hoard_explorer.tcss"
 
-    hoard_path: pathlib.Path = reactive(pathlib.Path("."), recompose=True)
-    config: Dict[any, any] = reactive({})
+    hoard_path: pathlib.Path = reactive(pathlib.Path(config.get("hoard_path", ".")), recompose=True)
 
-    def on_mount(self):
-        if os.path.isfile("hoard_explorer.toml"):
-            with open("hoard_explorer.toml", 'r') as f:
-                self.config = rtoml.load(f)
-        self.hoard_path = pathlib.Path(self.config.get("hoard_path", "."))
-
-    def watch_hoard_path(self):
+    def watch_hoard_path(self, new_path: pathlib.Path, old_path: pathlib.Path):
         try:
             screen = self.query_one(HoardExplorerScreen)
             screen.hoard = Hoard(self.hoard_path.as_posix())
