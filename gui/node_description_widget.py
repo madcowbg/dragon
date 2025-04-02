@@ -68,13 +68,13 @@ class NodeDescription(Widget):
             for name, uuid, updated_maybe, uuid_stats in statuses_sorted:
                 data_table.add_row(
                     name,
-                    *(format_count(uuid_stats[stat]["nfiles"]) if stat in uuid_stats else "" for stat in all_stats))
+                    *(Text(format_count(uuid_stats[stat]["nfiles"]), justify="right") if stat in uuid_stats else "" for stat in all_stats))
 
             data_table.add_row()
             for name, uuid, updated_maybe, uuid_stats in statuses_sorted:
                 data_table.add_row(
                     name,
-                    *(format_size(uuid_stats[stat]["size"]) if stat in uuid_stats else "" for stat in all_stats))
+                    *(Text(format_size(uuid_stats[stat]["size"]), justify="right") if stat in uuid_stats else "" for stat in all_stats))
 
         elif isinstance(self.hoard_item, HoardFile):
             hoard_file = self.hoard_item
