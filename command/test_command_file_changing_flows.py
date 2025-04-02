@@ -769,6 +769,25 @@ class TestFileChangingFlows(unittest.TestCase):
             join(self.tmpdir.name, 'repo-full/wat/test.me.2'),
             join(self.tmpdir.name, 'repo-full/lets_get_it_started/test.me.2-butsecond'))
 
+        res = full_cave_cmd.status()
+        self.assertEqual(
+            f"{full_cave_cmd.current_uuid()}:\n"
+            f"files:\n"
+            f"    same: 1 (20.0%)\n"
+            f"     mod: 1 (20.0%)\n"
+            f"     new: 3 (60.0%)\n"
+            f"   moved: 1 (20.0%)\n"
+            f" current: 5\n"
+            f" in repo: 4\n"
+            f" deleted: 1 (25.0%)\n"
+            f"dirs:\n"
+            f"    same: 1\n"
+            f"     new: 1 (50.0%)\n"
+            f" current: 2\n"
+            f" in repo: 1\n"
+            f" deleted: 0 (0.0%)\n"
+            f"", res)
+
         res = full_cave_cmd.refresh()
         self.assertEqual(
             "MOVED test.me.4 TO lets_get_it_started/test.me.4-renamed\n"

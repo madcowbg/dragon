@@ -5,7 +5,8 @@ import unittest
 from os.path import join
 from typing import Tuple, Iterable
 
-from command.command_repo import HoardIgnore, DEFAULT_IGNORE_GLOBS, walk_repo
+from command.comparison_repo import walk_repo
+from command.hoard_ignore import HoardIgnore, DEFAULT_IGNORE_GLOBS
 from command.test_repo_command import pretty_file_writer
 
 
