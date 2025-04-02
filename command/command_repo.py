@@ -4,6 +4,7 @@ import os
 import pathlib
 import re
 from io import StringIO
+from os.path import relpath
 from pathlib import PurePosixPath
 from typing import Tuple, List, Optional, Dict, Iterable
 
@@ -62,11 +63,84 @@ def walk_repo(repo: str, hoard_ignore: HoardIgnore) -> Iterable[Tuple[pathlib.Pa
             dirnames.remove(ignored)
 
 
-def _refresh_repo_contents(
-        repo_path: str, contents: RepoContents, hoard_ignore: HoardIgnore,
-        add_new_with_status: RepoFileStatus, skip_integrity_checks: bool, show_details: bool, out: StringIO):
+type RepoChange = FileDeleted | FileMoved | FileAdded | DirAdded | DirRemoved
+
+
+class FileDeleted:
+    def __init__(self, missing_relpath: PurePosixPath, details: str = "MOVED"):
+        self.missing_relpath = missing_relpath
+        self.details = details
+
+
+class FileMoved:
+    def __init__(
+            self, missing_relpath: PurePosixPath, moved_to_relpath: PurePosixPath, size: int, mtime: float,
+            moved_file_hash: str):
+        self.moved_file_hash = moved_file_hash
+        self.mtime = mtime
+        self.size = size
+
+        self.missing_relpath = missing_relpath
+        self.moved_to_relpath = moved_to_relpath
+
+
+class FileAdded:
+    def __init__(
+            self, relpath: PurePosixPath, size: int, mtime: float, fasthash: str, requested_status: RepoFileStatus):
+        assert not relpath.is_absolute()
+        self.relpath = relpath
+
+        self.mtime = mtime
+        self.size = size
+        self.fasthash = fasthash
+
+        self.requested_status = requested_status
+
+
+class DirAdded:
+    def __init__(self, relpath: PurePosixPath):
+        self.relpath = relpath
+
+
+class DirRemoved:
+
+    def __init__(self, dirpath: pathlib.PurePosixPath):
+        self.dirpath = dirpath
+
+
+def _apply_repo_change_to_contents(
+        change: RepoChange, contents: RepoContents, show_details: bool, out: StringIO) -> None:
     print_maybe = (lambda line: out.write(line + "\n")) if show_details else (lambda line: None)
 
+    if isinstance(change, FileDeleted):
+        print_maybe(f"{change.details} {change.missing_relpath}")
+        contents.fsobjects.mark_removed(PurePosixPath(change.missing_relpath))
+    elif isinstance(change, FileMoved):
+        contents.fsobjects.mark_moved(
+            change.missing_relpath, change.moved_to_relpath,
+            size=change.size, mtime=change.mtime, fasthash=change.moved_file_hash)
+
+        print_maybe(f"MOVED {change.missing_relpath.as_posix()} TO {change.moved_to_relpath.as_posix()}")
+    elif isinstance(change, FileAdded):
+        contents.fsobjects.add_file(
+            change.relpath, size=change.size, mtime=change.mtime, fasthash=change.fasthash,
+            status=change.requested_status)
+
+        print_maybe(f"{change.requested_status.value.upper()}_FILE {change.relpath.as_posix()}")
+    elif isinstance(change, DirAdded):
+        contents.fsobjects.add_dir(change.relpath, status=RepoFileStatus.ADDED)
+        print_maybe(f"ADDED_DIR {change.relpath}")
+    elif isinstance(change, DirRemoved):
+        print_maybe("REMOVED_DIR {diff.dirpath}")
+        contents.fsobjects.mark_removed(PurePosixPath(change.dirpath))
+    else:
+        raise TypeError(f"Unexpected change type {type(change)}")
+
+
+def find_repo_changes(
+        repo_path: str, contents: RepoContents,
+        hoard_ignore: HoardIgnore,
+        add_new_with_status: RepoFileStatus, skip_integrity_checks: bool) -> Iterable[RepoChange]:
     logging.info(f"Comparing contents and filesystem...")
     files_to_add_or_update: Dict[pathlib.Path, RepoFileStatus] = {}
     files_maybe_removed: List[Tuple[PurePosixPath, RepoFileProps]] = []
@@ -78,8 +152,7 @@ def _refresh_repo_contents(
             files_maybe_removed.append((diff.filepath, diff.props))
         elif isinstance(diff, DirNotInFilesystem):
             logging.info(f"Removing dir {diff.dirpath}")
-            print_maybe("REMOVED_DIR {diff.dirpath}")
-            contents.fsobjects.mark_removed(PurePosixPath(diff.dirpath))
+            yield DirRemoved(diff.dirpath)
         elif isinstance(diff, RepoFileWeakSame):
             assert skip_integrity_checks
             logging.info("Skipping file as size and mtime is the same!!!")
@@ -118,36 +191,30 @@ def _refresh_repo_contents(
 
         if len(candidates_file_to_hash) == 0:
             logging.info(f"File {missing_relpath} has no suitable copy, marking as deleted.")
-            print_maybe(f"REMOVED_FILE {missing_relpath}")
-            contents.fsobjects.mark_removed(PurePosixPath(missing_relpath))
+            yield FileDeleted(missing_relpath)
         elif len(candidates_file_to_hash) == 1:
             moved_to_file, moved_file_hash = candidates_file_to_hash[0]
             assert missing_file_props.fasthash == moved_file_hash
             assert files_to_add_or_update[moved_to_file] == RepoFileStatus.ADDED
 
-            moved_to_relpath = pathlib.Path(moved_to_file).relative_to(repo_path).as_posix()
+            moved_to_relpath = PurePosixPath(moved_to_file.relative_to(repo_path))
             logging.info(f"{missing_relpath} is moved to {moved_to_relpath} ")
 
             try:
+                # fixme maybe reuse the data from the old file?
                 size = os.path.getsize(moved_to_file)
                 mtime = os.path.getmtime(moved_to_file)
-                contents.fsobjects.mark_moved(
-                    pathlib.PurePosixPath(missing_relpath),
-                    pathlib.PurePosixPath(moved_to_relpath),
-                    size=size, mtime=mtime, fasthash=moved_file_hash)
+                yield FileMoved(PurePosixPath(missing_relpath), moved_to_relpath, size, mtime, moved_file_hash)
 
                 del files_to_add_or_update[moved_to_file]  # was fixed above
-                print_maybe(f"MOVED {missing_relpath} TO {moved_to_relpath}")
             except FileNotFoundError as e:
                 logging.error(
                     f"File not found: {moved_to_file}, fallbacks to delete/new")
-                contents.fsobjects.mark_removed(PurePosixPath(missing_relpath))
-                print_maybe(f"REMOVED_FILE_FALLBACK_ON_ERROR {missing_relpath}")
+                yield FileDeleted(missing_relpath, details="REMOVED_FILE_FALLBACK_ON_ERROR")
         else:
             logging.error(
                 f"Multiple new file candidates for {missing_relpath}, fallbacks to delete/new")
-            contents.fsobjects.mark_removed(PurePosixPath(missing_relpath))
-            print_maybe(f"REMOVED_FILE_FALLBACK_TOO_MANY {missing_relpath}")
+            yield FileDeleted(missing_relpath, details="REMOVED_FILE_FALLBACK_TOO_MANY")
     for fullpath, requested_status in alive_it(
             files_to_add_or_update.items(), title=f"Adding {len(files_to_add_or_update)} files"):
         relpath = pathlib.PurePosixPath(fullpath).relative_to(repo_path)
@@ -158,23 +225,16 @@ def _refresh_repo_contents(
         try:
             size = os.path.getsize(fullpath)
             mtime = os.path.getmtime(fullpath)
-            contents.fsobjects.add_file(
-                relpath, size=size, mtime=mtime, fasthash=file_hashes[fullpath], status=requested_status)
 
-            print_maybe(f"{requested_status.value.upper()}_FILE {relpath.as_posix()}")
+            yield FileAdded(relpath, size, mtime, file_hashes[fullpath], requested_status)
         except FileNotFoundError as e:
             logging.error("Error while adding file!")
             logging.error(e)
     for fullpath in alive_it(folders_to_add, title=f"Adding {len(folders_to_add)} folders"):
         relpath = pathlib.PurePosixPath(fullpath).relative_to(repo_path)
-        contents.fsobjects.add_dir(relpath, status=RepoFileStatus.ADDED)
-        print_maybe(f"ADDED_DIR {relpath}")
+        yield DirAdded(relpath)
+
     logging.info(f"Files read!")
-    logging.info("Ends updating, setting is_dirty to FALSE")
-    contents.config.end_updating()
-    assert not contents.config.is_dirty
-    if len(out.getvalue()) == 0:
-        print_maybe("NO CHANGES")
 
 
 class RepoCommand(object):
@@ -232,9 +292,17 @@ class RepoCommand(object):
             logging.info(f"Bumped epoch to {contents.config.epoch}")
 
             with StringIO() as out:
-                _refresh_repo_contents(
-                    self.repo.path, contents, hoard_ignore, add_new_with_status, skip_integrity_checks, show_details,
-                    out)
+                for change in find_repo_changes(
+                        self.repo.path, contents, hoard_ignore, add_new_with_status, skip_integrity_checks):
+                    _apply_repo_change_to_contents(change, contents, show_details, out)
+
+                logging.info("Ends updating, setting is_dirty to FALSE")
+                contents.config.end_updating()
+                assert not contents.config.is_dirty
+
+                if len(out.getvalue()) == 0 and show_details:
+                    out.write("NO CHANGES\n")
+
                 out.write(f"Refresh done!")
                 return out.getvalue()
 
