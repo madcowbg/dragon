@@ -77,27 +77,45 @@ class HoardContentsConfig:
             self.write()
 
 
+def _augment_with_fake_props(objects) -> Dict[str, HoardFileProps | None]:
+    # augment all objects with dummy folders as the hoard is incomplete by design
+    all_objs: Dict[str, HoardFileProps | None]() = {}
+    for path, props in list(objects.str_to_props()):
+        if path in all_objs:
+            continue
+
+        all_objs[path] = props if isinstance(props, HoardFileProps) else None
+        current_path, _ = path.rsplit("/", 1)
+
+        while len(current_path) > 0:
+            if current_path in all_objs:
+                break
+
+            all_objs[current_path] = None
+            current_path, _ = current_path.rsplit("/", 1)
+    return all_objs
+
+
+def _add_all_files_and_folders(root, all_objs):
+    # add all files and folders, ordered by path so that parent folders come before children
+    folders_cache: dict[str, HoardDir] = {"": root}
+    for path, props in sorted(all_objs.items(), key=lambda p_p: p_p[0]):
+        parent_path, child_name = path.rsplit("/", 1)
+        if props is not None:
+            # assert isinstance(props, HoardFileProps)
+            folders_cache[path] = folders_cache[parent_path].create_file(child_name, props)
+        else:
+            # assert isinstance(props, HoardDirProps)
+            folders_cache[path] = folders_cache[parent_path].create_dir(child_name)
+
+
 class HoardTree:
-    def __init__(self, objects: Iterator[Tuple[PurePosixPath, HoardFileProps | HoardDirProps]]):
+    def __init__(self, objects: "HoardFSObjects"):
         self.root = HoardDir(None, "", self)
 
-        for path, props in objects:
-            if isinstance(props, HoardFileProps):
-                filepath = path
-                assert custom_isabs(filepath.as_posix())
-                current = self.root
-                parts = pathlib.Path(filepath).parts
-                for folder in parts[1:-1]:
-                    current = current.get_or_create_dir(folder)
-                current.create_file(parts[-1], props)
-            elif isinstance(props, HoardDirProps):
-                dirpath = path
-                assert custom_isabs(dirpath.as_posix())
-                current = self.root
-                for folder in pathlib.Path(dirpath).parts[1:]:
-                    current = current.get_or_create_dir(folder)
-            else:
-                raise ValueError(f"Invalid props type: {type(props)}")
+        all_objs = _augment_with_fake_props(objects)
+
+        _add_all_files_and_folders(self.root, all_objs)
 
     def walk(self, from_path: str = "/", depth: int = sys.maxsize) -> \
             Generator[Tuple[Optional["HoardDir"], Optional["HoardFile"]], None, None]:
@@ -144,17 +162,20 @@ class HoardDir:
 
         self._fullname: Optional[str] = None
 
-    def get_or_create_dir(self, subname: str) -> "HoardDir":
-        if subname not in self.dirs:
-            self.dirs[subname] = HoardDir(self, subname, self.tree)
-        return self.dirs[subname]
-
     def get_dir(self, subname: str) -> Optional["HoardDir"]:
         return self.dirs.get(subname, None)
 
-    def create_file(self, filename: str, props: HoardFileProps):
-        assert filename not in self.files
-        self.files[filename] = HoardFile(self, filename, props)
+    def create_dir(self, subname: str) -> "HoardDir":
+        assert subname not in self.dirs and subname not in self.files
+        new_dir = HoardDir(self, subname, self.tree)
+        self.dirs[subname] = new_dir
+        return new_dir
+
+    def create_file(self, filename: str, props: HoardFileProps) -> HoardFile:
+        assert filename not in self.dirs and filename not in self.files
+        new_file = HoardFile(self, filename, props)
+        self.files[filename] = new_file
+        return new_file
 
     def walk(self, depth: int) -> Generator[Tuple[Optional["HoardDir"], Optional["HoardFile"]], None, None]:
         yield self, None
@@ -273,6 +294,20 @@ class HoardFSObjects:
             "SELECT fullpath, fsobject_id, isdir, size, fasthash FROM fsobject "
             "WHERE fullpath like ? or fullpath = ?",
             (f"{folder_with_trailing}%", folder))
+
+    def str_to_props(self) -> Iterable[Tuple[str, Optional[HoardFileProps]]]:
+        def read_str_to_props(cursor, row) -> Tuple[str, HoardFileProps | None]:
+            fullpath: str
+            fullpath, fsobject_id, isdir, size, fasthash = row
+            if isdir:
+                return fullpath, None
+            else:
+                return fullpath, HoardFileProps(self.parent, fsobject_id, size, fasthash)
+
+        curr = self.parent.conn.cursor()
+        curr.row_factory = read_str_to_props
+
+        yield from curr.execute("SELECT fullpath, fsobject_id, isdir, size, fasthash FROM fsobject ")
 
     @property
     def status_by_uuid(self) -> Dict[str, Dict[str, Dict[str, Any]]]:

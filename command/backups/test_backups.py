@@ -124,8 +124,8 @@ class TestBackups(unittest.TestCase):
             "/test.me.5 = g:1 c:1\n"
             "/wat\n"
             "/wat/test.me.2 = a:2\n"
-            "/wat/test.me.6 = g:1 c:1\n"
             "/wat/test.me.3 = g:1 c:1\n"
+            "/wat/test.me.6 = g:1 c:1\n"
             "DONE", res)
 
         res = hoard_cmd.files.pending(repo=incoming_cave_cmd.current_uuid())
@@ -171,8 +171,8 @@ class TestBackups(unittest.TestCase):
             "/test.me.5 = a:1\n"
             "/wat\n"
             "/wat/test.me.2 = a:2\n"
-            "/wat/test.me.6 = a:1\n"
             "/wat/test.me.3 = a:1\n"
+            "/wat/test.me.6 = a:1\n"
             "DONE", res)
 
     def test_create_with_simple_backup_from_start(self):
