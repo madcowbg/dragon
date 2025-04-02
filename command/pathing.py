@@ -1,4 +1,5 @@
 import pathlib
+from functools import cache
 from pathlib import PurePosixPath
 from typing import Optional, Dict
 
@@ -57,15 +58,16 @@ class HoardPathing:
         def __str__(self) -> str:
             return self._path.as_posix()
 
+    @cache
     def mounted_at(self, repo_uuid: str) -> PurePosixPath:
         assert self._config.remotes[repo_uuid].mounted_at.is_absolute()
         return self._config.remotes[repo_uuid].mounted_at
 
     def in_hoard(self, path: PurePosixPath | PurePosixPath) -> HoardPath:
-        return self.HoardPath(path, self)
+        return HoardPathing.HoardPath(path, self)
 
     def in_local(self, path: PurePosixPath, repo_uuid: str) -> LocalPath:
-        return self.LocalPath(path, repo_uuid, self)
+        return HoardPathing.LocalPath(path, repo_uuid, self)
 
     def repos_availability(self, folder: str) -> Dict[HoardRemote, str]:
         paths: Dict[HoardRemote, str] = {}
