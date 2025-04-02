@@ -304,22 +304,28 @@ class HoardFSObjects:
 
         return curr.execute("SELECT fullpath, isdir FROM fsobject ").fetchall()
 
-    @property
-    def status_by_uuid(self) -> Dict[str, Dict[str, Dict[str, Any]]]:
+    def status_by_uuid(self, folder_path: PurePosixPath | None) -> Dict[str, Dict[str, Dict[str, Any]]]:
+        if folder_path is not None:
+            AND_CLAUSE = " AND ? < fsobject.fullpath AND fsobject.fullpath < ? "
+            args = (fast_between_filter_left(folder_path), fast_between_filter_right(folder_path))
+        else:
+            AND_CLAUSE = ""
+            args = tuple()
+
         stats: Dict[str, Dict[str, Dict[str, Any]]] = dict()
         for uuid, nfiles, size in self.parent.conn.execute(
                 "SELECT fspresence.uuid, count(fspresence.fsobject_id) as nfiles, sum(size) as total_size "
                 "FROM fsobject JOIN fspresence ON fsobject.fsobject_id=fspresence.fsobject_id "
-                "WHERE isdir = FALSE "
-                "GROUP BY fspresence.uuid"):
+                f"WHERE isdir = FALSE {AND_CLAUSE} "
+                "GROUP BY fspresence.uuid", args):
             stats[uuid] = {
                 "total": {"nfiles": nfiles, "size": size}}
 
         for uuid, status, nfiles, size in self.parent.conn.execute(
                 "SELECT fspresence.uuid, fspresence.status, count(fspresence.fsobject_id) as nfiles, sum(size) as total_size "
                 "FROM fsobject JOIN fspresence ON fsobject.fsobject_id=fspresence.fsobject_id "
-                "WHERE isdir = FALSE "
-                "GROUP BY fspresence.uuid, fspresence.status"):
+                f"WHERE isdir = FALSE {AND_CLAUSE} "
+                "GROUP BY fspresence.uuid, fspresence.status", args):
             stats[uuid][status] = {"nfiles": nfiles, "size": size}
         return stats
 

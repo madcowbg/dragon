@@ -124,8 +124,8 @@ class TestBackups(unittest.TestCase):
             "/test.me.5 = g:1 c:1\n"
             "/wat\n"
             "/wat/test.me.2 = a:2\n"
-            "/wat/test.me.3 = g:1 c:1\n"
             "/wat/test.me.6 = g:1 c:1\n"
+            "/wat/test.me.3 = g:1 c:1\n"
             "DONE", res)
 
         res = hoard_cmd.files.pending(repo=incoming_cave_cmd.current_uuid())
@@ -171,8 +171,8 @@ class TestBackups(unittest.TestCase):
             "/test.me.5 = a:1\n"
             "/wat\n"
             "/wat/test.me.2 = a:2\n"
-            "/wat/test.me.3 = a:1\n"
             "/wat/test.me.6 = a:1\n"
+            "/wat/test.me.3 = a:1\n"
             "DONE", res)
 
     def test_create_with_simple_backup_from_start(self):
@@ -240,6 +240,26 @@ class TestBackups(unittest.TestCase):
             "|repo-full-name           |       299|       153|       146|          |\n"
             "|repo-incoming-name       |       223|          |          |       223|\n"
             "|repo-partial-name        |        76|        76|          |          |\n", res)
+
+        res = hoard_cmd.contents.status(path="/wat", hide_time=True, hide_disk_sizes=True)
+        self.assertEqual(
+            "|Num Files                |total     |available |get       |cleanup   |\n"
+            "|backup-1                 |         1|          |         1|          |\n"
+            "|backup-2                 |         1|          |         1|          |\n"
+            "|backup-3                 |         1|          |         1|          |\n"
+            "|backup-4                 |         1|          |         1|          |\n"
+            "|repo-full-name           |         3|         1|         2|          |\n"
+            "|repo-incoming-name       |         2|          |          |         2|\n"
+            "|repo-partial-name        |         1|         1|          |          |\n"
+            "\n"
+            "|Size                     |total     |available |get       |cleanup   |\n"
+            "|backup-1                 |         9|          |         9|          |\n"
+            "|backup-2                 |        16|          |        16|          |\n"
+            "|backup-3                 |        77|          |        77|          |\n"
+            "|backup-4                 |         9|          |         9|          |\n"
+            "|repo-full-name           |       102|        16|        86|          |\n"
+            "|repo-incoming-name       |        86|          |          |        86|\n"
+            "|repo-partial-name        |        16|        16|          |          |\n", res)
 
         res = hoard_cmd.backups.health()
         self.assertEqual(

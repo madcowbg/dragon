@@ -1,18 +1,20 @@
 import os
 from pathlib import PurePosixPath
 
+import humanize
 from rich.text import Text
 from textual.app import ComposeResult
 from textual.containers import Horizontal
 from textual.reactive import reactive
 from textual.widget import Widget
-from textual.widgets import Label
+from textual.widgets import Label, DataTable
 
+from command.contents.command import augment_statuses
 from command.pathing import HoardPathing
 from config import HoardConfig
 from contents.hoard import HoardFile, HoardDir, HoardContents
-from contents.hoard_props import HoardFileProps
-from util import pretty_truncate, format_size, group_to_dict
+from contents.hoard_props import HoardFileProps, HoardFileStatus
+from util import pretty_truncate, format_size, group_to_dict, format_count
 
 
 class NodeDescription(Widget):
@@ -32,7 +34,7 @@ class NodeDescription(Widget):
             yield Label(f"Folder name: {hoard_dir.name}")
             yield Label(f"Hoard path: {hoard_dir.fullname}")
 
-            yield Label(f"Availability on repos", classes="desc_section")
+            yield Label(f"Addressable on repos", classes="desc_section")
             for hoard_remote in self.hoard_config.remotes.all():
                 local_path = self.hoard_pathing.in_hoard(hoard_dir.fullname).at_local(hoard_remote.uuid)
                 if local_path is not None:
@@ -47,9 +49,33 @@ class NodeDescription(Widget):
                         Label(
                             f"[@click=app.open_cave_dir('{local_path.on_device_path()}')]{pretty_truncate(hoard_remote.uuid, 15)}[/]",
                             classes="repo_uuid"),
-                        Label(Text(self.hoard_pathing.in_local("", hoard_remote.uuid).on_device_path()), classes=f"remote_location {availability_status_class}"),
+                        Label(Text(self.hoard_pathing.in_local("", hoard_remote.uuid).on_device_path()),
+                              classes=f"remote_location {availability_status_class}"),
                         Label(Text(local_path.as_pure_path.as_posix()), classes="local_path"),
                         classes="desc_status_line")
+
+            yield Label(f"Storage on repos {hoard_dir.fullname}", classes="desc_section")
+            statuses = self.hoard_contents.fsobjects.status_by_uuid(PurePosixPath(hoard_dir.fullname))
+            available_states, statuses_sorted = augment_statuses(
+                self.hoard_config, self.hoard_contents, False, statuses)
+            all_stats = [
+                "total",
+                HoardFileStatus.AVAILABLE.value, HoardFileStatus.GET.value, HoardFileStatus.COPY.value,
+                HoardFileStatus.MOVE.value, HoardFileStatus.CLEANUP.value]
+
+            data_table = DataTable()
+            yield data_table
+            data_table.add_columns("name",  *all_stats)
+            for name, uuid, updated_maybe, uuid_stats in statuses_sorted:
+                data_table.add_row(
+                    name,
+                    *(format_count(uuid_stats[stat]["nfiles"]) if stat in uuid_stats else "" for stat in all_stats))
+
+            data_table.add_row()
+            for name, uuid, updated_maybe, uuid_stats in statuses_sorted:
+                data_table.add_row(
+                    name,
+                    *(format_size(uuid_stats[stat]["size"]) if stat in uuid_stats else "" for stat in all_stats))
 
         elif isinstance(self.hoard_item, HoardFile):
             hoard_file = self.hoard_item

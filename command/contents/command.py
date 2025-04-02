@@ -87,6 +87,17 @@ def _init_pull_preferences_incoming(content_prefs: ContentPrefs, remote_uuid: st
         on_hoard_only_local_unknown=PullBehavior.IGNORE)
 
 
+def augment_statuses(config, hoard, show_empty, statuses):
+    statuses_present = \
+        [(config.remotes[uuid].name, uuid, hoard.config.updated(uuid), vals)  # those that have files recorded
+         for uuid, vals in statuses.items()] + \
+        [(remote.name, remote.uuid, hoard.config.updated(remote.uuid), {})  # those lacking a recorded file
+         for remote in config.remotes.all() if show_empty and remote.uuid not in statuses]
+    statuses_sorted = sorted(statuses_present)
+    available_states = set(sum((list(stats.keys()) for _, _, _, stats in statuses_sorted), []))
+    return available_states, statuses_sorted
+
+
 class HoardCommandContents:
     def __init__(self, hoard: Hoard):
         self.hoard = hoard
@@ -134,18 +145,13 @@ class HoardCommandContents:
                     out.write("DONE")
                     return out.getvalue()
 
-    def status(self, hide_time: bool = False, hide_disk_sizes: bool = False, show_empty: bool = False):
+    def status(
+            self, path: str | None = None, hide_time: bool = False, hide_disk_sizes: bool = False,
+            show_empty: bool = False):
         config = self.hoard.config()
         with self.hoard.open_contents(create_missing=False, is_readonly=True) as hoard:
-            statuses: Dict[str, Dict[str, Dict[str, Any]]] = hoard.fsobjects.status_by_uuid
-            statuses_present = \
-                [(config.remotes[uuid].name, uuid, hoard.config.updated(uuid), vals)  # those that have files recorded
-                 for uuid, vals in statuses.items()] + \
-                [(remote.name, remote.uuid, hoard.config.updated(remote.uuid), {})  # those lacking a recorded file
-                 for remote in config.remotes.all() if show_empty and remote.uuid not in statuses]
-            statuses_sorted = sorted(statuses_present)
-
-            available_states = set(sum((list(stats.keys()) for _, _, _, stats in statuses_sorted), []))
+            statuses: Dict[str, Dict[str, Dict[str, Any]]] = hoard.fsobjects.status_by_uuid(PurePosixPath(path) if path else None)
+            available_states, statuses_sorted = augment_statuses(config, hoard, show_empty, statuses)
 
             all_stats = ["total", *(s for s in (HoardFileStatus.AVAILABLE.value, HoardFileStatus.GET.value,
                                                 HoardFileStatus.COPY.value, HoardFileStatus.MOVE.value,

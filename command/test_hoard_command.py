@@ -453,8 +453,8 @@ class TestHoardCommand(unittest.TestCase):
             "/test.me.4 = a:1 g:1 c:1\n"
             "/test.me.5 = g:2 c:1\n"
             "/wat/test.me.2 = a:2 g:1\n"
-            "/wat/test.me.3 = g:2 c:1\n"
             "/wat/test.me.6 = g:2 c:1\n"
+            "/wat/test.me.3 = g:2 c:1\n"
             "DONE", res)
 
     def test_sync_hoard_file_contents_one(self):
@@ -479,8 +479,8 @@ class TestHoardCommand(unittest.TestCase):
             "/test.me.4 = a:1 g:1 c:1\n"
             "/test.me.5 = g:2 c:1\n"
             "/wat/test.me.2 = a:2 g:1\n"
-            "/wat/test.me.3 = g:2 c:1\n"
             "/wat/test.me.6 = g:2 c:1\n"
+            "/wat/test.me.3 = g:2 c:1\n"
             "DONE", res)
 
         self.assertEqual([
@@ -510,8 +510,8 @@ class TestHoardCommand(unittest.TestCase):
             "/test.me.4 = a:1 g:1 c:1\n"
             "/test.me.5 = a:1 g:1 c:1\n"
             "/wat/test.me.2 = a:2 g:1\n"
-            "/wat/test.me.3 = a:1 g:1 c:1\n"
             "/wat/test.me.6 = a:1 g:1 c:1\n"
+            "/wat/test.me.3 = a:1 g:1 c:1\n"
             "DONE", res)
 
         res = full_cave_cmd.refresh(show_details=False)
@@ -624,8 +624,8 @@ class TestHoardCommand(unittest.TestCase):
             "/test.me.4 = a:2\n"
             "/test.me.5 = a:2\n"
             "/wat/test.me.2 = a:3\n"
-            "/wat/test.me.3 = a:2\n"
             "/wat/test.me.6 = a:2\n"
+            "/wat/test.me.3 = a:2\n"
             "DONE", res)
 
         self.assertEqual([
