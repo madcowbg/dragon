@@ -301,12 +301,18 @@ def compute_difference_between_contents_and_filesystem(
             title="Checking for deleted files and folders"):
         if isinstance(props, RepoFileProps):
             file_path = current_repo_path.joinpath(obj_path)
-            if not file_path.is_file() or hoard_ignore.matches(file_path):
-                yield FileNotInFilesystem(obj_path, props)
+            try:
+                if not file_path.is_file() or hoard_ignore.matches(file_path):
+                    yield FileNotInFilesystem(obj_path, props)
+            except OSError as e:
+                logging.error(e)  # fixme yield error
         elif isinstance(props, RepoDirProps):
             dir_path = current_repo_path.joinpath(obj_path)
-            if not dir_path.is_dir() or hoard_ignore.matches(dir_path):
-                yield DirNotInFilesystem(obj_path, props)
+            try:
+                if not dir_path.is_dir() or hoard_ignore.matches(dir_path):
+                    yield DirNotInFilesystem(obj_path, props)
+            except OSError as e:
+                logging.error(e)  # fixme yield error
         else:
             raise ValueError(f"invalid props type: {type(props)}")
 
