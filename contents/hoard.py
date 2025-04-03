@@ -44,10 +44,10 @@ class HoardContentsConfig:
 
         return self.doc["remotes"][remote_uuid]
 
-    def epoch(self, remote_uuid: str) -> int:
+    def remote_epoch(self, remote_uuid: str) -> int:
         return self._remote_config(remote_uuid).get("epoch", -1)
 
-    def set_epoch(self, remote_uuid: str, epoch: int, updated: datetime):
+    def set_remote_epoch(self, remote_uuid: str, epoch: int, updated: datetime):
         self._remote_config(remote_uuid)["epoch"] = epoch
         self._remote_config(remote_uuid)["updated"] = updated.isoformat()
         self.write()
@@ -62,7 +62,7 @@ class HoardContentsConfig:
 
     def restore_remote_config(self, config: RepoContentsConfig):
         config.doc["max_size"] = self.max_size(config.uuid)
-        config.doc["epoch"] = self.epoch(config.uuid)
+        config.doc["epoch"] = self.remote_epoch(config.uuid)
         config.write()
 
     def max_size(self, uuid: str):

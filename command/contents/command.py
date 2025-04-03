@@ -407,10 +407,10 @@ class HoardCommandContents:
                             out.write(f"Skipping update as {remote_uuid} is not fully calculated!\n")
                             continue
 
-                        if not ignore_epoch and hoard_contents.config.epoch(
+                        if not ignore_epoch and hoard_contents.config.remote_epoch(
                                 remote_uuid) >= current_contents.config.epoch:
                             out.write(f"Skipping update as past epoch {current_contents.config.epoch} "
-                                      f"is not after hoard epoch {hoard_contents.config.epoch(remote_uuid)}\n")
+                                      f"is not after hoard epoch {hoard_contents.config.remote_epoch(remote_uuid)}\n")
                             continue
 
                         logging.info(f"Saving config of remote {remote_uuid}...")
@@ -433,7 +433,7 @@ class HoardCommandContents:
                         pull_repo_contents_to_hoard(hoard_contents, pathing, config, current_contents, preferences, out)
 
                         logging.info(f"Updating epoch of {remote_uuid} to {current_contents.config.epoch}")
-                        hoard_contents.config.set_epoch(
+                        hoard_contents.config.set_remote_epoch(
                             remote_uuid, current_contents.config.epoch, current_contents.config.updated)
 
                     clean_dangling_files(hoard_contents, out)
