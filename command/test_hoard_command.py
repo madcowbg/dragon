@@ -64,10 +64,10 @@ class TestHoardCommand(unittest.TestCase):
         res = hoard_cmd.contents.pending("repo-in-local")
         self.assertEqual(
             f"Status of repo-in-local:\n"
+            f"ADDED_DIR /wat\n"
             f"PRESENT /wat/test.me.different\n"
             f"PRESENT /wat/test.me.once\n"
             f"PRESENT /wat/test.me.twice\n"
-            f"ADDED_DIR /wat\n"
             f"DONE",
             res.strip())
 
@@ -254,8 +254,8 @@ class TestHoardCommand(unittest.TestCase):
         cave_cmd.refresh(show_details=False)
         self.assertEqual(
             f"Status of repo-in-local:\n"
-            f"ADDED /newdir/newfile.is\n"
             f"ADDED_DIR /newdir\n"
+            f"ADDED /newdir/newfile.is\n"
             f"DELETED /wat/test.me.different\n"
             f"DONE",
             hoard_cmd.contents.pending("repo-in-local").strip())
@@ -380,8 +380,8 @@ class TestHoardCommand(unittest.TestCase):
         self.assertEqual(
             f"Status of repo-partial-name:\n"
             f"PRESENT /test.me.1\n"
-            f"PRESENT /wat/test.me.2\n"
             f"ADDED_DIR /wat\n"
+            f"PRESENT /wat/test.me.2\n"
             "DONE", res.strip())
 
         res = hoard_cmd.contents.pull("repo-partial-name")
@@ -668,9 +668,9 @@ class TestHoardCommand(unittest.TestCase):
         self.assertEqual(
             "+/test.me.1\n"
             "+/test.me.4\n"
+            "+/wat/inner/another.file\n"
             "+/wat/test.me.2\n"
             "+/wat/test.me.3\n"
-            "+/wat/inner/another.file\n"
             "Sync'ed repo-full-name to hoard!\nDONE", res)
 
         os.mkdir(join(self.tmpdir.name, "repo-cloned-wat"))

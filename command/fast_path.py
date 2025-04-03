@@ -5,19 +5,16 @@ from typing import Union, List
 
 class FastPosixPath(os.PathLike):
     def __init__(self, path: Union[bool, str, Path, "FastPosixPath"], drive: str = None, remainder: List[str] | None = None):
-        if isinstance(path, bool):  # supports FastPosixPath(is_absolute, remainder)
-            # print((path, drive, remainder))
+        if isinstance(path, bool):  # supports FastPosixPath(is_absolute, drive, remainder)
             assert ((drive != '') and path) or drive == ''  # paths with drives are absolute
             self._drive = drive
             self._is_absolute = path
             self._rem = remainder
         elif isinstance(path, FastPosixPath):
-            # print("other ", path)
             self._drive = path._drive
             self._is_absolute = path._is_absolute
             self._rem = path._rem
         else:
-            # print(f"other non-fast {type(path)}", path.__repr__())
             if isinstance(path, PurePath):
                 path = path.as_posix()
 
@@ -38,7 +35,6 @@ class FastPosixPath(os.PathLike):
                 self._is_absolute = self._drive != '' or path.startswith("/")
                 self._rem = parts if not self._is_absolute else parts[1:]
                 assert self._rem.__len__() == 0 or self._rem[0] != '', self._rem
-        # print(repr(self))
 
     def as_posix(self) -> str:
         if not self.is_absolute():
