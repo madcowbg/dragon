@@ -1,7 +1,7 @@
 import enum
 import os
 import pathlib
-from pathlib import PurePosixPath
+from command.fast_path import FastPosixPath
 from typing import Dict, Any, Optional, List, Generator
 
 import rtoml
@@ -23,10 +23,10 @@ class HoardRemote:
         return self.doc["name"] if "name" in self.doc else "INVALID"
 
     @property
-    def mounted_at(self) -> PurePosixPath | None:
-        return PurePosixPath(self.doc["mounted_at"]) if "mounted_at" in self.doc else None
+    def mounted_at(self) -> FastPosixPath | None:
+        return FastPosixPath(self.doc["mounted_at"]) if "mounted_at" in self.doc else None
 
-    def mount_at(self, mount_at: PurePosixPath):
+    def mount_at(self, mount_at: FastPosixPath):
         assert mount_at.is_absolute()
         self.doc["mounted_at"] = mount_at.as_posix()
 

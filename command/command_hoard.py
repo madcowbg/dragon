@@ -4,7 +4,9 @@ import os
 import pathlib
 import shutil
 from io import StringIO
-from pathlib import PurePosixPath
+
+import command.fast_path
+from command.fast_path import FastPosixPath
 from typing import Dict, List, Tuple
 
 from alive_progress import alive_bar, alive_it
@@ -121,7 +123,7 @@ class HoardCommand(object):
                 out.write(f"  {name_prefix}{remote.uuid} ({remote.type.value}){exact_path}\n")
             out.write("Mounts:\n")
 
-            mount_point_to_mount: Dict[PurePosixPath, List[HoardRemote]] = \
+            mount_point_to_mount: Dict[FastPosixPath, List[HoardRemote]] = \
                 group_to_dict(config.remotes.all(), key=lambda r: r.mounted_at)
             for mount, remotes in sorted(mount_point_to_mount.items()):
                 out.write(f"  {mount.as_posix()} -> {', '.join(r.name for r in remotes)}\n")
@@ -137,7 +139,7 @@ class HoardCommand(object):
             logging.info(f"Loaded hoard TOML!")
 
             repo_health: Dict[str, Dict[int, int]] = dict()
-            health_files: Dict[int, List[PurePosixPath]] = dict()
+            health_files: Dict[int, List[FastPosixPath]] = dict()
             for file, props in hoard.fsobjects:
                 if not isinstance(props, HoardFileProps):
                     continue  # fixme what about folders?
@@ -186,8 +188,8 @@ class HoardCommand(object):
         config = self.hoard.config()
         pathing = HoardPathing(config, self.hoard.paths())
 
-        from_path_in_hoard = pathing.in_hoard(PurePosixPath(from_path))
-        to_path_in_hoard = pathing.in_hoard(PurePosixPath(to_path))
+        from_path_in_hoard = pathing.in_hoard(FastPosixPath(from_path))
+        to_path_in_hoard = pathing.in_hoard(FastPosixPath(to_path))
 
         repos_to_move: List[HoardRemote] = []
         for remote in config.remotes.all():
@@ -218,14 +220,14 @@ class HoardCommand(object):
 
             with StringIO() as out:
                 out.write("Moving files and folders:\n")
-                current_path: PurePosixPath
+                current_path: FastPosixPath
                 for current_path, props in list(hoard.fsobjects):
                     assert isinstance(props, HoardFileProps) or isinstance(props, HoardDirProps), \
                         f"Unsupported props type: {type(props)}"
                     if current_path.is_relative_to(from_path):
                         rel_path = current_path.relative_to(from_path)
                         logging.info(f"Relative file path to move: {rel_path}")
-                        new_path = pathlib.PurePosixPath(to_path).joinpath(rel_path)
+                        new_path = command.fast_path.FastPosixPath(to_path).joinpath(rel_path)
 
                         out.write(f"{current_path.as_posix()}=>{new_path.as_posix()}\n")
                         hoard.fsobjects.move_via_mounts(current_path, new_path, props)
@@ -267,7 +269,7 @@ class HoardCommand(object):
 
                 with StringIO() as out:
                     logging.info(f"Iterating over files marked available in {remote}...")
-                    hoard_file: PurePosixPath
+                    hoard_file: FastPosixPath
                     for hoard_file, hoard_props in alive_it(
                             hoard.fsobjects.available_in_repo(remote_uuid), title="Recreating index"):
                         local_path_obj = pathing.in_hoard(hoard_file).at_local(remote_uuid)
@@ -337,7 +339,7 @@ class HoardCommand(object):
                                 skipped += 1
                                 continue
 
-                            places: List[Tuple[PurePosixPath, HoardFileProps]] = list(
+                            places: List[Tuple[FastPosixPath, HoardFileProps]] = list(
                                 hoard.fsobjects.by_fasthash(fasthash))
                             if len(places) == 0:
                                 mismatched += 1

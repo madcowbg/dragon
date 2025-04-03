@@ -4,7 +4,7 @@ import shutil
 import sys
 import traceback
 from io import StringIO
-from pathlib import PurePosixPath
+from command.fast_path import FastPosixPath
 from typing import Optional, List, Dict
 
 import aioshutil
@@ -117,7 +117,7 @@ def _fetch_files_in_repo(
 
     with alive_bar(to_mb(total_size), unit="MB", title="Fetching files") as bar:
         async def _execute_get(hoard_file: str, hoard_props: HoardFileProps):
-            hoard_filepath = pathing.in_hoard(PurePosixPath(hoard_file))
+            hoard_filepath = pathing.in_hoard(FastPosixPath(hoard_file))
             local_filepath = hoard_filepath.at_local(repo_uuid)
             logging.debug(f"restoring {hoard_file} to {local_filepath}...")
             success, fullpath = await _restore_from_another_repo(
@@ -149,7 +149,7 @@ def _fetch_files_in_repo(
                         candidates_to_copy = files_requiring_copy.get(hoard_props.fasthash, [])
                         logging.info(f"# of candidates to copy: {len(candidates_to_copy)}")
 
-                        local_filepath = pathing.in_hoard(PurePosixPath(hoard_file)).at_local(repo_uuid)
+                        local_filepath = pathing.in_hoard(FastPosixPath(hoard_file)).at_local(repo_uuid)
 
                         success, fullpath = await _restore_from_copy(
                             repo_uuid, local_filepath, hoard_props,
@@ -163,8 +163,8 @@ def _fetch_files_in_repo(
                     elif goal_status == HoardFileStatus.MOVE:
                         to_be_moved_from = hoard_props.get_move_file(repo_uuid)
 
-                        local_filepath_from = pathing.in_hoard(PurePosixPath(to_be_moved_from)).at_local(repo_uuid).on_device_path()
-                        local_filepath = pathing.in_hoard(PurePosixPath(hoard_file)).at_local(repo_uuid).on_device_path()
+                        local_filepath_from = pathing.in_hoard(FastPosixPath(to_be_moved_from)).at_local(repo_uuid).on_device_path()
+                        local_filepath = pathing.in_hoard(FastPosixPath(hoard_file)).at_local(repo_uuid).on_device_path()
                         try:
                             logging.info(f"Moving {local_filepath_from} to {local_filepath}")
 
@@ -214,9 +214,9 @@ def _cleanup_files_in_repo(
 
             if goal_status == HoardFileStatus.CLEANUP:
                 to_be_got = hoard_props.by_status(HoardFileStatus.GET)
-                to_be_moved_to = hoard.fsobjects.where_to_move(repo_uuid, PurePosixPath(hoard_file))
+                to_be_moved_to = hoard.fsobjects.where_to_move(repo_uuid, FastPosixPath(hoard_file))
 
-                local_path = pathing.in_hoard(PurePosixPath(hoard_file)).at_local(repo_uuid)
+                local_path = pathing.in_hoard(FastPosixPath(hoard_file)).at_local(repo_uuid)
                 local_file_to_delete = local_path.as_pure_path.as_posix()
 
                 if hoard_props.fasthash in files_requiring_copy:
@@ -320,12 +320,12 @@ async def _restore_from_copy(
     to_fullpath = local_filepath.on_device_path()
     print(f"Restoring to {to_fullpath}")
     for candidate_file in candidates_to_copy:
-        other_props = hoard.fsobjects[PurePosixPath(candidate_file)]
+        other_props = hoard.fsobjects[FastPosixPath(candidate_file)]
         if other_props.get_status(repo_uuid) != HoardFileStatus.AVAILABLE:  # file is not available here
             logging.error("trying to restore from a file that is not available!")
             continue
 
-        other_file_path = pathing.in_hoard(PurePosixPath(candidate_file)).at_local(repo_uuid).on_device_path()
+        other_file_path = pathing.in_hoard(FastPosixPath(candidate_file)).at_local(repo_uuid).on_device_path()
         print(f"Restoring from {other_file_path} to {to_fullpath}.")
 
         success, restored_file = await _restore_file(other_file_path, to_fullpath, hoard_props)

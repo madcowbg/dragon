@@ -3,7 +3,9 @@ import logging
 import os
 import pathlib
 from io import StringIO
-from pathlib import PurePosixPath
+
+import command.fast_path
+from command.fast_path import FastPosixPath
 from typing import Iterable, Tuple, Dict, Optional, List
 
 import aiofiles.os
@@ -45,14 +47,14 @@ def walk_repo(repo: str, hoard_ignore: HoardIgnore) -> Iterable[Tuple[pathlib.Pa
 
 
 class FileDeleted:
-    def __init__(self, missing_relpath: PurePosixPath, details: str = "MOVED"):
+    def __init__(self, missing_relpath: FastPosixPath, details: str = "MOVED"):
         self.missing_relpath = missing_relpath
         self.details = details
 
 
 class FileMoved:
     def __init__(
-            self, missing_relpath: PurePosixPath, moved_to_relpath: PurePosixPath, size: int, mtime: float,
+            self, missing_relpath: FastPosixPath, moved_to_relpath: FastPosixPath, size: int, mtime: float,
             moved_file_hash: str):
         self.moved_file_hash = moved_file_hash
         self.mtime = mtime
@@ -64,7 +66,7 @@ class FileMoved:
 
 class FileAdded:
     def __init__(
-            self, relpath: PurePosixPath, size: int, mtime: float, fasthash: str, requested_status: RepoFileStatus):
+            self, relpath: FastPosixPath, size: int, mtime: float, fasthash: str, requested_status: RepoFileStatus):
         assert not relpath.is_absolute()
         assert requested_status in (RepoFileStatus.ADDED, RepoFileStatus.PRESENT)
         self.relpath = relpath
@@ -78,7 +80,7 @@ class FileAdded:
 
 class FileModified:
     def __init__(
-            self, relpath: PurePosixPath, size: int, mtime: float, fasthash: str):
+            self, relpath: FastPosixPath, size: int, mtime: float, fasthash: str):
         assert not relpath.is_absolute()
         self.relpath = relpath
 
@@ -88,22 +90,22 @@ class FileModified:
 
 
 class DirAdded:
-    def __init__(self, relpath: PurePosixPath):
+    def __init__(self, relpath: FastPosixPath):
         self.relpath = relpath
 
 
 class DirRemoved:
-    def __init__(self, dirpath: pathlib.PurePosixPath):
+    def __init__(self, dirpath: command.fast_path.FastPosixPath):
         self.dirpath = dirpath
 
 
 class FileIsSame:
-    def __init__(self, relpath: PurePosixPath):
+    def __init__(self, relpath: FastPosixPath):
         self.relpath = relpath
 
 
 class DirIsSame:
-    def __init__(self, relpath: PurePosixPath):
+    def __init__(self, relpath: FastPosixPath):
         self.relpath = relpath
 
 
@@ -122,7 +124,7 @@ def find_repo_changes(
 
 def compute_changes_from_diffs(diffs_stream: Iterable[RepoDiffs], repo_path: str, add_new_with_status: RepoFileStatus):
     files_to_add_or_update: Dict[pathlib.Path, Tuple[RepoFileStatus, Optional[RepoFileProps]]] = {}
-    files_maybe_removed: List[Tuple[PurePosixPath, RepoFileProps]] = []
+    files_maybe_removed: List[Tuple[FastPosixPath, RepoFileProps]] = []
     folders_to_add: List[pathlib.Path] = []
 
     for diff in diffs_stream:
@@ -178,7 +180,7 @@ def compute_changes_from_diffs(diffs_stream: Iterable[RepoDiffs], repo_path: str
             assert missing_file_props.fasthash == moved_file_hash
             assert files_to_add_or_update[moved_to_file][0] == RepoFileStatus.ADDED
 
-            moved_to_relpath = PurePosixPath(moved_to_file.relative_to(repo_path))
+            moved_to_relpath = FastPosixPath(moved_to_file.relative_to(repo_path))
             logging.info(f"{missing_relpath} is moved to {moved_to_relpath} ")
 
             try:
@@ -199,7 +201,7 @@ def compute_changes_from_diffs(diffs_stream: Iterable[RepoDiffs], repo_path: str
 
     for fullpath, (requested_status, old_props) in alive_it(
             files_to_add_or_update.items(), title=f"Adding {len(files_to_add_or_update)} files"):
-        relpath = pathlib.PurePosixPath(fullpath).relative_to(repo_path)
+        relpath = command.fast_path.FastPosixPath(fullpath).relative_to(repo_path)
 
         if fullpath not in file_hashes:
             logging.warning(f"Skipping {fullpath} as it doesn't have a computed hash!")
@@ -220,35 +222,35 @@ def compute_changes_from_diffs(diffs_stream: Iterable[RepoDiffs], repo_path: str
             logging.error(e)
 
     for fullpath in alive_it(folders_to_add, title=f"Adding {len(folders_to_add)} folders"):
-        relpath = pathlib.PurePosixPath(fullpath).relative_to(repo_path)
+        relpath = command.fast_path.FastPosixPath(fullpath).relative_to(repo_path)
         yield DirAdded(relpath)
 
     logging.info(f"Files read!")
 
 
 class FileNotInFilesystem:
-    def __init__(self, filepath: PurePosixPath, props: RepoFileProps):
+    def __init__(self, filepath: FastPosixPath, props: RepoFileProps):
         assert not filepath.is_absolute()
         self.filepath = filepath
         self.props = props
 
 
 class DirNotInFilesystem:
-    def __init__(self, dirpath: PurePosixPath, props: RepoDirProps):
+    def __init__(self, dirpath: FastPosixPath, props: RepoDirProps):
         assert not dirpath.is_absolute()
         self.dirpath = dirpath
         self.props = props
 
 
 class RepoFileWeakSame:
-    def __init__(self, filepath: PurePosixPath, props: RepoFileProps):
+    def __init__(self, filepath: FastPosixPath, props: RepoFileProps):
         assert not filepath.is_absolute()
         self.filepath = filepath
         self.props = props
 
 
 class RepoFileWeakDifferent:
-    def __init__(self, filepath: PurePosixPath, props: RepoFileProps, mtime: float, size: int):
+    def __init__(self, filepath: FastPosixPath, props: RepoFileProps, mtime: float, size: int):
         assert not filepath.is_absolute()
 
         self.filepath = filepath
@@ -259,7 +261,7 @@ class RepoFileWeakDifferent:
 
 
 class RepoFileDifferent:
-    def __init__(self, filepath: PurePosixPath, props: RepoFileProps, mtime: float, size: int, fasthash: str):
+    def __init__(self, filepath: FastPosixPath, props: RepoFileProps, mtime: float, size: int, fasthash: str):
         assert not filepath.is_absolute()
 
         self.filepath = filepath
@@ -271,7 +273,7 @@ class RepoFileDifferent:
 
 
 class RepoFileSame:
-    def __init__(self, filepath: PurePosixPath, props: RepoFileProps, mtime: float):
+    def __init__(self, filepath: FastPosixPath, props: RepoFileProps, mtime: float):
         assert not filepath.is_absolute()
         self.filepath = filepath
         self.props = props
@@ -279,20 +281,20 @@ class RepoFileSame:
 
 
 class DirIsSameInRepo:
-    def __init__(self, dirpath: PurePosixPath, props: RepoDirProps):
+    def __init__(self, dirpath: FastPosixPath, props: RepoDirProps):
         assert not dirpath.is_absolute()
         self.dirpath = dirpath
         self.props = props
 
 
 class DirNotInRepo:
-    def __init__(self, dirpath: PurePosixPath):
+    def __init__(self, dirpath: FastPosixPath):
         assert not dirpath.is_absolute()
         self.dirpath = dirpath
 
 
 class FileNotInRepo:
-    def __init__(self, filepath: PurePosixPath):
+    def __init__(self, filepath: FastPosixPath):
         assert not filepath.is_absolute()
         self.filepath = filepath
 
@@ -326,7 +328,7 @@ def compute_difference_between_contents_and_filesystem(
         for file_path_full, dir_path_full in walk_repo(repo_path, hoard_ignore):
             if file_path_full is not None:
                 assert dir_path_full is None
-                file_path_local = PurePosixPath(file_path_full.relative_to(repo_path))
+                file_path_local = FastPosixPath(file_path_full.relative_to(repo_path))
                 logging.debug(f"Checking {file_path_local} for existence...")
                 if contents.fsobjects.in_existing(file_path_local):  # file is already in index
                     logging.debug(f"File is in contents, adding to check")  # checking size and mtime.")
@@ -336,7 +338,7 @@ def compute_difference_between_contents_and_filesystem(
                 bar()
             else:
                 assert dir_path_full is not None and file_path_full is None
-                dir_path_in_local = PurePosixPath(dir_path_full.relative_to(repo_path))
+                dir_path_in_local = FastPosixPath(dir_path_full.relative_to(repo_path))
                 if contents.fsobjects.in_existing(dir_path_in_local):
                     props = contents.fsobjects.get_existing(dir_path_in_local)
                     assert isinstance(props, RepoDirProps)
@@ -350,7 +352,7 @@ def compute_difference_between_contents_and_filesystem(
             try:
                 stats = await aiofiles.os.stat(file_fullpath)
 
-                file_path_local = pathlib.PurePosixPath(file_fullpath).relative_to(repo_path)
+                file_path_local = command.fast_path.FastPosixPath(file_fullpath).relative_to(repo_path)
                 props = contents.fsobjects.get_existing(file_path_local)
                 if skip_integrity_checks:
                     if props.mtime == stats.st_mtime and props.size == stats.st_size:
@@ -381,7 +383,7 @@ def compute_difference_filtered_by_path(
     for allowed_path in alive_it(allowed_paths, title="Checking updates"):
         path_on_device = pathlib.Path(allowed_path).absolute()
 
-        local_path = PurePosixPath(path_on_device.relative_to(repo_path))
+        local_path = FastPosixPath(path_on_device.relative_to(repo_path))
         if hoard_ignore.matches(local_path):
             logging.info("ignoring a file")
             continue
@@ -424,7 +426,7 @@ def _apply_repo_change_to_contents(
         pass
     elif isinstance(change, FileDeleted):
         print_maybe(f"{change.details} {change.missing_relpath}")
-        contents.fsobjects.mark_removed(PurePosixPath(change.missing_relpath))
+        contents.fsobjects.mark_removed(FastPosixPath(change.missing_relpath))
     elif isinstance(change, FileMoved):
         contents.fsobjects.mark_moved(
             change.missing_relpath, change.moved_to_relpath,
@@ -450,6 +452,6 @@ def _apply_repo_change_to_contents(
         print_maybe(f"ADDED_DIR {change.relpath}")
     elif isinstance(change, DirRemoved):
         print_maybe("REMOVED_DIR {diff.dirpath}")
-        contents.fsobjects.mark_removed(PurePosixPath(change.dirpath))
+        contents.fsobjects.mark_removed(FastPosixPath(change.dirpath))
     else:
         raise TypeError(f"Unexpected change type {type(change)}")

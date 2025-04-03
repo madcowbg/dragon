@@ -1,7 +1,7 @@
 import enum
 import logging
 from io import StringIO
-from pathlib import PurePosixPath
+from command.fast_path import FastPosixPath
 
 from command.content_prefs import ContentPrefs
 from command.contents.comparisons import compare_local_to_hoard
@@ -253,7 +253,7 @@ def _handle_hoard_only_moved(
     if preferences.on_hoard_only_local_moved == PullBehavior.MOVE_ON_HOARD:
         goal_status = diff.hoard_props.get_status(preferences.local_uuid)
         if goal_status == HoardFileStatus.AVAILABLE:
-            hoard_new_path = pathing.in_local(PurePosixPath(diff.local_props.last_related_fullpath), preferences.local_uuid) \
+            hoard_new_path = pathing.in_local(FastPosixPath(diff.local_props.last_related_fullpath), preferences.local_uuid) \
                 .at_hoard().as_pure_path
             hoard_new_path_props = hoard.fsobjects[hoard_new_path]
             assert isinstance(hoard_new_path_props, HoardFileProps)
@@ -360,7 +360,7 @@ def _incoming__safe_mark_for_cleanup(
 
 
 def reset_local_as_current(
-        hoard: HoardContents, remote_uuid: str, hoard_file: PurePosixPath, hoard_props: HoardFileProps,
+        hoard: HoardContents, remote_uuid: str, hoard_file: FastPosixPath, hoard_props: HoardFileProps,
         local_props: RepoFileProps):
     past_available = hoard_props.by_statuses(HoardFileStatus.AVAILABLE, HoardFileStatus.GET, HoardFileStatus.COPY)
 

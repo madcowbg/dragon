@@ -1,4 +1,4 @@
-from pathlib import PurePosixPath
+from command.fast_path import FastPosixPath
 
 from contents.repo_props import RepoFileProps
 from contents.hoard_props import HoardFileProps
@@ -9,7 +9,7 @@ class Diff:
 
 
 class FileOnlyInLocal(Diff):
-    def __init__(self, local_file: PurePosixPath, curr_file_hoard_path: PurePosixPath, local_props: RepoFileProps, is_added: bool):
+    def __init__(self, local_file: FastPosixPath, curr_file_hoard_path: FastPosixPath, local_props: RepoFileProps, is_added: bool):
         assert not local_file.is_absolute()
         assert curr_file_hoard_path.is_absolute()
         self.local_file = local_file
@@ -19,7 +19,7 @@ class FileOnlyInLocal(Diff):
         self.is_added = is_added
 
 class FileIsSame(Diff):
-    def __init__(self, current_file: PurePosixPath, curr_file_hoard_path: PurePosixPath, local_props: RepoFileProps,
+    def __init__(self, current_file: FastPosixPath, curr_file_hoard_path: FastPosixPath, local_props: RepoFileProps,
                  hoard_props: HoardFileProps):
         assert not current_file.is_absolute()
         assert curr_file_hoard_path.is_absolute()
@@ -31,7 +31,7 @@ class FileIsSame(Diff):
 
 class FileContentsDiffer(Diff):
     def __init__(
-            self, current_file: PurePosixPath, curr_file_hoard_path: PurePosixPath,
+            self, current_file: FastPosixPath, curr_file_hoard_path: FastPosixPath,
             local_props: RepoFileProps, hoard_props: HoardFileProps):
         assert not current_file.is_absolute()
         assert curr_file_hoard_path.is_absolute()
@@ -43,7 +43,7 @@ class FileContentsDiffer(Diff):
 
 class FileOnlyInHoardLocalDeleted(Diff):
     def __init__(
-            self, current_file: PurePosixPath, curr_file_hoard_path: PurePosixPath,
+            self, current_file: FastPosixPath, curr_file_hoard_path: FastPosixPath,
             hoard_props: HoardFileProps, local_props: RepoFileProps):
         assert not current_file.is_absolute()
         assert curr_file_hoard_path.is_absolute()
@@ -55,7 +55,7 @@ class FileOnlyInHoardLocalDeleted(Diff):
 
 
 class FileOnlyInHoardLocalUnknown(Diff):
-    def __init__(self, current_file: PurePosixPath, curr_file_hoard_path: PurePosixPath, hoard_props: HoardFileProps):
+    def __init__(self, current_file: FastPosixPath, curr_file_hoard_path: FastPosixPath, hoard_props: HoardFileProps):
         assert not current_file.is_absolute()
         assert curr_file_hoard_path.is_absolute()
         self.local_file = current_file
@@ -65,7 +65,7 @@ class FileOnlyInHoardLocalUnknown(Diff):
 
 class FileOnlyInHoardLocalMoved(Diff):
     def __init__(
-            self, current_file: PurePosixPath, curr_file_hoard_path: PurePosixPath,
+            self, current_file: FastPosixPath, curr_file_hoard_path: FastPosixPath,
             hoard_props: HoardFileProps, local_props: RepoFileProps):
         assert not current_file.is_absolute()
         assert curr_file_hoard_path.is_absolute()
@@ -77,7 +77,7 @@ class FileOnlyInHoardLocalMoved(Diff):
 
 
 class DirMissingInHoard(Diff):
-    def __init__(self, current_dir: PurePosixPath, curr_dir_hoard_path: PurePosixPath):
+    def __init__(self, current_dir: FastPosixPath, curr_dir_hoard_path: FastPosixPath):
         assert not current_dir.is_absolute()
         assert curr_dir_hoard_path.is_absolute()
         self.local_dir = current_dir
@@ -85,7 +85,7 @@ class DirMissingInHoard(Diff):
 
 
 class DirIsSame(Diff):
-    def __init__(self, current_dir: PurePosixPath, curr_dir_hoard_path: PurePosixPath):
+    def __init__(self, current_dir: FastPosixPath, curr_dir_hoard_path: FastPosixPath):
         assert not current_dir.is_absolute()
         assert curr_dir_hoard_path.is_absolute()
         self.local_dir = current_dir
@@ -93,7 +93,7 @@ class DirIsSame(Diff):
 
 
 class DirMissingInLocal(Diff):
-    def __init__(self, current_dir: PurePosixPath, curr_dir_hoard_path: PurePosixPath):
+    def __init__(self, current_dir: FastPosixPath, curr_dir_hoard_path: FastPosixPath):
         assert not current_dir.is_absolute()
         assert curr_dir_hoard_path.is_absolute()
         self.local_dir = current_dir

@@ -3,7 +3,7 @@ import os
 import pathlib
 import sys
 from io import StringIO
-from pathlib import PurePosixPath
+from command.fast_path import FastPosixPath
 from typing import List, Dict, Any, Optional, Callable
 
 import humanize
@@ -151,7 +151,7 @@ class HoardCommandContents:
         config = self.hoard.config()
         with self.hoard.open_contents(create_missing=False, is_readonly=True) as hoard:
             statuses: Dict[str, Dict[str, Dict[str, Any]]] = hoard.fsobjects.status_by_uuid(
-                PurePosixPath(path) if path else None)
+                FastPosixPath(path) if path else None)
             available_states, statuses_sorted = augment_statuses(config, hoard, show_empty, statuses)
 
             all_stats = ["total", *(s for s in (HoardFileStatus.AVAILABLE.value, HoardFileStatus.GET.value,
@@ -259,7 +259,7 @@ class HoardCommandContents:
                             continue
                         # file or dir is to be copied
                         relpath = hoard_path.relative_to(from_path)
-                        to_fullpath = PurePosixPath(to_path).joinpath(relpath)
+                        to_fullpath = FastPosixPath(to_path).joinpath(relpath)
                         logging.info(f"Copying {hoard_path} to {to_fullpath}")
 
                         hoard.fsobjects.copy(hoard_path, to_fullpath)
@@ -278,7 +278,7 @@ class HoardCommandContents:
         cleaned_up, wont_get, skipped = 0, 0, 0
         with StringIO() as out:
             print(f"Iterating files and folders to see what to drop...")
-            hoard_file: PurePosixPath
+            hoard_file: FastPosixPath
             for hoard_file, hoard_props in alive_it(hoard.fsobjects.in_folder(mounted_at)):
                 if not isinstance(hoard_props, HoardFileProps):
                     continue
