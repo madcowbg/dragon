@@ -434,7 +434,7 @@ class HoardCommandContents:
                         pull_repo_contents_to_hoard(hoard_contents, pathing, config, current_contents, preferences, out)
 
                         logging.info(f"Updating epoch of {remote_uuid} to {current_contents.config.epoch}")
-                        hoard_contents.config.set_remote_epoch(
+                        hoard_contents.config.mark_up_to_date(
                             remote_uuid, current_contents.config.epoch, current_contents.config.updated)
 
                     clean_dangling_files(hoard_contents, out)

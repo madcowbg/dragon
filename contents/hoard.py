@@ -60,8 +60,12 @@ class HoardContentsConfig:
     def remote_epoch(self, remote_uuid: str) -> int:
         return self._remote_config(remote_uuid).get("epoch", -1)
 
-    def set_remote_epoch(self, remote_uuid: str, epoch: int, updated: datetime):
+    def last_hoard_epoch_for_remote(self, remote_uuid: str) -> int:
+        return self._remote_config(remote_uuid).get("last_hoard_epoch", -1)
+
+    def mark_up_to_date(self, remote_uuid: str, epoch: int, updated: datetime):
         self._remote_config(remote_uuid)["epoch"] = epoch
+        self._remote_config(remote_uuid)["last_hoard_epoch"] = self.hoard_epoch
         self._remote_config(remote_uuid)["updated"] = updated.isoformat()
         self.write()
 
