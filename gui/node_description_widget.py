@@ -39,7 +39,7 @@ class NodeDescription(Widget):
             yield data_table
             data_table.add_columns("repo", "uuid", "path")
             for hoard_remote in self.hoard_config.remotes.all():
-                local_path = self.hoard_pathing.in_hoard(hoard_dir.fullname).at_local(hoard_remote.uuid)
+                local_path = self.hoard_pathing.in_hoard(FastPosixPath(hoard_dir.fullname)).at_local(hoard_remote.uuid)
                 if local_path is not None:
                     data_table.add_row(
                         Text(
@@ -49,7 +49,7 @@ class NodeDescription(Widget):
                             f"[@click=app.open_cave_dir('{local_path.on_device_path()}')]{pretty_truncate(hoard_remote.uuid, 15)}[/]",
                             style="u"),
                         Text(
-                            self.hoard_pathing.in_local(FastPosixPath(""), hoard_remote.uuid).on_device_path(),
+                            self.hoard_pathing.in_local(FastPosixPath(""), hoard_remote.uuid).on_device_path().as_posix(),
                             style="green" if os.path.isdir(local_path.on_device_path()) else "strike").append(
                             local_path.as_pure_path.as_posix(), style="normal"))
 
@@ -95,7 +95,7 @@ class NodeDescription(Widget):
                 yield Label(f"Repos where status = {status.value.upper()}")
                 for repo_uuid in repos:
                     hoard_remote = self.hoard_config.remotes[repo_uuid]
-                    full_local_path = self.hoard_pathing.in_hoard(hoard_file.fullname) \
+                    full_local_path = self.hoard_pathing.in_hoard(FastPosixPath(hoard_file.fullname)) \
                         .at_local(repo_uuid).on_device_path()
                     yield Horizontal(
                         Label(

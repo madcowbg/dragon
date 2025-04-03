@@ -32,7 +32,7 @@ class FastPosixPath(os.PathLike):
             else:
                 assert isinstance(path, str), repr(path)
 
-                parts = path.split(r"/")
+                parts = path.rstrip("/").split(r"/")
 
                 self._drive = parts[0] if len(parts) > 0 and parts[0].endswith(":") else ''
                 self._is_absolute = self._drive != '' or path.startswith("/")

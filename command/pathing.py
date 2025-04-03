@@ -43,7 +43,7 @@ class HoardPathing:
         def as_pure_path(self) -> FastPosixPath:
             return FastPosixPath(self._path)
 
-        def on_device_path(self) -> str:
+        def on_device_path(self) -> FastPosixPath:
             return self._pathing.cave_found_path(self._repo_uuid).joinpath(self._path.simple)
 
         def at_hoard(self) -> "HoardPathing.HoardPath":
@@ -62,10 +62,12 @@ class HoardPathing:
         assert self._config.remotes[repo_uuid].mounted_at.is_absolute()
         return self._config.remotes[repo_uuid].mounted_at
 
-    def in_hoard(self, path: FastPosixPath | FastPosixPath) -> HoardPath:
+    def in_hoard(self, path: FastPosixPath) -> HoardPath:
+        assert isinstance(path, FastPosixPath)
         return HoardPathing.HoardPath(path, self)
 
     def in_local(self, path: FastPosixPath, repo_uuid: str) -> LocalPath:
+        assert isinstance(path, FastPosixPath)
         return HoardPathing.LocalPath(path, repo_uuid, self)
 
     def repos_availability(self, folder: str) -> Dict[HoardRemote, str]:
