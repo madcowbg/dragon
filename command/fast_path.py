@@ -7,7 +7,7 @@ class FastPosixPath(os.PathLike):
     def __init__(self, path: Union[bool, str, Path, "FastPosixPath"], drive: str = None, remainder: List[str] | None = None):
         if isinstance(path, bool):  # supports FastPosixPath(is_absolute, remainder)
             # print((path, drive, remainder))
-            assert (drive == '') or (not path)  # paths with drives are absolute
+            assert ((drive != '') and path) or drive == ''  # paths with drives are absolute
             self._drive = drive
             self._is_absolute = path
             self._rem = remainder
