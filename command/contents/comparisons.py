@@ -1,5 +1,5 @@
 import logging
-from pathlib import PurePosixPath
+from command.fast_path import FastPosixPath
 from typing import Generator, Dict
 
 from alive_progress import alive_bar, alive_it
@@ -59,17 +59,18 @@ def compare_local_to_hoard(local: RepoContents, hoard: HoardContents, pathing: H
     #     "WHERE fsobject.fullpath IS NULL"))
     # logging.warning(f"found {len(all_missing_in_repo)} are missing!")
     #
-    logging.warning(f"loading all local existing objects")
-    all_local_existing: Dict[PurePosixPath, RepoFileProps | RepoDirProps] = dict(local.fsobjects.existing())
-    all_local_with_any_status: Dict[PurePosixPath, RepoFileProps | RepoDirProps] = dict(local.fsobjects.all_status())
+    all_local_with_any_status: Dict[FastPosixPath, RepoFileProps | RepoDirProps] = \
+        dict(s for s in alive_it(local.fsobjects.all_status(), title="Load current objects"))
+    all_local_existing: Dict[FastPosixPath, RepoFileProps | RepoDirProps] = dict(
+        (path, props) for path, props in local.fsobjects.all_status()
+        if props.last_status != RepoFileStatus.DELETED and props.last_status != RepoFileStatus.MOVED_FROM)
     logging.warning(f"loaded {len(all_local_existing)} local existing objects")
 
-    logging.warning(f"loading all hoard existing objects")
-    all_hoard_in_folder: Dict[PurePosixPath, HoardFileProps | HoardDirProps] = dict(hoard.fsobjects.in_folder(pathing.mounted_at(local.config.uuid)))
+    all_hoard_in_folder: Dict[FastPosixPath, HoardFileProps | HoardDirProps] = dict(
+        s for s in alive_it(hoard.fsobjects.in_folder(pathing.mounted_at(local.config.uuid)), title="Load hoard objects"))
     logging.warning(f"loaded {len(all_hoard_in_folder)} local existing objects")
     #
     # raise NotImplementedError()
-
 
     with alive_bar(local.fsobjects.len_existing(), title="Current files vs. Hoard") as bar:
         for current_path, props in all_local_existing.items():
@@ -77,23 +78,20 @@ def compare_local_to_hoard(local: RepoContents, hoard: HoardContents, pathing: H
             if isinstance(props, RepoFileProps):
                 current_file = current_path
                 curr_file_hoard_path = pathing.in_local(current_file, local.config.uuid).at_hoard()
-                if curr_file_hoard_path.as_pure_path not in all_hoard_in_folder:
+                hoard_props = all_hoard_in_folder.get(curr_file_hoard_path.as_pure_path, None)
+                if hoard_props is None:
                     logging.info(f"local file not in hoard: {curr_file_hoard_path}")
                     yield FileOnlyInLocal(
                         current_file, curr_file_hoard_path.as_pure_path, props,
                         props.last_status == RepoFileStatus.ADDED)
-                elif is_same_file(
-                        all_local_existing[current_file],
-                        all_hoard_in_folder[curr_file_hoard_path.as_pure_path]):
+                elif is_same_file(props, hoard_props):
                     logging.info(f"same in hoard {current_file}!")
-                    yield FileIsSame(current_file, curr_file_hoard_path.as_pure_path, props, all_hoard_in_folder[
-                        curr_file_hoard_path.as_pure_path])
+                    yield FileIsSame(current_file, curr_file_hoard_path.as_pure_path, props, hoard_props)
                 else:
                     logging.info(f"file changes {current_file}")
                     yield FileContentsDiffer(
                         current_file,
-                        curr_file_hoard_path.as_pure_path, props, all_hoard_in_folder[
-                            curr_file_hoard_path.as_pure_path])
+                        curr_file_hoard_path.as_pure_path, props, hoard_props)
 
             elif isinstance(props, RepoDirProps):
                 current_dir = current_path
@@ -106,7 +104,7 @@ def compare_local_to_hoard(local: RepoContents, hoard: HoardContents, pathing: H
             else:
                 raise ValueError(f"unknown props type: {type(props)}")
 
-    hoard_file: PurePosixPath
+    hoard_file: FastPosixPath
     for hoard_file, props in alive_it(
             all_hoard_in_folder.items(),
             title="Hoard vs. Current files"):
