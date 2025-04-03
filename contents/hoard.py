@@ -390,8 +390,8 @@ class HoardFSObjects:
 
         # add fsobject entry
         curr.execute(
-            "INSERT OR REPLACE INTO fsobject(fullpath, isdir, size, fasthash) VALUES (?, FALSE, ?, ?)",
-            (filepath.as_posix(), props.size, props.fasthash))
+            "INSERT OR REPLACE INTO fsobject(fullpath, isdir, size, fasthash, last_epoch_updated) VALUES (?, FALSE, ?, ?, ?)",
+            (filepath.as_posix(), props.size, props.fasthash, self.parent.config.hoard_epoch))
 
         # cleanup presence status
         fsobject_id: int = curr.execute(
@@ -410,8 +410,8 @@ class HoardFSObjects:
 
         # add fsobject entry
         curr.execute(
-            "INSERT OR REPLACE INTO fsobject(fullpath, isdir) VALUES (?, TRUE)",
-            (curr_dir.as_posix(),))
+            "INSERT OR REPLACE INTO fsobject(fullpath, isdir, last_epoch_updated) VALUES (?, TRUE, ?)",
+            (curr_dir.as_posix(), self.parent.config.hoard_epoch))
         fsobject_id: int = curr.execute(
             "SELECT fsobject_id FROM fsobject WHERE fullpath = ?", (curr_dir.as_posix(),)).fetchone()
         curr.execute("DELETE FROM fspresence WHERE fsobject_id = ?", (fsobject_id,))
@@ -442,8 +442,8 @@ class HoardFSObjects:
         if isinstance(props, HoardFileProps):
             # add fsobject entry
             curr.execute(
-                "INSERT OR REPLACE INTO fsobject(fullpath, isdir, size, fasthash) VALUES (?, FALSE, ?, ?)",
-                (new_path.as_posix(), props.size, props.fasthash))
+                "INSERT OR REPLACE INTO fsobject(fullpath, isdir, size, fasthash, last_epoch_updated) VALUES (?, FALSE, ?, ?, ?)",
+                (new_path.as_posix(), props.size, props.fasthash, self.parent.config.hoard_epoch))
 
             # add old presence
             new_path_id: int = curr.execute(
@@ -455,8 +455,8 @@ class HoardFSObjects:
         else:
             assert isinstance(props, HoardDirProps)
             curr.execute(
-                "INSERT OR REPLACE INTO fsobject(fullpath, isdir) VALUES (?, TRUE)",
-                (new_path.as_posix(),))
+                "INSERT OR REPLACE INTO fsobject(fullpath, isdir, last_epoch_updated) VALUES (?, TRUE, ?)",
+                (new_path.as_posix(), self.parent.config.hoard_epoch))
 
         self.delete(orig_path)
 
@@ -474,8 +474,8 @@ class HoardFSObjects:
         if isinstance(props, HoardFileProps):
             # add fsobject entry
             curr.execute(
-                "INSERT OR REPLACE INTO fsobject(fullpath, isdir, size, fasthash) VALUES (?, FALSE, ?, ?)",
-                (to_fullpath.as_posix(), props.size, props.fasthash))
+                "INSERT OR REPLACE INTO fsobject(fullpath, isdir, size, fasthash, last_epoch_updated) VALUES (?, FALSE, ?, ?, ?)",
+                (to_fullpath.as_posix(), props.size, props.fasthash, self.parent.config.hoard_epoch))
 
             # add presence tp request
             new_path_id: int = curr.execute(
@@ -547,7 +547,8 @@ class HoardContents:
                 " fullpath TEXT NOT NULL UNIQUE,"
                 " isdir BOOL NOT NULL,"
                 " size INTEGER,"
-                " fasthash TEXT)")
+                " fasthash TEXT,"
+                " last_epoch_updated INTEGER)")
 
             # for fasthash lookups in melding
             curr.execute("CREATE INDEX index_fsobject_fasthash ON fsobject (fasthash) ")
