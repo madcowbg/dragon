@@ -150,7 +150,8 @@ class HoardCommandContents:
             show_empty: bool = False):
         config = self.hoard.config()
         with self.hoard.open_contents(create_missing=False, is_readonly=True) as hoard:
-            statuses: Dict[str, Dict[str, Dict[str, Any]]] = hoard.fsobjects.status_by_uuid(PurePosixPath(path) if path else None)
+            statuses: Dict[str, Dict[str, Dict[str, Any]]] = hoard.fsobjects.status_by_uuid(
+                PurePosixPath(path) if path else None)
             available_states, statuses_sorted = augment_statuses(config, hoard, show_empty, statuses)
 
             all_stats = ["total", *(s for s in (HoardFileStatus.AVAILABLE.value, HoardFileStatus.GET.value,
@@ -437,9 +438,6 @@ class HoardCommandContents:
                             remote_uuid, current_contents.config.epoch, current_contents.config.updated)
 
                     clean_dangling_files(hoard_contents, out)
-                    logging.info("Writing updated hoard contents...")
-                    hoard_contents.write()
-                    logging.info("Local commit DONE!")
 
                 out.write(f"Sync'ed {config.remotes[remote_uuid].name} to hoard!\n")
             out.write("DONE")

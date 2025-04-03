@@ -92,9 +92,6 @@ class HoardCommandFiles:
 
                     _fetch_files_in_repo(hoard, repo_uuid, pathing, files_to_copy, out)
 
-                logging.info("Writing hoard file...")
-                hoard.write()
-
                 logging.info("Finding files that need copy - will not cleanup them!")
                 files_to_copy = _find_files_to_copy(hoard)
                 logging.info(f"Found {len(files_to_copy)} hashes to copy, won't cleanup them.")

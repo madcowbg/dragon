@@ -20,13 +20,17 @@ HOARD_CONTENTS_TOML = "hoard.contents.toml"
 
 
 class HoardContentsConfig:
-    def __init__(self, file: pathlib.Path):
+    def __init__(self, file: pathlib.Path, is_readonly: bool):
         self.file = file
+        self.is_readonly = is_readonly
 
         with open(file, "r") as f:
             self.doc = rtoml.load(f)
 
     def write(self):
+        if self.is_readonly:
+            raise ValueError("Cannot write to read-only contents!")
+
         with open(self.file, "w") as f:
             rtoml.dump(self.doc, f)
 
@@ -43,6 +47,15 @@ class HoardContentsConfig:
             self.write()
 
         return self.doc["remotes"][remote_uuid]
+
+    @property
+    def hoard_epoch(self) -> int:
+        return self.doc.get("hoard_epoch", 0)
+    
+    @hoard_epoch.setter
+    def hoard_epoch(self, epoch: int) -> None:
+        self.doc["hoard_epoch"] = epoch
+        self.write()
 
     def remote_epoch(self, remote_uuid: str) -> int:
         return self._remote_config(remote_uuid).get("epoch", -1)
@@ -76,6 +89,9 @@ class HoardContentsConfig:
         if 'max_size' not in remote["config"]:
             remote["config"]["max_size"] = max_size
             self.write()
+
+    def bump_hoard_epoch(self):
+        self.hoard_epoch += 1
 
 
 def _augment_with_fake_props(objects) -> Tuple[Set[str], List[str]]:
@@ -574,18 +590,22 @@ class HoardContents:
             f"file:{os.path.join(self.folder, HOARD_CONTENTS_FILENAME)}{'?mode=ro' if self.is_readonly else ''}",
             uri=True)
 
-        self.config = HoardContentsConfig(self.folder.joinpath(HOARD_CONTENTS_TOML))
+        self.config = HoardContentsConfig(self.folder.joinpath(HOARD_CONTENTS_TOML), self.is_readonly)
         self.fsobjects = HoardFSObjects(self)
 
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.config = None
-        self.fsobjects = None
-        self.epochs = None
+        if not self.is_readonly:
+            self.config.bump_hoard_epoch()
+            self.config.write()
 
         self.write()
         self.conn.close()
+
+        self.config = None
+        self.fsobjects = None
+        self.epochs = None
 
         return False
 
