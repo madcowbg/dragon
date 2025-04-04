@@ -3,7 +3,6 @@ import os
 import pathlib
 import sqlite3
 import sys
-from dataclasses import dataclass
 from datetime import datetime
 from functools import cached_property
 from sqlite3 import Connection
@@ -15,6 +14,7 @@ from command.fast_path import FastPosixPath
 from contents.hoard_props import HoardDirProps, HoardFileStatus, HoardFileProps
 from contents.repo import RepoContentsConfig
 from contents.repo_props import RepoFileProps
+from sql_util import SubfolderFilter, NoFilter
 from util import FIRST_VALUE, custom_isabs
 
 HOARD_CONTENTS_FILENAME = "hoard.contents"
@@ -329,26 +329,26 @@ class HoardFSObjects:
 
     def status_by_uuid(self, folder_path: FastPosixPath | None) -> Dict[str, Dict[str, Dict[str, Any]]]:
         if folder_path is not None:
-            AND_CLAUSE = " AND ? < fsobject.fullpath AND fsobject.fullpath < ? "
-            args = (fast_between_filter_left(folder_path), fast_between_filter_right(folder_path))
+            subfolder_filter = SubfolderFilter('fsobject.fullpath', folder_path)
         else:
-            AND_CLAUSE = ""
-            args = tuple()
+            subfolder_filter = NoFilter()
 
         stats: Dict[str, Dict[str, Dict[str, Any]]] = dict()
         for uuid, nfiles, size in self.parent.conn.execute(
                 "SELECT fspresence.uuid, count(fspresence.fsobject_id) as nfiles, sum(size) as total_size "
                 "FROM fsobject JOIN fspresence ON fsobject.fsobject_id=fspresence.fsobject_id "
-                f"WHERE isdir = FALSE {AND_CLAUSE} "
-                "GROUP BY fspresence.uuid", args):
+                f"WHERE isdir = FALSE AND {subfolder_filter.where_clause} "
+                "GROUP BY fspresence.uuid",
+                subfolder_filter.params):
             stats[uuid] = {
                 "total": {"nfiles": nfiles, "size": size}}
 
         for uuid, status, nfiles, size in self.parent.conn.execute(
                 "SELECT fspresence.uuid, fspresence.status, count(fspresence.fsobject_id) as nfiles, sum(size) as total_size "
                 "FROM fsobject JOIN fspresence ON fsobject.fsobject_id=fspresence.fsobject_id "
-                f"WHERE isdir = FALSE {AND_CLAUSE} "
-                "GROUP BY fspresence.uuid, fspresence.status", args):
+                f"WHERE isdir = FALSE AND {subfolder_filter.where_clause} "
+                "GROUP BY fspresence.uuid, fspresence.status",
+                subfolder_filter.params):
             stats[uuid][status] = {"nfiles": nfiles, "size": size}
         return stats
 
@@ -510,35 +510,16 @@ class HoardFSObjects:
 
     def stats_in_folder(self, folder_path: FastPosixPath) -> Tuple[int, int]:
         assert folder_path.is_absolute()
+        subfolder_filter = SubfolderFilter('fullpath', folder_path)
 
         return self.parent.conn.execute(
             "SELECT COUNT(1), IFNULL(SUM(fsobject.size), 0) FROM fsobject "
-            "WHERE isdir = FALSE AND ? < fullpath AND fullpath < ?",  # fast search using the index
-            (fast_between_filter_left(folder_path), fast_between_filter_right(folder_path))).fetchone()
+            f"WHERE isdir = FALSE AND {subfolder_filter.where_clause}",  # fast search using the index
+            subfolder_filter.params).fetchone()
 
     @cached_property
     def query(self) -> "Query":
         return Query(self.parent.conn)
-
-
-def field_is_subfolder_of(sql_field: str, param_name: str):
-    return f" :{param_name} || '/' < {sql_field} AND {sql_field} < :{param_name} || '0' "
-
-
-def format_for_subfolder(folder_name: FastPosixPath):
-    return folder_name.simple.rstrip("/")
-
-
-@dataclass
-class SubfolderFilter:
-    _sql_field: str
-    _param_value: FastPosixPath
-
-    @property
-    def where_clause(self): return f" ? || '/' < {self._sql_field} AND {self._sql_field} < ? || '0' "
-
-    @property
-    def params(self): return format_for_subfolder(self._param_value), format_for_subfolder(self._param_value)
 
 
 class Query:
@@ -577,16 +558,6 @@ class Query:
         return bool(self.cursor().execute(
             "SELECT is_deleted FROM file_stats_query WHERE fullpath = ?",
             (file_name.as_posix(),)).fetchone())
-
-
-def fast_between_filter_left(folder_path: FastPosixPath):
-    folder_path = "" if folder_path.as_posix() == "/" else folder_path.as_posix()
-    return folder_path + "/"
-
-
-def fast_between_filter_right(folder_path: FastPosixPath):
-    folder_path = "" if folder_path.as_posix() == "/" else folder_path.as_posix()
-    return folder_path + "0"
 
 
 STATUSES_THAT_USE_SIZE = [
