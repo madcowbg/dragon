@@ -1,8 +1,7 @@
-import pathlib
 from functools import cache
-from pathlib import PurePosixPath
 from typing import Optional, Dict
 
+from command.fast_path import FastPosixPath
 from config import HoardConfig, HoardPaths, HoardRemote
 
 
@@ -12,71 +11,73 @@ class HoardPathing:
         self._paths = paths
 
     class HoardPath:
-        def __init__(self, path: PurePosixPath, pathing: "HoardPathing"):
-            assert path.is_absolute()
+        def __init__(self, path: FastPosixPath, pathing: "HoardPathing"):
+            assert path._is_absolute
 
             self._path = path
-            assert self._path.is_absolute()
-
             self._pathing = pathing
 
         @property
-        def as_pure_path(self) -> PurePosixPath:
+        def as_pure_path(self) -> FastPosixPath:
             return self._path
 
         def at_local(self, repo_uuid: str) -> Optional["HoardPathing.LocalPath"]:
             mounted_at = self._pathing.mounted_at(repo_uuid)
             if not self._path.is_relative_to(mounted_at):
-                return None
-            else:
-                return HoardPathing.LocalPath(self._path.relative_to(mounted_at), repo_uuid, self._pathing)
+                return None  # is not relative
+            return HoardPathing.LocalPath(self._path.relative_to(mounted_at), repo_uuid, self._pathing)
 
         def __str__(self) -> str:
             return self._path.as_posix()
 
     class LocalPath:
-        def __init__(self, path: PurePosixPath, repo_uuid: str, pathing: "HoardPathing"):
-            assert not path.is_absolute()
+        def __init__(self, path: FastPosixPath, repo_uuid: str, pathing: "HoardPathing"):
+            assert not path._is_absolute
 
-            self._path = pathlib.PurePosixPath(path)
-            assert not self._path.is_absolute()
+            self._path = path
 
             self._repo_uuid = repo_uuid
             self._pathing = pathing
 
         @property
-        def as_pure_path(self) -> PurePosixPath:
-            return self._path
+        def as_pure_path(self) -> FastPosixPath:
+            return FastPosixPath(self._path)
 
-        def on_device_path(self) -> str:
-            return pathlib.PurePosixPath(self._pathing._paths[self._repo_uuid].find()).joinpath(self._path).as_posix()
+        def on_device_path(self) -> FastPosixPath:
+            return self._pathing.cave_found_path(self._repo_uuid).joinpath(self._path.simple)
 
         def at_hoard(self) -> "HoardPathing.HoardPath":
-            joined_path = pathlib.PurePosixPath(self._pathing.mounted_at(self._repo_uuid)).joinpath(self._path)
+            joined_path = self._pathing.mounted_at(self._repo_uuid).joinpath(self._path)
             return HoardPathing.HoardPath(joined_path, self._pathing)
 
         def __str__(self) -> str:
             return self._path.as_posix()
 
     @cache
-    def mounted_at(self, repo_uuid: str) -> PurePosixPath:
+    def cave_found_path(self, repo_uuid: str) -> FastPosixPath:
+        return FastPosixPath(self._paths[repo_uuid].find())
+
+    @cache
+    def mounted_at(self, repo_uuid: str) -> FastPosixPath:
         assert self._config.remotes[repo_uuid].mounted_at.is_absolute()
         return self._config.remotes[repo_uuid].mounted_at
 
-    def in_hoard(self, path: PurePosixPath | PurePosixPath) -> HoardPath:
+    def in_hoard(self, path: FastPosixPath) -> HoardPath:
+        assert isinstance(path, FastPosixPath)
         return HoardPathing.HoardPath(path, self)
 
-    def in_local(self, path: PurePosixPath, repo_uuid: str) -> LocalPath:
+    def in_local(self, path: FastPosixPath, repo_uuid: str) -> LocalPath:
+        assert isinstance(path, FastPosixPath)
         return HoardPathing.LocalPath(path, repo_uuid, self)
 
     def repos_availability(self, folder: str) -> Dict[HoardRemote, str]:
         paths: Dict[HoardRemote, str] = {}
         for remote in self._config.remotes.all():
-            relative_local_path = self.in_hoard(PurePosixPath(folder)).at_local(remote.uuid)
+            relative_local_path = self.in_hoard(FastPosixPath(folder)).at_local(remote.uuid)
             if relative_local_path is not None:
                 paths[remote] = relative_local_path.as_pure_path.as_posix()
         return paths
 
 
-def is_path_available(pathing: HoardPathing, hoard_file: PurePosixPath, repo: str) -> bool:
+def is_path_available(pathing: HoardPathing, hoard_file: FastPosixPath, repo: str) -> bool:
     return pathing.in_hoard(hoard_file).at_local(repo) is not None

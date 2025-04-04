@@ -11,8 +11,10 @@ NONE_TOML = "MISSING"
 
 class TotalCommand(object):
     def __init__(self, verbose: bool = False, path: str = ".", name: Optional[str] = None):
-        if verbose:
-            logging.basicConfig(level=logging.INFO)
+        logging.basicConfig(
+            level=logging.INFO if verbose else logging.WARNING,
+            format='%(asctime)s - %(funcName)20s() - %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S')
         self.cave = RepoCommand(path=path, name=name)
         self.hoard = HoardCommand(path=path)
 

@@ -1,4 +1,4 @@
-from pathlib import PurePosixPath
+from command.fast_path import FastPosixPath
 from typing import Dict, List
 
 from rich.text import Text
@@ -23,22 +23,22 @@ class HoardTreeWidget(Tree):
         self.select_node(self.root)
         self.root.expand()
 
-        self.mounts: Dict[PurePosixPath, List[HoardRemote]] = group_to_dict(
+        self.mounts: Dict[FastPosixPath, List[HoardRemote]] = group_to_dict(
             config.remotes.all(), key=lambda r: r.mounted_at)
-        self.root.set_label(self._create_pretty_folder_label("/", PurePosixPath("/"), 45))
+        self.root.set_label(self._create_pretty_folder_label("/", FastPosixPath("/"), 45))
 
     def _expand_hoard_dir(self, widget_node: TreeNode[HoardDir | HoardFile], hoard_dir: HoardDir, parent_offset: int):
         label_max_width = 45 - parent_offset * widget_node.tree.guide_depth
         for folder in hoard_dir.dirs.values():
-            folder_label = self._create_pretty_folder_label(folder.name, PurePosixPath(folder.fullname), label_max_width)
+            folder_label = self._create_pretty_folder_label(folder.name, FastPosixPath(folder.fullname), label_max_width)
             widget_node.add(folder_label, allow_expand=True, data=folder)
 
         for file in hoard_dir.files.values():
-            size = self.contents.fsobjects[PurePosixPath(file.fullname)].size
+            size = self.contents.fsobjects[FastPosixPath(file.fullname)].size
             file_label = Text().append(file.name.ljust(label_max_width + 2)).append(f"{format_size(size):>13}", "none")
             widget_node.add(file_label, allow_expand=False, data=file)
 
-    def _create_pretty_folder_label(self, name: str, fullname: PurePosixPath, max_width: int, name_style: str = "bold green"):
+    def _create_pretty_folder_label(self, name: str, fullname: FastPosixPath, max_width: int, name_style: str = "bold green"):
         count, size = self.contents.fsobjects.stats_in_folder(fullname)
         folder_name = Text().append(name, name_style).append(self._pretty_count_attached(fullname))
         folder_name.align("left", max_width)
@@ -47,7 +47,7 @@ class HoardTreeWidget(Tree):
             .append(f"{format_size(size):>7}", "none")
         return folder_label
 
-    def _pretty_count_attached(self, fullname: PurePosixPath) -> str:
+    def _pretty_count_attached(self, fullname: FastPosixPath) -> str:
         return f" ✅{len(self.mounts.get(fullname))}" if self.mounts.get(fullname) is not None else ""
 
     def on_tree_node_expanded(self, event: Tree[HoardDir | HoardFile].NodeExpanded):

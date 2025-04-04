@@ -3,7 +3,7 @@ import logging
 import threading
 from asyncio import Queue
 from io import StringIO
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from threading import Thread
 from time import sleep
 from typing import List
@@ -14,13 +14,14 @@ from watchdog.observers import Observer
 
 from command.comparison_repo import find_repo_changes, \
     compute_difference_filtered_by_path, compute_changes_from_diffs, _apply_repo_change_to_contents
+from command.fast_path import FastPosixPath
 from command.hoard_ignore import HoardIgnore, DEFAULT_IGNORE_GLOBS
 from command.repo import ProspectiveRepo, ConnectedRepo
 from contents.repo_props import RepoFileStatus
 
 
 class RepoWatcher(FileSystemEventHandler):
-    def __init__(self, hoard_path: PurePosixPath, hoard_ignore: HoardIgnore):
+    def __init__(self, hoard_path: FastPosixPath, hoard_ignore: HoardIgnore):
         self.hoard_path = hoard_path
         self.hoard_ignore = hoard_ignore
 
@@ -44,7 +45,7 @@ class RepoWatcher(FileSystemEventHandler):
         if path == '':
             return
 
-        src_path = PurePosixPath(Path(path).absolute())
+        src_path = FastPosixPath(Path(path).absolute())
         with self.lock:
             if src_path in self.queue_contents:
                 return
@@ -120,7 +121,7 @@ def run_daemon(path: str, assume_current: bool = False):
 
     repo = ProspectiveRepo(repo_path.as_posix())
     hoard_ignore: HoardIgnore = HoardIgnore(DEFAULT_IGNORE_GLOBS)
-    event_handler = RepoWatcher(PurePosixPath(repo.path), hoard_ignore)
+    event_handler = RepoWatcher(FastPosixPath(repo.path), hoard_ignore)
 
     observer = Observer()
     observer.schedule(event_handler, repo_path, recursive=True)

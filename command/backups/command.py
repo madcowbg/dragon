@@ -1,16 +1,14 @@
 import logging
-import pathlib
 from io import StringIO
-from pathlib import PurePosixPath
 from typing import Dict, Tuple, Callable
 
 from alive_progress import alive_it
 
+import command.fast_path
 from command.content_prefs import BackupSet, MIN_REPO_PERC_FREE
 from command.hoard import Hoard
 from command.pathing import HoardPathing
 from config import HoardRemote
-from contents.hoard import HoardContents
 from contents.hoard_props import HoardDirProps, HoardFileStatus
 from util import format_size, format_percent, group_to_dict
 
@@ -89,7 +87,7 @@ class HoardCommandBackups:
                     out.write(f"set: {backup_set.mounted_at.as_posix()} with {len(backup_set.backups)} media\n")
 
                     print(f"Considering backup set at {backup_set.mounted_at} with {len(backup_set.backups)} media")
-                    hoard_file: pathlib.PurePosixPath
+                    hoard_file: command.fast_path.FastPosixPath
                     for hoard_file, hoard_props in alive_it(hoard.fsobjects.in_folder(backup_set.mounted_at)):
                         assert hoard_file.is_relative_to(backup_set.mounted_at)
 
@@ -126,9 +124,10 @@ class HoardCommandBackups:
                     out.write(f"set: {backup_set.mounted_at} with {len(backup_set.backups)} media\n")
 
                     print(f"Considering backup set at {backup_set.mounted_at} with {len(backup_set.backups)} media")
-                    hoard_file: pathlib.PurePosixPath
+                    hoard_file: command.fast_path.FastPosixPath
                     for hoard_file, hoard_props in alive_it(hoard.fsobjects.in_folder(backup_set.mounted_at)):
-                        assert hoard_file.is_relative_to(backup_set.mounted_at)
+                        assert hoard_file.is_relative_to(backup_set.mounted_at), \
+                            f"{hoard_file} not rel to {backup_set.mounted_at}"
 
                         if isinstance(hoard_props, HoardDirProps):
                             continue

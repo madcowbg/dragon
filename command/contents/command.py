@@ -3,7 +3,7 @@ import os
 import pathlib
 import sys
 from io import StringIO
-from pathlib import PurePosixPath
+from command.fast_path import FastPosixPath
 from typing import List, Dict, Any, Optional, Callable
 
 import humanize
@@ -150,7 +150,8 @@ class HoardCommandContents:
             show_empty: bool = False):
         config = self.hoard.config()
         with self.hoard.open_contents(create_missing=False, is_readonly=True) as hoard:
-            statuses: Dict[str, Dict[str, Dict[str, Any]]] = hoard.fsobjects.status_by_uuid(PurePosixPath(path) if path else None)
+            statuses: Dict[str, Dict[str, Dict[str, Any]]] = hoard.fsobjects.status_by_uuid(
+                FastPosixPath(path) if path else None)
             available_states, statuses_sorted = augment_statuses(config, hoard, show_empty, statuses)
 
             all_stats = ["total", *(s for s in (HoardFileStatus.AVAILABLE.value, HoardFileStatus.GET.value,
@@ -258,7 +259,7 @@ class HoardCommandContents:
                             continue
                         # file or dir is to be copied
                         relpath = hoard_path.relative_to(from_path)
-                        to_fullpath = PurePosixPath(to_path).joinpath(relpath)
+                        to_fullpath = FastPosixPath(to_path).joinpath(relpath)
                         logging.info(f"Copying {hoard_path} to {to_fullpath}")
 
                         hoard.fsobjects.copy(hoard_path, to_fullpath)
@@ -277,7 +278,7 @@ class HoardCommandContents:
         cleaned_up, wont_get, skipped = 0, 0, 0
         with StringIO() as out:
             print(f"Iterating files and folders to see what to drop...")
-            hoard_file: PurePosixPath
+            hoard_file: FastPosixPath
             for hoard_file, hoard_props in alive_it(hoard.fsobjects.in_folder(mounted_at)):
                 if not isinstance(hoard_props, HoardFileProps):
                     continue
@@ -407,10 +408,10 @@ class HoardCommandContents:
                             out.write(f"Skipping update as {remote_uuid} is not fully calculated!\n")
                             continue
 
-                        if not ignore_epoch and hoard_contents.config.epoch(
+                        if not ignore_epoch and hoard_contents.config.remote_epoch(
                                 remote_uuid) >= current_contents.config.epoch:
                             out.write(f"Skipping update as past epoch {current_contents.config.epoch} "
-                                      f"is not after hoard epoch {hoard_contents.config.epoch(remote_uuid)}\n")
+                                      f"is not after hoard epoch {hoard_contents.config.remote_epoch(remote_uuid)}\n")
                             continue
 
                         logging.info(f"Saving config of remote {remote_uuid}...")
@@ -433,13 +434,10 @@ class HoardCommandContents:
                         pull_repo_contents_to_hoard(hoard_contents, pathing, config, current_contents, preferences, out)
 
                         logging.info(f"Updating epoch of {remote_uuid} to {current_contents.config.epoch}")
-                        hoard_contents.config.set_epoch(
+                        hoard_contents.config.mark_up_to_date(
                             remote_uuid, current_contents.config.epoch, current_contents.config.updated)
 
                     clean_dangling_files(hoard_contents, out)
-                    logging.info("Writing updated hoard contents...")
-                    hoard_contents.write()
-                    logging.info("Local commit DONE!")
 
                 out.write(f"Sync'ed {config.remotes[remote_uuid].name} to hoard!\n")
             out.write("DONE")

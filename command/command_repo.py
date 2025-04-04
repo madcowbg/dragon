@@ -1,7 +1,7 @@
 import logging
 import pathlib
 from io import StringIO
-from pathlib import PurePosixPath
+from command.fast_path import FastPosixPath
 from typing import List, Optional
 
 from command.comparison_repo import FileDeleted, FileMoved, FileAdded, FileModified, DirAdded, DirRemoved, FileIsSame, \
@@ -119,11 +119,11 @@ class RepoCommand(object):
         except MissingRepoContents:
             return f"Repo {current_uuid} contents have not been refreshed yet!"
 
-        files_same: List[PurePosixPath] = []
-        files_new: List[PurePosixPath] = []
-        files_mod: List[PurePosixPath] = []
-        files_moved: List[PurePosixPath] = []
-        files_del: List[PurePosixPath] = []
+        files_same: List[FastPosixPath] = []
+        files_new: List[FastPosixPath] = []
+        files_mod: List[FastPosixPath] = []
+        files_moved: List[FastPosixPath] = []
+        files_del: List[FastPosixPath] = []
 
         dir_new = []
         dir_same = []

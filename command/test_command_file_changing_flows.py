@@ -802,22 +802,22 @@ class TestFileChangingFlows(unittest.TestCase):
         res = hoard_cmd.contents.pending(full_cave_cmd.current_uuid())
         self.assertEqual(
             "Status of repo-full-name:\n"
-            "ADDED /lets_get_it_started/test.me.4-renamed\n"
-            "ADDED /test.me.added\n"
+            "ADDED_DIR /lets_get_it_started\n"
             "ADDED /lets_get_it_started/test.me.2-butnew\n"
             "ADDED /lets_get_it_started/test.me.2-butsecond\n"
+            "ADDED /lets_get_it_started/test.me.4-renamed\n"
             "MODIFIED /test.me.1\n"
-            "ADDED_DIR /lets_get_it_started\n"
+            "ADDED /test.me.added\n"
             "DELETED /wat/test.me.2\n"
             "MOVED /test.me.4\n"
             "DONE", res)
 
         res = hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
         self.assertEqual(
-            "+/lets_get_it_started/test.me.4-renamed\n"  # todo should not be logged, as we move it
-            "+/test.me.added\n"
             "+/lets_get_it_started/test.me.2-butnew\n"
             "+/lets_get_it_started/test.me.2-butsecond\n"
+            "+/lets_get_it_started/test.me.4-renamed\n"  # todo should not be logged, as we move it
+            "+/test.me.added\n"
             "u/test.me.1\n"
             "-/wat/test.me.2\n"
             "MOVE repo-copy-name: /test.me.4 to /lets_get_it_started/test.me.4-renamed\n"
@@ -848,10 +848,10 @@ class TestFileChangingFlows(unittest.TestCase):
             "repo-copy-name:\n"
             "TO_CLEANUP (is in 0) /wat/test.me.2\n"
             "TO_CLEANUP (is in 0) /test.me.4\n"
-            "TO_MOVE /lets_get_it_started/test.me.4-renamed from /test.me.4\n"
-            "TO_GET (from 1) /test.me.added\n"
             "TO_GET (from 1) /lets_get_it_started/test.me.2-butnew\n"
             "TO_GET (from 1) /lets_get_it_started/test.me.2-butsecond\n"
+            "TO_MOVE /lets_get_it_started/test.me.4-renamed from /test.me.4\n"
+            "TO_GET (from 1) /test.me.added\n"
             "TO_GET (from 1) /test.me.1\n"
             " repo-full-name has 4 files\n"
             "DONE", res)
@@ -889,10 +889,10 @@ class TestFileChangingFlows(unittest.TestCase):
             'repo-backup-name:\n'
             'TO_CLEANUP (is in 0) /test.me.4\n'
             'TO_GET (from 2) /wat/test.me.3\n'
-            'TO_GET (from 2) /lets_get_it_started/test.me.4-renamed\n'
-            'TO_GET (from 2) /test.me.added\n'
             'TO_GET (from 2) /lets_get_it_started/test.me.2-butnew\n'
             'TO_GET (from 2) /lets_get_it_started/test.me.2-butsecond\n'
+            'TO_GET (from 2) /lets_get_it_started/test.me.4-renamed\n'
+            'TO_GET (from 2) /test.me.added\n'
             'TO_GET (from 2) /test.me.1\n'
             ' repo-copy-name has 6 files\n'
             ' repo-full-name has 6 files\n'
@@ -1043,22 +1043,22 @@ class TestFileChangingFlows(unittest.TestCase):
         res = hoard_cmd.contents.pending(full_cave_cmd.current_uuid())
         self.assertEqual(
             "Status of repo-full-name:\n"
-            "ADDED /lets_get_it_started/test.me.4-renamed\n"
-            "ADDED /test.me.added\n"
+            "ADDED_DIR /lets_get_it_started\n"
             "ADDED /lets_get_it_started/test.me.2-butnew\n"
             "ADDED /lets_get_it_started/test.me.2-butsecond\n"
+            "ADDED /lets_get_it_started/test.me.4-renamed\n"
             "MODIFIED /test.me.1\n"
-            "ADDED_DIR /lets_get_it_started\n"
+            "ADDED /test.me.added\n"
             "DELETED /wat/test.me.2\n"
             "MOVED /test.me.4\n"
             "DONE", res)
 
         res = hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
         self.assertEqual(
-            "+/lets_get_it_started/test.me.4-renamed\n"  # todo should not be logged, as we move it
-            "+/test.me.added\n"
             "+/lets_get_it_started/test.me.2-butnew\n"
             "+/lets_get_it_started/test.me.2-butsecond\n"
+            "+/lets_get_it_started/test.me.4-renamed\n"  # todo should not be logged, as we move it
+            "+/test.me.added\n"
             "u/test.me.1\n"
             "-/wat/test.me.2\n"
             "MOVE repo-backup-name: /test.me.4 to /lets_get_it_started/test.me.4-renamed\n"
@@ -1090,10 +1090,10 @@ class TestFileChangingFlows(unittest.TestCase):
             "repo-copy-name:\n"
             "TO_CLEANUP (is in 0) /wat/test.me.2\n"
             "TO_CLEANUP (is in 0) /test.me.4\n"
-            "TO_MOVE /lets_get_it_started/test.me.4-renamed from /test.me.4\n"
-            "TO_GET (from 1) /test.me.added\n"
             "TO_GET (from 1) /lets_get_it_started/test.me.2-butnew\n"
             "TO_GET (from 1) /lets_get_it_started/test.me.2-butsecond\n"
+            "TO_MOVE /lets_get_it_started/test.me.4-renamed from /test.me.4\n"
+            "TO_GET (from 1) /test.me.added\n"
             "TO_GET (from 1) /test.me.1\n"
             " repo-full-name has 4 files\n"
             "DONE", res)
@@ -1131,10 +1131,10 @@ class TestFileChangingFlows(unittest.TestCase):
             'repo-backup-name:\n'
             'TO_CLEANUP (is in 0) /wat/test.me.2\n'
             'TO_CLEANUP (is in 0) /test.me.4\n'
-            'TO_MOVE /lets_get_it_started/test.me.4-renamed from /test.me.4\n'
-            'TO_GET (from 2) /test.me.added\n'
             'TO_GET (from 2) /lets_get_it_started/test.me.2-butnew\n'
             'TO_GET (from 2) /lets_get_it_started/test.me.2-butsecond\n'
+            'TO_MOVE /lets_get_it_started/test.me.4-renamed from /test.me.4\n'
+            'TO_GET (from 2) /test.me.added\n'
             'TO_GET (from 2) /test.me.1\n'
             ' repo-copy-name has 4 files\n'
             ' repo-full-name has 4 files\n'
