@@ -1,12 +1,13 @@
 import tempfile
 import unittest
 from os.path import join
+from unittest import IsolatedAsyncioTestCase
 
 from hashing import calc_file_md5, fast_hash
 from command.test_repo_command import write_contents
 
 
-class TestHashing(unittest.TestCase):
+class TestHashing(IsolatedAsyncioTestCase):
     def setUp(self):
         self.tmpdir = tempfile.TemporaryDirectory()
 

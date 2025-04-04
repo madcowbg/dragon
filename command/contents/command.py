@@ -4,7 +4,7 @@ import pathlib
 import sys
 from io import StringIO
 from command.fast_path import FastPosixPath
-from typing import List, Dict, Any, Optional, Callable
+from typing import List, Dict, Any, Optional, Callable, Awaitable
 
 import humanize
 from alive_progress import alive_bar, alive_it
@@ -102,7 +102,7 @@ class HoardCommandContents:
     def __init__(self, hoard: Hoard):
         self.hoard = hoard
 
-    def pending(self, remote: str, ignore_missing: bool = False):
+    async def pending(self, remote: str, ignore_missing: bool = False):
         remote_uuid = resolve_remote_uuid(self.hoard.config(), remote)
 
         logging.info(f"Reading current contents of {remote_uuid}...")
@@ -145,7 +145,7 @@ class HoardCommandContents:
                     out.write("DONE")
                     return out.getvalue()
 
-    def status(
+    async def status(
             self, path: str | None = None, hide_time: bool = False, hide_disk_sizes: bool = False,
             show_empty: bool = False):
         config = self.hoard.config()
@@ -206,7 +206,7 @@ class HoardCommandContents:
 
                 return out.getvalue()
 
-    def ls(
+    async def ls(
             self, selected_path: Optional[str] = None, depth: int = None,
             skip_folders: bool = False, show_remotes: int = False):
         logging.info(f"Loading hoard TOML...")
@@ -245,7 +245,7 @@ class HoardCommandContents:
                 out.write("DONE")
                 return out.getvalue()
 
-    def copy(self, from_path: str, to_path: str):
+    async def copy(self, from_path: str, to_path: str):
         assert custom_isabs(from_path), f"From path {from_path} must be absolute path."
         assert custom_isabs(to_path), f"To path {to_path} must be absolute path."
 
@@ -267,10 +267,10 @@ class HoardCommandContents:
                 out.write("DONE")
                 return out.getvalue()
 
-    def drop(self, repo: str, path: str):
-        return self._run_op(repo, path, self._execute_drop, is_readonly=False)
+    async def drop(self, repo: str, path: str):
+        return await self._run_op(repo, path, self._execute_drop, is_readonly=False)
 
-    def _execute_drop(self, hoard: HoardContents, repo_uuid: str, path: str) -> str:
+    async def _execute_drop(self, hoard: HoardContents, repo_uuid: str, path: str) -> str:
         pathing = HoardPathing(self.hoard.config(), self.hoard.paths())
         mounted_at = pathing.mounted_at(repo_uuid)
 
@@ -318,10 +318,10 @@ class HoardCommandContents:
             out.write("DONE")
             return out.getvalue()
 
-    def get(self, repo: str, path: str):
-        return self._run_op(repo, path, self._execute_get, is_readonly=False)
+    async def get(self, repo: str, path: str):
+        return await self._run_op(repo, path, self._execute_get, is_readonly=False)
 
-    def _execute_get(self, hoard: HoardContents, repo_uuid: str, path: str) -> str:
+    async def _execute_get(self, hoard: HoardContents, repo_uuid: str, path: str) -> str:
         pathing = HoardPathing(self.hoard.config(), self.hoard.paths())
 
         considered = 0
@@ -347,7 +347,7 @@ class HoardCommandContents:
             out.write("DONE")
             return out.getvalue()
 
-    def _run_op(self, repo: str, path: str, fun: Callable[[HoardContents, str, str], str], is_readonly: bool):
+    async def _run_op(self, repo: str, path: str, fun: Callable[[HoardContents, str, str], Awaitable[str]], is_readonly: bool):
         config = self.hoard.config()
         if custom_isabs(path):
             return f"Path {path} must be relative, but is absolute."
@@ -358,9 +358,9 @@ class HoardCommandContents:
             repo_mounted_at = config.remotes[repo_uuid].mounted_at
             logging.info(f"repo {repo} mounted at {repo_mounted_at}")
 
-            return fun(hoard, repo_uuid, path)
+            return await fun(hoard, repo_uuid, path)
 
-    def pull(
+    async def pull(
             self, remote: Optional[str] = None, all: bool = False, ignore_epoch: bool = False,
             force_fetch_local_missing: bool = False, assume_current: bool = False):
         logging.info("Loading config")
@@ -443,7 +443,7 @@ class HoardCommandContents:
             out.write("DONE")
             return out.getvalue()
 
-    def reset_with_existing(self, repo: str):
+    async def reset_with_existing(self, repo: str):
         config = self.hoard.config()
         pathing = HoardPathing(config, self.hoard.paths())
 
@@ -498,7 +498,7 @@ class HoardCommandContents:
                 out.write("DONE")
                 return out.getvalue()
 
-    def reset(self, repo: str):
+    async def reset(self, repo: str):
         config = self.hoard.config()
         pathing = HoardPathing(config, self.hoard.paths())
 

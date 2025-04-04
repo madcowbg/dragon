@@ -2,15 +2,15 @@ import os
 import pathlib
 import shutil
 import tempfile
-import unittest
 from itertools import cycle
 from os.path import join
+from unittest import IsolatedAsyncioTestCase
 
 from command.test_hoard_command import populate_hoard, populate_repotypes, init_complex_hoard, dump_file_list
 from command.test_repo_command import write_contents
 
 
-class TestHoardCommand(unittest.TestCase):
+class TestHoardCommand(IsolatedAsyncioTestCase):
     def setUp(self):
         self.tmpdir = tempfile.TemporaryDirectory()
         populate_hoard(self.tmpdir.name)
@@ -20,11 +20,11 @@ class TestHoardCommand(unittest.TestCase):
     def tearDown(self):
         self.tmpdir.cleanup()
 
-    def test_recover(self):
+    async def test_recover(self):
         hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = init_complex_hoard(
             self.tmpdir.name)
 
-        res = hoard_cmd.contents.pull("repo-full-name")
+        res = await hoard_cmd.contents.pull("repo-full-name")
         self.assertEqual(
             "+/test.me.1\n"
             "+/test.me.4\n"

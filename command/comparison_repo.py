@@ -15,7 +15,7 @@ from command.hoard_ignore import HoardIgnore
 from contents.repo import RepoContents
 from contents.repo_props import RepoFileStatus, RepoFileProps, RepoDirProps
 from hashing import find_hashes, fast_hash_async, fast_hash
-from util import group_to_dict, run_async_in_parallel
+from util import group_to_dict, run_async_in_parallel, run_in_separate_loop
 
 type RepoDiffs = (
         FileNotInFilesystem | FileNotInRepo
@@ -163,7 +163,7 @@ def compute_changes_from_diffs(diffs_stream: Iterable[RepoDiffs], repo_path: str
 
     logging.info(f"Detected {len(files_maybe_removed)} possible deletions.")
     logging.info(f"Hashing {len(files_to_add_or_update)} files to add:")
-    file_hashes = asyncio.run(find_hashes(list(files_to_add_or_update.keys())))
+    file_hashes = run_in_separate_loop(find_hashes(list(files_to_add_or_update.keys())))
     inverse_hashes: Dict[str, List[Tuple[pathlib.Path, str]]] = group_to_dict(
         file_hashes.items(),
         key=lambda file_to_hash: file_to_hash[1])
@@ -348,9 +348,9 @@ def compute_difference_between_contents_and_filesystem(
                 bar()
 
     with alive_bar(len(file_path_matches), title="Checking maybe mod files") as m_bar:
-        async def find_size_mtime_of(file_fullpath: str) -> RepoDiffs:
+        def find_size_mtime_of(file_fullpath: str) -> RepoDiffs:
             try:
-                stats = await aiofiles.os.stat(file_fullpath)
+                stats = run_in_separate_loop(aiofiles.os.stat(file_fullpath))
 
                 file_path_local = command.fast_path.FastPosixPath(file_fullpath).relative_to(repo_path)
                 props = contents.fsobjects.get_existing(file_path_local)
@@ -360,7 +360,7 @@ def compute_difference_between_contents_and_filesystem(
                     else:
                         return RepoFileWeakDifferent(file_path_local, props, stats.st_mtime, stats.st_size)
                 else:
-                    fasthash = await fast_hash_async(file_fullpath)
+                    fasthash = run_in_separate_loop(fast_hash_async(file_fullpath))
                     if props.fasthash == fasthash:
                         return RepoFileSame(file_path_local, props, stats.st_mtime)
                     else:
@@ -368,9 +368,7 @@ def compute_difference_between_contents_and_filesystem(
             finally:
                 m_bar()
 
-        prop_tuples: List[RepoDiffs] = run_async_in_parallel(
-            [(f,) for f in file_path_matches],
-            find_size_mtime_of)
+        prop_tuples: List[RepoDiffs] = [find_size_mtime_of(f) for f in file_path_matches]
 
         assert len(prop_tuples) == len(file_path_matches)
 

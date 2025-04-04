@@ -4,13 +4,14 @@ import tempfile
 import unittest
 from os.path import join
 from typing import Tuple, Iterable
+from unittest import IsolatedAsyncioTestCase
 
 from command.comparison_repo import walk_repo
 from command.hoard_ignore import HoardIgnore, DEFAULT_IGNORE_GLOBS
 from command.test_repo_command import pretty_file_writer
 
 
-class TestIgnoreLogic(unittest.TestCase):
+class TestIgnoreLogic(IsolatedAsyncioTestCase):
 
     def setUp(self):
         self.tmpdir = tempfile.TemporaryDirectory()

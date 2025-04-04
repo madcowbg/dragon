@@ -1,13 +1,12 @@
 import os
 import tempfile
-import unittest
 from os.path import join
+from unittest import IsolatedAsyncioTestCase
 
 from command.command_repo import RepoCommand
 from command.test_repo_command import pretty_file_writer
 from config import CaveType
 from dragon import TotalCommand
-from test_util import nice_dump
 
 
 def init_complex_hoard(tmpdir: str):
@@ -88,7 +87,7 @@ def populate_repotypes(tmpdir: str):
     os.mkdir(join(tmpdir, 'repo-backup-5'))  # empty
 
 
-class TestBackups(unittest.TestCase):
+class TestBackups(IsolatedAsyncioTestCase):
     def setUp(self):
         self.tmpdir = tempfile.TemporaryDirectory()
         populate_repotypes(self.tmpdir.name)
@@ -96,10 +95,10 @@ class TestBackups(unittest.TestCase):
     def tearDown(self):
         self.tmpdir.cleanup()
 
-    def test_get_to_steady_state(self):
+    async def test_get_to_steady_state(self):
         hoard_cmd, partial_cave_cmd, full_cave_cmd, incoming_cave_cmd = init_complex_hoard(self.tmpdir.name)
 
-        res = hoard_cmd.contents.pull(all=True)
+        res = await hoard_cmd.contents.pull(all=True)
         self.assertEqual(
             "+/test.me.1\n"
             "+/wat/test.me.2\n"
@@ -116,7 +115,7 @@ class TestBackups(unittest.TestCase):
             "Sync'ed repo-incoming-name to hoard!\n"
             "DONE", res)
 
-        res = hoard_cmd.contents.ls()
+        res = await hoard_cmd.contents.ls()
         self.assertEqual(
             "/\n"
             "/test.me.1 = a:2\n"
@@ -163,7 +162,7 @@ class TestBackups(unittest.TestCase):
             "repo-incoming-name:\n"
             "DONE", res)
 
-        res = hoard_cmd.contents.ls()
+        res = await hoard_cmd.contents.ls()
         self.assertEqual(
             "/\n"
             "/test.me.1 = a:2\n"
@@ -175,7 +174,7 @@ class TestBackups(unittest.TestCase):
             "/wat/test.me.3 = a:1\n"
             "DONE", res)
 
-    def test_create_with_simple_backup_from_start(self):
+    async def test_create_with_simple_backup_from_start(self):
         hoard_cmd, partial_cave_cmd, full_cave_cmd, incoming_cave_cmd = init_complex_hoard(self.tmpdir.name)
 
         backup_1_cmd = self._init_and_refresh_repo("repo-backup-1")
@@ -196,7 +195,7 @@ class TestBackups(unittest.TestCase):
             remote_path=join(self.tmpdir.name, "repo-backup-4"), name="backup-4", mount_point="/",
             type=CaveType.BACKUP)
 
-        res = hoard_cmd.contents.pull(all=True)
+        res = await hoard_cmd.contents.pull(all=True)
         self.assertEqual(
             "+/test.me.1\n"
             "+/wat/test.me.2\n"
@@ -221,7 +220,7 @@ class TestBackups(unittest.TestCase):
             "Sync'ed backup-4 to hoard!\n"
             "DONE", res)
 
-        res = hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
+        res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual(
             "|Num Files                |total     |available |get       |cleanup   |\n"
             "|backup-1                 |         3|         1|         2|          |\n"
@@ -241,7 +240,7 @@ class TestBackups(unittest.TestCase):
             "|repo-incoming-name       |       223|          |          |       223|\n"
             "|repo-partial-name        |        76|        76|          |          |\n", res)
 
-        res = hoard_cmd.contents.status(path="/wat", hide_time=True, hide_disk_sizes=True)
+        res = await hoard_cmd.contents.status(path="/wat", hide_time=True, hide_disk_sizes=True)
         self.assertEqual(
             "|Num Files                |total     |available |get       |cleanup   |\n"
             "|backup-1                 |         1|          |         1|          |\n"
@@ -333,13 +332,13 @@ class TestBackups(unittest.TestCase):
             " 0: 6 files (299)\n"
             "DONE", res)
 
-        res = hoard_cmd.contents.drop(repo="backup-2", path="wat")
+        res = await hoard_cmd.contents.drop(repo="backup-2", path="wat")
         self.assertEqual(
             'DROP /wat/test.me.2\n'
             "Considered 6 files, 1 marked for cleanup, 0 won't be downloaded, 2 are skipped.\n"
             'DONE', res)
 
-        res = hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
+        res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual(
             '|Num Files                |total     |available |cleanup   |\n'
             '|backup-1                 |         3|         3|          |\n'
@@ -357,10 +356,10 @@ class TestBackups(unittest.TestCase):
             '|repo-full-name           |       299|       299|          |\n'
             '|repo-partial-name        |        76|        76|          |\n', res)
 
-    def test_add_backup_repos_over_time(self):
+    async def test_add_backup_repos_over_time(self):
         hoard_cmd, partial_cave_cmd, full_cave_cmd, incoming_cave_cmd = init_complex_hoard(self.tmpdir.name)
 
-        hoard_cmd.contents.pull(all=True)
+        await hoard_cmd.contents.pull(all=True)
 
         backup_1_cmd = self._init_and_refresh_repo("repo-backup-1")
         backup_2_cmd = self._init_and_refresh_repo("repo-backup-2")
@@ -380,7 +379,7 @@ class TestBackups(unittest.TestCase):
             remote_path=join(self.tmpdir.name, "repo-backup-4"), name="backup-4", mount_point="/",
             type=CaveType.BACKUP)
 
-        res = hoard_cmd.contents.pull(all=True)
+        res = await hoard_cmd.contents.pull(all=True)
         self.assertEqual(
             "Skipping update as past epoch 1 is not after hoard epoch 1\n"
             "Skipping update as past epoch 1 is not after hoard epoch 1\n"
@@ -395,7 +394,7 @@ class TestBackups(unittest.TestCase):
             "Sync'ed backup-4 to hoard!\n"
             "DONE", res)
 
-        res = hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
+        res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual(
             "|Num Files                |total     |available |get       |cleanup   |\n"
             "|backup-1                 |         2|         1|         1|          |\n"
@@ -441,7 +440,7 @@ class TestBackups(unittest.TestCase):
             ' backup-4 <- 1 files (77)\n'
             'DONE', res)
 
-        res = hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
+        res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual(
             "|Num Files                |total     |available |get       |cleanup   |\n"
             "|backup-1                 |         2|         1|         1|          |\n"
@@ -461,13 +460,13 @@ class TestBackups(unittest.TestCase):
             "|repo-incoming-name       |       223|          |          |       223|\n"
             "|repo-partial-name        |        76|        76|          |          |\n", res)
 
-        res = hoard_cmd.contents.drop(repo="backup-1", path="wat")
+        res = await hoard_cmd.contents.drop(repo="backup-1", path="wat")
         self.assertEqual(
             'WONT_GET /wat/test.me.3\n'  # fixme wrong
             "Considered 6 files, 0 marked for cleanup, 1 won't be downloaded, 2 are skipped.\n"
             'DONE', res)
 
-        res = hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
+        res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual(
             '|Num Files                |total     |available |get       |cleanup   |\n'
             '|backup-1                 |         1|         1|          |          |\n'
