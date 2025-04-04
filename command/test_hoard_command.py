@@ -29,7 +29,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
     def tearDown(self):
         self.tmpdir.cleanup()
 
-    def test_create_hoard(self):
+    async def test_create_hoard(self):
         cave_cmd = TotalCommand(path=join(self.tmpdir.name, "repo")).cave
         cave_cmd.init()
         cave_cmd.refresh(show_details=False)
@@ -79,7 +79,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             "+/wat/test.me.twice\n"
             "Sync'ed repo-in-local to hoard!\nDONE", res.strip())
 
-        with hoard_cmd.hoard.open_contents(False, is_readonly=True) as hoard_contents:
+        async with hoard_cmd.hoard.open_contents(False, is_readonly=True) as hoard_contents:
             self._assert_hoard_contents(
                 hoard_contents,
                 files_exp=[
@@ -121,7 +121,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
 
         await hoard_cmd.contents.pull("repo-in-local")
 
-        with hoard_cmd.hoard.open_contents(False, is_readonly=True) as hc:
+        async with hoard_cmd.hoard.open_contents(False, is_readonly=True) as hc:
             self._assert_hoard_contents(
                 hc,
                 files_exp=[
@@ -137,7 +137,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         self.assertEqual(
             "=/wat/test.me.twice\nALREADY_MARKED_GET /wat/test.me.different\nSync'ed repo-in-local-2 to hoard!\nDONE", res.strip())
 
-        with hoard_cmd.hoard.open_contents(False, is_readonly=True) as hc:
+        async with hoard_cmd.hoard.open_contents(False, is_readonly=True) as hc:
             self._assert_hoard_contents(
                 hc,
                 files_exp=[
@@ -149,7 +149,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.pull("repo-in-local", ignore_epoch=True)
         self.assertEqual("Sync'ed repo-in-local to hoard!\nDONE", res)
 
-        with hoard_cmd.hoard.open_contents(False, is_readonly=True) as hc:
+        async with hoard_cmd.hoard.open_contents(False, is_readonly=True) as hc:
             self._assert_hoard_contents(
                 hc,
                 files_exp=[
@@ -180,7 +180,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             f"DONE",
             res.strip())
 
-        res = hoard_cmd.health()
+        res = await hoard_cmd.health()
         self.assertEqual(
             "Health stats:\n2 total remotes.\n"
             f"  [repo-in-local] {repo_uuid}: 2 with no other copy\n"
@@ -284,7 +284,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
 
         new_uuid = resolve_remote_uuid(hoard_cmd.hoard.config(), "cloned-repo")
 
-        res = hoard_cmd.health()
+        res = await hoard_cmd.health()
         self.assertEqual(
             "Health stats:\n"
             "1 total remotes.\n"
@@ -329,7 +329,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             "DELETED_DIR /wat\n"
             f"DONE", res)
 
-        res = hoard_cmd.files.push(repo="cloned-repo")
+        res = await hoard_cmd.files.push(repo="cloned-repo")
         self.assertEqual(
             f"cloned-repo:\n"
             "+ test.me.different\n"
@@ -344,7 +344,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.pending(new_uuid)
         self.assertEqual(f"Status of cloned-repo:\nDELETED_DIR /wat\n"            f"DONE", res.strip())
 
-        res = hoard_cmd.files.push(repo="cloned-repo")
+        res = await hoard_cmd.files.push(repo="cloned-repo")
         self.assertEqual(
             f"cloned-repo:\n"
             f"cloned-repo:\n"
@@ -367,7 +367,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             "  /wat -> cloned-repo\n"
             "DONE", res.strip())
 
-    def test_create_repo_types(self):
+    async def test_create_repo_types(self):
         populate_repotypes(self.tmpdir.name)
         hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = init_complex_hoard(
             self.tmpdir.name)
@@ -490,7 +490,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             'repo-partial/test.me.1',
             'repo-partial/wat/test.me.2', ], dump_file_list(self.tmpdir.name, 'repo-partial'))
 
-        res = hoard_cmd.files.push("repo-full-name")
+        res = await hoard_cmd.files.push("repo-full-name")
         self.assertEqual(
             f"repo-full-name:\n"
             "+ test.me.5\n"
@@ -592,7 +592,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             "|repo-partial-name        |                 now|        14|        14|          |          |\n",
             res)
 
-        res = hoard_cmd.files.push(all=True)
+        res = await hoard_cmd.files.push(all=True)
         self.assertEqual(
             f"repo-partial-name:\n"
             f"repo-full-name:\n"
@@ -698,7 +698,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
 
         self.assertEqual([], dump_file_list(self.tmpdir.name, "repo-cloned-wat/"))  # no files yet
 
-        res = hoard_cmd.files.push("repo-cloned-wat")
+        res = await hoard_cmd.files.push("repo-cloned-wat")
         self.assertEqual(
             f"repo-cloned-wat:\n"
             "+ inner/another.file\n"
@@ -715,7 +715,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.get(repo="repo-cloned-wat", path="")
         self.assertEqual("+/wat/test.me.2\n+/wat/test.me.3\nConsidered 3 files.\nDONE", res)
 
-        res = hoard_cmd.files.push("repo-cloned-wat")
+        res = await hoard_cmd.files.push("repo-cloned-wat")
         self.assertEqual(
             f"repo-cloned-wat:\n"
             "+ test.me.2\n"
@@ -765,12 +765,12 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             "/first-point/wat/test.me.2 = a:1\n"
             "DONE", res)
 
-        res = hoard_cmd.move_mounts(from_path="/first-point/inner", to_path="/cant-move-files")
+        res = await hoard_cmd.move_mounts(from_path="/first-point/inner", to_path="/cant-move-files")
         self.assertEqual(
             "Can't move /first-point/inner to /cant-move-files, requires moving files in repo-partial-name:inner.",
             res.strip())
 
-        res = hoard_cmd.move_mounts(from_path="/", to_path="/move-all-inside")
+        res = await hoard_cmd.move_mounts(from_path="/", to_path="/move-all-inside")
         self.assertEqual(
             "Moving files and folders:\n"
             "/first-point/test.me.1=>/move-all-inside/first-point/test.me.1\n"
@@ -798,10 +798,10 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             "  /move-all-inside/first-point -> repo-partial-name\n"
             "DONE", res.strip())
 
-        res = hoard_cmd.move_mounts(from_path="/first-point", to_path="/moved-data")
+        res = await hoard_cmd.move_mounts(from_path="/first-point", to_path="/moved-data")
         self.assertEqual("No repos to move!", res.strip())
 
-        res = hoard_cmd.move_mounts(from_path="/move-all-inside/first-point", to_path="/moved-data")
+        res = await hoard_cmd.move_mounts(from_path="/move-all-inside/first-point", to_path="/moved-data")
         self.assertEqual(
             "Moving files and folders:\n"
             "/move-all-inside/first-point/test.me.1=>/moved-data/test.me.1\n"
@@ -820,7 +820,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             "/moved-data/wat/test.me.2 = a:1\n"
             "DONE", res)
 
-        res = hoard_cmd.move_mounts(from_path="/moved-data", to_path="/")
+        res = await hoard_cmd.move_mounts(from_path="/moved-data", to_path="/")
         self.assertEqual(
             "Moving files and folders:\n"
             "/moved-data/test.me.1=>/test.me.1\n"
@@ -861,7 +861,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         # "+/first-point/wat/test.me.2\n"
         await hoard_cmd.contents.pull("repo-partial-name")
 
-        res = hoard_cmd.move_mounts(from_path="/first-point", to_path="/moved-data")
+        res = await hoard_cmd.move_mounts(from_path="/first-point", to_path="/moved-data")
         self.assertEqual(
             "Moving files and folders:\n"
             "/first-point/test.me.1=>/moved-data/test.me.1\n"
@@ -888,7 +888,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             "/moved-data/zed/test.me.2 = x:1\n"
             "DONE", res)
 
-        res = hoard_cmd.files.push("repo-partial-name")
+        res = await hoard_cmd.files.push("repo-partial-name")
         self.assertEqual(
             f"repo-partial-name:\n"
             "c+ zed/test.me.2\n"
@@ -930,7 +930,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             "/wat/test.me.2 = a:1 g:2\n"
             "DONE", await hoard_cmd.contents.ls(depth=2))
 
-        res = hoard_cmd.files.push("repo-backup-name")
+        res = await hoard_cmd.files.push("repo-backup-name")
         self.assertEqual(
             f"repo-backup-name:\n"
             "+ wat/test.me.2\n"
@@ -989,7 +989,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             "/wat/test.me.2 = a:1 g:2\n"
             "DONE", await hoard_cmd.contents.ls(depth=2))
 
-        res = hoard_cmd.files.push("repo-partial-name")
+        res = await hoard_cmd.files.push("repo-partial-name")
         self.assertEqual(
             f"repo-partial-name:\n"
             f"+ wat/test.me.2\n"

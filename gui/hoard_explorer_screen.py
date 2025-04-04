@@ -2,6 +2,7 @@ import logging
 import pathlib
 import traceback
 
+from textual import work
 from textual.app import ComposeResult
 from textual.containers import Horizontal
 from textual.reactive import reactive, var
@@ -35,28 +36,30 @@ class HoardExplorerScreen(Widget):
         else:
             yield Label("Please select a valid hoard!")
 
-    def watch_can_modify(self):
-        self.close_and_reopen()
+    async def watch_can_modify(self):
+        await self.close_and_reopen()
 
-    def watch_hoard(self):
-        self.close_and_reopen()
+    async def watch_hoard(self):
+        await self.close_and_reopen()
 
-    def close_and_reopen(self):
+    async def close_and_reopen(self):
         if self.hoard_contents is not None:
-            self.hoard_contents.__exit__(None, None, None)
+            await self.hoard_contents.__aexit__(None, None, None)
 
         try:
             self.notify(f"Loading hoard at {self.hoard.hoardpath}...")
             self.hoard_contents = self.hoard.open_contents(create_missing=False, is_readonly=not self.can_modify)
-            self.hoard_contents.__enter__()
+            await self.hoard_contents.__aenter__()
+
+            await self.recompose()
         except Exception as e:
             traceback.print_exception(e)
             logging.error(e)
             self.hoard_contents = None
 
-    def on_unmount(self):
+    async def on_unmount(self):
         if self.hoard_contents is not None:
-            self.hoard_contents.__exit__(None, None, None)
+            await self.hoard_contents.__aexit__(None, None, None)
 
     def on_tree_node_selected(self, event: Tree.NodeSelected):
         self.query_one(NodeDescription).hoard_item = event.node.data

@@ -66,7 +66,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         recover_path = join(self.tmpdir.name, 'recover-copy')
         os.mkdir(recover_path)
 
-        res = hoard_cmd.meld(source=dump_path, dest=recover_path, move=False, junk_folder="_tralala_")
+        res = await hoard_cmd.meld(source=dump_path, dest=recover_path, move=False, junk_folder="_tralala_")
         self.assertEqual(
             "A/test.me.1\n"
             "A/wat/test.me.2\n"
@@ -86,7 +86,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         recover_path = join(self.tmpdir.name, 'recover')
         os.mkdir(recover_path)
 
-        res = hoard_cmd.meld(source=dump_path, dest=recover_path, move=True)
+        res = await hoard_cmd.meld(source=dump_path, dest=recover_path, move=True)
         self.assertEqual(
             "M/test.me.1\n"
             "M/wat/test.me.2\n"

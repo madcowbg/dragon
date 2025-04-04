@@ -627,7 +627,7 @@ class HoardContents:
         self.fsobjects = None
         self.conn = None
 
-    def __enter__(self):
+    async def __aenter__(self) -> "HoardContents":
         self.conn = sqlite3.connect(
             f"file:{os.path.join(self.folder, HOARD_CONTENTS_FILENAME)}{'?mode=ro' if self.is_readonly else ''}",
             uri=True)
@@ -637,7 +637,7 @@ class HoardContents:
 
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
         if not self.is_readonly:
             self.config.bump_hoard_epoch()
             self.config.write()

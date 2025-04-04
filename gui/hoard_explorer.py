@@ -56,7 +56,7 @@ class HoardExplorerApp(App):
             config["hoard_path"] = event.value
             self._write_config()
 
-            self.hoard_path = pathlib.Path(self.config["hoard_path"])
+            self.hoard_path = pathlib.Path(config["hoard_path"])
             if self.hoard_path.is_dir():
                 self.notify(f"New hoard path: {self.hoard_path}")
             else:
@@ -88,7 +88,7 @@ class HoardExplorerApp(App):
 
     def _write_config(self):
         with open("hoard_explorer.toml", 'w') as f:
-            rtoml.dump(self.config, f)
+            rtoml.dump(config, f)
 
 
 def start_hoard_explorer_gui(path: str | None = None):

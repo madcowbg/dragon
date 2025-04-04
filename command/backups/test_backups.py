@@ -127,7 +127,7 @@ class TestBackups(IsolatedAsyncioTestCase):
             "/wat/test.me.3 = g:1 c:1\n"
             "DONE", res)
 
-        res = hoard_cmd.files.pending(repo=incoming_cave_cmd.current_uuid())
+        res = await hoard_cmd.files.pending(repo=incoming_cave_cmd.current_uuid())
         self.assertEqual(
             "repo-incoming-name:\n"
             "TO_CLEANUP (is in 1) /test.me.4\n"
@@ -140,7 +140,7 @@ class TestBackups(IsolatedAsyncioTestCase):
         full_cave_cmd.refresh(show_details=False)
         incoming_cave_cmd.refresh(show_details=False)
 
-        res = hoard_cmd.files.push(all=True)
+        res = await hoard_cmd.files.push(all=True)
         self.assertEqual(
             f"repo-partial-name:\n"
             f"repo-full-name:\n"
@@ -157,7 +157,7 @@ class TestBackups(IsolatedAsyncioTestCase):
             "d wat/test.me.6\n"
             "DONE", res)
 
-        res = hoard_cmd.files.pending(repo=incoming_cave_cmd.current_uuid())
+        res = await hoard_cmd.files.pending(repo=incoming_cave_cmd.current_uuid())
         self.assertEqual(
             "repo-incoming-name:\n"
             "DONE", res)
@@ -260,7 +260,7 @@ class TestBackups(IsolatedAsyncioTestCase):
             "|repo-incoming-name       |        86|          |          |        86|\n"
             "|repo-partial-name        |        16|        16|          |          |\n", res)
 
-        res = hoard_cmd.backups.health()
+        res = await hoard_cmd.backups.health()
         self.assertEqual(
             "# backup sets: 1\n"
             "# backups: 4\n"
@@ -282,7 +282,7 @@ class TestBackups(IsolatedAsyncioTestCase):
             " 1: 4 files (223)\n"
             "DONE", res)
 
-        res = hoard_cmd.files.push(all=True)
+        res = await hoard_cmd.files.push(all=True)
         self.assertEqual(
             "repo-partial-name:\n"
             "repo-full-name:\n"
@@ -314,7 +314,7 @@ class TestBackups(IsolatedAsyncioTestCase):
             "backup-4:\n"
             "DONE", res)
 
-        res = hoard_cmd.backups.health()
+        res = await hoard_cmd.backups.health()
         self.assertEqual(
             "# backup sets: 1\n"
             "# backups: 4\n"
@@ -410,7 +410,7 @@ class TestBackups(IsolatedAsyncioTestCase):
             "|repo-incoming-name       |       223|          |          |       223|\n"
             "|repo-partial-name        |        76|        76|          |          |\n", res)
 
-        res = hoard_cmd.backups.health()
+        res = await hoard_cmd.backups.health()
         self.assertEqual(
             "# backup sets: 1\n"
             "# backups: 4\n"
@@ -486,7 +486,7 @@ class TestBackups(IsolatedAsyncioTestCase):
             '|repo-incoming-name       |       223|          |          |       223|\n'
             '|repo-partial-name        |        76|        76|          |          |\n', res)
 
-        res = hoard_cmd.backups.health()
+        res = await hoard_cmd.backups.health()
         self.assertEqual(
             '# backup sets: 1\n'
             '# backups: 4\n'
@@ -515,7 +515,7 @@ class TestBackups(IsolatedAsyncioTestCase):
         #     'DONE', res)
         self.assertEqual(3, len(res.splitlines()))
 
-        res = hoard_cmd.backups.health()
+        res = await hoard_cmd.backups.health()
         self.assertEqual(
             '# backup sets: 1\n'
             '# backups: 4\n'

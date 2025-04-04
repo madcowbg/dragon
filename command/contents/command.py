@@ -109,7 +109,7 @@ class HoardCommandContents:
         connected_repo = self.hoard.connect_to_repo(remote_uuid, require_contents=True)
         with connected_repo.open_contents(is_readonly=True) as current_contents:
             logging.info(f"Loading hoard TOML...")
-            with self.hoard.open_contents(create_missing=False, is_readonly=True) as hoard:
+            async with self.hoard.open_contents(create_missing=False, is_readonly=True) as hoard:
                 logging.info(f"Loaded hoard TOML!")
                 logging.info(f"Computing status ...")
 
@@ -149,7 +149,7 @@ class HoardCommandContents:
             self, path: str | None = None, hide_time: bool = False, hide_disk_sizes: bool = False,
             show_empty: bool = False):
         config = self.hoard.config()
-        with self.hoard.open_contents(create_missing=False, is_readonly=True) as hoard:
+        async with self.hoard.open_contents(create_missing=False, is_readonly=True) as hoard:
             statuses: Dict[str, Dict[str, Dict[str, Any]]] = hoard.fsobjects.status_by_uuid(
                 FastPosixPath(path) if path else None)
             available_states, statuses_sorted = augment_statuses(config, hoard, show_empty, statuses)
@@ -210,7 +210,7 @@ class HoardCommandContents:
             self, selected_path: Optional[str] = None, depth: int = None,
             skip_folders: bool = False, show_remotes: int = False):
         logging.info(f"Loading hoard TOML...")
-        with self.hoard.open_contents(create_missing=False, is_readonly=True) as hoard:
+        async with self.hoard.open_contents(create_missing=False, is_readonly=True) as hoard:
             if depth is None:
                 depth = sys.maxsize if selected_path is None else 1
 
@@ -250,7 +250,7 @@ class HoardCommandContents:
         assert custom_isabs(to_path), f"To path {to_path} must be absolute path."
 
         print(f"Marking files for copy {from_path} to {to_path}...")
-        with self.hoard.open_contents(create_missing=False, is_readonly=False) as hoard:
+        async with self.hoard.open_contents(create_missing=False, is_readonly=False) as hoard:
             with StringIO() as out:
                 with alive_bar(len(hoard.fsobjects)) as bar:
                     for hoard_path, _ in hoard.fsobjects:
@@ -354,7 +354,7 @@ class HoardCommandContents:
             return f"Path {path} must be relative, but is absolute."
 
         logging.info(f"Loading hoard TOML...")
-        with self.hoard.open_contents(create_missing=False, is_readonly=is_readonly) as hoard:
+        async with self.hoard.open_contents(create_missing=False, is_readonly=is_readonly) as hoard:
             repo_uuid = resolve_remote_uuid(self.hoard.config(), repo)
             repo_mounted_at = config.remotes[repo_uuid].mounted_at
             logging.info(f"repo {repo} mounted at {repo_mounted_at}")
@@ -390,7 +390,7 @@ class HoardCommandContents:
                 logging.info(f"Pulling contents of {remote_obj.name}[{remote_uuid}].")
 
                 logging.info(f"Loading hoard contents TOML...")
-                with self.hoard.open_contents(create_missing=False, is_readonly=False) as hoard_contents:
+                async with self.hoard.open_contents(create_missing=False, is_readonly=False) as hoard_contents:
                     logging.info(f"Loaded hoard contents TOML!")
                     content_prefs = ContentPrefs(config, pathing, hoard_contents)
 
@@ -453,7 +453,7 @@ class HoardCommandContents:
         remote = config.remotes[repo_uuid]
 
         logging.info(f"Loading hoard contents...")
-        with self.hoard.open_contents(create_missing=False, is_readonly=False) as hoard:
+        async with self.hoard.open_contents(create_missing=False, is_readonly=False) as hoard:
             content_prefs = ContentPrefs(config, pathing, hoard)
 
             with StringIO() as out:
@@ -507,7 +507,7 @@ class HoardCommandContents:
         repo_uuid = resolve_remote_uuid(config, repo)
 
         logging.info(f"Loading hoard contents...")
-        with self.hoard.open_contents(create_missing=False, is_readonly=False) as hoard:
+        async with self.hoard.open_contents(create_missing=False, is_readonly=False) as hoard:
             with StringIO() as out:
                 out.write(f"{config.remotes[repo_uuid].name}:\n")
 

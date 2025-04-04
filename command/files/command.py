@@ -26,14 +26,14 @@ class HoardCommandFiles:
     def __init__(self, hoard: Hoard):
         self.hoard = hoard
 
-    def pending(self, repo: Optional[str] = None):
+    async def pending(self, repo: Optional[str] = None):
         config = self.hoard.config()
 
         repo_uuids: List[str] = [resolve_remote_uuid(config, repo)] \
             if repo is not None else [r.uuid for r in config.remotes.all()]
 
         logging.info(f"Loading hoard contents...")
-        with self.hoard.open_contents(create_missing=False, is_readonly=True) as hoard:
+        async with self.hoard.open_contents(create_missing=False, is_readonly=True) as hoard:
             with StringIO() as out:
                 for repo_uuid in repo_uuids:
                     logging.info(f"Iterating over pending ops in {repo_uuid}")
@@ -66,7 +66,7 @@ class HoardCommandFiles:
                 out.write("DONE")
                 return out.getvalue()
 
-    def push(self, repo: Optional[str] = None, all: bool = False):
+    async def push(self, repo: Optional[str] = None, all: bool = False):
         config = self.hoard.config()
         pathing = HoardPathing(config, self.hoard.paths())
         if all:
@@ -79,7 +79,7 @@ class HoardCommandFiles:
             repo_uuids = [resolve_remote_uuid(config, repo)]
 
         logging.info(f"Loading hoard contents...")
-        with self.hoard.open_contents(False, is_readonly=False) as hoard:
+        async with self.hoard.open_contents(False, is_readonly=False) as hoard:
             with StringIO() as out:
                 logging.info("try getting all requested files, per repo")
 
