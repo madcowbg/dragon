@@ -5,6 +5,7 @@ import subprocess
 from typing import Dict
 
 import rtoml
+from textual import work
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal
 from textual.css.query import NoMatches
@@ -52,7 +53,7 @@ class HoardExplorerApp(App):
 
     def on_input_submitted(self, event: Input.Submitted):
         if event.input == self.query_one("#hoard_path_input", Input):
-            self.config["hoard_path"] = event.value
+            config["hoard_path"] = event.value
             self._write_config()
 
             self.hoard_path = pathlib.Path(self.config["hoard_path"])
