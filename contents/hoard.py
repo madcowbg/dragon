@@ -1,7 +1,9 @@
+import logging
 import os
 import pathlib
 import sqlite3
 import sys
+from dataclasses import dataclass
 from datetime import datetime
 from functools import cached_property
 from sqlite3 import Connection
@@ -51,7 +53,7 @@ class HoardContentsConfig:
     @property
     def hoard_epoch(self) -> int:
         return self.doc.get("hoard_epoch", 0)
-    
+
     @hoard_epoch.setter
     def hoard_epoch(self, epoch: int) -> None:
         self.doc["hoard_epoch"] = epoch
@@ -217,7 +219,8 @@ class HoardFSObjects:
         self.parent = parent
 
     @cached_property
-    def tree(self) -> HoardTree: return HoardTree(self)
+    def tree(self) -> HoardTree:
+        return HoardTree(self)
 
     @property
     def num_files(self) -> int:
@@ -512,6 +515,68 @@ class HoardFSObjects:
             "SELECT COUNT(1), IFNULL(SUM(fsobject.size), 0) FROM fsobject "
             "WHERE isdir = FALSE AND ? < fullpath AND fullpath < ?",  # fast search using the index
             (fast_between_filter_left(folder_path), fast_between_filter_right(folder_path))).fetchone()
+
+    @cached_property
+    def query(self) -> "Query":
+        return Query(self.parent.conn)
+
+
+def field_is_subfolder_of(sql_field: str, param_name: str):
+    return f" :{param_name} || '/' < {sql_field} AND {sql_field} < :{param_name} || '0' "
+
+
+def format_for_subfolder(folder_name: FastPosixPath):
+    return folder_name.simple.rstrip("/")
+
+
+@dataclass
+class SubfolderFilter:
+    _sql_field: str
+    _param_value: FastPosixPath
+
+    @property
+    def where_clause(self): return f" ? || '/' < {self._sql_field} AND {self._sql_field} < ? || '0' "
+
+    @property
+    def params(self): return format_for_subfolder(self._param_value), format_for_subfolder(self._param_value)
+
+
+class Query:
+    def __init__(self, conn: Connection):
+        self.conn = conn
+        conn.execute(
+            f"CREATE TEMPORARY VIEW IF NOT EXISTS file_stats_query AS "
+            f"SELECT "
+            f"  (SELECT COUNT(1) from fspresence WHERE fsobject.fsobject_id = fspresence.fsobject_id AND status IN ('available', 'move')) as source_count,"
+            f"  NOT EXISTS (SELECT 1 from fspresence WHERE fsobject.fsobject_id = fspresence.fsobject_id and status NOT IN ('cleanup')) as is_deleted,"
+            f"  fullpath, fsobject_id "
+            f"FROM fsobject "
+            f"WHERE isdir = 0 ")
+
+    def count_non_deleted(self, folder_name: FastPosixPath) -> int:
+        subfolder_filter = SubfolderFilter('fullpath', folder_name)
+        return int(self.cursor().execute(
+            "SELECT IFNULL(SUM(is_deleted == 0), 0) AS non_deleted_count "
+            f"FROM file_stats_query WHERE {subfolder_filter.where_clause} ",
+            subfolder_filter.params).fetchone())
+
+    def cursor(self):
+        curr = self.conn.cursor()
+        curr.row_factory = FIRST_VALUE
+        return curr
+
+    def num_without_source(self, folder_name: FastPosixPath) -> int:
+        subfolder_filter = SubfolderFilter('fullpath', folder_name)
+        return int(self.cursor().execute(
+            "SELECT IFNULL(SUM(source_count == 0), 0) AS without_source_count "
+            f"FROM file_stats_query WHERE {subfolder_filter.where_clause}",
+            subfolder_filter.params).fetchone())
+
+    def is_deleted(self, file_name: FastPosixPath) -> bool:
+        logging.warning(file_name.as_posix())
+        return bool(self.cursor().execute(
+            "SELECT is_deleted FROM file_stats_query WHERE fullpath = ?",
+            (file_name.as_posix(),)).fetchone())
 
 
 def fast_between_filter_left(folder_path: FastPosixPath):

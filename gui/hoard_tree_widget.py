@@ -35,10 +35,13 @@ class HoardTreeWidget(Tree):
 
         for file in hoard_dir.files.values():
             size = self.contents.fsobjects[FastPosixPath(file.fullname)].size
-            file_label = Text().append(file.name.ljust(label_max_width + 2)).append(f"{format_size(size):>13}", "none")
+            file_label = Text().append(file.name, self.file_name_style(FastPosixPath(file.fullname)))
+            file_label.align("left", label_max_width + 2)
+            file_label.append(f"{format_size(size):>13}", "none")
             widget_node.add(file_label, allow_expand=False, data=file)
 
-    def _create_pretty_folder_label(self, name: str, fullname: FastPosixPath, max_width: int, name_style: str = "bold green"):
+    def _create_pretty_folder_label(self, name: str, fullname: FastPosixPath, max_width: int):
+        name_style = self.folder_name_style(fullname)
         count, size = self.contents.fsobjects.stats_in_folder(fullname)
         folder_name = Text().append(name, name_style).append(self._pretty_count_attached(fullname))
         folder_name.align("left", max_width)
@@ -46,6 +49,20 @@ class HoardTreeWidget(Tree):
             .append(f"{format_count(count):>6}", "dim") \
             .append(f"{format_size(size):>7}", "none")
         return folder_label
+
+    def folder_name_style(self, folder_name: FastPosixPath) -> str:
+        if self.contents.fsobjects.query.count_non_deleted(folder_name) == 0:
+            return "strike dim"
+        elif self.contents.fsobjects.query.num_without_source(folder_name) > 0:
+            return "red"
+        else:
+            return "bold green"
+
+    def file_name_style(self, file_name: FastPosixPath) -> str:
+        if self.contents.fsobjects.query.is_deleted(file_name):
+            return "strike dim"
+        else:
+            return "none"
 
     def _pretty_count_attached(self, fullname: FastPosixPath) -> str:
         return f" ✅{len(self.mounts.get(fullname))}" if self.mounts.get(fullname) is not None else ""
