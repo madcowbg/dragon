@@ -70,7 +70,7 @@ class HoardExplorerApp(App):
         if not path.exists():
             self.notify(f"File {filepath} does not exist!", severity="error")
         else:
-            self.notify(f"Opening {filepath} in Explorer.", severity="information")
+            self.notify(f"Navigating to {filepath} in Explorer.", severity="information")
             cmd = f"explorer.exe /select,\"{path}\""
             logging.error(cmd)
             subprocess.Popen(cmd)

@@ -1,5 +1,5 @@
 import os
-from pathlib import Path, PurePosixPath, PurePath
+from pathlib import Path, PurePath
 from typing import Union, List
 
 
@@ -41,9 +41,10 @@ class FastPosixPath(os.PathLike):
             if len(self._rem) == 0:
                 return "."
             else:
+                assert self._drive == ''
                 return "/".join(self._rem)
         else:
-            return "/" + "/".join(self._rem)
+            return self._drive + "/" + "/".join(self._rem)
 
     @property
     def simple(self) -> str:
