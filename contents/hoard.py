@@ -6,7 +6,7 @@ import sys
 from datetime import datetime
 from functools import cached_property
 from sqlite3 import Connection
-from typing import Dict, Any, Optional, Tuple, Generator, Iterable, List, Set
+from typing import Dict, Any, Optional, Tuple, Generator, Iterable, List, Set, AsyncGenerator
 
 import rtoml
 
@@ -308,7 +308,7 @@ class HoardFSObjects:
             "  WHERE fspresence.fsobject_id = fsobject.fsobject_id AND uuid = ? AND status = ?)",
             (remote_uuid, HoardFileStatus.AVAILABLE.value))
 
-    def in_folder(self, folder: FastPosixPath) -> Iterable[Tuple[FastPosixPath, HoardFileProps | HoardDirProps]]:
+    async def in_folder(self, folder: FastPosixPath) -> AsyncGenerator[Tuple[FastPosixPath, HoardFileProps | HoardDirProps]]:
         assert custom_isabs(folder.as_posix())  # from 3.13 behavior change...
         folder = folder.as_posix()
         folder_with_trailing = folder if folder.endswith("/") else folder + "/"
@@ -317,10 +317,11 @@ class HoardFSObjects:
         curr = self.parent.conn.cursor()
         curr.row_factory = self._read_as_path_to_props
 
-        yield from curr.execute(
+        for fp in curr.execute(
             "SELECT fullpath, fsobject_id, isdir, size, fasthash FROM fsobject "
             "WHERE fullpath like ? or fullpath = ?",
-            (f"{folder_with_trailing}%", folder))
+            (f"{folder_with_trailing}%", folder)):
+            yield fp
 
     def str_to_props(self) -> Iterable[Tuple[str, bool]]:
         curr = self.parent.conn.cursor()

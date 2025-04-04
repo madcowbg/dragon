@@ -4,7 +4,7 @@ import sqlite3
 from datetime import datetime
 from command.fast_path import FastPosixPath
 from sqlite3 import Connection, Cursor, Row
-from typing import Tuple, Iterable
+from typing import Tuple, Iterable, AsyncGenerator
 
 import rtoml
 

@@ -116,7 +116,7 @@ class HoardCommandContents:
                 with StringIO() as out:
                     out.write(f"Status of {self.hoard.config().remotes[remote_uuid].name}:\n")
 
-                    for diff in compare_local_to_hoard(
+                    async for diff in compare_local_to_hoard(
                             current_contents, hoard, HoardPathing(self.hoard.config(), self.hoard.paths())):
                         if isinstance(diff, FileOnlyInLocal):
                             if diff.is_added:
@@ -279,7 +279,7 @@ class HoardCommandContents:
         with StringIO() as out:
             print(f"Iterating files and folders to see what to drop...")
             hoard_file: FastPosixPath
-            for hoard_file, hoard_props in alive_it(hoard.fsobjects.in_folder(mounted_at)):
+            for hoard_file, hoard_props in alive_it([s async for s in hoard.fsobjects.in_folder(mounted_at)]):
                 if not isinstance(hoard_props, HoardFileProps):
                     continue
 
@@ -347,7 +347,8 @@ class HoardCommandContents:
             out.write("DONE")
             return out.getvalue()
 
-    async def _run_op(self, repo: str, path: str, fun: Callable[[HoardContents, str, str], Awaitable[str]], is_readonly: bool):
+    async def _run_op(self, repo: str, path: str, fun: Callable[[HoardContents, str, str], Awaitable[str]],
+                      is_readonly: bool):
         config = self.hoard.config()
         if custom_isabs(path):
             return f"Path {path} must be relative, but is absolute."
@@ -431,7 +432,8 @@ class HoardCommandContents:
                             preferences = _init_pull_preferences_partial(
                                 content_prefs, remote_uuid, assume_current, force_fetch_local_missing)
 
-                        pull_repo_contents_to_hoard(hoard_contents, pathing, config, current_contents, preferences, out)
+                        await pull_repo_contents_to_hoard(
+                            hoard_contents, pathing, config, current_contents, preferences, out)
 
                         logging.info(f"Updating epoch of {remote_uuid} to {current_contents.config.epoch}")
                         hoard_contents.config.mark_up_to_date(

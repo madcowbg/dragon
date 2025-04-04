@@ -432,7 +432,7 @@ class TestBackups(IsolatedAsyncioTestCase):
             " 1: 4 files (223)\n"
             "DONE", res)
 
-        res = hoard_cmd.backups.assign()
+        res = await hoard_cmd.backups.assign()
         self.assertEqual(
             'set: / with 4 media\n'
             ' backup-2 <- 1 files (77)\n'
@@ -508,7 +508,7 @@ class TestBackups(IsolatedAsyncioTestCase):
             ' 1: 4 files (223)\n'
             'DONE', res)
 
-        res = hoard_cmd.backups.clean()
+        res = await hoard_cmd.backups.clean()
         # self.assertEqual(  fixme make it run stably
         #     'set: / with 4 media\n'
         #     ' backup-1 LOST 1 files (60)\n'
