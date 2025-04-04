@@ -9,7 +9,7 @@ from textual.app import App, ComposeResult
 from textual.containers import Horizontal
 from textual.css.query import NoMatches
 from textual.reactive import reactive
-from textual.widgets import Footer, Header, Label, Input
+from textual.widgets import Footer, Header, Label, Input, Static, Switch
 
 from command.hoard import Hoard
 from gui.hoard_explorer_screen import HoardExplorerScreen
@@ -25,6 +25,7 @@ class HoardExplorerApp(App):
     CSS_PATH = "hoard_explorer.tcss"
 
     hoard_path: pathlib.Path = reactive(pathlib.Path(config.get("hoard_path", ".")), recompose=True)
+    can_modify: bool = reactive(default=False)
 
     def watch_hoard_path(self, new_path: pathlib.Path, old_path: pathlib.Path):
         try:
@@ -33,6 +34,11 @@ class HoardExplorerApp(App):
         except NoMatches:
             pass
 
+    def watch_can_modify(self, new_val: bool, old_val: bool):
+        if new_val != old_val:
+            screen = self.query_one(HoardExplorerScreen)
+            screen.can_modify = self.can_modify
+
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""
         yield Header()
@@ -40,6 +46,7 @@ class HoardExplorerApp(App):
 
         yield Horizontal(
             Label("Hoard:"), Input(value=self.hoard_path.as_posix(), id="hoard_path_input"),
+            Static("Can modify?"), Switch(value=self.can_modify, id="switch_can_modify"),
             classes="horizontal_config_line")
         yield HoardExplorerScreen(self.hoard_path)
 

@@ -17,6 +17,8 @@ from gui.node_description_widget import NodeDescription
 
 class HoardExplorerScreen(Widget):
     hoard: Hoard | None = reactive(None)
+    can_modify: bool = reactive(default=False)
+
     hoard_contents: HoardContents | None = var(None)
 
     def __init__(self, hoard_path: pathlib.Path):
@@ -33,14 +35,19 @@ class HoardExplorerScreen(Widget):
         else:
             yield Label("Please select a valid hoard!")
 
+    def watch_can_modify(self):
+        self.close_and_reopen()
+
     def watch_hoard(self):
+        self.close_and_reopen()
+
+    def close_and_reopen(self):
         if self.hoard_contents is not None:
             self.hoard_contents.__exit__(None, None, None)
 
         try:
             self.notify(f"Loading hoard at {self.hoard.hoardpath}...")
-            self.hoard_contents = self.hoard.open_contents(create_missing=False,
-                                                           is_readonly=True)  # fixme change to editable
+            self.hoard_contents = self.hoard.open_contents(create_missing=False, is_readonly=not self.can_modify)
             self.hoard_contents.__enter__()
         except Exception as e:
             traceback.print_exception(e)

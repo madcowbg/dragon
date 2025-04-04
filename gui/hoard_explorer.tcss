@@ -3,7 +3,7 @@
     align-vertical: middle;
 }
 
-.horizontal_config_line Label {
+.horizontal_config_line Label, .horizontal_config_line Static {
     padding: 1;
 }
 
@@ -41,3 +41,10 @@ HoardTreeWidget {
     margin-left: 1;
 }
 
+#hoard_path_input {
+    width: 50%;
+}
+
+Static {
+    width: auto;
+}
