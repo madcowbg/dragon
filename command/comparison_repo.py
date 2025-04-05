@@ -6,7 +6,7 @@ from io import StringIO
 
 import command.fast_path
 from command.fast_path import FastPosixPath
-from typing import Iterable, Tuple, Dict, Optional, List
+from typing import Iterable, Tuple, Dict, Optional, List, AsyncGenerator
 
 import aiofiles.os
 from alive_progress import alive_it, alive_bar
@@ -112,14 +112,15 @@ class DirIsSame:
 type RepoChange = FileIsSame | FileDeleted | FileModified | FileMoved | FileAdded | DirIsSame | DirAdded | DirRemoved
 
 
-def find_repo_changes(
+async def find_repo_changes(
         repo_path: str, contents: RepoContents, hoard_ignore: HoardIgnore,
-        add_new_with_status: RepoFileStatus, skip_integrity_checks: bool) -> Iterable[RepoChange]:
+        add_new_with_status: RepoFileStatus, skip_integrity_checks: bool) -> AsyncGenerator[RepoChange]:
     logging.info(f"Comparing contents and filesystem...")
     diffs_stream = compute_difference_between_contents_and_filesystem(
         contents, repo_path, hoard_ignore, skip_integrity_checks)
 
-    yield from compute_changes_from_diffs(diffs_stream, repo_path, add_new_with_status)
+    for diff in compute_changes_from_diffs(diffs_stream, repo_path, add_new_with_status):
+        yield diff
 
 
 def compute_changes_from_diffs(diffs_stream: Iterable[RepoDiffs], repo_path: str, add_new_with_status: RepoFileStatus):

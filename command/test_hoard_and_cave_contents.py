@@ -19,10 +19,10 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
     def tearDown(self):
         self.tmpdir.cleanup()
 
-    def test_dump_cave_contents(self):
+    async def test_dump_cave_contents(self):
         cave_cmd = TotalCommand(path=join(self.tmpdir.name, "repo")).cave
         cave_cmd.init()
-        cave_cmd.refresh(show_details=False)
+        await cave_cmd.refresh(show_details=False)
 
         repo_contents = ProspectiveRepo(join(self.tmpdir.name, "repo")).open_repo().connect(False).open_contents(True)
         with repo_contents:
@@ -39,7 +39,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
     async def test_dump_hoard_contents(self):
         cave_cmd = TotalCommand(path=join(self.tmpdir.name, "repo")).cave
         cave_cmd.init()
-        cave_cmd.refresh(show_details=False)
+        await cave_cmd.refresh(show_details=False)
 
         hoard_cmd = TotalCommand(path=join(self.tmpdir.name, "hoard")).hoard
         hoard_cmd.init()

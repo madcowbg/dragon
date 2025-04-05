@@ -174,7 +174,7 @@ class HoardCommand(object):
                 out.write("DONE")
                 return out.getvalue()
 
-    def clone(self, to_path: str, mount_at: str, name: str, fetch_new: bool = False):
+    async def clone(self, to_path: str, mount_at: str, name: str, fetch_new: bool = False):
         _ = self.hoard.config()  # validate hoard is available
 
         if not os.path.isdir(to_path):
@@ -182,7 +182,7 @@ class HoardCommand(object):
 
         cave_cmd = RepoCommand(path=to_path)
         cave_cmd.init()
-        cave_cmd.refresh(show_details=False)
+        await cave_cmd.refresh(show_details=False)
 
         self.add_remote(to_path, name=name, mount_point=mount_at, fetch_new=fetch_new)
         return f"DONE"

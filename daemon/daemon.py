@@ -61,7 +61,7 @@ class RepoWatcher(FileSystemEventHandler):
             self.queue.put_nowait(path)
 
 
-def updater(
+async def updater(
         watcher: RepoWatcher, connected_repo: ConnectedRepo, hoard_ignore: HoardIgnore,
         sleep_interval: int = 10, between_runs_interval: int = 1):
     logging.info("Start updating!")
@@ -131,7 +131,7 @@ def run_daemon(path: str, assume_current: bool = False):
         connected_repo = repo.open_repo().connect(require_contents=True)
 
         if not assume_current:
-            refresh_all(connected_repo, hoard_ignore)
+            asyncio.run(refresh_all(connected_repo, hoard_ignore))
 
         def run_updater():
             asyncio.run(updater(event_handler, connected_repo, hoard_ignore))
@@ -146,14 +146,14 @@ def run_daemon(path: str, assume_current: bool = False):
         observer.join()
 
 
-def refresh_all(connected_repo, hoard_ignore):
+async def refresh_all(connected_repo, hoard_ignore):
     with connected_repo.open_contents(is_readonly=False) as contents:
         logging.info("Start updating, setting is_dirty to TRUE")
         contents.config.start_updating()
 
         logging.info(f"Bumped epoch to {contents.config.epoch}")
         with StringIO() as out:
-            for change in find_repo_changes(
+            for change in await find_repo_changes(
                     connected_repo.path, contents, hoard_ignore, RepoFileStatus.ADDED, skip_integrity_checks=False):
                 _apply_repo_change_to_contents(change, contents, False, out)
             logging.info(out.getvalue())

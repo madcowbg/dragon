@@ -21,7 +21,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         self.tmpdir.cleanup()
 
     async def test_recover(self):
-        hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = init_complex_hoard(
+        hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = await init_complex_hoard(
             self.tmpdir.name)
 
         res = await hoard_cmd.contents.pull("repo-full-name")

@@ -49,7 +49,7 @@ class TestRepoCommand(IsolatedAsyncioTestCase):
             ['test.me.different', 'test.me.once', 'test.me.twice'],
             os.listdir(join(self.tmpdir.name, 'repo', 'wat')))
 
-    def test_init_refresh_repo(self):
+    async def test_init_refresh_repo(self):
         res = TotalCommand(path=join(self.tmpdir.name, "repo")).cave.init()
 
         posix_path = pathlib.Path(self.tmpdir.name).as_posix()
@@ -57,7 +57,7 @@ class TestRepoCommand(IsolatedAsyncioTestCase):
         self.assertEqual(['current.uuid'], os.listdir(join(self.tmpdir.name, "repo", ".hoard")))
 
         cave_cmd = TotalCommand(path=join(self.tmpdir.name, "repo")).cave
-        res = cave_cmd.refresh(show_details=False)
+        res = await cave_cmd.refresh(show_details=False)
         self.assertEqual(f"Refresh done!", res)
 
         current_uuid = cave_cmd.current_uuid()
@@ -65,16 +65,16 @@ class TestRepoCommand(IsolatedAsyncioTestCase):
             sorted([f"{current_uuid}.contents", f"{current_uuid}.toml", 'current.uuid']),
             sorted(os.listdir(join(self.tmpdir.name, "repo", ".hoard"))))
 
-    def test_show_repo(self):
+    async def test_show_repo(self):
         cave_cmd = TotalCommand(path=join(self.tmpdir.name, "repo")).cave
-        res = cave_cmd.status()
+        res = await cave_cmd.status()
         self.assertEqual(f"Repo is not initialized at {pathlib.Path(self.tmpdir.name).as_posix()}/repo", res)
 
         cave_cmd.init()
-        res = cave_cmd.status()
+        res = await cave_cmd.status()
         self.assertEqual(f"Repo {cave_cmd.current_uuid()} contents have not been refreshed yet!", res)
 
-        cave_cmd.refresh(show_details=False)
+        await cave_cmd.refresh(show_details=False)
 
         res = cave_cmd.status_index(show_dates=False)
         self.assertEqual([
@@ -90,7 +90,7 @@ class TestRepoCommand(IsolatedAsyncioTestCase):
             '  # dirs  = 1',
             ''], res.split("\n"))
 
-        res = cave_cmd.status()
+        res = await cave_cmd.status()
         self.assertEqual(
             f"{cave_cmd.current_uuid()}:\n"
             f"files:\n"
@@ -108,16 +108,16 @@ class TestRepoCommand(IsolatedAsyncioTestCase):
             f" in repo: 1\n"
             f" deleted: 0 (0.0%)\n", res)
 
-    def test_local_files_lifecycle(self):
+    async def test_local_files_lifecycle(self):
         cave_cmd = TotalCommand(path=join(self.tmpdir.name, "repo")).cave
-        res = cave_cmd.status()
+        res = await cave_cmd.status()
         self.assertEqual(f"Repo is not initialized at {pathlib.Path(self.tmpdir.name).as_posix()}/repo", res)
 
         cave_cmd.init()
-        res = cave_cmd.status()
+        res = await cave_cmd.status()
         self.assertEqual(f"Repo {cave_cmd.current_uuid()} contents have not been refreshed yet!", res)
 
-        res = cave_cmd.refresh(show_details=False)
+        res = await cave_cmd.refresh(show_details=False)
         self.assertEqual(f"Refresh done!", res)
 
         res = cave_cmd.status_index(show_dates=False)
@@ -139,7 +139,7 @@ class TestRepoCommand(IsolatedAsyncioTestCase):
         pfw('repo/wat/test.me.anew', "pkosadu")
         pfw('repo/wat/test.me.twice', None)
 
-        res = cave_cmd.refresh(show_details=False)
+        res = await cave_cmd.refresh(show_details=False)
         self.assertEqual(f"Refresh done!", res)
 
         res = cave_cmd.status_index(show_dates=False)
@@ -157,7 +157,7 @@ class TestRepoCommand(IsolatedAsyncioTestCase):
             '  # dirs  = 1',
             ''], res.split("\n"))
 
-        res = cave_cmd.status()
+        res = await cave_cmd.status()
         self.assertEqual(
             f"{cave_cmd.current_uuid()}:\n"
             f"files:\n"
@@ -177,7 +177,7 @@ class TestRepoCommand(IsolatedAsyncioTestCase):
 
         pfw('repo/test.me.anew2', "vseer")
 
-        res = cave_cmd.status()
+        res = await cave_cmd.status()
         self.assertEqual(
             f"{cave_cmd.current_uuid()}:\n"
             f"files:\n"
@@ -195,7 +195,7 @@ class TestRepoCommand(IsolatedAsyncioTestCase):
             f" in repo: 1\n"
             f" deleted: 0 (0.0%)\n", res)
 
-        res = cave_cmd.refresh(show_details=False)
+        res = await cave_cmd.refresh(show_details=False)
         self.assertEqual(f"Refresh done!", res)
 
         res = cave_cmd.status_index(show_dates=False)

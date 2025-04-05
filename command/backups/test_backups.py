@@ -9,18 +9,18 @@ from config import CaveType
 from dragon import TotalCommand
 
 
-def init_complex_hoard(tmpdir: str):
+async def init_complex_hoard(tmpdir: str):
     partial_cave_cmd = TotalCommand(path=join(tmpdir, "repo-partial")).cave
     partial_cave_cmd.init()
-    partial_cave_cmd.refresh(show_details=False)
+    await partial_cave_cmd.refresh(show_details=False)
 
     full_cave_cmd = TotalCommand(path=join(tmpdir, "repo-full")).cave
     full_cave_cmd.init()
-    full_cave_cmd.refresh(show_details=False)
+    await full_cave_cmd.refresh(show_details=False)
 
     incoming_cave_cmd = TotalCommand(path=join(tmpdir, "repo-incoming")).cave
     incoming_cave_cmd.init()
-    incoming_cave_cmd.refresh(show_details=False)
+    await incoming_cave_cmd.refresh(show_details=False)
 
     hoard_cmd = TotalCommand(path=join(tmpdir, "hoard")).hoard
     hoard_cmd.init()
@@ -96,7 +96,7 @@ class TestBackups(IsolatedAsyncioTestCase):
         self.tmpdir.cleanup()
 
     async def test_get_to_steady_state(self):
-        hoard_cmd, partial_cave_cmd, full_cave_cmd, incoming_cave_cmd = init_complex_hoard(self.tmpdir.name)
+        hoard_cmd, partial_cave_cmd, full_cave_cmd, incoming_cave_cmd = await init_complex_hoard(self.tmpdir.name)
 
         res = await hoard_cmd.contents.pull(all=True)
         self.assertEqual(
@@ -136,9 +136,9 @@ class TestBackups(IsolatedAsyncioTestCase):
             "TO_CLEANUP (is in 0) /wat/test.me.3\n"
             "DONE", res)
 
-        partial_cave_cmd.refresh(show_details=False)
-        full_cave_cmd.refresh(show_details=False)
-        incoming_cave_cmd.refresh(show_details=False)
+        await partial_cave_cmd.refresh(show_details=False)
+        await full_cave_cmd.refresh(show_details=False)
+        await incoming_cave_cmd.refresh(show_details=False)
 
         res = await hoard_cmd.files.push(all=True)
         self.assertEqual(
@@ -175,12 +175,12 @@ class TestBackups(IsolatedAsyncioTestCase):
             "DONE", res)
 
     async def test_create_with_simple_backup_from_start(self):
-        hoard_cmd, partial_cave_cmd, full_cave_cmd, incoming_cave_cmd = init_complex_hoard(self.tmpdir.name)
+        hoard_cmd, partial_cave_cmd, full_cave_cmd, incoming_cave_cmd = await init_complex_hoard(self.tmpdir.name)
 
-        backup_1_cmd = self._init_and_refresh_repo("repo-backup-1")
-        backup_2_cmd = self._init_and_refresh_repo("repo-backup-2")
-        backup_3_cmd = self._init_and_refresh_repo("repo-backup-3")
-        backup_4_cmd = self._init_and_refresh_repo("repo-backup-4")
+        backup_1_cmd = await self._init_and_refresh_repo("repo-backup-1")
+        backup_2_cmd = await self._init_and_refresh_repo("repo-backup-2")
+        backup_3_cmd = await self._init_and_refresh_repo("repo-backup-3")
+        backup_4_cmd = await self._init_and_refresh_repo("repo-backup-4")
 
         hoard_cmd.add_remote(
             remote_path=join(self.tmpdir.name, "repo-backup-1"), name="backup-1", mount_point="/",
@@ -357,14 +357,14 @@ class TestBackups(IsolatedAsyncioTestCase):
             '|repo-partial-name        |        76|        76|          |\n', res)
 
     async def test_add_backup_repos_over_time(self):
-        hoard_cmd, partial_cave_cmd, full_cave_cmd, incoming_cave_cmd = init_complex_hoard(self.tmpdir.name)
+        hoard_cmd, partial_cave_cmd, full_cave_cmd, incoming_cave_cmd = await init_complex_hoard(self.tmpdir.name)
 
         await hoard_cmd.contents.pull(all=True)
 
-        backup_1_cmd = self._init_and_refresh_repo("repo-backup-1")
-        backup_2_cmd = self._init_and_refresh_repo("repo-backup-2")
-        backup_3_cmd = self._init_and_refresh_repo("repo-backup-3")
-        backup_4_cmd = self._init_and_refresh_repo("repo-backup-4")
+        backup_1_cmd = await self._init_and_refresh_repo("repo-backup-1")
+        backup_2_cmd = await self._init_and_refresh_repo("repo-backup-2")
+        backup_3_cmd = await self._init_and_refresh_repo("repo-backup-3")
+        backup_4_cmd = await self._init_and_refresh_repo("repo-backup-4")
 
         hoard_cmd.add_remote(
             remote_path=join(self.tmpdir.name, "repo-backup-1"), name="backup-1", mount_point="/",
@@ -536,9 +536,9 @@ class TestBackups(IsolatedAsyncioTestCase):
             ' 1: 5 files (283)\n'
             'DONE', res)
 
-    def _init_and_refresh_repo(self, backup_folder: str) -> RepoCommand:
+    async def _init_and_refresh_repo(self, backup_folder: str) -> RepoCommand:
         backup_1_cmd = TotalCommand(path=join(self.tmpdir.name, backup_folder)).cave
         backup_1_cmd.init()
-        backup_1_cmd.refresh(show_details=False)
+        await backup_1_cmd.refresh(show_details=False)
 
         return backup_1_cmd
