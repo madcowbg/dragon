@@ -1,21 +1,23 @@
-import asyncio
+import logging
 import logging
 import os
 import pathlib
+import random
+from asyncio import TaskGroup
 from io import StringIO
-
-import command.fast_path
-from command.fast_path import FastPosixPath
+from itertools import batched
 from typing import Iterable, Tuple, Dict, Optional, List, AsyncGenerator
 
 import aiofiles.os
 from alive_progress import alive_it, alive_bar
 
+import command.fast_path
+from command.fast_path import FastPosixPath
 from command.hoard_ignore import HoardIgnore
 from contents.repo import RepoContents
 from contents.repo_props import RepoFileStatus, RepoFileProps, RepoDirProps
 from hashing import find_hashes, fast_hash_async, fast_hash
-from util import group_to_dict, run_async_in_parallel, run_in_separate_loop
+from util import group_to_dict, run_in_separate_loop
 
 type RepoDiffs = (
         FileNotInFilesystem | FileNotInRepo
@@ -119,16 +121,17 @@ async def find_repo_changes(
     diffs_stream = compute_difference_between_contents_and_filesystem(
         contents, repo_path, hoard_ignore, skip_integrity_checks)
 
-    for diff in compute_changes_from_diffs(diffs_stream, repo_path, add_new_with_status):
+    async for diff in compute_changes_from_diffs(diffs_stream, repo_path, add_new_with_status):
         yield diff
 
 
-def compute_changes_from_diffs(diffs_stream: Iterable[RepoDiffs], repo_path: str, add_new_with_status: RepoFileStatus):
+async def compute_changes_from_diffs(diffs_stream: AsyncGenerator[RepoDiffs], repo_path: str,
+                                     add_new_with_status: RepoFileStatus):
     files_to_add_or_update: Dict[pathlib.Path, Tuple[RepoFileStatus, Optional[RepoFileProps]]] = {}
     files_maybe_removed: List[Tuple[FastPosixPath, RepoFileProps]] = []
     folders_to_add: List[pathlib.Path] = []
 
-    for diff in diffs_stream:
+    async for diff in diffs_stream:
         if isinstance(diff, FileNotInFilesystem):
             logging.debug(f"File not found, marking for removal: {diff.filepath}")
             files_maybe_removed.append((diff.filepath, diff.props))
@@ -300,9 +303,9 @@ class FileNotInRepo:
         self.filepath = filepath
 
 
-def compute_difference_between_contents_and_filesystem(
+async def compute_difference_between_contents_and_filesystem(
         contents: RepoContents, repo_path: str, hoard_ignore: HoardIgnore,
-        skip_integrity_checks: bool) -> Iterable[RepoDiffs]:
+        skip_integrity_checks: bool) -> AsyncGenerator[RepoDiffs]:
     current_repo_path = pathlib.Path(repo_path)
     for obj_path, props in alive_it(
             list(contents.fsobjects.existing()),
@@ -324,7 +327,7 @@ def compute_difference_between_contents_and_filesystem(
         else:
             raise ValueError(f"invalid props type: {type(props)}")
 
-    file_path_matches: List[str] = list()
+    file_path_matches: List[pathlib.Path] = list()
     with alive_bar(total=contents.fsobjects.len_existing(), title="Walking filesystem") as bar:
         for file_path_full, dir_path_full in walk_repo(repo_path, hoard_ignore):
             if file_path_full is not None:
@@ -333,7 +336,7 @@ def compute_difference_between_contents_and_filesystem(
                 logging.debug(f"Checking {file_path_local} for existence...")
                 if contents.fsobjects.in_existing(file_path_local):  # file is already in index
                     logging.debug(f"File is in contents, adding to check")  # checking size and mtime.")
-                    file_path_matches.append(file_path_full.as_posix())
+                    file_path_matches.append(file_path_full)
                 else:
                     yield FileNotInRepo(file_path_local)
                 bar()
@@ -349,9 +352,9 @@ def compute_difference_between_contents_and_filesystem(
                 bar()
 
     with alive_bar(len(file_path_matches), title="Checking maybe mod files") as m_bar:
-        def find_size_mtime_of(file_fullpath: str) -> RepoDiffs:
+        async def find_size_mtime_of(file_fullpath: pathlib.Path) -> RepoDiffs:
             try:
-                stats = run_in_separate_loop(aiofiles.os.stat(file_fullpath))
+                stats = await aiofiles.os.stat(file_fullpath)
 
                 file_path_local = command.fast_path.FastPosixPath(file_fullpath).relative_to(repo_path)
                 props = contents.fsobjects.get_existing(file_path_local)
@@ -361,7 +364,7 @@ def compute_difference_between_contents_and_filesystem(
                     else:
                         return RepoFileWeakDifferent(file_path_local, props, stats.st_mtime, stats.st_size)
                 else:
-                    fasthash = run_in_separate_loop(fast_hash_async(file_fullpath))
+                    fasthash = await fast_hash_async(file_fullpath)
                     if props.fasthash == fasthash:
                         return RepoFileSame(file_path_local, props, stats.st_mtime)
                     else:
@@ -369,16 +372,27 @@ def compute_difference_between_contents_and_filesystem(
             finally:
                 m_bar()
 
-        prop_tuples: List[RepoDiffs] = [find_size_mtime_of(f) for f in file_path_matches]
+        async with TaskGroup() as tg:
+            tasks = []
 
-        assert len(prop_tuples) == len(file_path_matches)
+            async def run(batch: List[pathlib.Path]):
+                return [await find_size_mtime_of(file) for file in batch]
 
-    yield from alive_it(prop_tuples, title="Returning file diffs")
+            random.shuffle(file_path_matches)
+            files_batch: List[pathlib.Path]
+            batches = list(batched(file_path_matches, max(10, len(file_path_matches) // 32)))
+            logging.warning(f"Splitting {len(file_path_matches)} into {len(batches)} batches")
+            for files_batch in batches:
+                tasks.append(tg.create_task(run(files_batch)))
+
+        for task in tasks:
+            for result in await task:
+                yield result
 
 
-def compute_difference_filtered_by_path(
+async def compute_difference_filtered_by_path(
         contents: RepoContents, repo_path: str, hoard_ignore: HoardIgnore,
-        allowed_paths: List[str]) -> Iterable[RepoDiffs]:
+        allowed_paths: List[str]) -> AsyncGenerator[RepoDiffs]:
     for allowed_path in alive_it(allowed_paths, title="Checking updates"):
         path_on_device = pathlib.Path(allowed_path).absolute()
 
