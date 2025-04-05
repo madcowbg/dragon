@@ -3,18 +3,27 @@ import os
 import pathlib
 import subprocess
 
+from textual.messages import Message
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal
 from textual.css.query import NoMatches
 from textual.reactive import reactive
 from textual.screen import Screen
-from textual.widgets import Footer, Header, Label, Input, Static, Switch
+from textual.widgets import Footer, Header, Label, Input, Static, Switch, Select
 
+from command.hoard import Hoard
 from gui.app_config import config, _write_config
 from gui.hoard_explorer_screen import HoardExplorerWidget
 
 
 class HoardExplorerScreen(Screen):
+    AUTO_FOCUS = HoardExplorerWidget
+
+    class ChangeHoardPath(Message):
+        def __init__(self, new_path: pathlib.Path):
+            super().__init__()
+            self.new_path = new_path
+
     hoard_path: pathlib.Path = reactive(None)
     can_modify: bool = reactive(default=False)
 
@@ -27,6 +36,8 @@ class HoardExplorerScreen(Screen):
             screen.hoard_path = self.hoard_path
         except NoMatches:
             pass
+
+        self.post_message(HoardExplorerScreen.ChangeHoardPath(hoard_path))
 
     def watch_can_modify(self, new_val: bool, old_val: bool):
         if new_val != old_val:
@@ -62,10 +73,27 @@ class HoardExplorerScreen(Screen):
                 self.notify(f"Hoard path: {self.hoard_path} does not exist!", severity="error")
 
 
+class CaveExplorerScreen(Screen):
+    hoard: Hoard | None = reactive(None, recompose=True)
+
+    def compose(self) -> ComposeResult:
+        yield Header()
+        yield Footer()
+
+        if self.hoard is not None:
+            config = self.hoard.config()
+            yield Select((remote.name, remote) for remote in config.remotes.all())
+
+
 class HoardExplorerApp(App):
-    BINDINGS = [("d", "toggle_dark", "Toggle dark mode")]
+    BINDINGS = [
+        ("d", "toggle_dark", "Toggle dark mode"),
+        ("h", "app.push_screen('hoard_explorer')", "Explore hoard"),
+        ("c", "app.push_screen('cave_explorer')", "Explore cave"), ]
     CSS_PATH = "hoard_explorer.tcss"
-    SCREENS = {"hoard_explorer": HoardExplorerScreen}
+    SCREENS = {
+        "hoard_explorer": HoardExplorerScreen,
+        "cave_explorer": CaveExplorerScreen}
 
     def on_mount(self):
         self.push_screen("hoard_explorer")
@@ -73,6 +101,9 @@ class HoardExplorerApp(App):
     def action_toggle_dark(self) -> None:
         """An action to toggle dark mode."""
         self.theme = "textual-dark" if self.theme == "textual-light" else "textual-light"
+
+    def on_hoard_explorer_screen_change_hoard_path(self, event: HoardExplorerScreen.ChangeHoardPath):
+        self.get_screen("cave_explorer", CaveExplorerScreen).hoard = Hoard(event.new_path.as_posix())
 
     def action_open_cave_file(self, filepath: str):
         path = pathlib.WindowsPath(filepath)
