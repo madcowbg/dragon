@@ -37,11 +37,12 @@ class HoardExplorerScreen(Widget):
             yield Label("Please select a valid hoard!")
 
     async def watch_can_modify(self):
-        await self.close_and_reopen()
+        self.close_and_reopen()
 
     async def watch_hoard(self):
-        await self.close_and_reopen()
+        self.close_and_reopen()
 
+    @work(exclusive=True)
     async def close_and_reopen(self):
         if self.hoard_contents is not None:
             await self.hoard_contents.__aexit__(None, None, None)

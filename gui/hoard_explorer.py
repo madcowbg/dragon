@@ -51,6 +51,10 @@ class HoardExplorerApp(App):
             classes="horizontal_config_line")
         yield HoardExplorerScreen(self.hoard_path)
 
+    def on_switch_changed(self, event: Switch.Changed):
+        if event.switch == self.query_one("#switch_can_modify"):
+            self.can_modify = not self.can_modify
+
     def on_input_submitted(self, event: Input.Submitted):
         if event.input == self.query_one("#hoard_path_input", Input):
             config["hoard_path"] = event.value
