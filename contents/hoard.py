@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import pathlib
@@ -6,7 +7,7 @@ import sys
 from datetime import datetime
 from functools import cached_property
 from sqlite3 import Connection
-from typing import Dict, Any, Optional, Tuple, Generator, Iterable, List, Set
+from typing import Dict, Any, Optional, Tuple, Generator, Iterable, List, Set, AsyncGenerator
 
 import rtoml
 
@@ -100,11 +101,14 @@ class HoardContentsConfig:
         self.hoard_epoch += 1
 
 
-def _augment_with_fake_props(objects) -> Tuple[Set[str], List[str]]:
+async def _augment_with_fake_props(objects) -> Tuple[Set[str], List[str]]:
     # augment all objects with dummy folders as the hoard is incomplete by design
     all_dirs: Set[str] = set()
     all_files: List[str] = []
     for path, is_dir in list(objects.str_to_props()):
+        if len(all_files) % 10000 == 0:
+            await asyncio.sleep(0)  # give up control if other threads want to do something
+
         if is_dir:
             all_dirs.add(path)
         else:
@@ -121,27 +125,36 @@ def _augment_with_fake_props(objects) -> Tuple[Set[str], List[str]]:
     return all_dirs, all_files
 
 
-def _add_all_files_and_folders(root, all_dirs: Set[str], all_files: List[str], fsobjects: "HoardFSObjects"):
+async def _add_all_files_and_folders(root, all_dirs: Set[str], all_files: List[str], fsobjects: "HoardFSObjects"):
     # add all files and folders, ordered by path so that parent folders come before children
     folders_cache: dict[str, HoardDir] = {"": root}
     for path in sorted(all_dirs):
+        if len(folders_cache) % 10000 == 0:
+            await asyncio.sleep(0)  # give up control if other threads want to do something
+
         parent_path, child_name = path.rsplit("/", 1)
 
         # assert isinstance(props, HoardDirProps)
         folders_cache[path] = folders_cache[parent_path].create_dir(child_name)
 
-    for path in all_files:
+    for idx, path in enumerate(all_files):
+        if idx % 10000 == 0:
+            await asyncio.sleep(0)  # give up control if other threads want to do something
+
         parent_path, child_name = path.rsplit("/", 1)
         folders_cache[parent_path].create_file(child_name, path, fsobjects)
 
 
 class HoardTree:
-    def __init__(self, objects: "HoardFSObjects"):
+    def __init__(self):
         self.root = HoardDir(None, "", self)
 
-        all_dirs, all_files = _augment_with_fake_props(objects)
+    async def read(self, objects: "HoardFSObjects") -> "HoardTree":
+        all_dirs, all_files = await _augment_with_fake_props(objects)
 
-        _add_all_files_and_folders(self.root, all_dirs, all_files, objects)
+        await _add_all_files_and_folders(self.root, all_dirs, all_files, objects)
+
+        return self
 
     def walk(self, from_path: str = "/", depth: int = sys.maxsize) -> \
             Generator[Tuple[Optional["HoardDir"], Optional["HoardFile"]], None, None]:
@@ -219,8 +232,8 @@ class HoardFSObjects:
         self.parent = parent
 
     @cached_property
-    def tree(self) -> HoardTree:
-        return HoardTree(self)
+    async def tree(self) -> HoardTree:
+        return await HoardTree().read(self)
 
     @property
     def num_files(self) -> int:
@@ -308,7 +321,7 @@ class HoardFSObjects:
             "  WHERE fspresence.fsobject_id = fsobject.fsobject_id AND uuid = ? AND status = ?)",
             (remote_uuid, HoardFileStatus.AVAILABLE.value))
 
-    def in_folder(self, folder: FastPosixPath) -> Iterable[Tuple[FastPosixPath, HoardFileProps | HoardDirProps]]:
+    async def in_folder(self, folder: FastPosixPath) -> AsyncGenerator[Tuple[FastPosixPath, HoardFileProps | HoardDirProps]]:
         assert custom_isabs(folder.as_posix())  # from 3.13 behavior change...
         folder = folder.as_posix()
         folder_with_trailing = folder if folder.endswith("/") else folder + "/"
@@ -317,10 +330,11 @@ class HoardFSObjects:
         curr = self.parent.conn.cursor()
         curr.row_factory = self._read_as_path_to_props
 
-        yield from curr.execute(
+        for fp in curr.execute(
             "SELECT fullpath, fsobject_id, isdir, size, fasthash FROM fsobject "
             "WHERE fullpath like ? or fullpath = ?",
-            (f"{folder_with_trailing}%", folder))
+            (f"{folder_with_trailing}%", folder)):
+            yield fp
 
     def str_to_props(self) -> Iterable[Tuple[str, bool]]:
         curr = self.parent.conn.cursor()
@@ -626,7 +640,7 @@ class HoardContents:
         self.fsobjects = None
         self.conn = None
 
-    def __enter__(self):
+    async def __aenter__(self) -> "HoardContents":
         self.conn = sqlite3.connect(
             f"file:{os.path.join(self.folder, HOARD_CONTENTS_FILENAME)}{'?mode=ro' if self.is_readonly else ''}",
             uri=True)
@@ -636,7 +650,7 @@ class HoardContents:
 
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
         if not self.is_readonly:
             self.config.bump_hoard_epoch()
             self.config.write()

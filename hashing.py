@@ -9,9 +9,11 @@ from typing import Dict, List
 import aiofiles
 from alive_progress import alive_bar
 
+from util import run_in_separate_loop
+
 
 def fast_hash(fullpath: pathlib.Path, chunk_size: int = 1 << 16) -> str:
-    return asyncio.run(fast_hash_async(fullpath, chunk_size))
+    return run_in_separate_loop(fast_hash_async(fullpath, chunk_size))
 
 
 async def fast_hash_async(fullpath: pathlib.Path, chunk_size: int = 1 << 16) -> str:

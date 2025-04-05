@@ -26,7 +26,7 @@ from exceptions import MissingRepo
 from gui.hoard_explorer import start_hoard_explorer_gui
 from hashing import fast_hash
 from resolve_uuid import resolve_remote_uuid
-from util import group_to_dict
+from util import group_to_dict, run_in_separate_loop
 
 
 def path_in_local(hoard_file: str, mounted_at: str) -> str:
@@ -79,9 +79,12 @@ class HoardCommand(object):
         paths[remote_uuid] = CavePath.exact(remote_abs_path, speed, latency)
         paths.write()
 
-        with self.hoard.open_contents(create_missing=True,
-                                      is_readonly=False) as hoard:  # fixme remove when unit tests are updated
-            hoard.config.set_max_size_fallback(remote_uuid, shutil.disk_usage(remote_path).total)
+        async def hack():  # fixme remove when unit tests are updated
+            async with self.hoard.open_contents(create_missing=True,
+                                                is_readonly=False) as hoard:
+                hoard.config.set_max_size_fallback(remote_uuid, shutil.disk_usage(remote_path).total)
+
+        run_in_separate_loop(hack())
 
         return f"Added {name}[{remote_uuid}] at {remote_path}!"
 
@@ -130,12 +133,12 @@ class HoardCommand(object):
             out.write("DONE\n")
             return out.getvalue()
 
-    def health(self):
+    async def health(self):
         logging.info("Loading config")
         config = self.hoard.config()
 
         logging.info(f"Loading hoard TOML...")
-        with self.hoard.open_contents(create_missing=False, is_readonly=True) as hoard:
+        async with self.hoard.open_contents(create_missing=False, is_readonly=True) as hoard:
             logging.info(f"Loaded hoard TOML!")
 
             repo_health: Dict[str, Dict[int, int]] = dict()
@@ -184,7 +187,7 @@ class HoardCommand(object):
         self.add_remote(to_path, name=name, mount_point=mount_at, fetch_new=fetch_new)
         return f"DONE"
 
-    def move_mounts(self, from_path: str, to_path: str):
+    async def move_mounts(self, from_path: str, to_path: str):
         config = self.hoard.config()
         pathing = HoardPathing(config, self.hoard.paths())
 
@@ -215,7 +218,7 @@ class HoardCommand(object):
             return f"No repos to move!"
 
         logging.info(f"Loading hoard...")
-        with self.hoard.open_contents(create_missing=False, is_readonly=False) as hoard:
+        async with self.hoard.open_contents(create_missing=False, is_readonly=False) as hoard:
             logging.info(f"Loaded hoard.")
 
             with StringIO() as out:
@@ -250,11 +253,11 @@ class HoardCommand(object):
                 out.write("DONE")
                 return out.getvalue()
 
-    def export_contents_to_repo(self, remote: str):
+    async def export_contents_to_repo(self, remote: str):
         remote_uuid = resolve_remote_uuid(self.hoard.config(), remote)
 
         logging.info(f"Loading hoard TOML...")
-        with self.hoard.open_contents(create_missing=False, is_readonly=True) as hoard:
+        async with self.hoard.open_contents(create_missing=False, is_readonly=True) as hoard:
             logging.info(f"Removing old contents...")
             self.hoard.connect_to_repo(remote_uuid, require_contents=False).remove_contents()
 
@@ -298,7 +301,7 @@ class HoardCommand(object):
                     out.write("DONE")
                     return out.getvalue()
 
-    def meld(
+    async def meld(
             self, source: str, dest: str, move: bool = False, junk_folder: str = "_JUNK_",
             skip_empty_files: bool = True):
         if not os.path.isdir(source):
@@ -314,7 +317,7 @@ class HoardCommand(object):
             print("Copying files to proper locations!")
 
         logging.info(f"Loading hoard...")
-        with self.hoard.open_contents(create_missing=False, is_readonly=True) as hoard:
+        async with self.hoard.open_contents(create_missing=False, is_readonly=True) as hoard:
             logging.info(f"Loaded hoard.")
             junk_path = pathlib.Path(dest).joinpath(junk_folder)
             if move:

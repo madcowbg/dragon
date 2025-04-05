@@ -17,13 +17,13 @@ class HoardCommandBackups:
     def __init__(self, hoard: Hoard):
         self.hoard = hoard
 
-    def health(self):  # fixme rewrite output as table
+    async def health(self):  # fixme rewrite output as table
         logging.info("Loading config")
         config = self.hoard.config()
         pathing = HoardPathing(config, self.hoard.paths())
 
         logging.info(f"Loading hoard...")
-        with self.hoard.open_contents(create_missing=False, is_readonly=True) as hoard:
+        async with self.hoard.open_contents(create_missing=False, is_readonly=True) as hoard:
             backup_sets = BackupSet.all(config, pathing, hoard)
             backup_media = set(sum((list(b.backups.keys()) for b in backup_sets), []))
             count_backup_media = len(backup_media)
@@ -71,13 +71,13 @@ class HoardCommandBackups:
                 out.write("DONE")
                 return out.getvalue()
 
-    def clean(self):
+    async def clean(self):
         logging.info("Loading config")
         config = self.hoard.config()
         pathing = HoardPathing(config, self.hoard.paths())
 
         logging.info(f"Loading hoard...")
-        with self.hoard.open_contents(create_missing=False, is_readonly=False) as hoard:
+        async with self.hoard.open_contents(create_missing=False, is_readonly=False) as hoard:
             backup_sets = BackupSet.all(config, pathing, hoard)
 
             with StringIO() as out:
@@ -88,7 +88,7 @@ class HoardCommandBackups:
 
                     print(f"Considering backup set at {backup_set.mounted_at} with {len(backup_set.backups)} media")
                     hoard_file: command.fast_path.FastPosixPath
-                    for hoard_file, hoard_props in alive_it(hoard.fsobjects.in_folder(backup_set.mounted_at)):
+                    for hoard_file, hoard_props in alive_it([s async for s in hoard.fsobjects.in_folder(backup_set.mounted_at)]):
                         assert hoard_file.is_relative_to(backup_set.mounted_at)
 
                         if isinstance(hoard_props, HoardDirProps):
@@ -108,13 +108,13 @@ class HoardCommandBackups:
                 out.write("DONE")
                 return out.getvalue()
 
-    def assign(self):
+    async def assign(self):
         logging.info("Loading config")
         config = self.hoard.config()
         pathing = HoardPathing(config, self.hoard.paths())
 
         logging.info(f"Loading hoard...")
-        with self.hoard.open_contents(create_missing=False, is_readonly=False) as hoard:
+        async with self.hoard.open_contents(create_missing=False, is_readonly=False) as hoard:
             backup_sets = BackupSet.all(config, pathing, hoard)
 
             with StringIO() as out:
@@ -125,7 +125,8 @@ class HoardCommandBackups:
 
                     print(f"Considering backup set at {backup_set.mounted_at} with {len(backup_set.backups)} media")
                     hoard_file: command.fast_path.FastPosixPath
-                    for hoard_file, hoard_props in alive_it(hoard.fsobjects.in_folder(backup_set.mounted_at)):
+                    for hoard_file, hoard_props in alive_it(
+                            [s async for s in hoard.fsobjects.in_folder(backup_set.mounted_at)]):
                         assert hoard_file.is_relative_to(backup_set.mounted_at), \
                             f"{hoard_file} not rel to {backup_set.mounted_at}"
 

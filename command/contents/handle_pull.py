@@ -290,10 +290,10 @@ def _move_locally(
     out.write(f"CLEANUP_MOVED {diff.hoard_file.as_posix()}\n")
 
 
-def pull_repo_contents_to_hoard(
+async def pull_repo_contents_to_hoard(
         hoard_contents: HoardContents, pathing: HoardPathing, config: HoardConfig, current_contents: RepoContents,
         preferences: PullPreferences, out: StringIO):
-    all_diffs = list(compare_local_to_hoard(current_contents, hoard_contents, pathing))
+    all_diffs = [diff async for diff in compare_local_to_hoard(current_contents, hoard_contents, pathing)]
     diffs_by_type = group_to_dict(all_diffs, key=lambda diff: type(diff))
 
     for dt, diffs in diffs_by_type.items():

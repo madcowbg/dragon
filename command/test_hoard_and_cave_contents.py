@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 from os.path import join
+from unittest import IsolatedAsyncioTestCase
 
 from command.hoard import Hoard
 from command.repo import ProspectiveRepo
@@ -10,7 +11,7 @@ from contents.repo_props import RepoFileProps
 from dragon import TotalCommand
 
 
-class TestHoardCommand(unittest.TestCase):
+class TestHoardCommand(IsolatedAsyncioTestCase):
     def setUp(self):
         self.tmpdir = tempfile.TemporaryDirectory()
         populate_hoard(self.tmpdir.name)
@@ -35,7 +36,7 @@ class TestHoardCommand(unittest.TestCase):
                 ('wat/test.me.once', 8),
                 ('wat/test.me.twice', 6)], all_fsobjects)
 
-    def test_dump_hoard_contents(self):
+    async def test_dump_hoard_contents(self):
         cave_cmd = TotalCommand(path=join(self.tmpdir.name, "repo")).cave
         cave_cmd.init()
         cave_cmd.refresh(show_details=False)
@@ -45,7 +46,7 @@ class TestHoardCommand(unittest.TestCase):
 
         hoard_cmd.add_remote(remote_path=join(self.tmpdir.name, "repo"), name="repo-in-local", mount_point="/")
 
-        res = hoard_cmd.contents.pull(cave_cmd.current_uuid())
+        res = await hoard_cmd.contents.pull(cave_cmd.current_uuid())
         self.assertEqual([
             '+/wat/test.me.different',
             '+/wat/test.me.once',
@@ -54,7 +55,7 @@ class TestHoardCommand(unittest.TestCase):
             'DONE'], res.splitlines())
 
         repo_uuid = cave_cmd.current_uuid()
-        with Hoard(join(self.tmpdir.name, "hoard")).open_contents(False, True) as hoard_contents:
+        async with Hoard(join(self.tmpdir.name, "hoard")).open_contents(False, True) as hoard_contents:
             all_fsobjects = [
                 (file_or_dir.as_posix(), str([f"{repo}: {status.value}" for repo, status in props.presence.items()])
                 if isinstance(props, HoardFileProps) else "DIR")

@@ -19,21 +19,21 @@ from contents.hoard import HoardContents
 from contents.hoard_props import HoardFileStatus, HoardFileProps
 from hashing import fast_hash_async
 from resolve_uuid import resolve_remote_uuid
-from util import to_mb, run_async_in_parallel, format_size
+from util import to_mb, run_async_in_parallel, format_size, run_in_separate_loop
 
 
 class HoardCommandFiles:
     def __init__(self, hoard: Hoard):
         self.hoard = hoard
 
-    def pending(self, repo: Optional[str] = None):
+    async def pending(self, repo: Optional[str] = None):
         config = self.hoard.config()
 
         repo_uuids: List[str] = [resolve_remote_uuid(config, repo)] \
             if repo is not None else [r.uuid for r in config.remotes.all()]
 
         logging.info(f"Loading hoard contents...")
-        with self.hoard.open_contents(create_missing=False, is_readonly=True) as hoard:
+        async with self.hoard.open_contents(create_missing=False, is_readonly=True) as hoard:
             with StringIO() as out:
                 for repo_uuid in repo_uuids:
                     logging.info(f"Iterating over pending ops in {repo_uuid}")
@@ -66,7 +66,7 @@ class HoardCommandFiles:
                 out.write("DONE")
                 return out.getvalue()
 
-    def push(self, repo: Optional[str] = None, all: bool = False):
+    async def push(self, repo: Optional[str] = None, all: bool = False):
         config = self.hoard.config()
         pathing = HoardPathing(config, self.hoard.paths())
         if all:
@@ -79,7 +79,7 @@ class HoardCommandFiles:
             repo_uuids = [resolve_remote_uuid(config, repo)]
 
         logging.info(f"Loading hoard contents...")
-        with self.hoard.open_contents(False, is_readonly=False) as hoard:
+        async with self.hoard.open_contents(False, is_readonly=False) as hoard:
             with StringIO() as out:
                 logging.info("try getting all requested files, per repo")
 
@@ -116,11 +116,11 @@ def _fetch_files_in_repo(
     total_size = sum(f[1].size for f in files_to_fetch)
 
     with alive_bar(to_mb(total_size), unit="MB", title="Fetching files") as bar:
-        async def _execute_get(hoard_file: str, hoard_props: HoardFileProps):
+        def _execute_get(hoard_file: str, hoard_props: HoardFileProps):
             hoard_filepath = pathing.in_hoard(FastPosixPath(hoard_file))
             local_filepath = hoard_filepath.at_local(repo_uuid)
             logging.debug(f"restoring {hoard_file} to {local_filepath}...")
-            success, fullpath = await _restore_from_another_repo(
+            success, fullpath = _restore_from_another_repo(
                 hoard_filepath, repo_uuid, hoard_props, pathing._config, pathing._paths)
             if success:
                 hoard_props.mark_available(repo_uuid)
@@ -134,7 +134,7 @@ def _fetch_files_in_repo(
                 self.current_size = 0
                 self.current_size_mb = 0
 
-            async def copy_or_get_file(self, hoard_file: str, hoard_props: HoardFileProps) -> Optional[str]:
+            def copy_or_get_file(self, hoard_file: str, hoard_props: HoardFileProps) -> Optional[str]:
                 if hoard_props.size > (5 * (1 << 30)):  # >5G
                     logging.warning(f"Copying large file {format_size(hoard_props.size)}: {hoard_file}")
                 try:
@@ -151,7 +151,7 @@ def _fetch_files_in_repo(
 
                         local_filepath = pathing.in_hoard(FastPosixPath(hoard_file)).at_local(repo_uuid)
 
-                        success, fullpath = await _restore_from_copy(
+                        success, fullpath = _restore_from_copy(
                             repo_uuid, local_filepath, hoard_props,
                             hoard, candidates_to_copy, pathing)
                         if success:
@@ -185,14 +185,14 @@ def _fetch_files_in_repo(
                     else:
                         assert goal_status == HoardFileStatus.GET, f"Unexpected status {goal_status.value}"
 
-                        return await _execute_get(hoard_file, hoard_props)
+                        return _execute_get(hoard_file, hoard_props)
                 finally:
                     self.current_size += hoard_props.size
                     bar(to_mb(self.current_size) - self.current_size_mb)
                     self.current_size_mb = to_mb(self.current_size)
 
         copier = Copier()
-        outputs = run_async_in_parallel(files_to_fetch, copier.copy_or_get_file, ntasks=1)
+        outputs = [copier.copy_or_get_file(*fa) for fa in files_to_fetch]
 
         for line in outputs:
             if line is not None:
@@ -261,7 +261,7 @@ def _find_files_to_copy(hoard: HoardContents) -> Dict[str, List[str]]:
     return files_to_copy
 
 
-async def _restore_from_another_repo(
+def _restore_from_another_repo(
         hoard_file: HoardPathing.HoardPath, uuid_to_restore_to: str, hoard_props: HoardFileProps,
         config: HoardConfig, paths: HoardPaths) -> (bool, str):
     fullpath_to_restore = hoard_file.at_local(uuid_to_restore_to).on_device_path()
@@ -283,7 +283,7 @@ async def _restore_from_another_repo(
 
         file_fullpath = hoard_file.at_local(remote_uuid).on_device_path()
 
-        success, restored_file = await _restore_file(file_fullpath, fullpath_to_restore, hoard_props)
+        success, restored_file = run_in_separate_loop(_restore_file(file_fullpath, fullpath_to_restore, hoard_props))
         if success:
             return True, restored_file
 
@@ -314,7 +314,7 @@ async def _restore_file(fetch_fullpath: str, to_fullpath: str, hoard_props: Hoar
         logging.error(f"Are same file: {e}")
 
 
-async def _restore_from_copy(
+def _restore_from_copy(
         repo_uuid: str, local_filepath: HoardPathing.LocalPath, hoard_props: HoardFileProps,
         hoard: HoardContents, candidates_to_copy: List[str], pathing: HoardPathing) -> (bool, str):
     to_fullpath = local_filepath.on_device_path()
@@ -328,7 +328,7 @@ async def _restore_from_copy(
         other_file_path = pathing.in_hoard(FastPosixPath(candidate_file)).at_local(repo_uuid).on_device_path()
         print(f"Restoring from {other_file_path} to {to_fullpath}.")
 
-        success, restored_file = await _restore_file(other_file_path, to_fullpath, hoard_props)
+        success, restored_file = run_in_separate_loop(_restore_file(other_file_path, to_fullpath, hoard_props))
         if success:
             logging.info(f"Restore successful!")
             return True, restored_file

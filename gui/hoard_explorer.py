@@ -51,12 +51,16 @@ class HoardExplorerApp(App):
             classes="horizontal_config_line")
         yield HoardExplorerScreen(self.hoard_path)
 
+    def on_switch_changed(self, event: Switch.Changed):
+        if event.switch == self.query_one("#switch_can_modify"):
+            self.can_modify = not self.can_modify
+
     def on_input_submitted(self, event: Input.Submitted):
         if event.input == self.query_one("#hoard_path_input", Input):
             config["hoard_path"] = event.value
             self._write_config()
 
-            self.hoard_path = pathlib.Path(self.config["hoard_path"])
+            self.hoard_path = pathlib.Path(config["hoard_path"])
             if self.hoard_path.is_dir():
                 self.notify(f"New hoard path: {self.hoard_path}")
             else:
@@ -88,7 +92,7 @@ class HoardExplorerApp(App):
 
     def _write_config(self):
         with open("hoard_explorer.toml", 'w') as f:
-            rtoml.dump(self.config, f)
+            rtoml.dump(config, f)
 
 
 def start_hoard_explorer_gui(path: str | None = None):

@@ -70,9 +70,17 @@ def run_async_in_parallel(
 
             await q.join()
 
-    asyncio.run(run_all())
+    run_in_separate_loop(run_all())
 
     return [v for i, v in sorted(result_per_invocation.items())]
+
+
+def run_in_separate_loop(coro: Coroutine[Any, Any, R]) -> R:
+    value = []
+    thread = threading.Thread(target=lambda: value.append(asyncio.run(coro)))
+    thread.start()
+    thread.join()
+    return value[0]
 
 
 def run_in_parallel_threads(

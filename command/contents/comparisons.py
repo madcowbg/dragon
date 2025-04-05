@@ -1,6 +1,6 @@
 import logging
 from command.fast_path import FastPosixPath
-from typing import Generator, Dict
+from typing import Generator, Dict, AsyncGenerator
 
 from alive_progress import alive_bar, alive_it
 
@@ -24,16 +24,18 @@ def is_same_file(current: RepoFileProps, hoard: HoardFileProps):
     return True  # files are the same
 
 
-def compare_local_to_hoard(local: RepoContents, hoard: HoardContents, pathing: HoardPathing) \
-        -> Generator[Diff, None, None]:
+async def compare_local_to_hoard(local: RepoContents, hoard: HoardContents, pathing: HoardPathing) \
+        -> AsyncGenerator[Diff]:
+    logging.info("Load current objects")
     all_local_with_any_status: Dict[FastPosixPath, RepoFileProps | RepoDirProps] = \
         dict(s for s in alive_it(local.fsobjects.all_status(), title="Load current objects"))
 
-    all_hoard_in_folder: Dict[FastPosixPath, HoardFileProps | HoardDirProps] = dict(
-        s for s in
-        alive_it(hoard.fsobjects.in_folder(pathing.mounted_at(local.config.uuid)), title="Load hoard objects"))
+    logging.info("Load hoard objects in folder")
+    all_hoard_in_folder: Dict[FastPosixPath, HoardFileProps | HoardDirProps] = dict([
+        s async for s in hoard.fsobjects.in_folder(pathing.mounted_at(local.config.uuid))])
+    logging.info("Loaded all objects.")
 
-    with alive_bar(local.fsobjects.len_existing(), title="Current files vs. Hoard") as bar:
+    with alive_bar(len(all_local_with_any_status), title="Current files vs. Hoard") as bar:
         for current_path, props in all_local_with_any_status.items():
             bar()
             if props.last_status == RepoFileStatus.DELETED or props.last_status == RepoFileStatus.MOVED_FROM:

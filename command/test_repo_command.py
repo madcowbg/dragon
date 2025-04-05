@@ -1,9 +1,9 @@
 import os
 import pathlib
 import tempfile
-import unittest
 from os.path import join
 from typing import Callable
+from unittest import IsolatedAsyncioTestCase
 
 from dragon import TotalCommand
 
@@ -35,7 +35,7 @@ def populate(tmpdir: str):
     pfw('repo-2/test.me.different', "gsadf3dq")
 
 
-class TestRepoCommand(unittest.TestCase):
+class TestRepoCommand(IsolatedAsyncioTestCase):
     def setUp(self):
         self.tmpdir = tempfile.TemporaryDirectory()
         populate(self.tmpdir.name)
