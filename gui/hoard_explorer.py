@@ -2,36 +2,31 @@ import logging
 import os
 import pathlib
 import subprocess
-from typing import Dict
 
-import rtoml
-from textual import work
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal
 from textual.css.query import NoMatches
 from textual.reactive import reactive
+from textual.screen import Screen
 from textual.widgets import Footer, Header, Label, Input, Static, Switch
 
-from command.hoard import Hoard
-from gui.hoard_explorer_screen import HoardExplorerScreen
-
-config: Dict[any, any] = {}
-if os.path.isfile("hoard_explorer.toml"):
-    with open("hoard_explorer.toml", 'r') as f:
-        config = rtoml.load(f)
+from gui.app_config import config, _write_config
+from gui.hoard_explorer_screen import HoardExplorerWidget
 
 
-class HoardExplorerApp(App):
-    BINDINGS = [("d", "toggle_dark", "Toggle dark mode")]
-    CSS_PATH = "hoard_explorer.tcss"
-
-    hoard_path: pathlib.Path = reactive(pathlib.Path(config.get("hoard_path", ".")), recompose=True)
+class HoardExplorerScreen(Screen):
+    hoard_path: pathlib.Path = reactive(None)
     can_modify: bool = reactive(default=False)
 
-    def watch_hoard_path(self, new_path: pathlib.Path, old_path: pathlib.Path):
+    def watch_hoard_path(self, hoard_path: pathlib.Path):
+        logging.error(hoard_path)
+
+        if hoard_path is None:
+            return
+
         try:
-            screen = self.query_one(HoardExplorerScreen)
-            screen.hoard = Hoard(self.hoard_path.as_posix())
+            screen = self.query_one(HoardExplorerWidget)
+            screen.hoard_path = self.hoard_path
         except NoMatches:
             pass
 
@@ -41,6 +36,8 @@ class HoardExplorerApp(App):
             screen.can_modify = self.can_modify
 
     def compose(self) -> ComposeResult:
+        self.hoard_path = pathlib.Path(config.get("hoard_path", "."))
+
         """Create child widgets for the app."""
         yield Header()
         yield Footer()
@@ -49,7 +46,7 @@ class HoardExplorerApp(App):
             Label("Hoard:"), Input(value=self.hoard_path.as_posix(), id="hoard_path_input"),
             Static("Can modify?"), Switch(value=self.can_modify, id="switch_can_modify"),
             classes="horizontal_config_line")
-        yield HoardExplorerScreen(self.hoard_path)
+        yield HoardExplorerWidget(self.hoard_path)
 
     def on_switch_changed(self, event: Switch.Changed):
         if event.switch == self.query_one("#switch_can_modify"):
@@ -58,13 +55,22 @@ class HoardExplorerApp(App):
     def on_input_submitted(self, event: Input.Submitted):
         if event.input == self.query_one("#hoard_path_input", Input):
             config["hoard_path"] = event.value
-            self._write_config()
+            _write_config()
 
             self.hoard_path = pathlib.Path(config["hoard_path"])
             if self.hoard_path.is_dir():
                 self.notify(f"New hoard path: {self.hoard_path}")
             else:
                 self.notify(f"Hoard path: {self.hoard_path} does not exist!", severity="error")
+
+
+class HoardExplorerApp(App):
+    BINDINGS = [("d", "toggle_dark", "Toggle dark mode")]
+    CSS_PATH = "hoard_explorer.tcss"
+    SCREENS = {"hoard_explorer": HoardExplorerScreen}
+
+    def on_mount(self):
+        self.push_screen("hoard_explorer")
 
     def action_toggle_dark(self) -> None:
         """An action to toggle dark mode."""
@@ -89,10 +95,6 @@ class HoardExplorerApp(App):
             cmd = f"explorer.exe \"{path}\""
             logging.error(cmd)
             subprocess.Popen(cmd)
-
-    def _write_config(self):
-        with open("hoard_explorer.toml", 'w') as f:
-            rtoml.dump(config, f)
 
 
 def start_hoard_explorer_gui(path: str | None = None):
