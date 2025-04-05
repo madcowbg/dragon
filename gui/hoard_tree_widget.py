@@ -1,23 +1,24 @@
 from textual import work
 
 from command.fast_path import FastPosixPath
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 from rich.text import Text
 from textual.reactive import reactive, var
 from textual.widgets import Tree
-from textual.widgets._tree import TreeNode
+from textual.widgets._tree import TreeNode, NodeID
 
 from config import HoardConfig, HoardRemote
 from contents.hoard import HoardContents, HoardDir, HoardFile
 from util import group_to_dict, format_size, format_count
 
-
+TreeData = HoardDir | HoardFile
 class HoardTreeWidget(Tree):
     contents: HoardContents = reactive(None)
-    loaded_offset: dict[HoardDir | HoardFile, int] = var(dict())
+    loaded_offset: dict[TreeData, int] = var(dict())
 
     def __init__(self, contents: HoardContents, config: HoardConfig):
+        self.file_nodes: dict[str, Tuple[TreeNode[TreeData], int]] = dict()
         self.mounts: Dict[FastPosixPath, List[HoardRemote]] = group_to_dict(
             config.remotes.all(), key=lambda r: r.mounted_at)
 
@@ -37,18 +38,23 @@ class HoardTreeWidget(Tree):
         hoard_root.expand()
         self.root.set_label("Hoard")
 
-    def _expand_hoard_dir(self, widget_node: TreeNode[HoardDir | HoardFile], hoard_dir: HoardDir, parent_offset: int):
+    def _expand_hoard_dir(self, widget_node: TreeNode[TreeData], hoard_dir: HoardDir, parent_offset: int):
         label_max_width = 45 - parent_offset * widget_node.tree.guide_depth
         for folder in hoard_dir.dirs.values():
             folder_label = self._create_pretty_folder_label(folder.name, FastPosixPath(folder.fullname), label_max_width)
             widget_node.add(folder_label, allow_expand=True, data=folder)
 
         for file in hoard_dir.files.values():
-            size = self.contents.fsobjects[FastPosixPath(file.fullname)].size
-            file_label = Text().append(file.name, self.file_name_style(FastPosixPath(file.fullname)))
-            file_label.align("left", label_max_width + 2)
-            file_label.append(f"{format_size(size):>13}", "none")
-            widget_node.add(file_label, allow_expand=False, data=file)
+            size = file.props.size
+            file_label = self._pretty_file_label(file, label_max_width, size)
+            file_node = widget_node.add_leaf(file_label, data=file)
+            self.file_nodes[file.fullname] = file_node, label_max_width
+
+    def _pretty_file_label(self, file, label_max_width, size: int):
+        file_label = Text().append(file.name, self.file_name_style(FastPosixPath(file.fullname)))
+        file_label.align("left", label_max_width + 2)
+        file_label.append(f"{format_size(size):>13}", "none")
+        return file_label
 
     def _create_pretty_folder_label(self, name: str, fullname: FastPosixPath, max_width: int):
         name_style = self.folder_name_style(fullname)
@@ -77,8 +83,14 @@ class HoardTreeWidget(Tree):
     def _pretty_count_attached(self, fullname: FastPosixPath) -> str:
         return f" ✅{len(self.mounts.get(fullname))}" if self.mounts.get(fullname) is not None else ""
 
-    def on_tree_node_expanded(self, event: Tree[HoardDir | HoardFile].NodeExpanded):
+    def on_tree_node_expanded(self, event: Tree[TreeData].NodeExpanded):
         if event.node.parent is not None and event.node.data not in self.loaded_offset:
             self.loaded_offset[event.node.data] = 1 + (
                 self.loaded_offset[event.node.parent.data] if event.node.parent.data is not None else 0)
             self._expand_hoard_dir(event.node, event.node.data, self.loaded_offset[event.node.data])
+
+    def refresh_file_label(self, hoard_file: HoardFile):
+        file_node, label_max_width = self.file_nodes[hoard_file.fullname]
+        file_node.set_label(self._pretty_file_label(hoard_file, label_max_width, hoard_file.props.size))
+
+        # TODO also update the file's parents

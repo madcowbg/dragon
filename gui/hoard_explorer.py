@@ -19,8 +19,6 @@ class HoardExplorerScreen(Screen):
     can_modify: bool = reactive(default=False)
 
     def watch_hoard_path(self, hoard_path: pathlib.Path):
-        logging.error(hoard_path)
-
         if hoard_path is None:
             return
 
@@ -32,7 +30,7 @@ class HoardExplorerScreen(Screen):
 
     def watch_can_modify(self, new_val: bool, old_val: bool):
         if new_val != old_val:
-            screen = self.query_one(HoardExplorerScreen)
+            screen = self.query_one(HoardExplorerWidget)
             screen.can_modify = self.can_modify
 
     def compose(self) -> ComposeResult:

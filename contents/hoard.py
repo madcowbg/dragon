@@ -176,9 +176,16 @@ class HoardFile:
         self.fullname = fullname
         self.fsobjects = fsobjects
 
-    @cached_property
+        self._props = None
+
+    @property
     def props(self) -> HoardFileProps:
-        return self.fsobjects[FastPosixPath(self.fullname)]
+        if self._props is None:
+            self._props = self.fsobjects[FastPosixPath(self.fullname)]
+        return self._props
+
+    def reload_props(self):
+        self._props = self.fsobjects[FastPosixPath(self.fullname)]
 
 
 class HoardDir:

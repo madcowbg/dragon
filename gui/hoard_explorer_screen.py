@@ -14,7 +14,7 @@ from command.hoard import Hoard
 from command.pathing import HoardPathing
 from contents.hoard import HoardContents
 from gui.hoard_tree_widget import HoardTreeWidget
-from gui.node_description_widget import NodeDescription
+from gui.node_description_widget import NodeDescription, FileAvailabilityPerRepoDataTable
 
 
 class HoardExplorerWidget(Widget):
@@ -34,7 +34,7 @@ class HoardExplorerWidget(Widget):
             pathing = HoardPathing(config, self._hoard.paths())
             yield Horizontal(
                 HoardTreeWidget(self.hoard_contents, config),
-                NodeDescription(self.hoard_contents, config, pathing))
+                NodeDescription(self.hoard_contents, config, pathing, self.can_modify))
         else:
             yield Label("Please select a valid hoard!")
 
@@ -69,3 +69,11 @@ class HoardExplorerWidget(Widget):
 
     def on_tree_node_selected(self, event: Tree.NodeSelected):
         self.query_one(NodeDescription).hoard_item = event.node.data
+
+    async def on_file_availability_per_repo_data_table_file_status_modified(
+            self, event: FileAvailabilityPerRepoDataTable.FileStatusModified):
+        logging.info(f"File status modified: {event.hoard_file.fullname}, reloading")
+        event.hoard_file.reload_props()
+        await self.query_one(NodeDescription).recompose()
+
+        self.query_one(HoardTreeWidget).refresh_file_label(event.hoard_file)
