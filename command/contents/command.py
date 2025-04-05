@@ -225,7 +225,7 @@ class HoardCommandContents:
             with StringIO() as out:
                 file: Optional[HoardFile]
                 folder: Optional[HoardDir]
-                for folder, file in hoard.fsobjects.tree.walk(selected_path, depth=depth):
+                for folder, file in (await hoard.fsobjects.tree).walk(selected_path, depth=depth):
                     if file is not None:
                         stats = _file_stats(file.props)
                         out.write(f"{file.fullname} = {stats}\n")

@@ -1,3 +1,5 @@
+from textual import work
+
 from command.fast_path import FastPosixPath
 from typing import Dict, List
 
@@ -16,16 +18,24 @@ class HoardTreeWidget(Tree):
     loaded_offset: dict[HoardDir | HoardFile, int] = var(dict())
 
     def __init__(self, contents: HoardContents, config: HoardConfig):
-        super().__init__("Hoard", data=contents.fsobjects.tree.root, id="hoard_tree")
+        self.mounts: Dict[FastPosixPath, List[HoardRemote]] = group_to_dict(
+            config.remotes.all(), key=lambda r: r.mounted_at)
+
+        super().__init__("Hoard (loading...)", data=None, id="hoard_tree")
         self.guide_depth = 2
         self.auto_expand = False
         self.contents = contents
-        self.select_node(self.root)
-        self.root.expand()
 
-        self.mounts: Dict[FastPosixPath, List[HoardRemote]] = group_to_dict(
-            config.remotes.all(), key=lambda r: r.mounted_at)
-        self.root.set_label(self._create_pretty_folder_label("/", FastPosixPath("/"), 45))
+    async def on_mount(self):
+        self.root.expand()
+        self.run_worker(self._expand_root())
+
+    async def _expand_root(self):
+        hoard_tree = await self.contents.fsobjects.tree
+        hoard_root = self.root.add(self._create_pretty_folder_label("/", FastPosixPath("/"), 45), data=hoard_tree.root, expand=True)
+        self.select_node(hoard_root)
+        hoard_root.expand()
+        self.root.set_label("Hoard")
 
     def _expand_hoard_dir(self, widget_node: TreeNode[HoardDir | HoardFile], hoard_dir: HoardDir, parent_offset: int):
         label_max_width = 45 - parent_offset * widget_node.tree.guide_depth
@@ -68,7 +78,7 @@ class HoardTreeWidget(Tree):
         return f" ✅{len(self.mounts.get(fullname))}" if self.mounts.get(fullname) is not None else ""
 
     def on_tree_node_expanded(self, event: Tree[HoardDir | HoardFile].NodeExpanded):
-        if event.node.data not in self.loaded_offset:
+        if event.node.parent is not None and event.node.data not in self.loaded_offset:
             self.loaded_offset[event.node.data] = 1 + (
-                self.loaded_offset[event.node.parent.data] if event.node.parent is not None else 0)
+                self.loaded_offset[event.node.parent.data] if event.node.parent.data is not None else 0)
             self._expand_hoard_dir(event.node, event.node.data, self.loaded_offset[event.node.data])

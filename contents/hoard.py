@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import pathlib
@@ -100,11 +101,14 @@ class HoardContentsConfig:
         self.hoard_epoch += 1
 
 
-def _augment_with_fake_props(objects) -> Tuple[Set[str], List[str]]:
+async def _augment_with_fake_props(objects) -> Tuple[Set[str], List[str]]:
     # augment all objects with dummy folders as the hoard is incomplete by design
     all_dirs: Set[str] = set()
     all_files: List[str] = []
     for path, is_dir in list(objects.str_to_props()):
+        if len(all_files) % 10000 == 0:
+            await asyncio.sleep(0)  # give up control if other threads want to do something
+
         if is_dir:
             all_dirs.add(path)
         else:
@@ -121,27 +125,36 @@ def _augment_with_fake_props(objects) -> Tuple[Set[str], List[str]]:
     return all_dirs, all_files
 
 
-def _add_all_files_and_folders(root, all_dirs: Set[str], all_files: List[str], fsobjects: "HoardFSObjects"):
+async def _add_all_files_and_folders(root, all_dirs: Set[str], all_files: List[str], fsobjects: "HoardFSObjects"):
     # add all files and folders, ordered by path so that parent folders come before children
     folders_cache: dict[str, HoardDir] = {"": root}
     for path in sorted(all_dirs):
+        if len(folders_cache) % 10000 == 0:
+            await asyncio.sleep(0)  # give up control if other threads want to do something
+
         parent_path, child_name = path.rsplit("/", 1)
 
         # assert isinstance(props, HoardDirProps)
         folders_cache[path] = folders_cache[parent_path].create_dir(child_name)
 
-    for path in all_files:
+    for idx, path in enumerate(all_files):
+        if idx % 10000 == 0:
+            await asyncio.sleep(0)  # give up control if other threads want to do something
+
         parent_path, child_name = path.rsplit("/", 1)
         folders_cache[parent_path].create_file(child_name, path, fsobjects)
 
 
 class HoardTree:
-    def __init__(self, objects: "HoardFSObjects"):
+    def __init__(self):
         self.root = HoardDir(None, "", self)
 
-        all_dirs, all_files = _augment_with_fake_props(objects)
+    async def read(self, objects: "HoardFSObjects") -> "HoardTree":
+        all_dirs, all_files = await _augment_with_fake_props(objects)
 
-        _add_all_files_and_folders(self.root, all_dirs, all_files, objects)
+        await _add_all_files_and_folders(self.root, all_dirs, all_files, objects)
+
+        return self
 
     def walk(self, from_path: str = "/", depth: int = sys.maxsize) -> \
             Generator[Tuple[Optional["HoardDir"], Optional["HoardFile"]], None, None]:
@@ -219,8 +232,8 @@ class HoardFSObjects:
         self.parent = parent
 
     @cached_property
-    def tree(self) -> HoardTree:
-        return HoardTree(self)
+    async def tree(self) -> HoardTree:
+        return await HoardTree().read(self)
 
     @property
     def num_files(self) -> int:
