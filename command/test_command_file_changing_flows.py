@@ -189,7 +189,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.get("repo-partial-name", "wat")
         self.assertEqual(
             "+/wat/test.me.z\n"
-            "Considered 5 files.\n"
+            "Considered 2 files.\n"
             "DONE", res)
 
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)

@@ -682,7 +682,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         cloned_cave_cmd = TotalCommand(path=join(self.tmpdir.name, "repo-cloned-wat")).cave
 
         res = await hoard_cmd.contents.get(repo="repo-cloned-wat", path="inner")
-        self.assertEqual("+/wat/inner/another.file\nConsidered 3 files.\nDONE", res)
+        self.assertEqual("+/wat/inner/another.file\nConsidered 1 files.\nDONE", res)
 
         res = await hoard_cmd.contents.ls(show_remotes=True)
         self.assertEqual(

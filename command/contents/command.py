@@ -4,7 +4,7 @@ import pathlib
 import sys
 from io import StringIO
 from command.fast_path import FastPosixPath
-from typing import List, Dict, Any, Optional, Callable, Awaitable
+from typing import List, Dict, Any, Optional, Callable, Awaitable, Tuple, TextIO
 
 import humanize
 from alive_progress import alive_bar, alive_it
@@ -268,90 +268,19 @@ class HoardCommandContents:
                 return out.getvalue()
 
     async def drop(self, repo: str, path: str):
-        return await self._run_op(repo, path, self._execute_drop, is_readonly=False)
-
-    async def _execute_drop(self, hoard: HoardContents, repo_uuid: str, path: str) -> str:
-        pathing = HoardPathing(self.hoard.config(), self.hoard.paths())
-        mounted_at = pathing.mounted_at(repo_uuid)
-
-        considered = 0
-        cleaned_up, wont_get, skipped = 0, 0, 0
-        with StringIO() as out:
-            print(f"Iterating files and folders to see what to drop...")
-            hoard_file: FastPosixPath
-            for hoard_file, hoard_props in alive_it([s async for s in hoard.fsobjects.in_folder(mounted_at)]):
-                if not isinstance(hoard_props, HoardFileProps):
-                    continue
-
-                local_file = pathing.in_hoard(hoard_file).at_local(repo_uuid)
-                assert local_file is not None  # is not addressable here at all
-
-                considered += 1
-                if not pathlib.Path(local_file.as_pure_path.as_posix()).is_relative_to(path):
-                    logging.info(f"file not in {path}: {local_file}, skipping")
-                    continue
-
-                goal_status = hoard_props.get_status(repo_uuid)
-                if goal_status == HoardFileStatus.AVAILABLE:
-                    logging.info(f"File {hoard_file} is available, mapping for removal from {repo_uuid}.")
-
-                    hoard_props.mark_for_cleanup([repo_uuid])
-                    out.write(f"DROP {hoard_file.as_posix()}\n")
-
-                    cleaned_up += 1
-                elif goal_status == HoardFileStatus.GET or goal_status == HoardFileStatus.COPY:
-                    logging.info(f"File {hoard_file} is already not in repo, removing status.")
-
-                    hoard_props.remove_status(repo_uuid)
-                    out.write(f"WONT_GET {hoard_file.as_posix()}\n")
-
-                    wont_get += 1
-                elif goal_status == HoardFileStatus.CLEANUP or goal_status == HoardFileStatus.UNKNOWN:
-                    logging.info(f"Skipping {hoard_file} as it is already missing.")
-                    skipped += 1
-                else:
-                    raise ValueError(f"Unexpected status for {hoard_file}: {goal_status}")
-
-            out.write(
-                f"Considered {considered} files, {cleaned_up} marked for cleanup, "
-                f"{wont_get} won't be downloaded, {skipped} are skipped.\n")
-            out.write("DONE")
-            return out.getvalue()
+        return await self._run_op(repo, path, _execute_drop, is_readonly=False)
 
     async def get(self, repo: str, path: str):
-        return await self._run_op(repo, path, self._execute_get, is_readonly=False)
+        return await self._run_op(repo, path, _execute_get, is_readonly=False)
 
-    async def _execute_get(self, hoard: HoardContents, repo_uuid: str, path: str) -> str:
-        pathing = HoardPathing(self.hoard.config(), self.hoard.paths())
-
-        considered = 0
-        with StringIO() as out:
-            print(f"Iterating over {len(hoard.fsobjects)} files and folders...")
-            for hoard_file, hoard_props in alive_it(hoard.fsobjects):
-                if not isinstance(hoard_props, HoardFileProps):
-                    continue
-
-                local_file = pathing.in_hoard(hoard_file).at_local(repo_uuid)
-                if local_file is None:  # is not addressable here at all
-                    continue
-                considered += 1
-                if not pathlib.Path(local_file.as_pure_path.as_posix()).is_relative_to(path):
-                    logging.info(f"file not in {path}: {local_file}")
-                    continue
-                if hoard_props.get_status(repo_uuid) not in STATUSES_ALREADY_ENABLED:
-                    logging.info(f"enabling file {hoard_file} on {repo_uuid}")
-                    hoard_props.mark_to_get([repo_uuid])
-                    out.write(f"+{hoard_file}\n")
-
-            out.write(f"Considered {considered} files.\n")
-            out.write("DONE")
-            return out.getvalue()
-
-    async def _run_op(self, repo: str, path: str, fun: Callable[[HoardContents, str, str], Awaitable[str]],
+    async def _run_op(self, repo: str, path: str,
+                      fun: Callable[[HoardContents, HoardPathing, str, FastPosixPath], Awaitable[str]],
                       is_readonly: bool):
         config = self.hoard.config()
         if custom_isabs(path):
             return f"Path {path} must be relative, but is absolute."
+
+        pathing = HoardPathing(self.hoard.config(), self.hoard.paths())
 
         logging.info(f"Loading hoard TOML...")
         async with self.hoard.open_contents(create_missing=False, is_readonly=is_readonly) as hoard:
@@ -359,7 +288,7 @@ class HoardCommandContents:
             repo_mounted_at = config.remotes[repo_uuid].mounted_at
             logging.info(f"repo {repo} mounted at {repo_mounted_at}")
 
-            return await fun(hoard, repo_uuid, path)
+            return await fun(hoard, pathing, repo_uuid, FastPosixPath(path))
 
     async def pull(
             self, remote: Optional[str] = None, all: bool = False, ignore_epoch: bool = False,
@@ -538,6 +467,97 @@ class HoardCommandContents:
 
                 out.write("DONE")
                 return out.getvalue()
+
+
+async def _execute_get(
+        hoard: HoardContents, pathing: HoardPathing, repo_uuid: str, path_in_local: FastPosixPath) -> str:
+    mounted_at: FastPosixPath = pathing.mounted_at(repo_uuid)
+    path_in_hoard = mounted_at.joinpath(path_in_local)
+    with StringIO() as out:
+        await execute_get(hoard, pathing, repo_uuid, path_in_hoard, out)
+        return out.getvalue()
+
+
+async def execute_get(
+        hoard: HoardContents, pathing: HoardPathing, repo_uuid: str, path_in_hoard: FastPosixPath,
+        out: TextIO) -> str:
+    assert path_in_hoard.is_absolute()
+    considered = 0
+    print(f"Iterating over {len(hoard.fsobjects)} files and folders...")
+    for hoard_file, hoard_props in alive_it([s async for s in hoard.fsobjects.in_folder(path_in_hoard)]):
+        if not isinstance(hoard_props, HoardFileProps):
+            continue
+
+        local_file = pathing.in_hoard(hoard_file).at_local(repo_uuid)
+        assert local_file is not None  # is not addressable here at all
+
+        considered += 1
+
+        if hoard_props.get_status(repo_uuid) not in STATUSES_ALREADY_ENABLED:
+            logging.info(f"enabling file {hoard_file} on {repo_uuid}")
+            hoard_props.mark_to_get([repo_uuid])
+            out.write(f"+{hoard_file}\n")
+
+    out.write(f"Considered {considered} files.\n")
+    out.write("DONE")
+    return out.getvalue()
+
+
+async def _execute_drop(
+        hoard: HoardContents, pathing: HoardPathing, repo_uuid: str, path_in_local: FastPosixPath) -> str:
+    mounted_at: FastPosixPath = pathing.mounted_at(repo_uuid)
+    path_in_hoard = mounted_at.joinpath(path_in_local)
+    with StringIO() as out:
+        await execute_drop(hoard, pathing, repo_uuid, path_in_hoard, out)
+        return out.getvalue()
+
+
+async def execute_drop(
+        hoard: HoardContents, pathing: HoardPathing, repo_uuid: str, path_in_hoard: FastPosixPath,
+        out: TextIO) -> Tuple[int, int, int]:
+    assert path_in_hoard.is_absolute()
+
+    considered = 0
+    cleaned_up, wont_get, skipped = 0, 0, 0
+
+    print(f"Iterating files and folders to see what to drop...")
+    hoard_file: FastPosixPath
+    for hoard_file, hoard_props in alive_it([s async for s in hoard.fsobjects.in_folder(path_in_hoard)]):
+        if not isinstance(hoard_props, HoardFileProps):
+            continue
+
+        local_file = pathing.in_hoard(hoard_file).at_local(repo_uuid)
+        assert local_file is not None  # is not addressable here at all
+
+        considered += 1
+
+        goal_status = hoard_props.get_status(repo_uuid)
+        if goal_status == HoardFileStatus.AVAILABLE:
+            logging.info(f"File {hoard_file} is available, mapping for removal from {repo_uuid}.")
+
+            hoard_props.mark_for_cleanup([repo_uuid])
+            out.write(f"DROP {hoard_file.as_posix()}\n")
+
+            cleaned_up += 1
+        elif goal_status == HoardFileStatus.GET or goal_status == HoardFileStatus.COPY:
+            logging.info(f"File {hoard_file} is already not in repo, removing status.")
+
+            hoard_props.remove_status(repo_uuid)
+            out.write(f"WONT_GET {hoard_file.as_posix()}\n")
+
+            wont_get += 1
+        elif goal_status == HoardFileStatus.CLEANUP or goal_status == HoardFileStatus.UNKNOWN:
+            logging.info(f"Skipping {hoard_file} as it is already missing.")
+            skipped += 1
+        else:
+            raise ValueError(f"Unexpected status for {hoard_file}: {goal_status}")
+
+    out.write(
+        f"Considered {considered} files, {cleaned_up} marked for cleanup, "
+        f"{wont_get} won't be downloaded, {skipped} are skipped.\n")
+    out.write("DONE")
+
+    return cleaned_up, wont_get, skipped
 
 
 STATUSES_ALREADY_ENABLED = [HoardFileStatus.AVAILABLE, HoardFileStatus.GET]
