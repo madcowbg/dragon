@@ -480,7 +480,7 @@ async def _execute_get(
 
 async def execute_get(
         hoard: HoardContents, pathing: HoardPathing, repo_uuid: str, path_in_hoard: FastPosixPath,
-        out: TextIO) -> str:
+        out: TextIO) -> None:
     assert path_in_hoard.is_absolute()
     considered = 0
     print(f"Iterating over {len(hoard.fsobjects)} files and folders...")
@@ -500,7 +500,6 @@ async def execute_get(
 
     out.write(f"Considered {considered} files.\n")
     out.write("DONE")
-    return out.getvalue()
 
 
 async def _execute_drop(

@@ -1,21 +1,25 @@
 import logging
 import os
-import pathlib
+from io import StringIO
 
 from rich.text import Text
+from textual import work, on
 from textual.app import ComposeResult
+from textual.binding import Binding
+from textual.containers import Horizontal, Grid, Vertical
 from textual.message import Message
 from textual.reactive import reactive
+from textual.screen import Screen
 from textual.widget import Widget
-from textual.widgets import Label, DataTable
+from textual.widgets import Label, DataTable, Button
 
-from command.contents.command import augment_statuses
+from command.contents.command import augment_statuses, execute_get, execute_drop
 from command.fast_path import FastPosixPath
 from command.pathing import HoardPathing
 from config import HoardConfig
 from contents.hoard import HoardFile, HoardDir, HoardContents
 from contents.hoard_props import HoardFileProps, HoardFileStatus
-from util import pretty_truncate, format_size, group_to_dict, format_count
+from util import format_size, group_to_dict, format_count
 
 
 class FileAvailabilityPerRepoDataTable(DataTable):
@@ -48,13 +52,7 @@ class FileAvailabilityPerRepoDataTable(DataTable):
                 on_device_path = local_path.on_device_path()
                 is_file_present = os.path.isfile(on_device_path)
 
-                get_link = Text.from_markup(f"[@click=queue_get('{repo_uuid}')]✅get[/]", style='u green') \
-                    if self.can_modify and status not in (HoardFileStatus.AVAILABLE, HoardFileStatus.GET) \
-                    else Text("✅get", style="strike dim")
-                drop_link = Text.from_markup(f"[@click=queue_cleanup('{repo_uuid}')]❌drop[/]", style='u red') \
-                    if self.can_modify and status not in (HoardFileStatus.CLEANUP,) \
-                    else Text("❌drop", style="strike dim")
-                actions_links = Text().append(get_link).append(" ", style="none").append(drop_link)
+                actions_links = self._generate_action_links(repo_uuid, status)
 
                 self.add_row(
                     Text().append(hoard_remote.name, "green" if is_file_present else "dim strike"),
@@ -67,6 +65,15 @@ class FileAvailabilityPerRepoDataTable(DataTable):
                             f"[@click=app.open_cave_file('{on_device_path}')]{local_path.as_pure_path.simple}[/]",
                             style="u")))
 
+    def _generate_action_links(self, repo_uuid, status):
+        get_link = Text.from_markup(f"[@click=queue_get('{repo_uuid}')]✅get[/]", style='u green') \
+            if self.can_modify and status not in (HoardFileStatus.AVAILABLE, HoardFileStatus.GET) \
+            else Text("✅get", style="strike dim")
+        drop_link = Text.from_markup(f"[@click=queue_cleanup('{repo_uuid}')]❌drop[/]", style='u red') \
+            if self.can_modify and status not in (HoardFileStatus.CLEANUP,) \
+            else Text("❌drop", style="strike dim")
+        return Text().append(get_link).append(" ", style="none").append(drop_link)
+
     def action_queue_cleanup(self, repo_uuid: str):
         self.notify(f"Cleaning {self.hoard_file.fullname} from {repo_uuid}.")
 
@@ -78,6 +85,114 @@ class FileAvailabilityPerRepoDataTable(DataTable):
 
         self.hoard_file.props.mark_to_get([repo_uuid])
         self.post_message(FileAvailabilityPerRepoDataTable.FileStatusModified(self.hoard_file))
+
+
+class DirAvailabilityDataTable(DataTable):
+    def __init__(self, hoard_config: HoardConfig, hoard_contents: HoardContents, hoard_pathing: HoardPathing,
+                 hoard_dir: HoardDir, can_modify: bool):
+        super().__init__()
+
+        self.hoard_contents = hoard_contents
+        self.hoard_config = hoard_config
+        self.hoard_pathing = hoard_pathing
+        self.hoard_dir = hoard_dir
+        self.can_modify = can_modify
+
+    def on_mount(self):
+        self.add_columns("repo", "actions", "path")
+        for hoard_remote in self.hoard_config.remotes.all():
+            local_path = self.hoard_pathing.in_hoard(FastPosixPath(self.hoard_dir.fullname)).at_local(hoard_remote.uuid)
+            if local_path is not None:
+                path_on_device = local_path.on_device_path()
+                is_dir_present = os.path.isdir(path_on_device.as_posix())
+
+                get_link = Text.from_markup(
+                    f"[@click=queue_get('{hoard_remote.uuid}')]✅get all[/]", style='u green') \
+                    if self.can_modify else Text().append("✅get all", style="dim strike")
+                drop_link = Text.from_markup(
+                    f"[@click=queue_cleanup('{hoard_remote.uuid}')]❌drop all[/]", style='u red') \
+                    if self.can_modify else Text().append("❌drop all", style="dim strike")
+
+                actions_links = Text().append(get_link).append(" ", style="none").append(drop_link)
+
+                self.add_row(
+                    Text(
+                        hoard_remote.name,
+                        style="green" if is_dir_present else "strike"),
+                    actions_links,
+                    Text(
+                        self.hoard_pathing.in_local(FastPosixPath(""), hoard_remote.uuid).on_device_path().as_posix(),
+                        style="green" if is_dir_present else "strike").append(
+                        Text.from_markup(
+                            f"[@click=app.open_cave_dir('{path_on_device.as_posix()}')]{local_path.as_pure_path.simple}[/]")))
+
+    @work
+    async def action_queue_cleanup(self, repo_uuid: str):
+        hoard_precise_path = FastPosixPath(self.hoard_dir.fullname)
+        if await self.app.push_screen_wait(
+                ConfirmActionScreen(
+                    f"Are you sure you want to DROP all files in: \n"
+                    f"{self.hoard_dir.fullname}\n"
+                    f"in repo\n"
+                    f"{self.hoard_config.remotes[repo_uuid].name}({repo_uuid})?")):
+
+            self.notify(f"Dropping all in {self.hoard_dir.fullname} from {repo_uuid}.")
+            with StringIO() as out:
+                await execute_drop(self.hoard_contents, self.hoard_pathing, repo_uuid, hoard_precise_path, out)
+                logging.warn(out.getvalue())  # fixme use log widget
+                self.notify("Result: " + out.getvalue()[-20:])
+
+            await self.recompose()
+            # TODO make it update tree.
+        else:
+            self.notify("Cancelling action.")
+
+    @work
+    async def action_queue_get(self, repo_uuid: str):
+        hoard_precise_path = FastPosixPath(self.hoard_dir.fullname)
+        if await self.app.push_screen_wait(
+                ConfirmActionScreen(
+                    f"Are you sure you want to GET all files in: \n" # fixme show pending ops
+                    f"{hoard_precise_path.as_posix()}\n"
+                    f"in repo\n"
+                    f"{self.hoard_config.remotes[repo_uuid].name}({repo_uuid})?")):
+            self.notify(f"Getting all in {self.hoard_dir.fullname} into {repo_uuid}.")
+
+            with StringIO() as out:
+                await execute_get(self.hoard_contents, self.hoard_pathing, repo_uuid, hoard_precise_path, out)
+                logging.warn(out.getvalue())  # fixme use log widget
+                self.notify("Result: " + out.getvalue()[-20:])
+
+            await self.recompose()
+            # TODO make it update tree.
+        else:
+            self.notify("Cancelling action.")
+
+
+class ConfirmActionScreen(Screen[bool]):
+    BINDINGS = [Binding('esc', 'handle_no', "No")]
+
+    def __init__(self, question: str) -> None:
+        self.question = question
+        super().__init__()
+
+    def compose(self) -> ComposeResult:
+        yield Grid(
+            Vertical(*(Label(line) for line in self.question.splitlines()), id="question"),
+            Button("Yes", id="yes", variant="success"),
+            Button("No", id="no"),
+            id="dialog")
+
+    def on_mount(self):
+        self.query_one("#no").focus()
+
+    @on(Button.Pressed, "#yes")
+    def handle_yes(self) -> None:
+        self.dismiss(True)
+
+    @on(Button.Pressed, "#no")
+    def handle_no(self) -> None:
+        self.dismiss(False)
 
 
 class NodeDescription(Widget):
@@ -118,25 +233,10 @@ class NodeDescription(Widget):
         yield Label(f"Folder name: {hoard_dir.name}")
         yield Label(f"Hoard path: {hoard_dir.fullname}")
         yield Label(f"Addressable on repos", classes="desc_section")
-        data_table = DataTable()
-        yield data_table
-        data_table.add_columns("repo", "uuid", "path")
-        for hoard_remote in self.hoard_config.remotes.all():
-            local_path = self.hoard_pathing.in_hoard(FastPosixPath(hoard_dir.fullname)).at_local(hoard_remote.uuid)
-            if local_path is not None:
-                path_on_device = local_path.on_device_path()
-                is_dir_present = os.path.isdir(path_on_device.as_posix())
-                data_table.add_row(
-                    Text(
-                        hoard_remote.name,
-                        style="green" if is_dir_present else "strike"),
-                    Text.from_markup(
-                        f"[@click=app.open_cave_dir('{path_on_device.as_posix()}')]{pretty_truncate(hoard_remote.uuid, 15)}[/]",
-                        style="u"),
-                    Text(
-                        self.hoard_pathing.in_local(FastPosixPath(""), hoard_remote.uuid).on_device_path().as_posix(),
-                        style="green" if is_dir_present else "strike").append(
-                        local_path.as_pure_path.simple, style="normal"))
+
+        yield DirAvailabilityDataTable(
+            self.hoard_config, self.hoard_contents, self.hoard_pathing, hoard_dir, self.can_modify)
+
         yield Label(f"Storage on repos {hoard_dir.fullname}", classes="desc_section")
         statuses = self.hoard_contents.fsobjects.status_by_uuid(FastPosixPath(hoard_dir.fullname))
         available_states, statuses_sorted = augment_statuses(
