@@ -212,6 +212,7 @@ class RepoContents:
 
         conn = sqlite3.connect(contents_filepath)
         curr = conn.cursor()
+        curr.execute("PRAGMA foreign_keys=ON;")
 
         curr.execute(
             "CREATE TABLE fsobject("
@@ -256,6 +257,7 @@ class RepoContents:
     def __enter__(self) -> "RepoContents":
         assert self.conn is None
         self.conn = sqlite3.connect(f"file:{self.filepath}{'?mode=ro' if self.is_readonly else ''}", uri=True)
+        self.conn.execute("PRAGMA foreign_keys=ON;")
         self.fsobjects = RepoFSObjects(self)
         self.config = RepoContentsConfig(self.config_filepath)
         return self

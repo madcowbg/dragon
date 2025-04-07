@@ -328,7 +328,8 @@ class HoardFSObjects:
             "  WHERE fspresence.fsobject_id = fsobject.fsobject_id AND uuid = ? AND status = ?)",
             (remote_uuid, HoardFileStatus.AVAILABLE.value))
 
-    async def in_folder(self, folder: FastPosixPath) -> AsyncGenerator[Tuple[FastPosixPath, HoardFileProps | HoardDirProps]]:
+    async def in_folder(self, folder: FastPosixPath) -> AsyncGenerator[
+        Tuple[FastPosixPath, HoardFileProps | HoardDirProps]]:
         assert custom_isabs(folder.as_posix())  # from 3.13 behavior change...
         folder = folder.as_posix()
         folder_with_trailing = folder if folder.endswith("/") else folder + "/"
@@ -338,9 +339,9 @@ class HoardFSObjects:
         curr.row_factory = self._read_as_path_to_props
 
         for fp in curr.execute(
-            "SELECT fullpath, fsobject_id, isdir, size, fasthash FROM fsobject "
-            "WHERE fullpath like ? or fullpath = ?",
-            (f"{folder_with_trailing}%", folder)):
+                "SELECT fullpath, fsobject_id, isdir, size, fasthash FROM fsobject "
+                "WHERE fullpath like ? or fullpath = ?",
+                (f"{folder_with_trailing}%", folder)):
             yield fp
 
     def str_to_props(self) -> Iterable[Tuple[str, bool]]:
@@ -597,6 +598,7 @@ class HoardContents:
 
             conn = sqlite3.connect(config_filename)
             curr = conn.cursor()
+            curr.execute("PRAGMA foreign_keys=ON;")
 
             curr.execute(
                 "CREATE TABLE fsobject("
@@ -616,7 +618,7 @@ class HoardContents:
                 " uuid TEXT NOT NULL,"
                 " status TEXT NOT NULL,"
                 " move_from TEXT,"
-                " FOREIGN KEY (fsobject_id) REFERENCES fsobject(id) ON DELETE CASCADE)"
+                " FOREIGN KEY (fsobject_id) REFERENCES fsobject(fsobject_id) ON DELETE CASCADE)"
             )
             curr.execute("CREATE UNIQUE INDEX fspresence_fsobject_id__uuid ON fspresence(fsobject_id, uuid)")
 
@@ -651,6 +653,7 @@ class HoardContents:
         self.conn = sqlite3.connect(
             f"file:{os.path.join(self.folder, HOARD_CONTENTS_FILENAME)}{'?mode=ro' if self.is_readonly else ''}",
             uri=True)
+        self.conn.execute("PRAGMA foreign_keys=ON;")
 
         self.config = HoardContentsConfig(self.folder.joinpath(HOARD_CONTENTS_TOML), self.is_readonly)
         self.fsobjects = HoardFSObjects(self)
