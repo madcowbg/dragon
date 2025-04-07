@@ -1,0 +1,8 @@
+CaveInfoWidget {
+    height: 80%
+}
+
+RichLog#cave_explorer_log {
+    height:auto;
+    min-height: 10%
+}
