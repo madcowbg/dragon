@@ -1,3 +1,5 @@
+from typing import TypeVar, Dict
+
 from rich.text import Text
 from textual.app import ComposeResult
 from textual.css.query import NoMatches
@@ -26,6 +28,7 @@ class HoardContentsPending(Tree[FolderNode[FileOp]]):
 
         self.op_tree = None
         self.counts = None
+        self.ops_cnt = None
 
     async def on_mount(self):
         async with self.hoard.open_contents(create_missing=False, is_readonly=True) as hoard_contents:
@@ -33,20 +36,39 @@ class HoardContentsPending(Tree[FolderNode[FileOp]]):
                 get_pending_operations(hoard_contents, self.remote.uuid),
                 lambda op: op.hoard_file)
 
-        self.root.data = self.op_tree.root
         self.counts = aggregate_on_nodes(
             self.op_tree,
             lambda op: 1,
             lambda old, new: new if old is None else old + new)
+        self.ops_cnt = aggregate_on_nodes(
+            self.op_tree,
+            lambda node: {type(node.data).__name__: 1},
+            sum_dicts)
 
+        self.root.data = self.op_tree.root
         self.root.expand()
 
     def on_tree_node_expanded(self, event: Tree[FolderNode[FileOp]].NodeExpanded):
         for _, folder in event.node.data.folders.items():
-            event.node.add(Text().append(folder.name).append(f" ({self.counts[folder]})", style="green"), data=folder)
+            folder_label = Text().append(folder.name).append(" ").append(f"({self.counts[folder]})", style="green")
+            cnts_label = Text().append("{")
+            for k, v in self.ops_cnt[folder].items():
+                cnts_label.append(f"{k}: {v},")
+            cnts_label.append("}")
+            event.node.add(folder_label.append(" ").append(cnts_label), data=folder)
 
         for _, op in event.node.data.files.items():
             event.node.add_leaf(f"{type(op.data)}: {op.data.hoard_file}", data=op)
+
+
+T = TypeVar('T')
+
+
+def sum_dicts(old: Dict[T, any], new: Dict[T, any]) -> Dict[T, any]:
+    result = old.copy() if old is not None else dict()
+    for k, v in new.items():
+        result[k] = result.get(k, 0) + v
+    return result
 
 
 class CaveInfoWidget(Widget):
