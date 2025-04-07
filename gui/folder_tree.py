@@ -69,7 +69,7 @@ def aggregate_on_nodes(tree: FolderTree[T], file_stats: Callable[[T], R], agg: C
 
 def append_stats_on_children(
         node: FolderNode[T], file_stats: Callable[[T], R], agg: Callable[[R | None, R], R],
-        stats: Dict[FolderNode[T], R]) -> None:
+        stats: Dict[FolderNode[T], R | None]) -> None:
 
     for folder in node.folders.values():
         append_stats_on_children(folder, file_stats, agg, stats)
@@ -81,5 +81,4 @@ def append_stats_on_children(
     for file in node.files.values():
         new_stat = agg(new_stat, file_stats(file))
 
-    assert new_stat is not None
     stats[node] = new_stat

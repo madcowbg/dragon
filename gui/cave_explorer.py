@@ -9,7 +9,7 @@ from textual.widget import Widget
 from textual.widgets import Tree, Static, Header, Footer, Select, RichLog
 
 from command.hoard import Hoard
-from command.pending_file_ops import FileOp, get_pending_operations
+from command.pending_file_ops import FileOp, get_pending_operations, CleanupFile, GetFile, CopyFile, MoveFile
 from config import HoardRemote
 from gui.app_config import config, _write_config
 from gui.folder_tree import FolderNode, FolderTree, aggregate_on_nodes
@@ -22,7 +22,7 @@ class HoardContentsPending(Tree[FolderNode[FileOp]]):
     op_tree: FolderTree[FileOp] | None
 
     def __init__(self, hoard: Hoard, remote: HoardRemote):
-        super().__init__('content diffs')
+        super().__init__('Pending operations')
         self.hoard = hoard
         self.remote = remote
 
@@ -42,23 +42,43 @@ class HoardContentsPending(Tree[FolderNode[FileOp]]):
             lambda old, new: new if old is None else old + new)
         self.ops_cnt = aggregate_on_nodes(
             self.op_tree,
-            lambda node: {type(node.data).__name__: 1},
+            lambda node: {op_to_str(node.data): 1},
             sum_dicts)
 
         self.root.data = self.op_tree.root
+        self.root.label = self.root.label.append(self._pretty_folder_label_descriptor(self.op_tree.root))
         self.root.expand()
 
     def on_tree_node_expanded(self, event: Tree[FolderNode[FileOp]].NodeExpanded):
         for _, folder in event.node.data.folders.items():
-            folder_label = Text().append(folder.name).append(" ").append(f"({self.counts[folder]})", style="green")
-            cnts_label = Text().append("{")
-            for k, v in self.ops_cnt[folder].items():
-                cnts_label.append(f"{k}: {v},")
-            cnts_label.append("}")
+            folder_label = Text().append(folder.name).append(" ").append(f"({self.counts[folder]})", style="dim")
+            cnts_label = self._pretty_folder_label_descriptor(folder)
             event.node.add(folder_label.append(" ").append(cnts_label), data=folder)
 
         for _, op in event.node.data.files.items():
             event.node.add_leaf(f"{type(op.data)}: {op.data.hoard_file}", data=op)
+
+    def _pretty_folder_label_descriptor(self, folder: FolderNode[FileOp]) -> Text:
+        cnts_label = Text().append("{")
+        for (op_type, order), v in sorted(self.ops_cnt[folder].items(), key=lambda x: x[0][1]):
+            cnts_label.append(
+                op_type, style="green" if op_type == "get" else "strike dim" if op_type == "cleanup" else "none") \
+                .append(" ").append(str(v), style="dim").append(",")
+        cnts_label.append("}")
+        return cnts_label
+
+
+def op_to_str(op: FileOp):
+    if isinstance(op, GetFile):
+        return "get", 1
+    elif isinstance(op, CopyFile):
+        return "copy", 2
+    elif isinstance(op, MoveFile):
+        return "move", 3
+    elif isinstance(op, CleanupFile):
+        return "cleanup", 4
+    else:
+        raise ValueError(f"Unsupported op: {op}")
 
 
 T = TypeVar('T')
