@@ -18,7 +18,7 @@ from command.hoard import Hoard
 from command.pathing import HoardPathing
 from command.pending_file_ops import FileOp, get_pending_operations, CleanupFile, GetFile, CopyFile, MoveFile
 from config import HoardRemote
-from contents_diff import FileIsSame, DirIsSame, DirMissingInHoard, DirMissingInLocal
+from contents_diff import FileIsSame
 from exceptions import RepoOpeningFailed
 from gui.app_config import config, _write_config
 from gui.folder_tree import FolderNode, FolderTree, aggregate_on_nodes
@@ -135,12 +135,11 @@ class HoardContentsPendingToPull(Tree):
                     # fixme too slow to even load all the is-same cases, should optimize
                     diffs = [
                         diff async for diff in compare_local_to_hoard(current_contents, hoard_contents, pathing)
-                        if not isinstance(diff, FileIsSame) and not isinstance(diff, DirIsSame)
-                           and not isinstance(diff, DirMissingInLocal) and not isinstance(diff, DirMissingInHoard)]
+                        if not isinstance(diff, FileIsSame)]
 
             self.op_tree = FolderTree(
                 diffs,
-                lambda diff: diff.hoard_file)
+                lambda diff: diff.hoard_file.as_posix())
 
             self.counts = await aggregate_counts(self.op_tree)
 

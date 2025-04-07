@@ -4,23 +4,21 @@ import os
 import pathlib
 import shutil
 from io import StringIO
-
-import command.fast_path
-from command.fast_path import FastPosixPath
 from typing import Dict, List, Tuple
 
 from alive_progress import alive_bar, alive_it
 
+import command.fast_path
 from command.backups.command import HoardCommandBackups
 from command.command_repo import RepoCommand
 from command.contents.command import HoardCommandContents
+from command.fast_path import FastPosixPath
 from command.files.command import HoardCommandFiles
 from command.hoard import Hoard
 from command.pathing import HoardPathing
 from command.repo import ProspectiveRepo
 from config import HoardRemote, CavePath, CaveType, ConnectionSpeed, ConnectionLatency
-from contents.hoard import HoardContents
-from contents.hoard_props import HoardDirProps, HoardFileProps
+from contents.hoard_props import HoardFileProps
 from contents.repo_props import RepoFileStatus
 from exceptions import MissingRepo
 from gui.hoard_explorer import start_hoard_explorer_gui
@@ -144,8 +142,7 @@ class HoardCommand(object):
             repo_health: Dict[str, Dict[int, int]] = dict()
             health_files: Dict[int, List[FastPosixPath]] = dict()
             for file, props in hoard.fsobjects:
-                if not isinstance(props, HoardFileProps):
-                    continue  # fixme what about folders?
+                assert isinstance(props, HoardFileProps)
 
                 num_copies = len(props.available_at)
                 if num_copies not in health_files:
@@ -225,8 +222,7 @@ class HoardCommand(object):
                 out.write("Moving files and folders:\n")
                 current_path: FastPosixPath
                 for current_path, props in list(hoard.fsobjects):
-                    assert isinstance(props, HoardFileProps) or isinstance(props, HoardDirProps), \
-                        f"Unsupported props type: {type(props)}"
+                    assert isinstance(props, HoardFileProps), f"Unsupported props type: {type(props)}"
                     if current_path.is_relative_to(from_path):
                         rel_path = current_path.relative_to(from_path)
                         logging.info(f"Relative file path to move: {rel_path}")
@@ -278,24 +274,17 @@ class HoardCommand(object):
                         local_path_obj = pathing.in_hoard(hoard_file).at_local(remote_uuid)
                         assert local_path_obj is not None, \
                             f"Path {hoard_file} needs to be available in local, but isn't???"
-                        if isinstance(hoard_props, HoardFileProps):
-                            logging.info(
-                                f"Restoring description of file {hoard_file} to {local_path_obj}...")
-                            current_contents.fsobjects.add_file(
-                                local_path_obj.as_pure_path,
-                                size=hoard_props.size,
-                                mtime=datetime.datetime.now(),
-                                fasthash=hoard_props.fasthash,
-                                status=RepoFileStatus.PRESENT)
-                            out.write(f"PRESENT {local_path_obj}\n")
-                        elif isinstance(hoard_props, HoardDirProps):
-                            logging.info(
-                                f"Restoring description of dir {hoard_file} to {local_path_obj}...")
-                            current_contents.fsobjects.add_dir(
-                                local_path_obj.as_pure_path, RepoFileStatus.PRESENT)
-                            out.write(f"PRESENT DIR {local_path_obj}\n")
-                        else:
-                            raise ValueError(f"Unsupported hoard props type: {type(hoard_props)}")
+                        assert isinstance(hoard_props, HoardFileProps)
+
+                        logging.info(
+                            f"Restoring description of file {hoard_file} to {local_path_obj}...")
+                        current_contents.fsobjects.add_file(
+                            local_path_obj.as_pure_path,
+                            size=hoard_props.size,
+                            mtime=datetime.datetime.now(),
+                            fasthash=hoard_props.fasthash,
+                            status=RepoFileStatus.PRESENT)
+                        out.write(f"PRESENT {local_path_obj}\n")
 
                     current_contents.config.end_updating()
                     out.write("DONE")

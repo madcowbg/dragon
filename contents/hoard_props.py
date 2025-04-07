@@ -3,12 +3,6 @@ from typing import Dict, Any, List, Iterable
 
 from util import FIRST_VALUE
 
-
-class HoardDirProps:
-    def __init__(self, doc: Dict[str, Any]):
-        self.doc = doc
-
-
 class HoardFileStatus(enum.Enum):
     AVAILABLE = "available"
     GET = "get"

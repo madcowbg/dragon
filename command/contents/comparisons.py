@@ -6,12 +6,11 @@ from alive_progress import alive_bar, alive_it
 
 from command.pathing import HoardPathing
 from contents.hoard import HoardContents
-from contents.hoard_props import HoardFileProps, HoardDirProps
+from contents.hoard_props import HoardFileProps
 from contents.repo import RepoContents
-from contents.repo_props import RepoFileProps, RepoFileStatus, RepoDirProps
+from contents.repo_props import RepoFileProps, RepoFileStatus
 from contents_diff import Diff, FileOnlyInLocal, FileIsSame, FileContentsDiffer, \
-    DirMissingInHoard, DirIsSame, FileOnlyInHoardLocalUnknown, FileOnlyInHoardLocalDeleted, FileOnlyInHoardLocalMoved, \
-    DirMissingInLocal
+    FileOnlyInHoardLocalUnknown, FileOnlyInHoardLocalDeleted, FileOnlyInHoardLocalMoved
 
 
 def is_same_file(current: RepoFileProps, hoard: HoardFileProps):
@@ -27,11 +26,11 @@ def is_same_file(current: RepoFileProps, hoard: HoardFileProps):
 async def compare_local_to_hoard(local: RepoContents, hoard: HoardContents, pathing: HoardPathing) \
         -> AsyncGenerator[Diff]:
     logging.info("Load current objects")
-    all_local_with_any_status: Dict[FastPosixPath, RepoFileProps | RepoDirProps] = \
+    all_local_with_any_status: Dict[FastPosixPath, RepoFileProps] = \
         dict(s for s in alive_it(local.fsobjects.all_status(), title="Load current objects"))
 
     logging.info("Load hoard objects in folder")
-    all_hoard_in_folder: Dict[FastPosixPath, HoardFileProps | HoardDirProps] = dict([
+    all_hoard_in_folder: Dict[FastPosixPath, HoardFileProps] = dict([
         s async for s in hoard.fsobjects.in_folder(pathing.mounted_at(local.config.uuid))])
     logging.info("Loaded all objects.")
 
@@ -40,34 +39,24 @@ async def compare_local_to_hoard(local: RepoContents, hoard: HoardContents, path
             bar()
             if props.last_status == RepoFileStatus.DELETED or props.last_status == RepoFileStatus.MOVED_FROM:
                 continue
-            if isinstance(props, RepoFileProps):
-                current_file = current_path
-                curr_file_hoard_path = pathing.in_local(current_file, local.config.uuid).at_hoard()
-                hoard_props = all_hoard_in_folder.get(curr_file_hoard_path.as_pure_path, None)
-                if hoard_props is None:
-                    logging.info(f"local file not in hoard: {curr_file_hoard_path}")
-                    yield FileOnlyInLocal(
-                        current_file, curr_file_hoard_path.as_pure_path, props,
-                        props.last_status == RepoFileStatus.ADDED)
-                elif is_same_file(props, hoard_props):
-                    logging.info(f"same in hoard {current_file}!")
-                    yield FileIsSame(current_file, curr_file_hoard_path.as_pure_path, props, hoard_props)
-                else:
-                    logging.info(f"file changes {current_file}")
-                    yield FileContentsDiffer(
-                        current_file,
-                        curr_file_hoard_path.as_pure_path, props, hoard_props)
+            assert isinstance(props, RepoFileProps)
 
-            elif isinstance(props, RepoDirProps):
-                current_dir = current_path
-                curr_dir_hoard_path = pathing.in_local(current_dir, local.config.uuid).at_hoard()
-                if curr_dir_hoard_path.as_pure_path not in all_hoard_in_folder:
-                    logging.info(f"new dir found: {current_dir}")
-                    yield DirMissingInHoard(current_dir, curr_dir_hoard_path.as_pure_path)
-                else:
-                    yield DirIsSame(current_dir, curr_dir_hoard_path.as_pure_path)
+            current_file = current_path
+            curr_file_hoard_path = pathing.in_local(current_file, local.config.uuid).at_hoard()
+            hoard_props = all_hoard_in_folder.get(curr_file_hoard_path.as_pure_path, None)
+            if hoard_props is None:
+                logging.info(f"local file not in hoard: {curr_file_hoard_path}")
+                yield FileOnlyInLocal(
+                    current_file, curr_file_hoard_path.as_pure_path, props,
+                    props.last_status == RepoFileStatus.ADDED)
+            elif is_same_file(props, hoard_props):
+                logging.info(f"same in hoard {current_file}!")
+                yield FileIsSame(current_file, curr_file_hoard_path.as_pure_path, props, hoard_props)
             else:
-                raise ValueError(f"unknown props type: {type(props)}")
+                logging.info(f"file changes {current_file}")
+                yield FileContentsDiffer(
+                    current_file,
+                    curr_file_hoard_path.as_pure_path, props, hoard_props)
 
     hoard_file: FastPosixPath
     for hoard_file, props in alive_it(
@@ -77,28 +66,17 @@ async def compare_local_to_hoard(local: RepoContents, hoard: HoardContents, path
         assert curr_path_in_local is not None  # hoard file is not in the mounted location
         local_props: RepoFileProps | None = all_local_with_any_status.get(curr_path_in_local.as_pure_path, None)
 
-        if isinstance(props, HoardFileProps):
-            if local_props is None:
-                yield FileOnlyInHoardLocalUnknown(curr_path_in_local.as_pure_path, hoard_file, props)
-            elif local_props.last_status == RepoFileStatus.DELETED:
-                yield FileOnlyInHoardLocalDeleted(
-                    curr_path_in_local.as_pure_path, hoard_file, props, local_props)
-            elif local_props.last_status == RepoFileStatus.MOVED_FROM:
-                yield FileOnlyInHoardLocalMoved(
-                    curr_path_in_local.as_pure_path, hoard_file, props, local_props)
-            elif local_props.last_status in (RepoFileStatus.ADDED, RepoFileStatus.PRESENT, RepoFileStatus.MODIFIED):
-                pass  # file is there, which is handled above
-            else:
-                raise ValueError(f"Unrecognized state: {local_props.last_status}")
-        elif isinstance(props, HoardDirProps):
-            hoard_dir = hoard_file
-            curr_dir_path_in_local = pathing.in_hoard(hoard_dir).at_local(local.config.uuid)
-            assert curr_dir_path_in_local is not None  # hoard dir is not in the mounted location
+        assert isinstance(props, HoardFileProps)
 
-            if local_props is None or local_props.last_status == RepoFileStatus.DELETED or local_props.last_status == RepoFileStatus.MOVED_FROM:
-                logging.info(f"missing dir found in hoard: {hoard_dir}")
-                yield DirMissingInLocal(curr_dir_path_in_local.as_pure_path, hoard_dir)
-            else:
-                pass  # existing dirs are handled above
+        if local_props is None:
+            yield FileOnlyInHoardLocalUnknown(curr_path_in_local.as_pure_path, hoard_file, props)
+        elif local_props.last_status == RepoFileStatus.DELETED:
+            yield FileOnlyInHoardLocalDeleted(
+                curr_path_in_local.as_pure_path, hoard_file, props, local_props)
+        elif local_props.last_status == RepoFileStatus.MOVED_FROM:
+            yield FileOnlyInHoardLocalMoved(
+                curr_path_in_local.as_pure_path, hoard_file, props, local_props)
+        elif local_props.last_status in (RepoFileStatus.ADDED, RepoFileStatus.PRESENT, RepoFileStatus.MODIFIED):
+            pass  # file is there, which is handled above
         else:
-            raise ValueError(f"unknown props type: {type(props)}")
+            raise ValueError(f"Unrecognized state: {local_props.last_status}")

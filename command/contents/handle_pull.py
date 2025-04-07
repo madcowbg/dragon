@@ -12,8 +12,7 @@ from contents.hoard_props import HoardFileStatus, HoardFileProps
 from contents.repo import RepoContents
 from contents.repo_props import RepoFileProps, RepoFileStatus
 from contents_diff import FileIsSame, FileOnlyInLocal, FileContentsDiffer, \
-    FileOnlyInHoardLocalDeleted, FileOnlyInHoardLocalUnknown, FileOnlyInHoardLocalMoved, DirMissingInHoard, \
-    DirMissingInLocal, DirIsSame
+    FileOnlyInHoardLocalDeleted, FileOnlyInHoardLocalUnknown, FileOnlyInHoardLocalMoved
 from util import group_to_dict
 
 
@@ -318,18 +317,6 @@ async def pull_repo_contents_to_hoard(
     for diff in diffs_by_type.pop(FileOnlyInHoardLocalUnknown, []):
         assert isinstance(diff, FileOnlyInHoardLocalUnknown)
         _handle_hoard_only(preferences, diff, out)
-
-    for diff in diffs_by_type.pop(DirMissingInHoard, []):
-        assert isinstance(diff, DirMissingInHoard)
-        logging.info(f"new dir found: {diff.local_dir}")
-        hoard_contents.fsobjects.add_dir(diff.hoard_dir)
-
-    dir_missing_in_local = diffs_by_type.pop(DirMissingInLocal, [])
-    logging.info(f"# dir missing in local = {len(dir_missing_in_local)}")
-
-    dir_is_same = diffs_by_type.pop(DirIsSame, [])
-    logging.info(f"# dir missing in local = {len(dir_is_same)}")
-    logging.info(f"Handling moves, after the other ops have been done.")
 
     for diff in diffs_by_type.pop(FileOnlyInHoardLocalMoved, []):
         assert isinstance(diff, FileOnlyInHoardLocalMoved)

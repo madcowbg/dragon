@@ -78,7 +78,6 @@ class TestRepoCommand(IsolatedAsyncioTestCase):
 
         res = cave_cmd.status_index(show_dates=False)
         self.assertEqual([
-            'wat: added @ 1',
             'wat/test.me.different: present @ 1',
             'wat/test.me.once: present @ 1',
             'wat/test.me.twice: present @ 1',
@@ -87,7 +86,6 @@ class TestRepoCommand(IsolatedAsyncioTestCase):
             'Max size: 3.6TB',
             f'UUID: {cave_cmd.current_uuid()}',
             '  # files = 3 of size 19',
-            '  # dirs  = 1',
             ''], res.split("\n"))
 
         res = await cave_cmd.status()
@@ -100,12 +98,6 @@ class TestRepoCommand(IsolatedAsyncioTestCase):
             f"   moved: 0 (0.0%)\n"
             f" current: 3\n"
             f" in repo: 3\n"
-            f" deleted: 0 (0.0%)\n"
-            f"dirs:\n"
-            f"    same: 1\n"
-            f"     new: 0 (0.0%)\n"
-            f" current: 1\n"
-            f" in repo: 1\n"
             f" deleted: 0 (0.0%)\n", res)
 
     async def test_local_files_lifecycle(self):
@@ -122,7 +114,6 @@ class TestRepoCommand(IsolatedAsyncioTestCase):
 
         res = cave_cmd.status_index(show_dates=False)
         self.assertEqual([
-            'wat: added @ 1',
             'wat/test.me.different: present @ 1',
             'wat/test.me.once: present @ 1',
             'wat/test.me.twice: present @ 1',
@@ -131,7 +122,6 @@ class TestRepoCommand(IsolatedAsyncioTestCase):
             'Max size: 3.6TB',
             f'UUID: {cave_cmd.current_uuid()}',
             '  # files = 3 of size 19',
-            '  # dirs  = 1',
             ''], res.split("\n"))
 
         pfw = pretty_file_writer(self.tmpdir.name)
@@ -144,7 +134,6 @@ class TestRepoCommand(IsolatedAsyncioTestCase):
 
         res = cave_cmd.status_index(show_dates=False)
         self.assertEqual([
-            'wat: added @ 1',
             'wat/test.me.anew: added @ 2',
             'wat/test.me.different: present @ 1',
             'wat/test.me.once: modified @ 2',
@@ -154,7 +143,6 @@ class TestRepoCommand(IsolatedAsyncioTestCase):
             'Max size: 3.6TB',
             f'UUID: {cave_cmd.current_uuid()}',
             '  # files = 3 of size 27',
-            '  # dirs  = 1',
             ''], res.split("\n"))
 
         res = await cave_cmd.status()
@@ -167,12 +155,6 @@ class TestRepoCommand(IsolatedAsyncioTestCase):
             "   moved: 0 (0.0%)\n"
             f" current: 3\n"
             f" in repo: 3\n"
-            f" deleted: 0 (0.0%)\n"
-            f"dirs:\n"
-            f"    same: 1\n"
-            f"     new: 0 (0.0%)\n"
-            f" current: 1\n"
-            f" in repo: 1\n"
             f" deleted: 0 (0.0%)\n", res)
 
         pfw('repo/test.me.anew2', "vseer")
@@ -187,12 +169,6 @@ class TestRepoCommand(IsolatedAsyncioTestCase):
             f"   moved: 0 (0.0%)\n"
             f" current: 4\n"
             f" in repo: 3\n"
-            f" deleted: 0 (0.0%)\n"
-            f"dirs:\n"
-            f"    same: 1\n"
-            f"     new: 0 (0.0%)\n"
-            f" current: 1\n"
-            f" in repo: 1\n"
             f" deleted: 0 (0.0%)\n", res)
 
         res = await cave_cmd.refresh(show_details=False)
@@ -201,7 +177,6 @@ class TestRepoCommand(IsolatedAsyncioTestCase):
         res = cave_cmd.status_index(show_dates=False)
         self.assertEqual([
             'test.me.anew2: added @ 3',
-            'wat: added @ 1',
             'wat/test.me.anew: added @ 2',
             'wat/test.me.different: present @ 1',
             'wat/test.me.once: modified @ 2',
@@ -211,5 +186,4 @@ class TestRepoCommand(IsolatedAsyncioTestCase):
             'Max size: 3.6TB',
             f'UUID: {cave_cmd.current_uuid()}',
             '  # files = 4 of size 32',
-            '  # dirs  = 1',
             ''], res.split("\n"))

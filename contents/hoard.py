@@ -1,7 +1,6 @@
 import logging
 import os
 import pathlib
-import sqlite3
 import sys
 from datetime import datetime
 from functools import cached_property
@@ -11,7 +10,7 @@ from typing import Dict, Any, Optional, Tuple, Generator, Iterable, List, Set, A
 import rtoml
 
 from command.fast_path import FastPosixPath
-from contents.hoard_props import HoardDirProps, HoardFileStatus, HoardFileProps
+from contents.hoard_props import HoardFileStatus, HoardFileProps
 from contents.repo import RepoContentsConfig
 from contents.repo_props import RepoFileProps
 from sql_util import SubfolderFilter, NoFilter, sqlite3_standard
@@ -200,12 +199,6 @@ class HoardFSObjects:
         return curr.execute("SELECT count(1) FROM fsobject WHERE isdir=FALSE").fetchone()
 
     @property
-    def num_dirs(self) -> int:
-        curr = self.parent.conn.cursor()
-        curr.row_factory = FIRST_VALUE
-        return curr.execute("SELECT count(1) FROM fsobject WHERE isdir=TRUE").fetchone()
-
-    @property
     def total_size(self) -> int:
         curr = self.parent.conn.cursor()
         curr.row_factory = FIRST_VALUE
@@ -214,16 +207,15 @@ class HoardFSObjects:
     def __len__(self) -> int:
         curr = self.parent.conn.cursor()
         curr.row_factory = FIRST_VALUE
-        return curr.execute("SELECT count(1) FROM fsobject").fetchone()
+        return curr.execute("SELECT count(1) FROM fsobject WHERE isdir = FALSE").fetchone()
 
-    def _read_as_path_to_props(self, cursor, row) -> Tuple[FastPosixPath, HoardFileProps | HoardDirProps]:
+    def _read_as_path_to_props(self, cursor, row) -> Tuple[FastPosixPath, HoardFileProps]:
         fullpath, fsobject_id, isdir, size, fasthash = row
         if isdir:
-            return FastPosixPath(fullpath), HoardDirProps({})
-        else:
-            return FastPosixPath(fullpath), HoardFileProps(self.parent, fsobject_id, size, fasthash)
+            logging.error("ERROR - TRYING TO CREATE A DIR OBJECT")
+        return FastPosixPath(fullpath), HoardFileProps(self.parent, fsobject_id, size, fasthash)
 
-    def __getitem__(self, file_path: FastPosixPath) -> HoardFileProps | HoardDirProps:
+    def __getitem__(self, file_path: FastPosixPath) -> HoardFileProps:
         assert file_path.is_absolute()
 
         curr = self.parent.conn.cursor()
@@ -231,7 +223,7 @@ class HoardFSObjects:
         return curr.execute(
             "SELECT fullpath, fsobject_id, isdir, size, fasthash "
             "FROM fsobject "
-            "WHERE fsobject.fullpath = ? ",
+            "WHERE fsobject.fullpath = ? AND isdir = FALSE ",
             (file_path.as_posix(),)).fetchone()[1]
 
     def by_fasthash(self, fasthash: str) -> Iterable[Tuple[FastPosixPath, HoardFileProps]]:
@@ -240,15 +232,15 @@ class HoardFSObjects:
         yield from curr.execute(
             "SELECT fullpath, fsobject_id, isdir, size, fasthash "
             "FROM fsobject "
-            "WHERE isdir = FALSE and fasthash = ?", (fasthash,))
+            "WHERE fasthash = ? AND isdir = FALSE ", (fasthash,))
 
-    def __iter__(self) -> Iterable[Tuple[FastPosixPath, HoardFileProps | HoardDirProps]]:
+    def __iter__(self) -> Iterable[Tuple[FastPosixPath, HoardFileProps]]:
         curr = self.parent.conn.cursor()
         curr.row_factory = self._read_as_path_to_props
-        yield from curr.execute("SELECT fullpath, fsobject_id, isdir, size, fasthash FROM fsobject")
+        yield from curr.execute("SELECT fullpath, fsobject_id, isdir, size, fasthash FROM fsobject WHERE isdir = FALSE ")
 
     @property
-    def dangling_files(self) -> Iterable[Tuple[FastPosixPath, HoardFileProps | HoardDirProps]]:
+    def dangling_files(self) -> Iterable[Tuple[FastPosixPath, HoardFileProps]]:
         curr = self.parent.conn.cursor()
         curr.row_factory = self._read_as_path_to_props
         yield from curr.execute(
@@ -256,7 +248,7 @@ class HoardFSObjects:
             "WHERE isdir = FALSE AND "
             "  NOT EXISTS (SELECT 1 FROM fspresence WHERE fspresence.fsobject_id = fsobject.fsobject_id)")
 
-    def with_pending(self, repo_uuid: str) -> Iterable[Tuple[FastPosixPath, HoardFileProps | HoardDirProps]]:
+    def with_pending(self, repo_uuid: str) -> Iterable[Tuple[FastPosixPath, HoardFileProps]]:
         curr = self.parent.conn.cursor()
         curr.row_factory = self._read_as_path_to_props
         yield from curr.execute(
@@ -269,18 +261,18 @@ class HoardFSObjects:
             (repo_uuid, HoardFileStatus.GET.value, HoardFileStatus.COPY.value, HoardFileStatus.MOVE.value,
              HoardFileStatus.CLEANUP.value))
 
-    def available_in_repo(self, remote_uuid: str) -> Iterable[Tuple[FastPosixPath, HoardFileProps | HoardDirProps]]:
+    def available_in_repo(self, remote_uuid: str) -> Iterable[Tuple[FastPosixPath, HoardFileProps]]:
         curr = self.parent.conn.cursor()
         curr.row_factory = self._read_as_path_to_props
         yield from curr.execute(
             "SELECT fullpath, fsobject_id, isdir, size, fasthash FROM fsobject "
-            "WHERE EXISTS ("
+            "WHERE isdir = FALSE AND EXISTS ("
             "  SELECT 1 FROM fspresence "
             "  WHERE fspresence.fsobject_id = fsobject.fsobject_id AND uuid = ? AND status = ?)",
             (remote_uuid, HoardFileStatus.AVAILABLE.value))
 
     async def in_folder(self, folder: FastPosixPath) -> AsyncGenerator[
-        Tuple[FastPosixPath, HoardFileProps | HoardDirProps]]:
+        Tuple[FastPosixPath, HoardFileProps]]:
         assert custom_isabs(folder.as_posix())  # from 3.13 behavior change...
         folder = folder.as_posix()
         folder_with_trailing = folder if folder.endswith("/") else folder + "/"
@@ -291,7 +283,7 @@ class HoardFSObjects:
 
         for fp in curr.execute(
                 "SELECT fullpath, fsobject_id, isdir, size, fasthash FROM fsobject "
-                "WHERE fullpath like ? or fullpath = ?",
+                "WHERE isdir = FALSE AND fullpath like ? or fullpath = ?",
                 (f"{folder_with_trailing}%", folder)):
             yield fp
 
@@ -325,19 +317,19 @@ class HoardFSObjects:
             stats[uuid][status] = {"nfiles": nfiles, "size": size}
         return stats
 
-    def to_fetch(self, repo_uuid: str) -> Generator[Tuple[str, HoardFileProps | HoardDirProps], None, None]:
+    def to_fetch(self, repo_uuid: str) -> Generator[Tuple[str, HoardFileProps], None, None]:
         for fsobject_id, fullpath, isdir, size, fasthash in self.parent.conn.execute(
                 "SELECT fsobject.fsobject_id, fullpath, isdir, size, fasthash "
                 "FROM fsobject JOIN fspresence on fsobject.fsobject_id = fspresence.fsobject_id "
-                "WHERE fspresence.uuid = ? and fspresence.status in (?, ?, ?)", (repo_uuid, *STATUSES_TO_FETCH)):
+                "WHERE fspresence.uuid = ? and fspresence.status in (?, ?, ?) AND isdir = FALSE ", (repo_uuid, *STATUSES_TO_FETCH)):
             assert not isdir
             yield fullpath, HoardFileProps(self.parent, fsobject_id, size, fasthash)
 
-    def to_cleanup(self, repo_uuid: str) -> Generator[Tuple[str, HoardFileProps | HoardDirProps], None, None]:
+    def to_cleanup(self, repo_uuid: str) -> Generator[Tuple[str, HoardFileProps], None, None]:
         for fsobject_id, fullpath, isdir, size, fasthash in self.parent.conn.execute(
                 "SELECT fsobject.fsobject_id, fullpath, isdir, size, fasthash "
                 "FROM fsobject JOIN fspresence ON fsobject.fsobject_id = fspresence.fsobject_id "
-                "WHERE fspresence.uuid = ? AND fspresence.status = ?", (repo_uuid, HoardFileStatus.CLEANUP.value)):
+                "WHERE fspresence.uuid = ? AND fspresence.status = ? AND isdir = FALSE ", (repo_uuid, HoardFileStatus.CLEANUP.value)):
             assert not isdir
             yield fullpath, HoardFileProps(self.parent, fsobject_id, size, fasthash)
 
@@ -348,7 +340,7 @@ class HoardFSObjects:
         return curr.execute(
             f"SELECT fsobject.fullpath "
             f"FROM fspresence JOIN fsobject on fspresence.fsobject_id = fsobject.fsobject_id "
-            f"WHERE status = ? AND move_from = ? AND uuid = ?",
+            f"WHERE status = ? AND move_from = ? AND uuid = ? AND isdir = FALSE ",
             (HoardFileStatus.MOVE.value, hoard_file.as_posix(), remote)).fetchall()
 
     def __contains__(self, file_path: FastPosixPath) -> bool:
@@ -356,7 +348,7 @@ class HoardFSObjects:
 
         curr = self._first_value_curr()
         return curr.execute(
-            "SELECT count(1) > 0 FROM fsobject WHERE fsobject.fullpath = ?",
+            "SELECT count(1) > 0 FROM fsobject WHERE fsobject.fullpath = ? AND isdir = FALSE ",
             (file_path.as_posix(),)).fetchone()
 
     def add_or_replace_file(self, filepath: FastPosixPath, props: RepoFileProps) -> HoardFileProps:
@@ -382,18 +374,6 @@ class HoardFSObjects:
         curr.row_factory = FIRST_VALUE
         return curr
 
-    def add_dir(self, curr_dir: FastPosixPath):
-        assert curr_dir.is_absolute()
-        curr = self._first_value_curr()
-
-        # add fsobject entry
-        curr.execute(
-            "INSERT OR REPLACE INTO fsobject(fullpath, isdir, last_epoch_updated) VALUES (?, TRUE, ?)",
-            (curr_dir.as_posix(), self.parent.config.hoard_epoch))
-        fsobject_id: int = curr.execute(
-            "SELECT fsobject_id FROM fsobject WHERE fullpath = ?", (curr_dir.as_posix(),)).fetchone()
-        curr.execute("DELETE FROM fspresence WHERE fsobject_id = ?", (fsobject_id,))
-
     def delete(self, curr_path: FastPosixPath):
         assert curr_path.is_absolute()
 
@@ -405,11 +385,11 @@ class HoardFSObjects:
         curr.execute("DELETE FROM fspresence WHERE fsobject_id = ?", (fsobject_id,))
         curr.execute("DELETE FROM fsobject WHERE fsobject_id = ?", (fsobject_id,))
 
-    def move_via_mounts(self, orig_path: FastPosixPath, new_path: FastPosixPath, props: HoardDirProps | HoardFileProps):
+    def move_via_mounts(self, orig_path: FastPosixPath, new_path: FastPosixPath, props: HoardFileProps):
         assert orig_path.is_absolute()
         assert new_path.is_absolute()
         assert orig_path != new_path
-        assert isinstance(props, HoardFileProps) or isinstance(props, HoardDirProps)
+        assert isinstance(props, HoardFileProps)
 
         # delete whatever new_path had
         self.delete(new_path)
@@ -417,24 +397,19 @@ class HoardFSObjects:
         curr = self.parent.conn.cursor()
         curr.row_factory = FIRST_VALUE
 
-        if isinstance(props, HoardFileProps):
-            # add fsobject entry
-            curr.execute(
-                "INSERT INTO fsobject(fullpath, isdir, size, fasthash, last_epoch_updated) VALUES (?, FALSE, ?, ?, ?)",
-                (new_path.as_posix(), props.size, props.fasthash, self.parent.config.hoard_epoch))
+        assert isinstance(props, HoardFileProps)
+        # add fsobject entry
+        curr.execute(
+            "INSERT INTO fsobject(fullpath, isdir, size, fasthash, last_epoch_updated) VALUES (?, FALSE, ?, ?, ?)",
+            (new_path.as_posix(), props.size, props.fasthash, self.parent.config.hoard_epoch))
 
-            # add old presence
-            new_path_id: int = curr.execute(
-                "SELECT fsobject_id FROM fsobject WHERE fullpath = ?",
-                (new_path.as_posix(),)).fetchone()
-            curr.executemany(
-                "INSERT INTO fspresence(fsobject_id, uuid, status) VALUES (?, ?, ?)",
-                [(new_path_id, uuid, status.value) for uuid, status in props.presence.items()])
-        else:
-            assert isinstance(props, HoardDirProps)
-            curr.execute(
-                "INSERT INTO fsobject(fullpath, isdir, last_epoch_updated) VALUES (?, TRUE, ?)",
-                (new_path.as_posix(), self.parent.config.hoard_epoch))
+        # add old presence
+        new_path_id: int = curr.execute(
+            "SELECT fsobject_id FROM fsobject WHERE fullpath = ?",
+            (new_path.as_posix(),)).fetchone()
+        curr.executemany(
+            "INSERT INTO fspresence(fsobject_id, uuid, status) VALUES (?, ?, ?)",
+            [(new_path_id, uuid, status.value) for uuid, status in props.presence.items()])
 
         self.delete(orig_path)
 
@@ -449,26 +424,22 @@ class HoardFSObjects:
         curr.row_factory = FIRST_VALUE
 
         props = self[FastPosixPath(from_fullpath)]
-        if isinstance(props, HoardFileProps):
-            # add fsobject entry
-            curr.execute(
-                "INSERT INTO fsobject(fullpath, isdir, size, fasthash, last_epoch_updated) VALUES (?, FALSE, ?, ?, ?)",
-                (to_fullpath.as_posix(), props.size, props.fasthash, self.parent.config.hoard_epoch))
+        assert isinstance(props, HoardFileProps)
+        # add fsobject entry
+        curr.execute(
+            "INSERT INTO fsobject(fullpath, isdir, size, fasthash, last_epoch_updated) VALUES (?, FALSE, ?, ?, ?)",
+            (to_fullpath.as_posix(), props.size, props.fasthash, self.parent.config.hoard_epoch))
 
-            # add presence tp request
-            new_path_id: int = curr.execute(
-                "SELECT fsobject_id FROM fsobject WHERE fullpath = ?",
-                (to_fullpath.as_posix(),)).fetchone()
+        # add presence tp request
+        new_path_id: int = curr.execute(
+            "SELECT fsobject_id FROM fsobject WHERE fullpath = ?",
+            (to_fullpath.as_posix(),)).fetchone()
 
-            previously_added_repos = props.repos_having_status(
-                HoardFileStatus.COPY, HoardFileStatus.GET, HoardFileStatus.AVAILABLE)
-            curr.executemany(
-                "INSERT INTO fspresence(fsobject_id, uuid, status) VALUES (?, ?, ?)",
-                [(new_path_id, uuid, HoardFileStatus.COPY.value) for uuid in previously_added_repos])
-        elif isinstance(props, HoardDirProps):
-            self.add_dir(to_fullpath)
-        else:
-            raise ValueError(f"props type unrecognized: {type(props)}")
+        previously_added_repos = props.repos_having_status(
+            HoardFileStatus.COPY, HoardFileStatus.GET, HoardFileStatus.AVAILABLE)
+        curr.executemany(
+            "INSERT INTO fspresence(fsobject_id, uuid, status) VALUES (?, ?, ?)",
+            [(new_path_id, uuid, HoardFileStatus.COPY.value) for uuid in previously_added_repos])
 
     def used_size(self, repo_uuid: str) -> int:
         used_size = self.parent.conn.execute(

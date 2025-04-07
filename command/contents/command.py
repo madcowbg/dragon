@@ -20,8 +20,8 @@ from config import CaveType
 from contents.hoard import HoardContents, HoardFile, HoardDir
 from contents.hoard_props import HoardFileStatus, HoardFileProps
 from contents.repo_props import RepoFileProps, RepoFileStatus
-from contents_diff import FileIsSame, FileContentsDiffer, FileOnlyInHoardLocalDeleted, DirMissingInHoard, DirIsSame, \
-    DirMissingInLocal, FileOnlyInHoardLocalUnknown, FileOnlyInHoardLocalMoved, FileOnlyInLocal
+from contents_diff import FileIsSame, FileContentsDiffer, FileOnlyInHoardLocalDeleted, FileOnlyInHoardLocalUnknown, \
+    FileOnlyInHoardLocalMoved, FileOnlyInLocal
 from exceptions import MissingRepoContents
 from resolve_uuid import resolve_remote_uuid
 from util import format_size, custom_isabs
@@ -132,12 +132,7 @@ class HoardCommandContents:
                                 out.write(f"MISSING {diff.hoard_file.as_posix()}\n")
                         elif isinstance(diff, FileOnlyInHoardLocalMoved):
                             out.write(f"MOVED {diff.hoard_file.as_posix()}\n")
-                        elif isinstance(diff, DirMissingInHoard):
-                            out.write(f"ADDED_DIR {diff.hoard_dir.as_posix()}\n")
-                        elif isinstance(diff, DirMissingInLocal):
-                            if not ignore_missing:
-                                out.write(f"DELETED_DIR {diff.hoard_dir.as_posix()}\n")
-                        elif isinstance(diff, FileIsSame) or isinstance(diff, DirIsSame):
+                        elif isinstance(diff, FileIsSame):
                             pass
                         else:
                             raise ValueError(f"Unused diff class: {type(diff)}")
@@ -392,8 +387,7 @@ class HoardCommandContents:
                 connected_repo = self.hoard.connect_to_repo(repo_uuid, True)
                 with connected_repo.open_contents(is_readonly=True) as current_contents:
                     for local_file, local_props in alive_it(current_contents.fsobjects.existing()):
-                        if not isinstance(local_props, RepoFileProps):
-                            continue
+                        assert isinstance(local_props, RepoFileProps)
 
                         hoard_file = pathing.in_local(local_file, repo_uuid).at_hoard().as_pure_path
                         if hoard_file not in hoard.fsobjects:
@@ -485,8 +479,7 @@ async def execute_get(
     considered = 0
     print(f"Iterating over {len(hoard.fsobjects)} files and folders...")
     for hoard_file, hoard_props in alive_it([s async for s in hoard.fsobjects.in_folder(path_in_hoard)]):
-        if not isinstance(hoard_props, HoardFileProps):
-            continue
+        assert isinstance(hoard_props, HoardFileProps)
 
         local_file = pathing.in_hoard(hoard_file).at_local(repo_uuid)
         assert local_file is not None  # is not addressable here at all
@@ -522,8 +515,7 @@ async def execute_drop(
     print(f"Iterating files and folders to see what to drop...")
     hoard_file: FastPosixPath
     for hoard_file, hoard_props in alive_it([s async for s in hoard.fsobjects.in_folder(path_in_hoard)]):
-        if not isinstance(hoard_props, HoardFileProps):
-            continue
+        assert isinstance(hoard_props, HoardFileProps)
 
         local_file = pathing.in_hoard(hoard_file).at_local(repo_uuid)
         assert local_file is not None  # is not addressable here at all

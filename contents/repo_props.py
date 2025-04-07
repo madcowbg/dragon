@@ -23,9 +23,3 @@ class RepoFileProps:
         self.last_status = last_status
         self.last_update_epoch = last_update_epoch
         self.last_related_fullpath = last_related_fullpath
-
-
-class RepoDirProps:
-    def __init__(self, last_status: RepoFileStatus, last_update_epoch: datetime):
-        self.last_status = last_status
-        self.last_update_epoch = last_update_epoch

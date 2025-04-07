@@ -1,14 +1,14 @@
+import logging
 import os
 import shutil
-import sqlite3
 from datetime import datetime
-from command.fast_path import FastPosixPath
 from sqlite3 import Connection, Cursor, Row
-from typing import Tuple, Iterable, AsyncGenerator
+from typing import Tuple, Iterable
 
 import rtoml
 
-from contents.repo_props import RepoFileProps, RepoDirProps, RepoFileStatus
+from command.fast_path import FastPosixPath
+from contents.repo_props import RepoFileProps, RepoFileStatus
 from exceptions import MissingRepoContents
 from sql_util import sqlite3_standard
 from util import FIRST_VALUE
@@ -25,11 +25,6 @@ class RepoFSObjects:
                 "SELECT count(1) FROM fsobject WHERE isdir=FALSE AND last_status NOT IN (?, ?)",
                 (RepoFileStatus.DELETED.value, RepoFileStatus.MOVED_FROM.value)).fetchone()
 
-        @property
-        def num_dirs(self) -> int:
-            return self.parent._first_value_cursor().execute(
-                "SELECT count(1) FROM fsobject WHERE isdir=TRUE AND last_status NOT IN (?, ?)",
-                (RepoFileStatus.DELETED.value, RepoFileStatus.MOVED_FROM.value)).fetchone()
 
         @property
         def total_size(self) -> int:
@@ -55,16 +50,15 @@ class RepoFSObjects:
             (RepoFileStatus.DELETED.value, RepoFileStatus.MOVED_FROM.value)).fetchone()
 
     @staticmethod
-    def _create_pair_path_props(cursor: Cursor, row: Row) -> Tuple[FastPosixPath, RepoFileProps | RepoDirProps]:
+    def _create_pair_path_props(cursor: Cursor, row: Row) -> Tuple[FastPosixPath, RepoFileProps]:
         fullpath, isdir, size, mtime, fasthash, md5, last_status, last_update_epoch, last_related_fullpath = row
-
         if isdir:
-            return FastPosixPath(fullpath), RepoDirProps(RepoFileStatus(last_status), last_update_epoch)
-        else:
-            return FastPosixPath(fullpath), RepoFileProps(
-                size, mtime, fasthash, md5, RepoFileStatus(last_status), last_update_epoch, last_related_fullpath)
+            logging.error("ERROR - TRYING TO CREATE A DIR OBJECT")
 
-    def get_existing(self, file_path: FastPosixPath) -> RepoFileProps | RepoDirProps:
+        return FastPosixPath(fullpath), RepoFileProps(
+            size, mtime, fasthash, md5, RepoFileStatus(last_status), last_update_epoch, last_related_fullpath)
+
+    def get_existing(self, file_path: FastPosixPath) -> RepoFileProps:
         assert not file_path.is_absolute()
         curr = self.parent.conn.cursor()
         curr.row_factory = RepoFSObjects._create_pair_path_props
@@ -76,7 +70,7 @@ class RepoFSObjects:
             (file_path.as_posix(), RepoFileStatus.DELETED.value, RepoFileStatus.MOVED_FROM.value)).fetchone()
         return props
 
-    def get_file_with_any_status(self, file_path: FastPosixPath) -> RepoFileProps | RepoDirProps | None:
+    def get_file_with_any_status(self, file_path: FastPosixPath) -> RepoFileProps | None:
         assert not file_path.is_absolute()
         curr = self.parent.conn.cursor()
         curr.row_factory = RepoFSObjects._create_pair_path_props
@@ -93,7 +87,7 @@ class RepoFSObjects:
             _, props = all_pairs[0]
             return props
 
-    def all_status(self) -> Iterable[Tuple[FastPosixPath, RepoFileProps | RepoDirProps]]:
+    def all_status(self) -> Iterable[Tuple[FastPosixPath, RepoFileProps]]:
         curr = self.parent.conn.cursor()
         curr.row_factory = RepoFSObjects._create_pair_path_props
 
@@ -101,7 +95,7 @@ class RepoFSObjects:
             "SELECT fullpath, isdir, size, mtime, fasthash, md5, last_status, last_update_epoch, last_related_fullpath "
             "FROM fsobject ORDER BY fullpath")
 
-    def existing(self) -> Iterable[Tuple[FastPosixPath, RepoFileProps | RepoDirProps]]:
+    def existing(self) -> Iterable[Tuple[FastPosixPath, RepoFileProps]]:
         curr = self.parent.conn.cursor()
         curr.row_factory = RepoFSObjects._create_pair_path_props
 

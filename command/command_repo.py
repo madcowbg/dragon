@@ -4,8 +4,8 @@ from io import StringIO
 from command.fast_path import FastPosixPath
 from typing import List, Optional
 
-from command.comparison_repo import FileDeleted, FileMoved, FileAdded, FileModified, DirAdded, DirRemoved, FileIsSame, \
-    DirIsSame, find_repo_changes, _apply_repo_change_to_contents
+from command.comparison_repo import FileDeleted, FileMoved, FileAdded, FileModified, FileIsSame, find_repo_changes, \
+    _apply_repo_change_to_contents
 from command.hoard_ignore import HoardIgnore, DEFAULT_IGNORE_GLOBS
 from command.repo import ProspectiveRepo
 from contents.repo_props import RepoFileStatus
@@ -103,8 +103,7 @@ class RepoCommand(object):
                     f"Max size: {format_size(contents.config.max_size)}\n"
                     f"UUID: {remote_uuid}\n",
                     f"Last updated on {contents.config.updated}\n" if show_dates else "",
-                    f"  # files = {stats.num_files} of size {format_size(stats.total_size)}\n",
-                    f"  # dirs  = {stats.num_dirs}\n", ])
+                    f"  # files = {stats.num_files} of size {format_size(stats.total_size)}\n"])
                 return out.getvalue()
 
     async def status(self, skip_integrity_checks: bool = False):
@@ -125,10 +124,6 @@ class RepoCommand(object):
         files_moved: List[FastPosixPath] = []
         files_del: List[FastPosixPath] = []
 
-        dir_new = []
-        dir_same = []
-        dir_deleted = []
-
         hoard_ignore = HoardIgnore(DEFAULT_IGNORE_GLOBS)
 
         with contents:
@@ -146,12 +141,6 @@ class RepoCommand(object):
                     files_new.append(change.relpath)
                 elif isinstance(change, FileModified):
                     files_mod.append(change.relpath)
-                elif isinstance(change, DirIsSame):
-                    dir_same.append(change.relpath)
-                elif isinstance(change, DirAdded):
-                    dir_new.append(change.relpath)
-                elif isinstance(change, DirRemoved):
-                    dir_deleted.append(change.dirpath)
                 else:
                     raise TypeError(f"Unexpected change type {type(change)}")
 
@@ -159,7 +148,6 @@ class RepoCommand(object):
             # assert len(dir_new) + len(dir_same) == contents.fsobjects.num_dirs
 
             files_current = len(files_new) + len(files_same) + len(files_mod)
-            dirs_current = len(dir_same) + len(dir_new)
             with StringIO() as out:
                 stats = contents.fsobjects.stats_existing
                 out.write(
@@ -171,13 +159,7 @@ class RepoCommand(object):
                     f"   moved: {len(files_moved)} ({format_percent(len(files_moved) / files_current)})\n"
                     f" current: {files_current}\n"
                     f" in repo: {stats.num_files}\n"
-                    f" deleted: {len(files_del)} ({format_percent(len(files_del) / stats.num_files)})\n"
-                    f"dirs:\n"
-                    f"    same: {len(dir_same)}\n"
-                    f"     new: {len(dir_new)} ({format_percent(len(dir_new) / dirs_current)})\n"
-                    f" current: {dirs_current}\n"
-                    f" in repo: {stats.num_dirs}\n"
-                    f" deleted: {len(dir_deleted)} ({format_percent(len(dir_deleted) / max(1, stats.num_dirs))})\n")
+                    f" deleted: {len(files_del)} ({format_percent(len(files_del) / stats.num_files)})\n")
 
                 return out.getvalue()
 
