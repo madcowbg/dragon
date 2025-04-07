@@ -211,13 +211,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             "   moved: 0 (0.0%)\n"
             " current: 3\n"
             " in repo: 3\n"
-            " deleted: 1 (33.3%)\n"
-            "dirs:\n"
-            "    same: 1\n"
-            "     new: 1 (50.0%)\n"
-            " current: 2\n"
-            " in repo: 1\n"
-            " deleted: 0 (0.0%)\n", res)
+            " deleted: 1 (33.3%)\n", res)
 
         # touch file without changing contents, no difference
         pathlib.Path(join(self.tmpdir.name, "repo/wat/test.me.once")).touch()
@@ -231,13 +225,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             "   moved: 0 (0.0%)\n"
             " current: 3\n"
             " in repo: 3\n"
-            " deleted: 1 (33.3%)\n"
-            "dirs:\n"
-            "    same: 1\n"
-            "     new: 1 (50.0%)\n"
-            " current: 2\n"
-            " in repo: 1\n"
-            " deleted: 0 (0.0%)\n", res)
+            " deleted: 1 (33.3%)\n", res)
 
         # as is not refreshed, no change in status
         self.assertEqual(
@@ -950,13 +938,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             "   moved: 0 (0.0%)\n"
             " current: 1\n"
             " in repo: 2\n"
-            " deleted: 1 (50.0%)\n"
-            "dirs:\n"
-            "    same: 1\n"
-            "     new: 0 (0.0%)\n"
-            " current: 1\n"
-            " in repo: 1\n"
-            " deleted: 0 (0.0%)\n", res)
+            " deleted: 1 (50.0%)\n", res)
 
         res = await partial_cave_cmd.refresh(show_details=False)
         self.assertEqual("Refresh done!", res)

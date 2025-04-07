@@ -8,7 +8,7 @@ from command.pathing import HoardPathing
 from contents.hoard import HoardContents
 from contents.hoard_props import HoardFileProps, HoardDirProps
 from contents.repo import RepoContents
-from contents.repo_props import RepoFileProps, RepoFileStatus, RepoDirProps
+from contents.repo_props import RepoFileProps, RepoFileStatus
 from contents_diff import Diff, FileOnlyInLocal, FileIsSame, FileContentsDiffer, \
     FileOnlyInHoardLocalUnknown, FileOnlyInHoardLocalDeleted, FileOnlyInHoardLocalMoved
 
@@ -26,7 +26,7 @@ def is_same_file(current: RepoFileProps, hoard: HoardFileProps):
 async def compare_local_to_hoard(local: RepoContents, hoard: HoardContents, pathing: HoardPathing) \
         -> AsyncGenerator[Diff]:
     logging.info("Load current objects")
-    all_local_with_any_status: Dict[FastPosixPath, RepoFileProps | RepoDirProps] = \
+    all_local_with_any_status: Dict[FastPosixPath, RepoFileProps] = \
         dict(s for s in alive_it(local.fsobjects.all_status(), title="Load current objects"))
 
     logging.info("Load hoard objects in folder")
@@ -56,9 +56,6 @@ async def compare_local_to_hoard(local: RepoContents, hoard: HoardContents, path
                     yield FileContentsDiffer(
                         current_file,
                         curr_file_hoard_path.as_pure_path, props, hoard_props)
-
-            elif isinstance(props, RepoDirProps):
-                pass
             else:
                 raise ValueError(f"unknown props type: {type(props)}")
 

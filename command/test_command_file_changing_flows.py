@@ -779,14 +779,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             f"   moved: 1 (20.0%)\n"
             f" current: 5\n"
             f" in repo: 4\n"
-            f" deleted: 1 (25.0%)\n"
-            f"dirs:\n"
-            f"    same: 1\n"
-            f"     new: 1 (50.0%)\n"
-            f" current: 2\n"
-            f" in repo: 1\n"
-            f" deleted: 0 (0.0%)\n"
-            f"", res)
+            f" deleted: 1 (25.0%)\n", res)
 
         res = await full_cave_cmd.refresh()
         self.assertEqual(
@@ -796,7 +789,6 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             "ADDED_FILE lets_get_it_started/test.me.2-butnew\n"
             "ADDED_FILE lets_get_it_started/test.me.2-butsecond\n"
             "MODIFIED_FILE test.me.1\n"
-            "ADDED_DIR lets_get_it_started\n"
             "Refresh done!", res)
 
         res = await hoard_cmd.contents.pending(full_cave_cmd.current_uuid())
@@ -908,8 +900,6 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             "ADDED_FILE lets_get_it_started/test.me.2-butsecond\n"
             "ADDED_FILE lets_get_it_started/test.me.4-renamed\n"
             "ADDED_FILE wat/test.me.3\n"
-            "ADDED_DIR lets_get_it_started\n"
-            "ADDED_DIR wat\n"
             "Refresh done!", res)
 
         res = await full_cave_cmd.refresh()
@@ -1017,27 +1007,23 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             "ADDED_FILE lets_get_it_started/test.me.2-butnew\n"
             "ADDED_FILE lets_get_it_started/test.me.2-butsecond\n"
             "MODIFIED_FILE test.me.1\n"
-            "ADDED_DIR lets_get_it_started\n"
             "Refresh done!", res)
 
         res = full_cave_cmd.status_index(show_dates=False)
         self.assertEqual(
-            "lets_get_it_started: added @ 3\n"
             "lets_get_it_started/test.me.2-butnew: added @ 3\n"
             "lets_get_it_started/test.me.2-butsecond: added @ 3\n"
             "lets_get_it_started/test.me.4-renamed: added @ 3\n"
             "test.me.1: modified @ 3\n"
             "test.me.4: moved_from @ 3\n"
             "test.me.added: added @ 3\n"
-            "wat: added @ 1\n"
             "wat/test.me.2: deleted @ 3\n"
             "wat/test.me.3: present @ 1\n"
             "--- SUMMARY ---\n"
             "Result for local\n"
             "Max size: 3.6TB\n"
             f"UUID: {full_cave_cmd.current_uuid()}\n"
-            "  # files = 6 of size 47\n"
-            "  # dirs  = 2\n", res)
+            "  # files = 6 of size 47\n", res)
 
         res = await hoard_cmd.contents.pending(full_cave_cmd.current_uuid())
         self.assertEqual(
@@ -1149,8 +1135,6 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             "ADDED_FILE lets_get_it_started/test.me.2-butsecond\n"
             "ADDED_FILE lets_get_it_started/test.me.4-renamed\n"
             "ADDED_FILE wat/test.me.3\n"
-            "ADDED_DIR lets_get_it_started\n"
-            "ADDED_DIR wat\n"
             "Refresh done!", res)
 
         res = await hoard_cmd.files.push(backup_cave_cmd.current_uuid())
@@ -1174,7 +1158,6 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             "ADDED_FILE lets_get_it_started/test.me.2-butsecond\n"
             "ADDED_FILE lets_get_it_started/test.me.4-renamed\n"
             "MODIFIED_FILE test.me.1\n"
-            "ADDED_DIR lets_get_it_started\n"
             "Refresh done!", res)
 
         res = await full_cave_cmd.refresh()
@@ -1299,15 +1282,13 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         self.assertEqual(
             "test.me.1: present @ 1\n"
             "test.me.4: present @ 1\n"
-            "wat: added @ 1\n"
             "wat/test.me.2: present @ 1\n"
             "wat/test.me.3: present @ 1\n"
             "--- SUMMARY ---\n"
             "Result for local\n"
             "Max size: 3.6TB\n"
             f"UUID: {full_cave_cmd.current_uuid()}\n"
-            "  # files = 4 of size 35\n"
-            "  # dirs  = 1\n", res)
+            "  # files = 4 of size 35\n", res)
 
         res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
         self.assertEqual(
@@ -1352,26 +1333,21 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             "MOVED test.me.4 TO lets_get_it_started/test.me.4-renamed\n"
             "ADDED_FILE test.me.added\n"
             "MODIFIED_FILE test.me.1\n"
-            "ADDED_DIR lets_get_it_started\n"
-            "ADDED_DIR wat\n"
             "Refresh done!", res)
 
         res = full_cave_cmd.status_index(show_dates=False)
         self.assertEqual(
-            "lets_get_it_started: added @ 2\n"
             "lets_get_it_started/test.me.4-renamed: added @ 2\n"
             "test.me.1: modified @ 2\n"
             "test.me.4: moved_from @ 2\n"
             "test.me.added: added @ 2\n"
-            "wat: added @ 2\n"
             "wat/test.me.2: present @ 1\n"
             "wat/test.me.3: present @ 1\n"
             "--- SUMMARY ---\n"
             "Result for local\n"
             "Max size: 3.6TB\n"
             f"UUID: {full_cave_cmd.current_uuid()}\n"
-            "  # files = 5 of size 39\n"
-            "  # dirs  = 2\n", res)
+            "  # files = 5 of size 39\n", res)
 
         res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
         self.assertEqual(

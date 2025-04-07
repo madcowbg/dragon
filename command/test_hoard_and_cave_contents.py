@@ -31,7 +31,6 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
                 for file_or_dir, props in repo_contents.fsobjects.all_status()]
 
             self.assertEqual([
-                ('wat', True),
                 ('wat/test.me.different', 5),
                 ('wat/test.me.once', 8),
                 ('wat/test.me.twice', 6)], all_fsobjects)
