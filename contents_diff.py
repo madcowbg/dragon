@@ -74,27 +74,3 @@ class FileOnlyInHoardLocalMoved(Diff):
 
         self.hoard_file = curr_file_hoard_path
         self.hoard_props = hoard_props
-
-
-class DirMissingInHoard(Diff):
-    def __init__(self, current_dir: FastPosixPath, curr_dir_hoard_path: FastPosixPath):
-        assert not current_dir.is_absolute()
-        assert curr_dir_hoard_path.is_absolute()
-        self.local_dir = current_dir
-        self.hoard_dir = curr_dir_hoard_path
-
-
-class DirIsSame(Diff):
-    def __init__(self, current_dir: FastPosixPath, curr_dir_hoard_path: FastPosixPath):
-        assert not current_dir.is_absolute()
-        assert curr_dir_hoard_path.is_absolute()
-        self.local_dir = current_dir
-        self.hoard_dir = curr_dir_hoard_path
-
-
-class DirMissingInLocal(Diff):
-    def __init__(self, current_dir: FastPosixPath, curr_dir_hoard_path: FastPosixPath):
-        assert not current_dir.is_absolute()
-        assert curr_dir_hoard_path.is_absolute()
-        self.local_dir = current_dir
-        self.hoard_dir = curr_dir_hoard_path

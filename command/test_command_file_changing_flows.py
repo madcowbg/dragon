@@ -802,7 +802,6 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.pending(full_cave_cmd.current_uuid())
         self.assertEqual(
             "Status of repo-full-name:\n"
-            "ADDED_DIR /lets_get_it_started\n"
             "ADDED /lets_get_it_started/test.me.2-butnew\n"
             "ADDED /lets_get_it_started/test.me.2-butsecond\n"
             "ADDED /lets_get_it_started/test.me.4-renamed\n"
@@ -1043,7 +1042,6 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.pending(full_cave_cmd.current_uuid())
         self.assertEqual(
             "Status of repo-full-name:\n"
-            "ADDED_DIR /lets_get_it_started\n"
             "ADDED /lets_get_it_started/test.me.2-butnew\n"
             "ADDED /lets_get_it_started/test.me.2-butsecond\n"
             "ADDED /lets_get_it_started/test.me.4-renamed\n"

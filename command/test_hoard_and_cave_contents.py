@@ -63,5 +63,4 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             self.assertEqual([
                 ('/wat/test.me.different', f"['{repo_uuid}: available']"),
                 ('/wat/test.me.once', f"['{repo_uuid}: available']"),
-                ('/wat/test.me.twice', f"['{repo_uuid}: available']"),
-                ('/wat', 'DIR')], all_fsobjects)
+                ('/wat/test.me.twice', f"['{repo_uuid}: available']")], all_fsobjects)

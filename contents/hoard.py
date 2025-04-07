@@ -200,12 +200,6 @@ class HoardFSObjects:
         return curr.execute("SELECT count(1) FROM fsobject WHERE isdir=FALSE").fetchone()
 
     @property
-    def num_dirs(self) -> int:
-        curr = self.parent.conn.cursor()
-        curr.row_factory = FIRST_VALUE
-        return curr.execute("SELECT count(1) FROM fsobject WHERE isdir=TRUE").fetchone()
-
-    @property
     def total_size(self) -> int:
         curr = self.parent.conn.cursor()
         curr.row_factory = FIRST_VALUE
@@ -214,14 +208,12 @@ class HoardFSObjects:
     def __len__(self) -> int:
         curr = self.parent.conn.cursor()
         curr.row_factory = FIRST_VALUE
-        return curr.execute("SELECT count(1) FROM fsobject").fetchone()
+        return curr.execute("SELECT count(1) FROM fsobject WHERE isdir = FALSE").fetchone()
 
     def _read_as_path_to_props(self, cursor, row) -> Tuple[FastPosixPath, HoardFileProps | HoardDirProps]:
         fullpath, fsobject_id, isdir, size, fasthash = row
-        if isdir:
-            return FastPosixPath(fullpath), HoardDirProps({})
-        else:
-            return FastPosixPath(fullpath), HoardFileProps(self.parent, fsobject_id, size, fasthash)
+        assert isdir == False
+        return FastPosixPath(fullpath), HoardFileProps(self.parent, fsobject_id, size, fasthash)
 
     def __getitem__(self, file_path: FastPosixPath) -> HoardFileProps | HoardDirProps:
         assert file_path.is_absolute()
@@ -231,7 +223,7 @@ class HoardFSObjects:
         return curr.execute(
             "SELECT fullpath, fsobject_id, isdir, size, fasthash "
             "FROM fsobject "
-            "WHERE fsobject.fullpath = ? ",
+            "WHERE fsobject.fullpath = ? AND isdir = FALSE ",
             (file_path.as_posix(),)).fetchone()[1]
 
     def by_fasthash(self, fasthash: str) -> Iterable[Tuple[FastPosixPath, HoardFileProps]]:
@@ -240,12 +232,12 @@ class HoardFSObjects:
         yield from curr.execute(
             "SELECT fullpath, fsobject_id, isdir, size, fasthash "
             "FROM fsobject "
-            "WHERE isdir = FALSE and fasthash = ?", (fasthash,))
+            "WHERE fasthash = ? AND isdir = FALSE ", (fasthash,))
 
     def __iter__(self) -> Iterable[Tuple[FastPosixPath, HoardFileProps | HoardDirProps]]:
         curr = self.parent.conn.cursor()
         curr.row_factory = self._read_as_path_to_props
-        yield from curr.execute("SELECT fullpath, fsobject_id, isdir, size, fasthash FROM fsobject")
+        yield from curr.execute("SELECT fullpath, fsobject_id, isdir, size, fasthash FROM fsobject WHERE isdir = FALSE ")
 
     @property
     def dangling_files(self) -> Iterable[Tuple[FastPosixPath, HoardFileProps | HoardDirProps]]:
@@ -274,7 +266,7 @@ class HoardFSObjects:
         curr.row_factory = self._read_as_path_to_props
         yield from curr.execute(
             "SELECT fullpath, fsobject_id, isdir, size, fasthash FROM fsobject "
-            "WHERE EXISTS ("
+            "WHERE isdir = FALSE AND EXISTS ("
             "  SELECT 1 FROM fspresence "
             "  WHERE fspresence.fsobject_id = fsobject.fsobject_id AND uuid = ? AND status = ?)",
             (remote_uuid, HoardFileStatus.AVAILABLE.value))
@@ -291,7 +283,7 @@ class HoardFSObjects:
 
         for fp in curr.execute(
                 "SELECT fullpath, fsobject_id, isdir, size, fasthash FROM fsobject "
-                "WHERE fullpath like ? or fullpath = ?",
+                "WHERE isdir = FALSE AND fullpath like ? or fullpath = ?",
                 (f"{folder_with_trailing}%", folder)):
             yield fp
 
@@ -329,7 +321,7 @@ class HoardFSObjects:
         for fsobject_id, fullpath, isdir, size, fasthash in self.parent.conn.execute(
                 "SELECT fsobject.fsobject_id, fullpath, isdir, size, fasthash "
                 "FROM fsobject JOIN fspresence on fsobject.fsobject_id = fspresence.fsobject_id "
-                "WHERE fspresence.uuid = ? and fspresence.status in (?, ?, ?)", (repo_uuid, *STATUSES_TO_FETCH)):
+                "WHERE fspresence.uuid = ? and fspresence.status in (?, ?, ?) AND isdir = FALSE ", (repo_uuid, *STATUSES_TO_FETCH)):
             assert not isdir
             yield fullpath, HoardFileProps(self.parent, fsobject_id, size, fasthash)
 
@@ -337,7 +329,7 @@ class HoardFSObjects:
         for fsobject_id, fullpath, isdir, size, fasthash in self.parent.conn.execute(
                 "SELECT fsobject.fsobject_id, fullpath, isdir, size, fasthash "
                 "FROM fsobject JOIN fspresence ON fsobject.fsobject_id = fspresence.fsobject_id "
-                "WHERE fspresence.uuid = ? AND fspresence.status = ?", (repo_uuid, HoardFileStatus.CLEANUP.value)):
+                "WHERE fspresence.uuid = ? AND fspresence.status = ? AND isdir = FALSE ", (repo_uuid, HoardFileStatus.CLEANUP.value)):
             assert not isdir
             yield fullpath, HoardFileProps(self.parent, fsobject_id, size, fasthash)
 
@@ -348,7 +340,7 @@ class HoardFSObjects:
         return curr.execute(
             f"SELECT fsobject.fullpath "
             f"FROM fspresence JOIN fsobject on fspresence.fsobject_id = fsobject.fsobject_id "
-            f"WHERE status = ? AND move_from = ? AND uuid = ?",
+            f"WHERE status = ? AND move_from = ? AND uuid = ? AND isdir = FALSE ",
             (HoardFileStatus.MOVE.value, hoard_file.as_posix(), remote)).fetchall()
 
     def __contains__(self, file_path: FastPosixPath) -> bool:
@@ -356,7 +348,7 @@ class HoardFSObjects:
 
         curr = self._first_value_curr()
         return curr.execute(
-            "SELECT count(1) > 0 FROM fsobject WHERE fsobject.fullpath = ?",
+            "SELECT count(1) > 0 FROM fsobject WHERE fsobject.fullpath = ? AND isdir = FALSE ",
             (file_path.as_posix(),)).fetchone()
 
     def add_or_replace_file(self, filepath: FastPosixPath, props: RepoFileProps) -> HoardFileProps:
@@ -381,18 +373,6 @@ class HoardFSObjects:
         curr = self.parent.conn.cursor()
         curr.row_factory = FIRST_VALUE
         return curr
-
-    def add_dir(self, curr_dir: FastPosixPath):
-        assert curr_dir.is_absolute()
-        curr = self._first_value_curr()
-
-        # add fsobject entry
-        curr.execute(
-            "INSERT OR REPLACE INTO fsobject(fullpath, isdir, last_epoch_updated) VALUES (?, TRUE, ?)",
-            (curr_dir.as_posix(), self.parent.config.hoard_epoch))
-        fsobject_id: int = curr.execute(
-            "SELECT fsobject_id FROM fsobject WHERE fullpath = ?", (curr_dir.as_posix(),)).fetchone()
-        curr.execute("DELETE FROM fspresence WHERE fsobject_id = ?", (fsobject_id,))
 
     def delete(self, curr_path: FastPosixPath):
         assert curr_path.is_absolute()

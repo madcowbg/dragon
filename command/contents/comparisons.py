@@ -10,8 +10,7 @@ from contents.hoard_props import HoardFileProps, HoardDirProps
 from contents.repo import RepoContents
 from contents.repo_props import RepoFileProps, RepoFileStatus, RepoDirProps
 from contents_diff import Diff, FileOnlyInLocal, FileIsSame, FileContentsDiffer, \
-    DirMissingInHoard, DirIsSame, FileOnlyInHoardLocalUnknown, FileOnlyInHoardLocalDeleted, FileOnlyInHoardLocalMoved, \
-    DirMissingInLocal
+    FileOnlyInHoardLocalUnknown, FileOnlyInHoardLocalDeleted, FileOnlyInHoardLocalMoved
 
 
 def is_same_file(current: RepoFileProps, hoard: HoardFileProps):
@@ -59,13 +58,7 @@ async def compare_local_to_hoard(local: RepoContents, hoard: HoardContents, path
                         curr_file_hoard_path.as_pure_path, props, hoard_props)
 
             elif isinstance(props, RepoDirProps):
-                current_dir = current_path
-                curr_dir_hoard_path = pathing.in_local(current_dir, local.config.uuid).at_hoard()
-                if curr_dir_hoard_path.as_pure_path not in all_hoard_in_folder:
-                    logging.info(f"new dir found: {current_dir}")
-                    yield DirMissingInHoard(current_dir, curr_dir_hoard_path.as_pure_path)
-                else:
-                    yield DirIsSame(current_dir, curr_dir_hoard_path.as_pure_path)
+                pass
             else:
                 raise ValueError(f"unknown props type: {type(props)}")
 
@@ -91,14 +84,6 @@ async def compare_local_to_hoard(local: RepoContents, hoard: HoardContents, path
             else:
                 raise ValueError(f"Unrecognized state: {local_props.last_status}")
         elif isinstance(props, HoardDirProps):
-            hoard_dir = hoard_file
-            curr_dir_path_in_local = pathing.in_hoard(hoard_dir).at_local(local.config.uuid)
-            assert curr_dir_path_in_local is not None  # hoard dir is not in the mounted location
-
-            if local_props is None or local_props.last_status == RepoFileStatus.DELETED or local_props.last_status == RepoFileStatus.MOVED_FROM:
-                logging.info(f"missing dir found in hoard: {hoard_dir}")
-                yield DirMissingInLocal(curr_dir_path_in_local.as_pure_path, hoard_dir)
-            else:
-                pass  # existing dirs are handled above
+            pass
         else:
             raise ValueError(f"unknown props type: {type(props)}")

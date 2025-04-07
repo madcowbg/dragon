@@ -20,8 +20,8 @@ from config import CaveType
 from contents.hoard import HoardContents, HoardFile, HoardDir
 from contents.hoard_props import HoardFileStatus, HoardFileProps
 from contents.repo_props import RepoFileProps, RepoFileStatus
-from contents_diff import FileIsSame, FileContentsDiffer, FileOnlyInHoardLocalDeleted, DirMissingInHoard, DirIsSame, \
-    DirMissingInLocal, FileOnlyInHoardLocalUnknown, FileOnlyInHoardLocalMoved, FileOnlyInLocal
+from contents_diff import FileIsSame, FileContentsDiffer, FileOnlyInHoardLocalDeleted, FileOnlyInHoardLocalUnknown, \
+    FileOnlyInHoardLocalMoved, FileOnlyInLocal
 from exceptions import MissingRepoContents
 from resolve_uuid import resolve_remote_uuid
 from util import format_size, custom_isabs
@@ -132,12 +132,7 @@ class HoardCommandContents:
                                 out.write(f"MISSING {diff.hoard_file.as_posix()}\n")
                         elif isinstance(diff, FileOnlyInHoardLocalMoved):
                             out.write(f"MOVED {diff.hoard_file.as_posix()}\n")
-                        elif isinstance(diff, DirMissingInHoard):
-                            out.write(f"ADDED_DIR {diff.hoard_dir.as_posix()}\n")
-                        elif isinstance(diff, DirMissingInLocal):
-                            if not ignore_missing:
-                                out.write(f"DELETED_DIR {diff.hoard_dir.as_posix()}\n")
-                        elif isinstance(diff, FileIsSame) or isinstance(diff, DirIsSame):
+                        elif isinstance(diff, FileIsSame):
                             pass
                         else:
                             raise ValueError(f"Unused diff class: {type(diff)}")
