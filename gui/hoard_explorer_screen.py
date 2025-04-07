@@ -84,6 +84,7 @@ class HoardExplorerWidget(Widget):
 
 
 class HoardExplorerScreen(Screen):
+    CSS_PATH = "hoard_explorer_screen.tcss"
     AUTO_FOCUS = HoardExplorerWidget
 
     class ChangeHoardPath(Message):

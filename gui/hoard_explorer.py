@@ -6,7 +6,7 @@ import subprocess
 from textual.app import App
 
 from command.hoard import Hoard
-from gui.cave_explorer import CaveExplorerScreen
+from gui.cave_explorer_screen import CaveExplorerScreen
 from gui.hoard_explorer_screen import HoardExplorerScreen
 
 
