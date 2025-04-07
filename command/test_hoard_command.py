@@ -1,7 +1,6 @@
 import os
 import pathlib
 import tempfile
-import unittest
 from os.path import join
 from typing import Tuple, List, Dict
 from unittest import IsolatedAsyncioTestCase
@@ -10,7 +9,7 @@ from command.command_repo import RepoCommand
 from command.test_repo_command import populate, write_contents, pretty_file_writer
 from config import CaveType
 from contents.hoard import HoardContents
-from contents.hoard_props import HoardDirProps, HoardFileProps
+from contents.hoard_props import HoardFileProps
 from dragon import TotalCommand
 from resolve_uuid import resolve_remote_uuid
 

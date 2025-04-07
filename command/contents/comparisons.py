@@ -6,7 +6,7 @@ from alive_progress import alive_bar, alive_it
 
 from command.pathing import HoardPathing
 from contents.hoard import HoardContents
-from contents.hoard_props import HoardFileProps, HoardDirProps
+from contents.hoard_props import HoardFileProps
 from contents.repo import RepoContents
 from contents.repo_props import RepoFileProps, RepoFileStatus
 from contents_diff import Diff, FileOnlyInLocal, FileIsSame, FileContentsDiffer, \
@@ -30,7 +30,7 @@ async def compare_local_to_hoard(local: RepoContents, hoard: HoardContents, path
         dict(s for s in alive_it(local.fsobjects.all_status(), title="Load current objects"))
 
     logging.info("Load hoard objects in folder")
-    all_hoard_in_folder: Dict[FastPosixPath, HoardFileProps | HoardDirProps] = dict([
+    all_hoard_in_folder: Dict[FastPosixPath, HoardFileProps] = dict([
         s async for s in hoard.fsobjects.in_folder(pathing.mounted_at(local.config.uuid))])
     logging.info("Loaded all objects.")
 
@@ -80,7 +80,5 @@ async def compare_local_to_hoard(local: RepoContents, hoard: HoardContents, path
                 pass  # file is there, which is handled above
             else:
                 raise ValueError(f"Unrecognized state: {local_props.last_status}")
-        elif isinstance(props, HoardDirProps):
-            pass
         else:
             raise ValueError(f"unknown props type: {type(props)}")
