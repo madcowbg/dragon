@@ -6,10 +6,23 @@ import subprocess
 from textual.app import App, ComposeResult
 from textual.reactive import reactive
 from textual.screen import Screen
-from textual.widgets import Footer, Header, Select
+from textual.widget import Widget
+from textual.widgets import Footer, Header, Select, Static
 
 from command.hoard import Hoard
+from config import HoardRemote
 from gui.hoard_explorer_screen import HoardExplorerScreen
+
+class CaveInfoWidget(Widget):
+    remote: HoardRemote | None = reactive(None, recompose=True)
+
+    def compose(self) -> ComposeResult:
+        if self.remote is None:
+            yield Static("Please choose a cave.")
+        else:
+            yield Static(self.remote.name)
+            yield Static(self.remote.uuid)
+
 
 
 class CaveExplorerScreen(Screen):
@@ -22,6 +35,10 @@ class CaveExplorerScreen(Screen):
         if self.hoard is not None:
             config = self.hoard.config()
             yield Select((remote.name, remote) for remote in config.remotes.all())
+        yield CaveInfoWidget()
+
+    def on_select_changed(self, event: Select.Changed):
+        self.query_one(CaveInfoWidget).remote = event.value
 
 
 class HoardExplorerApp(App):
