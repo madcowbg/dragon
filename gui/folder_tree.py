@@ -49,6 +49,7 @@ class FolderTree(Generic[T]):
             parent.add_file(os.path.basename(op.hoard_file), op)
 
     def _ensure_parent_node(self, path: str) -> FolderNode[T]:
+        assert isinstance(path, str)
         if path not in self.nodes:
             folder, file = os.path.split(path)
             parent = self._ensure_parent_node(folder)

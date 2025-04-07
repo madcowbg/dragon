@@ -139,7 +139,7 @@ class HoardContentsPendingToPull(Tree):
 
             self.op_tree = FolderTree(
                 diffs,
-                lambda diff: diff.hoard_file)
+                lambda diff: diff.hoard_file.as_posix())
 
             self.counts = await aggregate_counts(self.op_tree)
 
