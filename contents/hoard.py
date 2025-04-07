@@ -397,19 +397,19 @@ class HoardFSObjects:
         curr = self.parent.conn.cursor()
         curr.row_factory = FIRST_VALUE
 
-        if isinstance(props, HoardFileProps):
-            # add fsobject entry
-            curr.execute(
-                "INSERT INTO fsobject(fullpath, isdir, size, fasthash, last_epoch_updated) VALUES (?, FALSE, ?, ?, ?)",
-                (new_path.as_posix(), props.size, props.fasthash, self.parent.config.hoard_epoch))
+        assert isinstance(props, HoardFileProps)
+        # add fsobject entry
+        curr.execute(
+            "INSERT INTO fsobject(fullpath, isdir, size, fasthash, last_epoch_updated) VALUES (?, FALSE, ?, ?, ?)",
+            (new_path.as_posix(), props.size, props.fasthash, self.parent.config.hoard_epoch))
 
-            # add old presence
-            new_path_id: int = curr.execute(
-                "SELECT fsobject_id FROM fsobject WHERE fullpath = ?",
-                (new_path.as_posix(),)).fetchone()
-            curr.executemany(
-                "INSERT INTO fspresence(fsobject_id, uuid, status) VALUES (?, ?, ?)",
-                [(new_path_id, uuid, status.value) for uuid, status in props.presence.items()])
+        # add old presence
+        new_path_id: int = curr.execute(
+            "SELECT fsobject_id FROM fsobject WHERE fullpath = ?",
+            (new_path.as_posix(),)).fetchone()
+        curr.executemany(
+            "INSERT INTO fspresence(fsobject_id, uuid, status) VALUES (?, ?, ?)",
+            [(new_path_id, uuid, status.value) for uuid, status in props.presence.items()])
 
         self.delete(orig_path)
 
@@ -424,24 +424,22 @@ class HoardFSObjects:
         curr.row_factory = FIRST_VALUE
 
         props = self[FastPosixPath(from_fullpath)]
-        if isinstance(props, HoardFileProps):
-            # add fsobject entry
-            curr.execute(
-                "INSERT INTO fsobject(fullpath, isdir, size, fasthash, last_epoch_updated) VALUES (?, FALSE, ?, ?, ?)",
-                (to_fullpath.as_posix(), props.size, props.fasthash, self.parent.config.hoard_epoch))
+        assert isinstance(props, HoardFileProps)
+        # add fsobject entry
+        curr.execute(
+            "INSERT INTO fsobject(fullpath, isdir, size, fasthash, last_epoch_updated) VALUES (?, FALSE, ?, ?, ?)",
+            (to_fullpath.as_posix(), props.size, props.fasthash, self.parent.config.hoard_epoch))
 
-            # add presence tp request
-            new_path_id: int = curr.execute(
-                "SELECT fsobject_id FROM fsobject WHERE fullpath = ?",
-                (to_fullpath.as_posix(),)).fetchone()
+        # add presence tp request
+        new_path_id: int = curr.execute(
+            "SELECT fsobject_id FROM fsobject WHERE fullpath = ?",
+            (to_fullpath.as_posix(),)).fetchone()
 
-            previously_added_repos = props.repos_having_status(
-                HoardFileStatus.COPY, HoardFileStatus.GET, HoardFileStatus.AVAILABLE)
-            curr.executemany(
-                "INSERT INTO fspresence(fsobject_id, uuid, status) VALUES (?, ?, ?)",
-                [(new_path_id, uuid, HoardFileStatus.COPY.value) for uuid in previously_added_repos])
-        else:
-            raise ValueError(f"props type unrecognized: {type(props)}")
+        previously_added_repos = props.repos_having_status(
+            HoardFileStatus.COPY, HoardFileStatus.GET, HoardFileStatus.AVAILABLE)
+        curr.executemany(
+            "INSERT INTO fspresence(fsobject_id, uuid, status) VALUES (?, ?, ?)",
+            [(new_path_id, uuid, HoardFileStatus.COPY.value) for uuid in previously_added_repos])
 
     def used_size(self, repo_uuid: str) -> int:
         used_size = self.parent.conn.execute(

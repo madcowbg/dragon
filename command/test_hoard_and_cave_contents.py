@@ -27,7 +27,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         repo_contents = ProspectiveRepo(join(self.tmpdir.name, "repo")).open_repo().connect(False).open_contents(True)
         with repo_contents:
             all_fsobjects = [
-                (file_or_dir.as_posix(), props.size if isinstance(props, RepoFileProps) else True)
+                (file_or_dir.as_posix(), props.size)
                 for file_or_dir, props in repo_contents.fsobjects.all_status()]
 
             self.assertEqual([
@@ -56,8 +56,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         repo_uuid = cave_cmd.current_uuid()
         async with Hoard(join(self.tmpdir.name, "hoard")).open_contents(False, True) as hoard_contents:
             all_fsobjects = [
-                (file_or_dir.as_posix(), str([f"{repo}: {status.value}" for repo, status in props.presence.items()])
-                if isinstance(props, HoardFileProps) else "DIR")
+                (file_or_dir.as_posix(), str([f"{repo}: {status.value}" for repo, status in props.presence.items()]))
                 for file_or_dir, props in hoard_contents.fsobjects]
             self.assertEqual([
                 ('/wat/test.me.different', f"['{repo_uuid}: available']"),

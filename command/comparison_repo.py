@@ -258,15 +258,13 @@ async def compute_difference_between_contents_and_filesystem(
     for obj_path, props in alive_it(
             list(contents.fsobjects.existing()),
             title="Checking for deleted files and folders"):
-        if isinstance(props, RepoFileProps):
-            file_path = current_repo_path.joinpath(obj_path)
-            try:
-                if not file_path.is_file() or hoard_ignore.matches(file_path):
-                    yield FileNotInFilesystem(obj_path, props)
-            except OSError as e:
-                logging.error(e)  # fixme yield error
-        else:
-            raise ValueError(f"invalid props type: {type(props)}")
+        assert isinstance(props, RepoFileProps)
+        file_path = current_repo_path.joinpath(obj_path)
+        try:
+            if not file_path.is_file() or hoard_ignore.matches(file_path):
+                yield FileNotInFilesystem(obj_path, props)
+        except OSError as e:
+            logging.error(e)  # fixme yield error
 
     file_path_matches: List[pathlib.Path] = list()
     with alive_bar(total=contents.fsobjects.len_existing(), title="Walking filesystem") as bar:
@@ -338,18 +336,16 @@ async def compute_difference_filtered_by_path(
             logging.debug(f"{local_path} is in contents, check")
 
             existing_prop = contents.fsobjects.get_existing(local_path)
-            if isinstance(existing_prop, RepoFileProps):
-                if not path_on_device.is_file():
-                    yield FileNotInFilesystem(local_path, existing_prop)
-                else:
-                    stats = os.stat(path_on_device)
-                    fasthash = fast_hash(path_on_device)
-                    if existing_prop.fasthash == fasthash:
-                        yield RepoFileSame(local_path, existing_prop, stats.st_mtime)
-                    else:
-                        yield RepoFileDifferent(local_path, existing_prop, stats.st_mtime, stats.st_size, fasthash)
+            assert isinstance(existing_prop, RepoFileProps)
+            if not path_on_device.is_file():
+                yield FileNotInFilesystem(local_path, existing_prop)
             else:
-                raise ValueError(f"invalid props type: {type(existing_prop)}")
+                stats = os.stat(path_on_device)
+                fasthash = fast_hash(path_on_device)
+                if existing_prop.fasthash == fasthash:
+                    yield RepoFileSame(local_path, existing_prop, stats.st_mtime)
+                else:
+                    yield RepoFileDifferent(local_path, existing_prop, stats.st_mtime, stats.st_size, fasthash)
         else:
             if path_on_device.is_file():
                 yield FileNotInRepo(local_path)

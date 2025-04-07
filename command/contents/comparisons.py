@@ -39,25 +39,24 @@ async def compare_local_to_hoard(local: RepoContents, hoard: HoardContents, path
             bar()
             if props.last_status == RepoFileStatus.DELETED or props.last_status == RepoFileStatus.MOVED_FROM:
                 continue
-            if isinstance(props, RepoFileProps):
-                current_file = current_path
-                curr_file_hoard_path = pathing.in_local(current_file, local.config.uuid).at_hoard()
-                hoard_props = all_hoard_in_folder.get(curr_file_hoard_path.as_pure_path, None)
-                if hoard_props is None:
-                    logging.info(f"local file not in hoard: {curr_file_hoard_path}")
-                    yield FileOnlyInLocal(
-                        current_file, curr_file_hoard_path.as_pure_path, props,
-                        props.last_status == RepoFileStatus.ADDED)
-                elif is_same_file(props, hoard_props):
-                    logging.info(f"same in hoard {current_file}!")
-                    yield FileIsSame(current_file, curr_file_hoard_path.as_pure_path, props, hoard_props)
-                else:
-                    logging.info(f"file changes {current_file}")
-                    yield FileContentsDiffer(
-                        current_file,
-                        curr_file_hoard_path.as_pure_path, props, hoard_props)
+            assert isinstance(props, RepoFileProps)
+
+            current_file = current_path
+            curr_file_hoard_path = pathing.in_local(current_file, local.config.uuid).at_hoard()
+            hoard_props = all_hoard_in_folder.get(curr_file_hoard_path.as_pure_path, None)
+            if hoard_props is None:
+                logging.info(f"local file not in hoard: {curr_file_hoard_path}")
+                yield FileOnlyInLocal(
+                    current_file, curr_file_hoard_path.as_pure_path, props,
+                    props.last_status == RepoFileStatus.ADDED)
+            elif is_same_file(props, hoard_props):
+                logging.info(f"same in hoard {current_file}!")
+                yield FileIsSame(current_file, curr_file_hoard_path.as_pure_path, props, hoard_props)
             else:
-                raise ValueError(f"unknown props type: {type(props)}")
+                logging.info(f"file changes {current_file}")
+                yield FileContentsDiffer(
+                    current_file,
+                    curr_file_hoard_path.as_pure_path, props, hoard_props)
 
     hoard_file: FastPosixPath
     for hoard_file, props in alive_it(
@@ -67,18 +66,17 @@ async def compare_local_to_hoard(local: RepoContents, hoard: HoardContents, path
         assert curr_path_in_local is not None  # hoard file is not in the mounted location
         local_props: RepoFileProps | None = all_local_with_any_status.get(curr_path_in_local.as_pure_path, None)
 
-        if isinstance(props, HoardFileProps):
-            if local_props is None:
-                yield FileOnlyInHoardLocalUnknown(curr_path_in_local.as_pure_path, hoard_file, props)
-            elif local_props.last_status == RepoFileStatus.DELETED:
-                yield FileOnlyInHoardLocalDeleted(
-                    curr_path_in_local.as_pure_path, hoard_file, props, local_props)
-            elif local_props.last_status == RepoFileStatus.MOVED_FROM:
-                yield FileOnlyInHoardLocalMoved(
-                    curr_path_in_local.as_pure_path, hoard_file, props, local_props)
-            elif local_props.last_status in (RepoFileStatus.ADDED, RepoFileStatus.PRESENT, RepoFileStatus.MODIFIED):
-                pass  # file is there, which is handled above
-            else:
-                raise ValueError(f"Unrecognized state: {local_props.last_status}")
+        assert isinstance(props, HoardFileProps)
+
+        if local_props is None:
+            yield FileOnlyInHoardLocalUnknown(curr_path_in_local.as_pure_path, hoard_file, props)
+        elif local_props.last_status == RepoFileStatus.DELETED:
+            yield FileOnlyInHoardLocalDeleted(
+                curr_path_in_local.as_pure_path, hoard_file, props, local_props)
+        elif local_props.last_status == RepoFileStatus.MOVED_FROM:
+            yield FileOnlyInHoardLocalMoved(
+                curr_path_in_local.as_pure_path, hoard_file, props, local_props)
+        elif local_props.last_status in (RepoFileStatus.ADDED, RepoFileStatus.PRESENT, RepoFileStatus.MODIFIED):
+            pass  # file is there, which is handled above
         else:
-            raise ValueError(f"unknown props type: {type(props)}")
+            raise ValueError(f"Unrecognized state: {local_props.last_status}")

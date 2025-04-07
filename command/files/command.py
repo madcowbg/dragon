@@ -251,11 +251,12 @@ def _cleanup_files_in_repo(
 def _find_files_to_copy(hoard: HoardContents) -> Dict[str, List[str]]:
     fasthashes_to_copy = [
         props.fasthash for filepath, props in hoard.fsobjects
-        if isinstance(props, HoardFileProps) and len(props.by_status(HoardFileStatus.COPY)) > 0]
+        if len(props.by_status(HoardFileStatus.COPY)) > 0]
 
     files_to_copy: Dict[str, List[str]] = dict((h, []) for h in fasthashes_to_copy)
     for filepath, props in hoard.fsobjects:
-        if isinstance(props, HoardFileProps) and props.fasthash in fasthashes_to_copy:
+        assert isinstance(props, HoardFileProps)
+        if props.fasthash in fasthashes_to_copy:
             files_to_copy[props.fasthash].append(filepath.as_posix())
 
     return files_to_copy

@@ -387,8 +387,7 @@ class HoardCommandContents:
                 connected_repo = self.hoard.connect_to_repo(repo_uuid, True)
                 with connected_repo.open_contents(is_readonly=True) as current_contents:
                     for local_file, local_props in alive_it(current_contents.fsobjects.existing()):
-                        if not isinstance(local_props, RepoFileProps):
-                            continue
+                        assert isinstance(local_props, RepoFileProps)
 
                         hoard_file = pathing.in_local(local_file, repo_uuid).at_hoard().as_pure_path
                         if hoard_file not in hoard.fsobjects:
@@ -480,8 +479,7 @@ async def execute_get(
     considered = 0
     print(f"Iterating over {len(hoard.fsobjects)} files and folders...")
     for hoard_file, hoard_props in alive_it([s async for s in hoard.fsobjects.in_folder(path_in_hoard)]):
-        if not isinstance(hoard_props, HoardFileProps):
-            continue
+        assert isinstance(hoard_props, HoardFileProps)
 
         local_file = pathing.in_hoard(hoard_file).at_local(repo_uuid)
         assert local_file is not None  # is not addressable here at all
@@ -517,8 +515,7 @@ async def execute_drop(
     print(f"Iterating files and folders to see what to drop...")
     hoard_file: FastPosixPath
     for hoard_file, hoard_props in alive_it([s async for s in hoard.fsobjects.in_folder(path_in_hoard)]):
-        if not isinstance(hoard_props, HoardFileProps):
-            continue
+        assert isinstance(hoard_props, HoardFileProps)
 
         local_file = pathing.in_hoard(hoard_file).at_local(repo_uuid)
         assert local_file is not None  # is not addressable here at all
