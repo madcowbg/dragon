@@ -5,6 +5,7 @@ import pathlib
 import subprocess
 from typing import TypeVar, Generic, Union, Callable, List, Iterable, Dict
 
+from rich.text import Text
 from textual.app import App, ComposeResult
 from textual.css.query import NoMatches
 from textual.reactive import reactive, var
@@ -75,6 +76,33 @@ class FolderTree(Generic[T]):
         return self.nodes[path]
 
 
+R = TypeVar('R')
+
+
+def aggregate_on_nodes(tree: FolderTree[T], file_stats: Callable[[T], R], agg: Callable[[R | None, R], R]) \
+        -> Dict[FolderNode[T] | FileNode[T], R]:
+    stats = dict()
+    append_on_children(tree.root, file_stats, agg, stats)
+    return stats
+
+
+def append_on_children(
+        node: FolderNode[T], file_stats: Callable[[T], R], agg: Callable[[R | None, R], R],
+        stats: Dict[FolderNode[T], R]) -> None:
+
+    for folder in node.folders.values():
+        append_on_children(folder, file_stats, agg, stats)
+
+    new_stat = None
+    for folder in node.folders.values():
+        new_stat = agg(new_stat, stats[folder])
+
+    for file in node.files.values():
+        new_stat = agg(new_stat, file_stats(file))
+
+    stats[node] = new_stat
+
+
 class HoardContentsPending(Tree[FolderNode[FileOp]]):
     hoard: Hoard | None = reactive(None)
     remote: HoardRemote | None = reactive(None, recompose=True)
@@ -87,19 +115,25 @@ class HoardContentsPending(Tree[FolderNode[FileOp]]):
         self.remote = remote
 
         self.op_tree = None
+        self.counts = None
 
     async def on_mount(self):
         async with self.hoard.open_contents(create_missing=False, is_readonly=True) as hoard_contents:
             self.op_tree = FolderTree(
                 get_pending_operations(hoard_contents, self.remote.uuid),
                 lambda op: op.hoard_file)
+
         self.root.data = self.op_tree.root
+        self.counts = aggregate_on_nodes(
+            self.op_tree,
+            lambda op: 1,
+            lambda old, new: new if old is None else old + new)
 
         self.root.expand()
 
     def on_tree_node_expanded(self, event: Tree[FolderNode[FileOp]].NodeExpanded):
         for _, folder in event.node.data.folders.items():
-            event.node.add(folder.name, data=folder)
+            event.node.add(Text().append(folder.name).append(f" ({self.counts[folder]})", style="green"), data=folder)
 
         for _, op in event.node.data.files.items():
             event.node.add_leaf(f"{type(op.data)}: {op.data.hoard_file}", data=op)
