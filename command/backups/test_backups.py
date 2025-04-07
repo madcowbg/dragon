@@ -123,17 +123,17 @@ class TestBackups(IsolatedAsyncioTestCase):
             "/test.me.5 = g:1 c:1\n"
             "/wat\n"
             "/wat/test.me.2 = a:2\n"
-            "/wat/test.me.6 = g:1 c:1\n"
             "/wat/test.me.3 = g:1 c:1\n"
+            "/wat/test.me.6 = g:1 c:1\n"
             "DONE", res)
 
         res = await hoard_cmd.files.pending(repo=incoming_cave_cmd.current_uuid())
         self.assertEqual(
             "repo-incoming-name:\n"
             "TO_CLEANUP (is in 1) /test.me.4\n"
+            "TO_CLEANUP (is in 0) /wat/test.me.3\n"
             "TO_CLEANUP (is in 0) /test.me.5\n"
             "TO_CLEANUP (is in 0) /wat/test.me.6\n"
-            "TO_CLEANUP (is in 0) /wat/test.me.3\n"
             "DONE", res)
 
         await partial_cave_cmd.refresh(show_details=False)
@@ -170,8 +170,8 @@ class TestBackups(IsolatedAsyncioTestCase):
             "/test.me.5 = a:1\n"
             "/wat\n"
             "/wat/test.me.2 = a:2\n"
-            "/wat/test.me.6 = a:1\n"
             "/wat/test.me.3 = a:1\n"
+            "/wat/test.me.6 = a:1\n"
             "DONE", res)
 
     async def test_create_with_simple_backup_from_start(self):

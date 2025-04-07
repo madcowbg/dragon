@@ -1,4 +1,3 @@
-import asyncio
 import logging
 import os
 import pathlib
@@ -15,7 +14,7 @@ from command.fast_path import FastPosixPath
 from contents.hoard_props import HoardDirProps, HoardFileStatus, HoardFileProps
 from contents.repo import RepoContentsConfig
 from contents.repo_props import RepoFileProps
-from sql_util import SubfolderFilter, NoFilter
+from sql_util import SubfolderFilter, NoFilter, sqlite3_standard
 from util import FIRST_VALUE, custom_isabs
 
 HOARD_CONTENTS_FILENAME = "hoard.contents"
@@ -101,60 +100,10 @@ class HoardContentsConfig:
         self.hoard_epoch += 1
 
 
-async def _augment_with_fake_props(objects) -> Tuple[Set[str], List[str]]:
-    # augment all objects with dummy folders as the hoard is incomplete by design
-    all_dirs: Set[str] = set()
-    all_files: List[str] = []
-    for path, is_dir in list(objects.str_to_props()):
-        if len(all_files) % 10000 == 0:
-            await asyncio.sleep(0)  # give up control if other threads want to do something
-
-        if is_dir:
-            all_dirs.add(path)
-        else:
-            all_files.append(path)
-
-        current_path, _ = path.rsplit("/", 1)
-
-        while len(current_path) > 0:
-            if current_path in all_dirs:
-                break
-
-            all_dirs.add(current_path)
-            current_path, _ = current_path.rsplit("/", 1)
-    return all_dirs, all_files
-
-
-async def _add_all_files_and_folders(root, all_dirs: Set[str], all_files: List[str], fsobjects: "HoardFSObjects"):
-    # add all files and folders, ordered by path so that parent folders come before children
-    folders_cache: dict[str, HoardDir] = {"": root}
-    for path in sorted(all_dirs):
-        if len(folders_cache) % 10000 == 0:
-            await asyncio.sleep(0)  # give up control if other threads want to do something
-
-        parent_path, child_name = path.rsplit("/", 1)
-
-        # assert isinstance(props, HoardDirProps)
-        folders_cache[path] = folders_cache[parent_path].create_dir(child_name)
-
-    for idx, path in enumerate(all_files):
-        if idx % 10000 == 0:
-            await asyncio.sleep(0)  # give up control if other threads want to do something
-
-        parent_path, child_name = path.rsplit("/", 1)
-        folders_cache[parent_path].create_file(child_name, path, fsobjects)
-
-
 class HoardTree:
-    def __init__(self):
+    def __init__(self, objects: "HoardFSObjects"):
         self.root = HoardDir(None, "", self)
-
-    async def read(self, objects: "HoardFSObjects") -> "HoardTree":
-        all_dirs, all_files = await _augment_with_fake_props(objects)
-
-        await _add_all_files_and_folders(self.root, all_dirs, all_files, objects)
-
-        return self
+        self.objects = objects
 
     def walk(self, from_path: str = "/", depth: int = sys.maxsize) -> \
             Generator[Tuple[Optional["HoardDir"], Optional["HoardFile"]], None, None]:
@@ -189,37 +138,34 @@ class HoardFile:
 
 
 class HoardDir:
-    @property
-    def fullname(self):
-        if self._fullname is None:
-            parent_path = pathlib.Path(self.parent.fullname) if self.parent is not None else pathlib.Path("/")
-            self._fullname = parent_path.joinpath(self.name)
-        return self._fullname.as_posix()
+    @cached_property
+    def fullname(self) -> str:  # fixme replace with FullPosixPath
+        parent_path = pathlib.Path(self.parent.fullname) if self.parent is not None else pathlib.Path("/")
+        return parent_path.joinpath(self.name).as_posix()
 
     def __init__(self, parent: Optional["HoardDir"], name: str, tree: HoardTree):
         self.tree = tree
         self.name = name
         self.parent = parent
 
-        self.dirs: Dict[str, HoardDir] = {}
-        self.files: Dict[str, HoardFile] = {}
+    @property
+    def dirs(self) -> Dict[str, "HoardDir"]:
+        return dict(
+            (_filename(subname), HoardDir(self, _filename(subname), self.tree))
+            for subname in self.tree.objects.get_sub_dirs(self._as_parent))
 
-        self._fullname: Optional[str] = None
+    @property
+    def _as_parent(self):
+        return self.fullname if self.fullname != "/" else ""
 
-    def get_dir(self, subname: str) -> Optional["HoardDir"]:
+    @property
+    def files(self) -> Dict[str, HoardFile]:
+        return dict(
+            (_filename(subname), HoardFile(self, _filename(subname), subname, self.tree.objects))
+            for subname in self.tree.objects.get_sub_files(self._as_parent))
+
+    def get_dir(self, subname: str) -> Optional["HoardDir"]:  # FIXME remove, slow and obsolete
         return self.dirs.get(subname, None)
-
-    def create_dir(self, subname: str) -> "HoardDir":
-        assert subname not in self.dirs and subname not in self.files
-        new_dir = HoardDir(self, subname, self.tree)
-        self.dirs[subname] = new_dir
-        return new_dir
-
-    def create_file(self, filename: str, fullname: str, fsobjects: "HoardFSObjects") -> HoardFile:
-        assert filename not in self.dirs and filename not in self.files
-        new_file = HoardFile(self, filename, fullname, fsobjects)
-        self.files[filename] = new_file
-        return new_file
 
     def walk(self, depth: int) -> Generator[Tuple[Optional["HoardDir"], Optional["HoardFile"]], None, None]:
         yield self, None
@@ -231,6 +177,11 @@ class HoardDir:
             yield from hoard_dir.walk(depth - 1)
 
 
+def _filename(filepath: str) -> str:
+    _, name = os.path.split(filepath)
+    return name
+
+
 STATUSES_TO_FETCH = [HoardFileStatus.COPY.value, HoardFileStatus.GET.value, HoardFileStatus.MOVE.value]
 
 
@@ -240,7 +191,7 @@ class HoardFSObjects:
 
     @cached_property
     async def tree(self) -> HoardTree:
-        return await HoardTree().read(self)
+        return HoardTree(self)
 
     @property
     def num_files(self) -> int:
@@ -415,7 +366,9 @@ class HoardFSObjects:
 
         # add fsobject entry
         curr.execute(
-            "INSERT OR REPLACE INTO fsobject(fullpath, isdir, size, fasthash, last_epoch_updated) VALUES (?, FALSE, ?, ?, ?)",
+            "INSERT INTO fsobject(fullpath, isdir, size, fasthash, last_epoch_updated) VALUES (?, FALSE, ?, ?, ?) "
+            "ON CONFLICT (fullpath) DO UPDATE "
+            "SET isdir = excluded.isdir, size = excluded.size, fasthash = excluded.fasthash, last_epoch_updated = excluded.last_epoch_updated ",
             (filepath.as_posix(), props.size, props.fasthash, self.parent.config.hoard_epoch))
 
         # cleanup presence status
@@ -449,8 +402,8 @@ class HoardFSObjects:
             "SELECT fsobject_id FROM fsobject WHERE fullpath = ?", (curr_path.as_posix(),)).fetchone()
         if fsobject_id is None:
             return
-        curr.execute("DELETE FROM fsobject WHERE fsobject_id = ?", (fsobject_id,))
         curr.execute("DELETE FROM fspresence WHERE fsobject_id = ?", (fsobject_id,))
+        curr.execute("DELETE FROM fsobject WHERE fsobject_id = ?", (fsobject_id,))
 
     def move_via_mounts(self, orig_path: FastPosixPath, new_path: FastPosixPath, props: HoardDirProps | HoardFileProps):
         assert orig_path.is_absolute()
@@ -467,7 +420,7 @@ class HoardFSObjects:
         if isinstance(props, HoardFileProps):
             # add fsobject entry
             curr.execute(
-                "INSERT OR REPLACE INTO fsobject(fullpath, isdir, size, fasthash, last_epoch_updated) VALUES (?, FALSE, ?, ?, ?)",
+                "INSERT INTO fsobject(fullpath, isdir, size, fasthash, last_epoch_updated) VALUES (?, FALSE, ?, ?, ?)",
                 (new_path.as_posix(), props.size, props.fasthash, self.parent.config.hoard_epoch))
 
             # add old presence
@@ -480,7 +433,7 @@ class HoardFSObjects:
         else:
             assert isinstance(props, HoardDirProps)
             curr.execute(
-                "INSERT OR REPLACE INTO fsobject(fullpath, isdir, last_epoch_updated) VALUES (?, TRUE, ?)",
+                "INSERT INTO fsobject(fullpath, isdir, last_epoch_updated) VALUES (?, TRUE, ?)",
                 (new_path.as_posix(), self.parent.config.hoard_epoch))
 
         self.delete(orig_path)
@@ -499,7 +452,7 @@ class HoardFSObjects:
         if isinstance(props, HoardFileProps):
             # add fsobject entry
             curr.execute(
-                "INSERT OR REPLACE INTO fsobject(fullpath, isdir, size, fasthash, last_epoch_updated) VALUES (?, FALSE, ?, ?, ?)",
+                "INSERT INTO fsobject(fullpath, isdir, size, fasthash, last_epoch_updated) VALUES (?, FALSE, ?, ?, ?)",
                 (to_fullpath.as_posix(), props.size, props.fasthash, self.parent.config.hoard_epoch))
 
             # add presence tp request
@@ -542,6 +495,22 @@ class HoardFSObjects:
     @cached_property
     def query(self) -> "Query":
         return Query(self.parent.conn)
+
+    def get_sub_dirs(self, fullpath: str) -> Iterable[str]:
+        curr = self.parent.conn.cursor()
+        curr.row_factory = FIRST_VALUE
+        yield from curr.execute(
+            "SELECT fullpath FROM folder_structure "
+            "WHERE parent = ? AND isdir = TRUE",
+            (fullpath,))
+
+    def get_sub_files(self, fullpath: str) -> Iterable[str]:
+        curr = self.parent.conn.cursor()
+        curr.row_factory = FIRST_VALUE
+        yield from curr.execute(
+            "SELECT fullpath FROM folder_structure "
+            "WHERE parent = ? AND isdir = FALSE",
+            (fullpath,))
 
 
 class Query:
@@ -596,31 +565,10 @@ class HoardContents:
             if is_readonly:
                 raise ValueError("Cannot create a read-only hoard!")
 
-            conn = sqlite3.connect(config_filename)
+            conn = sqlite3_standard(config_filename)
             curr = conn.cursor()
-            curr.execute("PRAGMA foreign_keys=ON;")
 
-            curr.execute(
-                "CREATE TABLE fsobject("
-                " fsobject_id INTEGER PRIMARY KEY AUTOINCREMENT,"
-                " fullpath TEXT NOT NULL UNIQUE,"
-                " isdir BOOL NOT NULL,"
-                " size INTEGER,"
-                " fasthash TEXT,"
-                " last_epoch_updated INTEGER)")
-
-            # for fasthash lookups in melding
-            curr.execute("CREATE INDEX index_fsobject_fasthash ON fsobject (fasthash) ")
-
-            curr.execute(
-                "CREATE TABLE fspresence ("
-                " fsobject_id INTEGER,"
-                " uuid TEXT NOT NULL,"
-                " status TEXT NOT NULL,"
-                " move_from TEXT,"
-                " FOREIGN KEY (fsobject_id) REFERENCES fsobject(fsobject_id) ON DELETE CASCADE)"
-            )
-            curr.execute("CREATE UNIQUE INDEX fspresence_fsobject_id__uuid ON fspresence(fsobject_id, uuid)")
+            init_hoard_db_tables(curr)
 
             conn.commit()
             conn.close()
@@ -650,10 +598,9 @@ class HoardContents:
         self.conn = None
 
     async def __aenter__(self) -> "HoardContents":
-        self.conn = sqlite3.connect(
+        self.conn = sqlite3_standard(
             f"file:{os.path.join(self.folder, HOARD_CONTENTS_FILENAME)}{'?mode=ro' if self.is_readonly else ''}",
             uri=True)
-        self.conn.execute("PRAGMA foreign_keys=ON;")
 
         self.config = HoardContentsConfig(self.folder.joinpath(HOARD_CONTENTS_TOML), self.is_readonly)
         self.fsobjects = HoardFSObjects(self)
@@ -676,3 +623,72 @@ class HoardContents:
 
     def write(self):
         self.conn.commit()
+
+
+def init_hoard_db_tables(curr):
+    curr.execute(
+        "CREATE TABLE fsobject("
+        " fsobject_id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        " fullpath TEXT NOT NULL UNIQUE,"
+        " isdir BOOL NOT NULL,"
+        " size INTEGER,"
+        " fasthash TEXT,"
+        " last_epoch_updated INTEGER)")
+    # for fasthash lookups in melding
+    curr.execute("CREATE INDEX index_fsobject_fasthash ON fsobject (fasthash) ")
+    curr.execute(
+        "CREATE TABLE fspresence ("
+        " fsobject_id INTEGER,"
+        " uuid TEXT NOT NULL,"
+        " status TEXT NOT NULL,"
+        " move_from TEXT,"
+        " FOREIGN KEY (fsobject_id) REFERENCES fsobject(fsobject_id) ON DELETE RESTRICT)"
+    )
+
+    curr.execute("CREATE UNIQUE INDEX fspresence_fsobject_id__uuid ON fspresence(fsobject_id, uuid)")
+
+    curr.executescript("""
+            CREATE TABLE folder_structure (
+              fullpath TEXT NOT NULL PRIMARY KEY,
+              fsobject_id INTEGER,
+              ISDIR BOOL NOT NULL,
+              parent TEXT,
+              FOREIGN KEY(parent) REFERENCES folder_structure(fullpath) ON DELETE RESTRICT
+              );
+            CREATE INDEX _folder_structure_parent ON folder_structure (parent);
+
+            -- add to folder structure
+            CREATE TRIGGER add_missing__folder_structure_on_fsobject AFTER INSERT ON fsobject 
+            BEGIN
+              INSERT INTO folder_structure (fullpath, parent, isdir)
+              SELECT new.fullpath, CASE WHEN LENGTH(new.fullpath) == 0 THEN NULL ELSE rtrim(rtrim(new.fullpath, replace(new.fullpath, '/', '')), '/') END, new.isdir
+              WHERE NOT EXISTS (SELECT 1 FROM folder_structure WHERE folder_structure.fullpath = new.fullpath);
+              
+              UPDATE folder_structure SET fsobject_id = new.fsobject_id WHERE fullpath = new.fullpath; 
+            END;
+
+            CREATE TRIGGER add_missing__folder_structure_parent BEFORE INSERT ON folder_structure
+            WHEN new.parent IS NOT NULL AND NOT EXISTS (SELECT 1 FROM folder_structure WHERE folder_structure.fullpath = new.parent)
+            BEGIN
+              INSERT OR REPLACE INTO folder_structure(fullpath, parent, isdir)
+              VALUES (new.parent, CASE WHEN LENGTH(new.parent)=0 THEN NULL ELSE rtrim(rtrim(new.parent, replace(new.parent, '/', '')), '/') END, TRUE);
+            END;
+
+            CREATE TRIGGER remove_obsolete__folder_structure_on_fsobject_can_delete AFTER DELETE ON fsobject
+            WHEN NOT EXISTS(SELECT 1 FROM folder_structure WHERE parent == old.fullpath)
+            BEGIN
+              DELETE FROM folder_structure WHERE folder_structure.fullpath = old.fullpath; -- no child folders
+            END;
+            
+            CREATE TRIGGER remove_obsolete__folder_structure_on_fsobject AFTER DELETE ON fsobject
+            BEGIN
+              UPDATE folder_structure SET fsobject_id = NULL WHERE folder_structure.fullpath = old.fullpath;
+            END;
+
+            CREATE TRIGGER remove_obsolete__folder_structure_on_no_other_children AFTER DELETE ON folder_structure
+            WHEN NOT EXISTS (SELECT 1 FROM fsobject WHERE fsobject.fullpath = old.parent) 
+              AND NOT EXISTS (SELECT 1 FROM folder_structure WHERE folder_structure.parent = old.parent)
+            BEGIN
+              DELETE FROM folder_structure 
+              WHERE folder_structure.fullpath = old.parent;
+            END;""")

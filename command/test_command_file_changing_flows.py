@@ -616,9 +616,9 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             "TO_GET (from 1) /wat/test.me.3\n"
             " repo-changed-cave-name has 2 files\n"
             "repo-backup-name:\n"
+            "TO_GET (from 1) /test.me.1\n"
             "TO_GET (from 3) /wat/test.me.2\n"
             "TO_GET (from 2) /test.me.4\n"
-            "TO_GET (from 1) /test.me.1\n"
             "TO_GET (from 1) /wat/test.me.3\n"
             " repo-changed-cave-name has 4 files\n"
             " repo-full-name has 2 files\n"
@@ -642,9 +642,9 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             " repo-changed-cave-name has 1 files\n"
             "repo-full-name:\n"
             "repo-backup-name:\n"
+            "TO_GET (from 1) /test.me.1\n"
             "TO_GET (from 3) /wat/test.me.2\n"
             "TO_GET (from 2) /test.me.4\n"
-            "TO_GET (from 1) /test.me.1\n"
             "TO_GET (from 1) /wat/test.me.3\n"
             " repo-changed-cave-name has 4 files\n"
             " repo-full-name has 2 files\n"
@@ -668,9 +668,9 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             " repo-full-name has 1 files\n"
             "repo-full-name:\n"
             "repo-backup-name:\n"
+            "TO_GET (from 1) /test.me.1\n"
             "TO_GET (from 3) /wat/test.me.2\n"
             "TO_GET (from 2) /test.me.4\n"
-            "TO_GET (from 1) /test.me.1\n"
             "TO_GET (from 1) /wat/test.me.3\n"
             " repo-changed-cave-name has 2 files\n"
             " repo-full-name has 4 files\n"
@@ -846,13 +846,13 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.files.pending(copy_cave_cmd.current_uuid())
         self.assertEqual(
             "repo-copy-name:\n"
+            "TO_GET (from 1) /test.me.1\n"
             "TO_CLEANUP (is in 0) /wat/test.me.2\n"
             "TO_CLEANUP (is in 0) /test.me.4\n"
             "TO_GET (from 1) /lets_get_it_started/test.me.2-butnew\n"
             "TO_GET (from 1) /lets_get_it_started/test.me.2-butsecond\n"
             "TO_MOVE /lets_get_it_started/test.me.4-renamed from /test.me.4\n"
             "TO_GET (from 1) /test.me.added\n"
-            "TO_GET (from 1) /test.me.1\n"
             " repo-full-name has 4 files\n"
             "DONE", res)
 
@@ -887,13 +887,13 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.files.pending(backup_cave_cmd.current_uuid())
         self.assertEqual(
             'repo-backup-name:\n'
+            'TO_GET (from 2) /test.me.1\n'
             'TO_CLEANUP (is in 0) /test.me.4\n'
             'TO_GET (from 2) /wat/test.me.3\n'
             'TO_GET (from 2) /lets_get_it_started/test.me.2-butnew\n'
             'TO_GET (from 2) /lets_get_it_started/test.me.2-butsecond\n'
             'TO_GET (from 2) /lets_get_it_started/test.me.4-renamed\n'
             'TO_GET (from 2) /test.me.added\n'
-            'TO_GET (from 2) /test.me.1\n'
             ' repo-copy-name has 6 files\n'
             ' repo-full-name has 6 files\n'
             'DONE', res)
@@ -1088,13 +1088,13 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.files.pending(copy_cave_cmd.current_uuid())
         self.assertEqual(
             "repo-copy-name:\n"
+            "TO_GET (from 1) /test.me.1\n"
             "TO_CLEANUP (is in 0) /wat/test.me.2\n"
             "TO_CLEANUP (is in 0) /test.me.4\n"
             "TO_GET (from 1) /lets_get_it_started/test.me.2-butnew\n"
             "TO_GET (from 1) /lets_get_it_started/test.me.2-butsecond\n"
             "TO_MOVE /lets_get_it_started/test.me.4-renamed from /test.me.4\n"
             "TO_GET (from 1) /test.me.added\n"
-            "TO_GET (from 1) /test.me.1\n"
             " repo-full-name has 4 files\n"
             "DONE", res)
 
@@ -1129,13 +1129,13 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.files.pending(backup_cave_cmd.current_uuid())
         self.assertEqual(
             'repo-backup-name:\n'
+            'TO_GET (from 2) /test.me.1\n'
             'TO_CLEANUP (is in 0) /wat/test.me.2\n'
             'TO_CLEANUP (is in 0) /test.me.4\n'
             'TO_GET (from 2) /lets_get_it_started/test.me.2-butnew\n'
             'TO_GET (from 2) /lets_get_it_started/test.me.2-butsecond\n'
             'TO_MOVE /lets_get_it_started/test.me.4-renamed from /test.me.4\n'
             'TO_GET (from 2) /test.me.added\n'
-            'TO_GET (from 2) /test.me.1\n'
             ' repo-copy-name has 4 files\n'
             ' repo-full-name has 4 files\n'
             'DONE', res)
@@ -1191,8 +1191,8 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.files.pending(partial_cave_cmd.current_uuid())
         self.assertEqual(
             'repo-partial-name:\n'
-            'TO_CLEANUP (is in 0) /wat/test.me.2\n'
             'TO_GET (from 3) /test.me.1\n'
+            'TO_CLEANUP (is in 0) /wat/test.me.2\n'
             ' repo-backup-name has 1 files\n'
             ' repo-copy-name has 1 files\n'
             ' repo-full-name has 1 files\n'
