@@ -1,9 +1,6 @@
 import logging
-import os
-import pathlib
 import sys
 from io import StringIO
-from command.fast_path import FastPosixPath
 from typing import List, Dict, Any, Optional, Callable, Awaitable, Tuple, TextIO
 
 import humanize
@@ -13,10 +10,11 @@ from command.content_prefs import ContentPrefs
 from command.contents.comparisons import compare_local_to_hoard
 from command.contents.handle_pull import PullPreferences, pull_repo_contents_to_hoard, _handle_local_only, \
     reset_local_as_current, PullBehavior
+from command.fast_path import FastPosixPath
 from command.hoard import Hoard
 from command.pathing import HoardPathing
 from command.pending_file_ops import GetFile, CopyFile, CleanupFile, get_pending_operations
-from config import CaveType
+from config import CaveType, HoardRemote
 from contents.hoard import HoardContents, HoardFile, HoardDir
 from contents.hoard_props import HoardFileStatus, HoardFileProps
 from contents.repo_props import RepoFileProps, RepoFileStatus
@@ -97,6 +95,60 @@ def augment_statuses(config, hoard, show_empty, statuses):
     available_states = set(sum((list(stats.keys()) for _, _, _, stats in statuses_sorted), []))
     return available_states, statuses_sorted
 
+
+async def execute_pull(hoard: Hoard, remote_obj: HoardRemote, ignore_epoch: bool, assume_current: bool,
+                       force_fetch_local_missing: bool, out: StringIO):
+    config = hoard.config()
+    pathing = HoardPathing(config, hoard.paths())
+
+    logging.info(f"Loading hoard contents TOML...")
+    async with hoard.open_contents(create_missing=False, is_readonly=False) as hoard_contents:
+        logging.info(f"Loaded hoard contents TOML!")
+        content_prefs = ContentPrefs(config, pathing, hoard_contents)
+
+        try:
+            connected_repo = hoard.connect_to_repo(remote_obj.uuid, require_contents=True)
+            current_contents = connected_repo.open_contents(is_readonly=True)
+        except MissingRepoContents as e:
+            logging.error(e)
+            out.write(f"Repo {remote_obj.uuid} has no current contents available!\n")
+            return
+
+        with current_contents:
+            if current_contents.config.is_dirty:
+                logging.error(
+                    f"{remote_obj.uuid} is_dirty = TRUE, so the refresh is not complete - can't use current repo.")
+                out.write(f"Skipping update as {remote_obj.uuid} is not fully calculated!\n")
+                return
+
+            if not ignore_epoch and hoard_contents.config.remote_epoch(
+                    remote_obj.uuid) >= current_contents.config.epoch:
+                out.write(f"Skipping update as past epoch {current_contents.config.epoch} "
+                          f"is not after hoard epoch {hoard_contents.config.remote_epoch(remote_obj.uuid)}\n")
+                return
+
+            logging.info(f"Saving config of remote {remote_obj.uuid}...")
+            hoard_contents.config.save_remote_config(current_contents.config)
+
+            if remote_obj.type == CaveType.INCOMING:
+                preferences = _init_pull_preferences_incoming(content_prefs, remote_obj.uuid)
+            elif remote_obj.type == CaveType.BACKUP:
+                preferences = _init_pull_preferences_backup(content_prefs, remote_obj.uuid)
+            else:
+                assert remote_obj.type == CaveType.PARTIAL
+                preferences = _init_pull_preferences_partial(
+                    content_prefs, remote_obj.uuid, assume_current, force_fetch_local_missing)
+
+            await pull_repo_contents_to_hoard(
+                hoard_contents, pathing, config, current_contents, preferences, out)
+
+            logging.info(f"Updating epoch of {remote_obj.uuid} to {current_contents.config.epoch}")
+            hoard_contents.config.mark_up_to_date(
+                remote_obj.uuid, current_contents.config.epoch, current_contents.config.updated)
+
+        clean_dangling_files(hoard_contents, out)
+
+    out.write(f"Sync'ed {remote_obj.name} to hoard!\n")
 
 class HoardCommandContents:
     def __init__(self, hoard: Hoard):
@@ -290,7 +342,6 @@ class HoardCommandContents:
             force_fetch_local_missing: bool = False, assume_current: bool = False):
         logging.info("Loading config")
         config = self.hoard.config()
-        pathing = HoardPathing(config, self.hoard.paths())
 
         if all:
             assert remote is None
@@ -313,59 +364,12 @@ class HoardCommandContents:
                 remote_obj = config.remotes[remote_uuid]
                 logging.info(f"Pulling contents of {remote_obj.name}[{remote_uuid}].")
 
-                logging.info(f"Loading hoard contents TOML...")
-                async with self.hoard.open_contents(create_missing=False, is_readonly=False) as hoard_contents:
-                    logging.info(f"Loaded hoard contents TOML!")
-                    content_prefs = ContentPrefs(config, pathing, hoard_contents)
+                if remote_obj is None or remote_obj.mounted_at is None:
+                    out.write(f"Remote {remote_uuid} is not mounted!\n")
+                    continue
 
-                    try:
-                        connected_repo = self.hoard.connect_to_repo(remote_uuid, require_contents=True)
-                        current_contents = connected_repo.open_contents(is_readonly=True)
-                    except MissingRepoContents as e:
-                        logging.error(e)
-                        out.write(f"Repo {remote_uuid} has no current contents available!\n")
-                        continue
+                await execute_pull(self.hoard, remote_obj, ignore_epoch, assume_current, force_fetch_local_missing, out)
 
-                    with current_contents:
-                        if current_contents.config.is_dirty:
-                            logging.error(
-                                f"{remote_uuid} is_dirty = TRUE, so the refresh is not complete - can't use current repo.")
-                            out.write(f"Skipping update as {remote_uuid} is not fully calculated!\n")
-                            continue
-
-                        if not ignore_epoch and hoard_contents.config.remote_epoch(
-                                remote_uuid) >= current_contents.config.epoch:
-                            out.write(f"Skipping update as past epoch {current_contents.config.epoch} "
-                                      f"is not after hoard epoch {hoard_contents.config.remote_epoch(remote_uuid)}\n")
-                            continue
-
-                        logging.info(f"Saving config of remote {remote_uuid}...")
-                        hoard_contents.config.save_remote_config(current_contents.config)
-
-                        remote_doc = config.remotes[remote_uuid]
-                        if remote_doc is None or remote_doc.mounted_at is None:
-                            out.write(f"Remote {remote_uuid} is not mounted!\n")
-                            continue
-
-                        if remote_obj.type == CaveType.INCOMING:
-                            preferences = _init_pull_preferences_incoming(content_prefs, remote_uuid)
-                        elif remote_obj.type == CaveType.BACKUP:
-                            preferences = _init_pull_preferences_backup(content_prefs, remote_uuid)
-                        else:
-                            assert remote_obj.type == CaveType.PARTIAL
-                            preferences = _init_pull_preferences_partial(
-                                content_prefs, remote_uuid, assume_current, force_fetch_local_missing)
-
-                        await pull_repo_contents_to_hoard(
-                            hoard_contents, pathing, config, current_contents, preferences, out)
-
-                        logging.info(f"Updating epoch of {remote_uuid} to {current_contents.config.epoch}")
-                        hoard_contents.config.mark_up_to_date(
-                            remote_uuid, current_contents.config.epoch, current_contents.config.updated)
-
-                    clean_dangling_files(hoard_contents, out)
-
-                out.write(f"Sync'ed {config.remotes[remote_uuid].name} to hoard!\n")
             out.write("DONE")
             return out.getvalue()
 
