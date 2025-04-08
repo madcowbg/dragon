@@ -1,5 +1,4 @@
 import logging
-from multiprocessing.pool import worker
 from sqlite3 import OperationalError
 from typing import TypeVar, Dict
 
@@ -12,6 +11,7 @@ from textual.reactive import reactive, var
 from textual.screen import Screen
 from textual.widget import Widget
 from textual.widgets import Tree, Static, Header, Footer, Select, RichLog
+from textual.widgets._tree import TreeNode
 
 from command.contents.comparisons import compare_local_to_hoard
 from command.hoard import Hoard
@@ -22,6 +22,8 @@ from contents_diff import FileIsSame
 from exceptions import RepoOpeningFailed
 from gui.app_config import config, _write_config
 from gui.folder_tree import FolderNode, FolderTree, aggregate_on_nodes
+from gui.progress_reporting import StartProgressReporting, MarkProgressReporting, progress_reporting, \
+    ProgressReporting
 
 
 class HoardContentsPendingToSyncFile(Tree[FolderNode[FileOp]]):
@@ -39,6 +41,8 @@ class HoardContentsPendingToSyncFile(Tree[FolderNode[FileOp]]):
         self.counts = None
         self.ops_cnt = None
 
+        self.expanded = set()
+
     async def on_mount(self):
         async with self.hoard.open_contents(create_missing=False, is_readonly=True) as hoard_contents:
             self.op_tree = FolderTree(
@@ -55,8 +59,12 @@ class HoardContentsPendingToSyncFile(Tree[FolderNode[FileOp]]):
         self.root.label = self.root.label.append(self._pretty_folder_label_descriptor(self.op_tree.root))
         self.root.expand()
 
-
     def on_tree_node_expanded(self, event: Tree[FolderNode[FileOp]].NodeExpanded):
+        if event.node in self.expanded:
+            return
+
+        self.expanded.add(event.node)
+
         for _, folder in event.node.data.folders.items():
             folder_label = Text().append(folder.name).append(" ").append(f"({self.counts[folder]})", style="dim")
             cnts_label = self._pretty_folder_label_descriptor(folder)
@@ -82,6 +90,7 @@ async def aggregate_counts(op_tree):
         op_tree,
         lambda op: 1,
         lambda old, new: new if old is None else old + new)
+
 
 def op_to_str(op: FileOp):
     if isinstance(op, GetFile):
@@ -112,7 +121,6 @@ PENDING_TO_PULL = 'Hoard vs Repo contents'
 class HoardContentsPendingToPull(Tree):
     hoard: Hoard | None = reactive(None)
     remote: HoardRemote | None = reactive(None, recompose=True)
-    loaded = reactive(None)
 
     def __init__(self, hoard: Hoard, remote: HoardRemote):
         super().__init__(PENDING_TO_PULL + " (expand to load)")
@@ -123,8 +131,10 @@ class HoardContentsPendingToPull(Tree):
         self.op_tree = None
         self.counts = None
 
+        self.expanded = set()
+
     @work(thread=True)
-    async def populate(self):
+    async def populate_and_expand(self):
         try:
             self.root.label = PENDING_TO_PULL + " (loading...)"
             pathing = HoardPathing(self.hoard.config(), self.hoard.paths())
@@ -133,7 +143,9 @@ class HoardContentsPendingToPull(Tree):
                 async with self.hoard.open_contents(create_missing=False, is_readonly=True) as hoard_contents:
                     # fixme too slow to even load all the is-same cases, should optimize
                     diffs = [
-                        diff async for diff in compare_local_to_hoard(current_contents, hoard_contents, pathing)
+                        diff async for diff in compare_local_to_hoard(
+                            current_contents, hoard_contents, pathing,
+                            progress_reporting(self, id="hoard-contents-to-pull", max_frequency=10))
                         if not isinstance(diff, FileIsSame)]
 
             self.op_tree = FolderTree(
@@ -147,29 +159,34 @@ class HoardContentsPendingToPull(Tree):
 
             self.post_message(Tree.NodeExpanded(self.root))
 
+            self._expand_subtree(self.root)
+
         except RepoOpeningFailed as e:
-            self.loaded = False
             logging.error(f"Repo opening failed: {e}")
             self.root.label = PENDING_TO_PULL + " (FAILED TO OPEN)"
         except OperationalError as e:
-            self.loaded = False
             logging.error(f"Repo opening failed: {e}")
             self.root.label = PENDING_TO_PULL + " (INVALID CONTENTS)"
 
-    async def on_tree_node_expanded(self, event: Tree.NodeExpanded):
-        if event.node == self.root and not self.loaded:
-            self.loaded = True
-            self.populate()
+    def on_tree_node_expanded(self, event: Tree.NodeExpanded):
+        if event.node in self.expanded:
+            return
+        self.expanded.add(event.node)
 
-        if self.op_tree is not None:
-            for _, folder in event.node.data.folders.items():
-                folder_name = Text().append(folder.name).append(" ").append(f"({self.counts[folder]})", style="dim")
-                # cnts_label = self._pretty_folder_label_descriptor(folder)
-                folder_label = folder_name #.append(" ").append(cnts_label)
-                event.node.add(folder_label, data=folder)
+        if event.node == self.root:
+            self.populate_and_expand()
+        else:
+            assert self.op_tree is not None
+            self._expand_subtree(event.node)
 
-            for _, node in event.node.data.files.items():
-                event.node.add_leaf(f"{type(node.data)}: {node.data.hoard_file}", data=node.data)
+    def _expand_subtree(self, node: TreeNode):
+        for _, folder in node.data.folders.items():
+            folder_name = Text().append(folder.name).append(" ").append(f"({self.counts[folder]})", style="dim")
+            # cnts_label = self._pretty_folder_label_descriptor(folder)
+            folder_label = folder_name  # .append(" ").append(cnts_label)
+            node.add(folder_label, data=folder)
+        for _, node in node.data.files.items():
+            node.add_leaf(f"{type(node.data)}: {node.data.hoard_file}", data=node.data)
 
 
 class CaveInfoWidget(Widget):
@@ -227,7 +244,16 @@ class CaveExplorerScreen(Screen):
         else:
             yield Select((), prompt="Select a cave", disabled=True)
         yield CaveInfoWidget(self.hoard, self.remote)
+        yield ProgressReporting()
         yield RichLog(id="cave_explorer_log")
 
     def on_select_changed(self, event: Select.Changed):
         self.remote = event.value
+
+    async def on_start_progress_reporting(self, event: StartProgressReporting):
+        await self.query_one(ProgressReporting).on_start_progress_reporting(event)
+
+    async def on_mark_progress_reporting(self, event: MarkProgressReporting):
+        await self.query_one(ProgressReporting).on_mark_progress_reporting(event)
+
+
