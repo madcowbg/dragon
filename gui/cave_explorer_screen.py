@@ -43,7 +43,7 @@ class HoardContentsPendingToSyncFile(Tree[FolderNode[FileOp]]):
         async with self.hoard.open_contents(create_missing=False, is_readonly=True) as hoard_contents:
             self.op_tree = FolderTree(
                 get_pending_operations(hoard_contents, self.remote.uuid),
-                lambda op: op.hoard_file)
+                lambda op: op.hoard_file.as_posix())
 
         self.counts = await aggregate_counts(self.op_tree)
         self.ops_cnt = aggregate_on_nodes(

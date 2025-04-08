@@ -211,8 +211,7 @@ class HoardFSObjects:
 
     def _read_as_path_to_props(self, cursor, row) -> Tuple[FastPosixPath, HoardFileProps]:
         fullpath, fsobject_id, isdir, size, fasthash = row
-        if isdir:
-            logging.error("ERROR - TRYING TO CREATE A DIR OBJECT")
+        assert isdir == False
         return FastPosixPath(fullpath), HoardFileProps(self.parent, fsobject_id, size, fasthash)
 
     def __getitem__(self, file_path: FastPosixPath) -> HoardFileProps:

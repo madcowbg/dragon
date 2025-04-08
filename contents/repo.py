@@ -46,15 +46,13 @@ class RepoFSObjects:
 
     def len_existing(self) -> int:
         return self._first_value_cursor().execute(
-            "SELECT count(1) FROM fsobject WHERE last_status NOT IN (?, ?)",
+            "SELECT count(1) FROM fsobject WHERE last_status NOT IN (?, ?) and isdir = FALSE",
             (RepoFileStatus.DELETED.value, RepoFileStatus.MOVED_FROM.value)).fetchone()
 
     @staticmethod
     def _create_pair_path_props(cursor: Cursor, row: Row) -> Tuple[FastPosixPath, RepoFileProps]:
         fullpath, isdir, size, mtime, fasthash, md5, last_status, last_update_epoch, last_related_fullpath = row
-        if isdir:
-            logging.error("ERROR - TRYING TO CREATE A DIR OBJECT")
-
+        assert isdir == False
         return FastPosixPath(fullpath), RepoFileProps(
             size, mtime, fasthash, md5, RepoFileStatus(last_status), last_update_epoch, last_related_fullpath)
 
@@ -66,7 +64,7 @@ class RepoFSObjects:
         _, props = curr.execute(
             "SELECT fullpath, isdir, size, mtime, fasthash, md5, last_status, last_update_epoch, last_related_fullpath "
             "FROM fsobject "
-            "WHERE fsobject.fullpath = ? AND last_status NOT IN (?, ?)",
+            "WHERE fsobject.fullpath = ? AND last_status NOT IN (?, ?) and isdir = FALSE",
             (file_path.as_posix(), RepoFileStatus.DELETED.value, RepoFileStatus.MOVED_FROM.value)).fetchone()
         return props
 
@@ -93,7 +91,7 @@ class RepoFSObjects:
 
         yield from curr.execute(
             "SELECT fullpath, isdir, size, mtime, fasthash, md5, last_status, last_update_epoch, last_related_fullpath "
-            "FROM fsobject ORDER BY fullpath")
+            "FROM fsobject WHERE isdir = FALSE ORDER BY fullpath")
 
     def existing(self) -> Iterable[Tuple[FastPosixPath, RepoFileProps]]:
         curr = self.parent.conn.cursor()
@@ -101,13 +99,13 @@ class RepoFSObjects:
 
         yield from curr.execute(
             "SELECT fullpath, isdir, size, mtime, fasthash, md5, last_status, last_update_epoch, last_related_fullpath "
-            "FROM fsobject WHERE last_status NOT IN (?, ?)",
+            "FROM fsobject WHERE last_status NOT IN (?, ?) and isdir = FALSE",
             (RepoFileStatus.DELETED.value, RepoFileStatus.MOVED_FROM.value))
 
     def in_existing(self, file_path: FastPosixPath) -> bool:
         assert not file_path.is_absolute()
         return self._first_value_cursor().execute(
-            "SELECT count(1) FROM fsobject WHERE fsobject.fullpath = ? AND last_status NOT IN (?, ?)",
+            "SELECT count(1) FROM fsobject WHERE fsobject.fullpath = ? AND last_status NOT IN (?, ?) and isdir = FALSE",
             (file_path.as_posix(), RepoFileStatus.DELETED.value, RepoFileStatus.MOVED_FROM.value)).fetchone() > 0
 
     def add_file(self, filepath: FastPosixPath, size: int, mtime: float, fasthash: str, status: RepoFileStatus) -> None:
@@ -128,13 +126,6 @@ class RepoFSObjects:
 
         # add the new file
         self.add_file(to_file, size, mtime, fasthash, RepoFileStatus.ADDED)
-
-    def add_dir(self, dirpath: FastPosixPath, status: RepoFileStatus):
-        assert not dirpath.is_absolute()
-        self.parent.conn.execute(
-            "INSERT OR REPLACE INTO fsobject(fullpath, isdir, md5, last_status, last_update_epoch, last_related_fullpath) "
-            "VALUES (?, TRUE, NULL, ?, ?, NULL)",
-            (dirpath.as_posix(), status.value, self.parent.config.epoch))
 
     def mark_removed(self, path: FastPosixPath):
         assert not path.is_absolute()
