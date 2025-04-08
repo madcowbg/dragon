@@ -123,9 +123,8 @@ class HoardContentsPendingToPull(Tree):
         self.op_tree = None
         self.counts = None
 
-    @work(exclusive=True)
+    @work(thread=True)
     async def populate(self):
-        self.loaded = True
         try:
             self.root.label = PENDING_TO_PULL + " (loading...)"
             pathing = HoardPathing(self.hoard.config(), self.hoard.paths())
@@ -159,6 +158,7 @@ class HoardContentsPendingToPull(Tree):
 
     async def on_tree_node_expanded(self, event: Tree.NodeExpanded):
         if event.node == self.root and not self.loaded:
+            self.loaded = True
             self.populate()
 
         if self.op_tree is not None:
