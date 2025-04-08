@@ -1,18 +1,20 @@
 import logging
+from io import StringIO
 from sqlite3 import OperationalError
 from typing import TypeVar, Dict
 
 from rich.text import Text
-from textual import work
+from textual import work, on
 from textual.app import ComposeResult
-from textual.containers import Horizontal
+from textual.containers import Horizontal, Vertical
 from textual.css.query import NoMatches
 from textual.reactive import reactive, var
 from textual.screen import Screen
 from textual.widget import Widget
-from textual.widgets import Tree, Static, Header, Footer, Select, RichLog
+from textual.widgets import Tree, Static, Header, Footer, Select, RichLog, Button
 from textual.widgets._tree import TreeNode
 
+from command.contents.command import execute_pull
 from command.contents.comparisons import compare_local_to_hoard
 from command.hoard import Hoard
 from command.pathing import HoardPathing
@@ -22,6 +24,7 @@ from contents_diff import FileIsSame
 from exceptions import RepoOpeningFailed
 from gui.app_config import config, _write_config
 from gui.folder_tree import FolderNode, FolderTree, aggregate_on_nodes
+from gui.node_description_widget import ConfirmActionScreen
 from gui.progress_reporting import StartProgressReporting, MarkProgressReporting, progress_reporting, \
     ProgressReporting
 
@@ -185,8 +188,8 @@ class HoardContentsPendingToPull(Tree):
             # cnts_label = self._pretty_folder_label_descriptor(folder)
             folder_label = folder_name  # .append(" ").append(cnts_label)
             node.add(folder_label, data=folder)
-        for _, node in node.data.files.items():
-            node.add_leaf(f"{type(node.data)}: {node.data.hoard_file}", data=node.data)
+        for _, file in node.data.files.items():
+            node.add_leaf(f"{type(file.data)}: {file.data.hoard_file}", data=node.data)
 
 
 class CaveInfoWidget(Widget):
@@ -205,9 +208,32 @@ class CaveInfoWidget(Widget):
             yield Static(self.remote.name)
             yield Static(self.remote.uuid)
             yield Horizontal(
-                HoardContentsPendingToSyncFile(self.hoard, self.remote),
-                HoardContentsPendingToPull(self.hoard, self.remote),
+                Vertical(
+                    Button(
+                        "Push files to repo", variant="primary", id="push_files_to_repo", disabled=True),
+                    HoardContentsPendingToSyncFile(self.hoard, self.remote)),
+                Vertical(
+                    Button("Pull to Hoard", variant="primary"),
+                    HoardContentsPendingToPull(self.hoard, self.remote)
+                ),
                 id="content_trees")
+
+    @on(Button.Pressed)
+    @work
+    async def pull_to_hoard(self):
+        if await self.app.push_screen_wait(
+                ConfirmActionScreen(
+                    f"Are you sure you want to PULL the repo: \n"
+                    f"{self.remote.name}({self.remote.uuid}\n"
+                    f"into hoard?")):
+            with StringIO() as out:
+                await execute_pull(
+                    self.hoard, self.remote,
+                    ignore_epoch=False, assume_current=False, force_fetch_local_missing=False, out=out,
+                    progress_bar=progress_reporting(self, "pull-to-hoard-operation", 10))
+                logging.info(out.getvalue())
+
+            await self.recompose()
 
 
 class CaveExplorerScreen(Screen):
@@ -255,5 +281,3 @@ class CaveExplorerScreen(Screen):
 
     async def on_mark_progress_reporting(self, event: MarkProgressReporting):
         await self.query_one(ProgressReporting).on_mark_progress_reporting(event)
-
-

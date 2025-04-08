@@ -96,8 +96,9 @@ def augment_statuses(config, hoard, show_empty, statuses):
     return available_states, statuses_sorted
 
 
-async def execute_pull(hoard: Hoard, remote_obj: HoardRemote, ignore_epoch: bool, assume_current: bool,
-                       force_fetch_local_missing: bool, out: StringIO):
+async def execute_pull(
+        hoard: Hoard, remote_obj: HoardRemote, ignore_epoch: bool, assume_current: bool,
+        force_fetch_local_missing: bool, out: StringIO, progress_bar=alive_it):
     config = hoard.config()
     pathing = HoardPathing(config, hoard.paths())
 
@@ -140,7 +141,7 @@ async def execute_pull(hoard: Hoard, remote_obj: HoardRemote, ignore_epoch: bool
                     content_prefs, remote_obj.uuid, assume_current, force_fetch_local_missing)
 
             await pull_repo_contents_to_hoard(
-                hoard_contents, pathing, config, current_contents, preferences, out)
+                hoard_contents, pathing, config, current_contents, preferences, out, progress_bar)
 
             logging.info(f"Updating epoch of {remote_obj.uuid} to {current_contents.config.epoch}")
             hoard_contents.config.mark_up_to_date(
@@ -149,6 +150,7 @@ async def execute_pull(hoard: Hoard, remote_obj: HoardRemote, ignore_epoch: bool
         clean_dangling_files(hoard_contents, out)
 
     out.write(f"Sync'ed {remote_obj.name} to hoard!\n")
+
 
 class HoardCommandContents:
     def __init__(self, hoard: Hoard):

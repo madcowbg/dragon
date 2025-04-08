@@ -1,6 +1,9 @@
 import enum
 import logging
 from io import StringIO
+
+from alive_progress import alive_it
+
 from command.fast_path import FastPosixPath
 
 from command.content_prefs import ContentPrefs
@@ -291,8 +294,8 @@ def _move_locally(
 
 async def pull_repo_contents_to_hoard(
         hoard_contents: HoardContents, pathing: HoardPathing, config: HoardConfig, current_contents: RepoContents,
-        preferences: PullPreferences, out: StringIO):
-    all_diffs = [diff async for diff in compare_local_to_hoard(current_contents, hoard_contents, pathing)]
+        preferences: PullPreferences, out: StringIO, progress_tool=alive_it):
+    all_diffs = [diff async for diff in compare_local_to_hoard(current_contents, hoard_contents, pathing, progress_tool)]
     diffs_by_type = group_to_dict(all_diffs, key=lambda diff: type(diff))
 
     for dt, diffs in diffs_by_type.items():
