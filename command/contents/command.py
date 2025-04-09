@@ -8,9 +8,8 @@ from alive_progress import alive_bar, alive_it
 
 from command.content_prefs import ContentPrefs
 from command.contents.comparisons import compare_local_to_hoard
-from command.contents.handle_pull import PullPreferences, pull_repo_contents_to_hoard, behavior_reset_local_as_current, \
-    PullIntention, \
-    _handle_local_only
+from command.contents.handle_pull import PullPreferences, pull_repo_contents_to_hoard, PullIntention, \
+    _handle_local_only, ResetLocalAsCurrentBehavior
 from command.fast_path import FastPosixPath
 from command.hoard import Hoard
 from command.pathing import HoardPathing
@@ -457,7 +456,7 @@ class HoardCommandContents:
 
                                 diff = Diff(
                                     DiffType.FileContentsDiffer, local_file, hoard_file, local_props, hoard_props, None)
-                                behavior_reset_local_as_current(diff, hoard, repo_uuid)
+                                ResetLocalAsCurrentBehavior(diff).execute(repo_uuid, None, hoard, None)
                                 out.write(f"RESET {hoard_file}\n")
 
                 out.write("DONE")
