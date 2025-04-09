@@ -18,6 +18,7 @@ from command.content_prefs import ContentPrefs
 from command.contents.command import execute_pull, init_pull_preferences
 from command.contents.comparisons import compare_local_to_hoard
 from command.contents.handle_pull import resolution_to_match_repo_and_hoard, calculate_actions, Action
+from command.files.command import execute_files_push
 from command.hoard import Hoard
 from command.pathing import HoardPathing
 from command.pending_file_ops import FileOp, get_pending_operations, CleanupFile, GetFile, CopyFile, MoveFile
@@ -217,7 +218,7 @@ class CaveInfoWidget(Widget):
             yield Horizontal(
                 Vertical(
                     Button(
-                        "Push files to repo", variant="primary", id="push_files_to_repo", disabled=True),
+                        "Push files to repo", variant="primary", id="push_files_to_repo"),
                     HoardContentsPendingToSyncFile(self.hoard, self.remote)),
                 Vertical(
                     Button("Pull to Hoard", variant="primary"),
@@ -225,7 +226,24 @@ class CaveInfoWidget(Widget):
                 ),
                 id="content_trees")
 
-    @on(Button.Pressed)
+    @on(Button.Pressed, "#push_files_to_repo")
+    @work
+    async def push_files_to_repo(self):
+        if await self.app.push_screen_wait(
+                ConfirmActionScreen(
+                    f"Are you sure you want to PUSH FILES to the repo: \n"
+                    f"{self.remote.name}({self.remote.uuid}\n"
+                    f"?")):
+            with StringIO() as out:
+                await execute_files_push(
+                    self.hoard.config(),
+                    self.hoard,[self.remote.uuid], out)
+                # FIXME implement progress_bar=progress_reporting(self, "pull-to-hoard-operation", 10)
+                logging.info(out.getvalue())
+
+            await self.recompose()
+
+    @on(Button.Pressed, "#pull_to_hoard")
     @work
     async def pull_to_hoard(self):
         if await self.app.push_screen_wait(
