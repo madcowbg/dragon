@@ -47,6 +47,11 @@ class HoardRemote:
     def fetch_new(self, value: bool):
         self.doc["fetch_new"] = value
 
+    def __eq__(self, other):
+        return isinstance(other, HoardRemote) and self.uuid == other.uuid and self.doc == other.doc
+
+    def __hash__(self):
+        return hash(self.uuid)
 
 class HoardRemotes:
     def __init__(self, doc: Dict[str, Any]):

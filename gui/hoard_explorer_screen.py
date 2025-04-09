@@ -113,11 +113,10 @@ class HoardExplorerScreen(Screen):
             screen.can_modify = self.can_modify
 
     def compose(self) -> ComposeResult:
-        self.hoard_path = pathlib.Path(config.get("hoard_path", "."))
-
-        """Create child widgets for the app."""
         yield Header()
         yield Footer()
+
+        self.hoard_path = pathlib.Path(config.get("hoard_path", "."))
 
         yield Horizontal(
             Label("Hoard:"), Input(value=self.hoard_path.as_posix(), id="hoard_path_input"),

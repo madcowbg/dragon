@@ -8,22 +8,21 @@ from textual import work, on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.css.query import NoMatches
-from textual.reactive import reactive, var
+from textual.reactive import reactive
 from textual.screen import Screen
 from textual.widget import Widget
 from textual.widgets import Tree, Static, Header, Footer, Select, RichLog, Button
+from textual.widgets._select import BLANK
 from textual.widgets._tree import TreeNode
 
 from command.content_prefs import ContentPrefs
 from command.contents.command import execute_pull, init_pull_preferences
-from command.contents.comparisons import compare_local_to_hoard
 from command.contents.handle_pull import resolution_to_match_repo_and_hoard, calculate_actions, Action
 from command.files.command import execute_files_push
 from command.hoard import Hoard
 from command.pathing import HoardPathing
 from command.pending_file_ops import FileOp, get_pending_operations, CleanupFile, GetFile, CopyFile, MoveFile
 from config import HoardRemote
-from contents_diff import DiffType
 from exceptions import RepoOpeningFailed
 from gui.app_config import config, _write_config
 from gui.folder_tree import FolderNode, FolderTree, aggregate_on_nodes
@@ -237,7 +236,7 @@ class CaveInfoWidget(Widget):
             with StringIO() as out:
                 await execute_files_push(
                     self.hoard.config(),
-                    self.hoard,[self.remote.uuid], out)
+                    self.hoard, [self.remote.uuid], out)
                 # FIXME implement progress_bar=progress_reporting(self, "pull-to-hoard-operation", 10)
                 logging.info(out.getvalue())
 
@@ -265,7 +264,7 @@ class CaveExplorerScreen(Screen):
     CSS_PATH = "cave_exporer_screen.tcss"
 
     hoard: Hoard | None = reactive(None, recompose=True)
-    remote: HoardRemote | None = var(None)
+    remote: HoardRemote | None = reactive(None, recompose=True)
 
     def on_mount(self):
         if self.hoard is not None:
@@ -282,8 +281,9 @@ class CaveExplorerScreen(Screen):
     def watch_remote(self):
         if self.remote is not None:
             config["cave_exporer_selected_repo"] = self.remote.uuid
-            self.query_one(CaveInfoWidget).remote = self.remote
             _write_config()
+            self.query_one(CaveInfoWidget).remote = self.remote
+            self.query_one(Select).value = self.remote
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -291,9 +291,12 @@ class CaveExplorerScreen(Screen):
 
         if self.hoard is not None:
             config = self.hoard.config()
-            yield Select(((remote.name, remote) for remote in config.remotes.all()), prompt="Select a cave")
+            yield Select(
+                ((remote.name, remote) for remote in config.remotes.all()),
+                prompt="Select a cave",
+                value=self.remote if self.remote is not None else BLANK)
         else:
-            yield Select((), prompt="Select a cave", disabled=True)
+            yield Select((), prompt="Hoard not loaded", disabled=True)
         yield CaveInfoWidget(self.hoard, self.remote)
         yield ProgressReporting()
         yield RichLog(id="cave_explorer_log")

@@ -3,25 +3,44 @@ import os
 import pathlib
 import subprocess
 
-from textual.app import App
+from textual.app import App, ComposeResult
+from textual.screen import Screen
+from textual.widgets import Header, Footer, Label
 
 from command.hoard import Hoard
+from gui.app_config import config, _write_config
 from gui.cave_explorer_screen import CaveExplorerScreen
 from gui.hoard_explorer_screen import HoardExplorerScreen
 
+class HoardStateScreen(Screen):
+
+    def compose(self) -> ComposeResult:
+        yield Header()
+        yield Footer()
+
+        yield Label("Hoard state")
 
 class HoardExplorerApp(App):
     BINDINGS = [
         ("d", "toggle_dark", "Toggle dark mode"),
-        ("h", "app.push_screen('hoard_explorer')", "Explore hoard"),
-        ("c", "app.push_screen('cave_explorer')", "Explore cave"), ]
+        ("h", "app.push_screen('hoard_explorer')", "Hoard explorer"),
+        ("s", "app.push_screen('hoard_state')", "Hoard state"),
+        ("c", "app.push_screen('cave_explorer')", "Cave operations"), ]
     CSS_PATH = "hoard_explorer.tcss"
     SCREENS = {
         "hoard_explorer": HoardExplorerScreen,
+        "hoard_state": HoardStateScreen,
         "cave_explorer": CaveExplorerScreen}
 
     def on_mount(self):
-        self.push_screen("hoard_explorer")
+        self.get_screen("cave_explorer", CaveExplorerScreen).hoard = Hoard(config["hoard_path"])
+        self.push_screen(config.get("last_screen", "hoard_explorer"))
+
+    def action_push_screen(self, screen: str) -> None:
+        config["last_screen"] = screen
+        _write_config()
+
+        super().push_screen(screen)
 
     def action_toggle_dark(self) -> None:
         """An action to toggle dark mode."""
