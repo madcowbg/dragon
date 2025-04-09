@@ -8,7 +8,7 @@ class FolderNode[T]:
     parent: Union["FolderNode[T]", None]
 
     folders: Dict[str, "FolderNode[T]"]
-    files: Dict[str, T]
+    files: Dict[str, "FileNode[T]"]
 
     def __init__(self, parent: Union["FolderNode[T]", None], name: str):
         self.parent = parent
@@ -36,7 +36,7 @@ class FileNode[T]:
         self.data = data
 
 
-class FolderTree(Generic[T]):
+class FolderTree[T]:
     root: FolderNode[T]
     nodes: Dict[str, FolderNode[T]]
 
@@ -46,7 +46,7 @@ class FolderTree(Generic[T]):
 
         for op in data_list:
             parent = self._ensure_parent_node(key(op))
-            parent.add_file(os.path.basename(op.hoard_file), op)
+            parent.add_file(os.path.basename(key(op)), op)
 
     def _ensure_parent_node(self, path: str) -> FolderNode[T]:
         assert isinstance(path, str)

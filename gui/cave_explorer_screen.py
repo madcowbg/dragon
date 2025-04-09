@@ -14,8 +14,10 @@ from textual.widget import Widget
 from textual.widgets import Tree, Static, Header, Footer, Select, RichLog, Button
 from textual.widgets._tree import TreeNode
 
-from command.contents.command import execute_pull
+from command.content_prefs import ContentPrefs
+from command.contents.command import execute_pull, init_pull_preferences
 from command.contents.comparisons import compare_local_to_hoard
+from command.contents.handle_pull import resolution_to_match_repo_and_hoard, calculate_actions, Action
 from command.hoard import Hoard
 from command.pathing import HoardPathing
 from command.pending_file_ops import FileOp, get_pending_operations, CleanupFile, GetFile, CopyFile, MoveFile
@@ -121,7 +123,7 @@ def sum_dicts(old: Dict[T, any], new: Dict[T, any]) -> Dict[T, any]:
 PENDING_TO_PULL = 'Hoard vs Repo contents'
 
 
-class HoardContentsPendingToPull(Tree):
+class HoardContentsPendingToPull(Tree[Action]):
     hoard: Hoard | None = reactive(None)
     remote: HoardRemote | None = reactive(None, recompose=True)
 
@@ -140,24 +142,29 @@ class HoardContentsPendingToPull(Tree):
     async def populate_and_expand(self):
         try:
             self.root.label = PENDING_TO_PULL + " (loading...)"
-            pathing = HoardPathing(self.hoard.config(), self.hoard.paths())
+            hoard_config = self.hoard.config()
+            pathing = HoardPathing(hoard_config, self.hoard.paths())
             repo = self.hoard.connect_to_repo(self.remote.uuid, True)
             with repo.open_contents(is_readonly=True) as current_contents:
                 async with self.hoard.open_contents(create_missing=False, is_readonly=True) as hoard_contents:
-                    # fixme too slow to even load all the is-same cases, should optimize
-                    diffs = [
-                        diff async for diff in compare_local_to_hoard(
-                            current_contents, hoard_contents, pathing,
-                            progress_reporting(self, id="hoard-contents-to-pull", max_frequency=10))
-                        if not diff.diff_type == DiffType.FileIsSame]
+                    content_prefs = ContentPrefs(hoard_config, pathing, hoard_contents)
 
-            self.op_tree = FolderTree(
-                diffs,
-                lambda diff: diff.hoard_file.as_posix())
+                    preferences = init_pull_preferences(
+                        content_prefs, self.remote, assume_current=False, force_fetch_local_missing=False)
+
+                    resolutions = await resolution_to_match_repo_and_hoard(
+                        current_contents, hoard_contents, pathing, preferences,
+                        progress_reporting(self, id="hoard-contents-to-pull", max_frequency=10))
+
+                    with StringIO() as other_out:
+                        actions = list(calculate_actions(preferences, resolutions, pathing, hoard_config, other_out))
+                        logging.debug(other_out.getvalue())
+
+            self.op_tree = FolderTree[Action](actions, lambda action: action.file_being_acted_on.as_posix())
 
             self.counts = await aggregate_counts(self.op_tree)
 
-            self.root.label = PENDING_TO_PULL + f" ({len(diffs)})"
+            self.root.label = PENDING_TO_PULL + f" ({len(actions)})"
             self.root.data = self.op_tree.root
 
             self.post_message(Tree.NodeExpanded(self.root))
@@ -182,14 +189,14 @@ class HoardContentsPendingToPull(Tree):
             assert self.op_tree is not None
             self._expand_subtree(event.node)
 
-    def _expand_subtree(self, node: TreeNode):
+    def _expand_subtree(self, node: TreeNode[FolderNode[Action]]):
         for _, folder in node.data.folders.items():
             folder_name = Text().append(folder.name).append(" ").append(f"({self.counts[folder]})", style="dim")
             # cnts_label = self._pretty_folder_label_descriptor(folder)
             folder_label = folder_name  # .append(" ").append(cnts_label)
             node.add(folder_label, data=folder)
         for _, file in node.data.files.items():
-            node.add_leaf(f"{type(file.data)}: {file.data.hoard_file}", data=node.data)
+            node.add_leaf(f"{type(file.data)}: {file.data.file_being_acted_on}", data=node.data)
 
 
 class CaveInfoWidget(Widget):
