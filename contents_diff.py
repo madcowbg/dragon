@@ -32,38 +32,3 @@ class Diff:
         self.is_added = is_added
 
 
-def FileOnlyInLocal(
-        local_file: FastPosixPath, curr_file_hoard_path: FastPosixPath, local_props: RepoFileProps,
-        is_added: bool):
-    return Diff(DiffType.FileOnlyInLocal, local_file, curr_file_hoard_path, local_props, None, is_added)
-
-
-def FileIsSame(
-        current_file: FastPosixPath, curr_file_hoard_path: FastPosixPath,
-        local_props: RepoFileProps, hoard_props: HoardFileProps):
-    return Diff(DiffType.FileIsSame, current_file, curr_file_hoard_path, local_props, hoard_props, None)
-
-
-def FileContentsDiffer(
-        current_file: FastPosixPath, curr_file_hoard_path: FastPosixPath,
-        local_props: RepoFileProps, hoard_props: HoardFileProps):
-    return Diff(DiffType.FileContentsDiffer, current_file, curr_file_hoard_path, local_props, hoard_props, None)
-
-
-def FileOnlyInHoardLocalDeleted(
-        current_file: FastPosixPath, curr_file_hoard_path: FastPosixPath, hoard_props: HoardFileProps,
-        local_props: RepoFileProps):
-    return Diff(
-        DiffType.FileOnlyInHoardLocalDeleted, current_file, curr_file_hoard_path, local_props, hoard_props, None)
-
-
-def FileOnlyInHoardLocalUnknown(
-        current_file: FastPosixPath, curr_file_hoard_path: FastPosixPath, hoard_props: HoardFileProps):
-    return Diff(
-        DiffType.FileOnlyInHoardLocalUnknown, current_file, curr_file_hoard_path, None, hoard_props, None)
-
-
-def FileOnlyInHoardLocalMoved(
-        current_file: FastPosixPath, curr_file_hoard_path: FastPosixPath, hoard_props: HoardFileProps,
-        local_props: RepoFileProps):
-    return Diff(DiffType.FileOnlyInHoardLocalMoved, current_file, curr_file_hoard_path, local_props, hoard_props, None)

@@ -14,8 +14,7 @@ from contents.hoard import HoardContents
 from contents.hoard_props import HoardFileStatus, HoardFileProps
 from contents.repo import RepoContents
 from contents.repo_props import RepoFileProps, RepoFileStatus
-from contents_diff import FileIsSame, FileOnlyInLocal, FileContentsDiffer, \
-    FileOnlyInHoardLocalDeleted, FileOnlyInHoardLocalUnknown, FileOnlyInHoardLocalMoved, DiffType, Diff
+from contents_diff import DiffType, Diff
 from util import group_to_dict
 
 

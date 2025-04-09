@@ -20,7 +20,7 @@ from command.hoard import Hoard
 from command.pathing import HoardPathing
 from command.pending_file_ops import FileOp, get_pending_operations, CleanupFile, GetFile, CopyFile, MoveFile
 from config import HoardRemote
-from contents_diff import FileIsSame, DiffType
+from contents_diff import DiffType
 from exceptions import RepoOpeningFailed
 from gui.app_config import config, _write_config
 from gui.folder_tree import FolderNode, FolderTree, aggregate_on_nodes

@@ -18,8 +18,7 @@ from config import CaveType, HoardRemote
 from contents.hoard import HoardContents, HoardFile, HoardDir
 from contents.hoard_props import HoardFileStatus, HoardFileProps
 from contents.repo_props import RepoFileProps, RepoFileStatus
-from contents_diff import FileIsSame, FileContentsDiffer, FileOnlyInHoardLocalDeleted, FileOnlyInHoardLocalUnknown, \
-    FileOnlyInHoardLocalMoved, FileOnlyInLocal, DiffType
+from contents_diff import DiffType, Diff
 from exceptions import MissingRepoContents
 from resolve_uuid import resolve_remote_uuid
 from util import format_size, custom_isabs
@@ -409,9 +408,8 @@ class HoardCommandContents:
                                 on_hoard_only_local_unknown=PullBehavior.FAIL,
                                 on_hoard_only_local_deleted=PullBehavior.FAIL,
                             )
-                            diff = FileOnlyInLocal(
-                                local_file, hoard_file, local_props,
-                                local_props.last_status == RepoFileStatus.ADDED)
+                            added = local_props.last_status == RepoFileStatus.ADDED
+                            diff = Diff(DiffType.FileOnlyInLocal, local_file, hoard_file, local_props, None, added)
                             _handle_local_only(
                                 preferences.on_file_added_or_present, preferences.local_uuid,
                                 diff, preferences.content_prefs, hoard, out)
