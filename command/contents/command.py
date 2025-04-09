@@ -9,7 +9,7 @@ from alive_progress import alive_bar, alive_it
 from command.content_prefs import ContentPrefs
 from command.contents.comparisons import compare_local_to_hoard
 from command.contents.handle_pull import PullPreferences, pull_repo_contents_to_hoard, PullIntention, \
-    _handle_local_only, ResetLocalAsCurrentBehavior
+    ResetLocalAsCurrentBehavior, _calculate_local_only
 from command.fast_path import FastPosixPath
 from command.hoard import Hoard
 from command.pathing import HoardPathing
@@ -443,9 +443,8 @@ class HoardCommandContents:
                             )
                             added = local_props.last_status == RepoFileStatus.ADDED
                             diff = Diff(DiffType.FileOnlyInLocal, local_file, hoard_file, local_props, None, added)
-                            _handle_local_only(
-                                preferences.on_file_added_or_present, preferences.local_uuid,
-                                diff, preferences.content_prefs, hoard, out)
+                            for b in _calculate_local_only(preferences.on_file_added_or_present, diff, out):
+                                b.execute(preferences.local_uuid, preferences.content_prefs, hoard, out)
                             out.write(f"READD {hoard_file}\n")
                         else:
                             hoard_props = hoard.fsobjects[hoard_file]
