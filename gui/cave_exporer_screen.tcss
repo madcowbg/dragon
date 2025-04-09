@@ -1,10 +1,23 @@
+#selection-pane {
+    width: 100%;
+    height: 80%;
+}
+
+#choose_remote {
+    height: 100%
+}
+
+.repo-group {
+    padding-top: 1;
+}
+
 CaveInfoWidget {
     height: 80%
 }
 
 RichLog#cave_explorer_log {
     height:auto;
-    min-height: 10%
+    min-height: 5%
 }
 
 Bar > .bar--indeterminate {
@@ -19,6 +32,11 @@ Bar > .bar--bar {
 
 Bar > .bar--complete {
     color: $error;
+}
+
+ProgressReporting {
+    min-height: 10%;
+    max-height: 15%;
 }
 
 PercentageStatus {

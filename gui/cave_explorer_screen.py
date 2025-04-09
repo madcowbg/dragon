@@ -11,7 +11,7 @@ from textual.css.query import NoMatches
 from textual.reactive import reactive
 from textual.screen import Screen
 from textual.widget import Widget
-from textual.widgets import Tree, Static, Header, Footer, Select, RichLog, Button
+from textual.widgets import Tree, Static, Header, Footer, Select, RichLog, Button, RadioSet, RadioButton, Label
 from textual.widgets._select import BLANK
 from textual.widgets._tree import TreeNode
 
@@ -22,13 +22,15 @@ from command.files.command import execute_files_push
 from command.hoard import Hoard
 from command.pathing import HoardPathing
 from command.pending_file_ops import FileOp, get_pending_operations, CleanupFile, GetFile, CopyFile, MoveFile
-from config import HoardRemote
+from config import HoardRemote, latency_order
 from exceptions import RepoOpeningFailed
 from gui.app_config import config, _write_config
 from gui.confirm_action_screen import ConfirmActionScreen
 from gui.folder_tree import FolderNode, FolderTree, aggregate_on_nodes
 from gui.progress_reporting import StartProgressReporting, MarkProgressReporting, progress_reporting_it, \
     ProgressReporting, progress_reporting_bar
+from resolve_uuid import resolve_remote_uuid
+from util import group_to_dict
 
 
 class HoardContentsPendingToSyncFile(Tree[FolderNode[FileOp]]):
@@ -278,31 +280,46 @@ class CaveExplorerScreen(Screen):
         except NoMatches:
             pass
 
-    def watch_remote(self):
+    def watch_remote(self, new_remote: HoardRemote, old_remote: HoardRemote):
         if self.remote is not None:
             config["cave_exporer_selected_repo"] = self.remote.uuid
             _write_config()
             self.query_one(CaveInfoWidget).remote = self.remote
-            self.query_one(Select).value = self.remote
+            self.query_one(f"#uuid-{self.remote.uuid}", RadioButton).toggle()
 
     def compose(self) -> ComposeResult:
         yield Header()
         yield Footer()
 
-        if self.hoard is not None:
-            config = self.hoard.config()
-            yield Select(
-                ((remote.name, remote) for remote in config.remotes.all()),
-                prompt="Select a cave",
-                value=self.remote if self.remote is not None else BLANK)
-        else:
-            yield Select((), prompt="Hoard not loaded", disabled=True)
-        yield CaveInfoWidget(self.hoard, self.remote)
+        with Horizontal(id="selection-pane"):
+            with RadioSet(id="choose_remote"):
+                if self.hoard is not None:
+                    config = self.hoard.config()
+
+                    latency_to_repos = group_to_dict(
+                        config.remotes.all(),
+                        key=lambda r: self.hoard.paths()[r.uuid].latency)
+                    for latency, repos in sorted(latency_to_repos.items(), key=lambda lr: latency_order(lr[0])):
+                        yield Static(f"Latency: {latency.value}", classes="repo-group")
+                        for remote in sorted(repos, key=lambda r: r.name):
+                            yield RadioButton(
+                                remote.name, name=remote.uuid, id=f"uuid-{remote.uuid}", value=remote == self.remote)
+
+            yield CaveInfoWidget(self.hoard, self.remote)
+
         yield ProgressReporting()
         yield RichLog(id="cave_explorer_log")
 
-    def on_select_changed(self, event: Select.Changed):
-        self.remote = event.value
+    def on_radio_set_changed(self, event: RadioSet.Changed):
+        if self.hoard is None:
+            return
+
+        uuid = resolve_remote_uuid(self.hoard.config(), event.pressed.name)
+        if uuid is None:
+            self.notify(f"Invalid repo selected - {event.pressed.name}!", severity="error")
+            return
+
+        self.remote = self.hoard.config().remotes[uuid]
 
     async def on_start_progress_reporting(self, event: StartProgressReporting):
         await self.query_one(ProgressReporting).on_start_progress_reporting(event)
