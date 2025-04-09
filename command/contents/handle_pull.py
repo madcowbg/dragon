@@ -1,6 +1,7 @@
 import abc
 import enum
 import logging
+import re
 from io import StringIO
 from typing import Iterable, Tuple
 
@@ -57,14 +58,23 @@ class PullPreferences:
 
 
 class Action(abc.ABC):
+    @classmethod
+    def action_type(cls):
+        def snake_case(string):
+            return re.sub(r'(?<=[a-z])(?=[A-Z])|[^a-zA-Z]', '_', string).strip('_').lower()
+
+        return snake_case(cls.__name__)
+
     diff: Diff
 
     def __init__(self, diff: Diff):
         self.diff = diff
 
+    @property
+    def file_being_acted_on(self): return self.diff.hoard_file
+
     @abc.abstractmethod
     def execute(self, local_uuid: str, content_prefs: ContentPrefs, hoard: HoardContents, out: StringIO) -> None: pass
-
 
 class MarkIsAvailableBehavior(Action):
     def __init__(self, diff: Diff):

@@ -723,6 +723,14 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             "PRESENT /wat/test.me.3\n"
             "DONE", res)
 
+        res = await hoard_cmd.contents.pending_pull(full_cave_cmd.current_uuid())
+        self.assertEqual([
+            'Status of repo-full-name:',
+            'MARK_IS_AVAILABLE_BEHAVIOR /test.me.1',
+            'MARK_IS_AVAILABLE_BEHAVIOR /wat/test.me.2',
+            'ADD_NEW_FILE_BEHAVIOR /test.me.4',
+            'ADD_NEW_FILE_BEHAVIOR /wat/test.me.3'], res.splitlines())
+
         res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
         self.assertEqual(
             f"=/test.me.1\n=/wat/test.me.2\n+/test.me.4\n+/wat/test.me.3"
@@ -802,6 +810,17 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             "DELETED /wat/test.me.2\n"
             "MOVED /test.me.4\n"
             "DONE", res)
+
+        res = await hoard_cmd.contents.pending_pull(full_cave_cmd.current_uuid())
+        self.assertEqual([
+            'Status of repo-full-name:',
+            'ADD_NEW_FILE_BEHAVIOR /lets_get_it_started/test.me.2-butnew',
+            'ADD_NEW_FILE_BEHAVIOR /lets_get_it_started/test.me.2-butsecond',
+            'ADD_NEW_FILE_BEHAVIOR /lets_get_it_started/test.me.4-renamed',
+            'ADD_NEW_FILE_BEHAVIOR /test.me.added',
+            'RESET_LOCAL_AS_CURRENT_BEHAVIOR /test.me.1',
+            'DELETE_FILE_FROM_HOARD_BEHAVIOR /wat/test.me.2',
+            'MOVE_FILE_BEHAVIOR /test.me.4'], res.splitlines())
 
         res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
         self.assertEqual(
@@ -1036,6 +1055,17 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             "DELETED /wat/test.me.2\n"
             "MOVED /test.me.4\n"
             "DONE", res)
+
+        res = await hoard_cmd.contents.pending_pull(full_cave_cmd.current_uuid())
+        self.assertEqual([
+            'Status of repo-full-name:',
+            'ADD_NEW_FILE_BEHAVIOR /lets_get_it_started/test.me.2-butnew',
+            'ADD_NEW_FILE_BEHAVIOR /lets_get_it_started/test.me.2-butsecond',
+            'ADD_NEW_FILE_BEHAVIOR /lets_get_it_started/test.me.4-renamed',
+            'ADD_NEW_FILE_BEHAVIOR /test.me.added',
+            'RESET_LOCAL_AS_CURRENT_BEHAVIOR /test.me.1',
+            'DELETE_FILE_FROM_HOARD_BEHAVIOR /wat/test.me.2',
+            'MOVE_FILE_BEHAVIOR /test.me.4'], res.splitlines())
 
         res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
         self.assertEqual(
@@ -1439,6 +1469,13 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             "ADDED /lets_get_it_started/test.me.2-butsecond\n"
             "DELETED /wat/test.me.2\n"
             "DONE", res)
+
+        res = await hoard_cmd.contents.pending_pull(full_cave_cmd.current_uuid())
+        self.assertEqual([
+            'Status of repo-full-name:',
+            'ADD_NEW_FILE_BEHAVIOR /lets_get_it_started/test.me.2-butnew',
+            'ADD_NEW_FILE_BEHAVIOR /lets_get_it_started/test.me.2-butsecond',
+            'DELETE_FILE_FROM_HOARD_BEHAVIOR /wat/test.me.2'], res.splitlines())
 
         res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
         self.assertEqual(

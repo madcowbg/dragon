@@ -8,8 +8,9 @@ from alive_progress import alive_bar, alive_it
 
 from command.content_prefs import ContentPrefs
 from command.contents.comparisons import compare_local_to_hoard
-from command.contents.handle_pull import PullPreferences, pull_repo_contents_to_hoard, PullIntention, \
-    ResetLocalAsCurrentBehavior, _calculate_local_only
+from command.contents.handle_pull import PullPreferences, pull_repo_contents_to_hoard, \
+    resolution_to_match_repo_and_hoard, PullIntention, _calculate_local_only, ResetLocalAsCurrentBehavior, \
+    calculate_actions
 from command.fast_path import FastPosixPath
 from command.hoard import Hoard
 from command.pathing import HoardPathing
@@ -187,23 +188,36 @@ class HoardCommandContents:
     def __init__(self, hoard: Hoard):
         self.hoard = hoard
 
-    async def pending(self, remote: str, ignore_missing: bool = False):
-        remote_uuid = resolve_remote_uuid(self.hoard.config(), remote)
+    async def pending_pull(self, remote: str):
+        config = self.hoard.config()
+        remote_uuid = resolve_remote_uuid(config, remote)
 
         logging.info(f"Reading current contents of {remote_uuid}...")
         connected_repo = self.hoard.connect_to_repo(remote_uuid, require_contents=True)
         with connected_repo.open_contents(is_readonly=True) as current_contents:
             logging.info(f"Loading hoard TOML...")
-            async with self.hoard.open_contents(create_missing=False, is_readonly=True) as hoard:
+            async with self.hoard.open_contents(create_missing=False, is_readonly=True) as hoard_contents:
                 logging.info(f"Loaded hoard TOML!")
                 logging.info(f"Computing status ...")
 
                 with StringIO() as out:
-                    out.write(f"Status of {self.hoard.config().remotes[remote_uuid].name}:\n")
+                    remote_obj = config.remotes[remote_uuid]
+                    out.write(f"Status of {remote_obj.name}:\n")
 
-                    await execute_pring_pending(
-                        current_contents, hoard, HoardPathing(self.hoard.config(), self.hoard.paths()), ignore_missing,
-                        out)
+                    pathing = HoardPathing(config, self.hoard.paths())
+                    content_prefs = ContentPrefs(config, pathing, hoard_contents)
+
+                    preferences = init_pull_preferences(
+                        content_prefs, remote_obj, assume_current=False, force_fetch_local_missing=False)
+
+                    resolutions = await resolution_to_match_repo_and_hoard(
+                        current_contents, hoard_contents, pathing, preferences, alive_it)
+
+                    with StringIO() as other_out:
+                        for action in calculate_actions(preferences, resolutions, pathing, config, other_out):
+                            out.write(f"{action.__class__.action_type().upper()} {action.file_being_acted_on}\n")
+                        logging.debug(other_out.getvalue())
+
                     return out.getvalue()
 
     async def differences(self, remote: str, ignore_missing: bool = False):

@@ -70,6 +70,13 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             f"DONE",
             res.strip())
 
+        res = await hoard_cmd.contents.pending_pull("repo-in-local")
+        self.assertEqual([
+            'Status of repo-in-local:',
+            'ADD_NEW_FILE_BEHAVIOR /wat/test.me.different',
+            'ADD_NEW_FILE_BEHAVIOR /wat/test.me.once',
+            'ADD_NEW_FILE_BEHAVIOR /wat/test.me.twice'], res.splitlines())
+
         res = await hoard_cmd.contents.pull("repo-in-local")
         self.assertEqual(
             "+/wat/test.me.different\n"
@@ -87,6 +94,9 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.differences("repo-in-local")
         self.assertEqual(f"Status of repo-in-local:\nDONE", res.strip())
+
+        res = await hoard_cmd.contents.pending_pull("repo-in-local")
+        self.assertEqual(['Status of repo-in-local:'], res.splitlines())
 
     def _assert_hoard_contents(
             self, hoard_contents: HoardContents, files_exp: List[Tuple[str, int, int, str]]):
@@ -129,7 +139,8 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull("repo-in-local-2")
         self.assertEqual(
-            "=/wat/test.me.twice\nALREADY_MARKED_GET /wat/test.me.different\nSync'ed repo-in-local-2 to hoard!\nDONE", res.strip())
+            "=/wat/test.me.twice\nALREADY_MARKED_GET /wat/test.me.different\nSync'ed repo-in-local-2 to hoard!\nDONE",
+            res.strip())
 
         async with hoard_cmd.hoard.open_contents(False, is_readonly=True) as hc:
             self._assert_hoard_contents(
@@ -156,6 +167,9 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             f"MODIFIED /wat/test.me.different\n"
             f"MISSING /wat/test.me.once\n"
             f"DONE", res.strip())
+
+        res = await hoard_cmd.contents.pending_pull("repo-in-local-2")
+        self.assertEqual(['Status of repo-in-local-2:'], res.splitlines())
 
         res = await hoard_cmd.contents.differences("repo-in-local")
         self.assertEqual(f"Status of repo-in-local:\nDONE", res.strip())
@@ -306,6 +320,9 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             "MISSING /wat/test.me.twice\n"
             f"DONE", res)
 
+        res = await hoard_cmd.contents.pending_pull(new_uuid)
+        self.assertEqual(['Status of cloned-repo:'], res.splitlines())
+
         res = await hoard_cmd.files.push(repo="cloned-repo")
         self.assertEqual(
             f"cloned-repo:\n"
@@ -320,6 +337,9 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.differences(new_uuid)
         self.assertEqual(f"Status of cloned-repo:\nDONE", res.strip())
+
+        res = await hoard_cmd.contents.pending_pull(new_uuid)
+        self.assertEqual(['Status of cloned-repo:'], res.splitlines())
 
         res = await hoard_cmd.files.push(repo="cloned-repo")
         self.assertEqual(
