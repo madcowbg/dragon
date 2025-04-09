@@ -8,8 +8,8 @@ from alive_progress import alive_bar, alive_it
 
 from command.content_prefs import ContentPrefs
 from command.contents.comparisons import compare_local_to_hoard
-from command.contents.handle_pull import PullPreferences, pull_repo_contents_to_hoard, _handle_local_only, \
-    reset_local_as_current, PullBehavior
+from command.contents.handle_pull import PullPreferences, pull_repo_contents_to_hoard, reset_local_as_current, PullBehavior, \
+    _handle_local_only
 from command.fast_path import FastPosixPath
 from command.hoard import Hoard
 from command.pathing import HoardPathing
@@ -398,23 +398,23 @@ class HoardCommandContents:
                         hoard_file = pathing.in_local(local_file, repo_uuid).at_hoard().as_pure_path
                         if hoard_file not in hoard.fsobjects:
                             logging.info(f"Local file {local_file} will be handled to hoard.")
+                            preferences = PullPreferences(
+                                remote.uuid, content_prefs,
+                                on_same_file_is_present=PullBehavior.ADD_TO_HOARD,
+                                on_file_added_or_present=PullBehavior.FAIL,
+                                on_file_is_different_and_modified=PullBehavior.FAIL,
+                                on_file_is_different_and_added=PullBehavior.FAIL,
+                                on_file_is_different_but_present=PullBehavior.FAIL,
+                                on_hoard_only_local_moved=PullBehavior.FAIL,
+                                on_hoard_only_local_unknown=PullBehavior.FAIL,
+                                on_hoard_only_local_deleted=PullBehavior.FAIL,
+                            )
+                            diff = FileOnlyInLocal(
+                                local_file, hoard_file, local_props,
+                                local_props.last_status == RepoFileStatus.ADDED)
                             _handle_local_only(
-                                PullPreferences(
-                                    remote.uuid, content_prefs,
-                                    on_same_file_is_present=PullBehavior.ADD_TO_HOARD,
-                                    on_file_added_or_present=PullBehavior.FAIL,
-                                    on_file_is_different_and_modified=PullBehavior.FAIL,
-                                    on_file_is_different_and_added=PullBehavior.FAIL,
-                                    on_file_is_different_but_present=PullBehavior.FAIL,
-                                    on_hoard_only_local_moved=PullBehavior.FAIL,
-                                    on_hoard_only_local_unknown=PullBehavior.FAIL,
-                                    on_hoard_only_local_deleted=PullBehavior.FAIL,
-                                ),
-                                FileOnlyInLocal(
-                                    local_file, hoard_file, local_props,
-                                    local_props.last_status == RepoFileStatus.ADDED),
-                                hoard,
-                                StringIO())  # fixme make it elegant
+                                preferences.on_file_added_or_present, preferences.local_uuid,
+                                diff, preferences.content_prefs, hoard, out)
                             out.write(f"READD {hoard_file}\n")
                         else:
                             hoard_props = hoard.fsobjects[hoard_file]

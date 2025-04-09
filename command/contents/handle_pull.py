@@ -56,8 +56,8 @@ class PullPreferences:
         self.on_hoard_only_local_moved = on_hoard_only_local_moved
 
 
-def _handle_file_is_same(behavior: PullBehavior, local_uuid: str, content_prefs: ContentPrefs, diff: "FileIsSame",
-                         out: StringIO):
+def _handle_file_is_same(
+        behavior: PullBehavior, local_uuid: str, content_prefs: ContentPrefs, diff: "FileIsSame", out: StringIO):
     assert behavior in (PullBehavior.ADD_TO_HOARD_AND_CLEANUP, PullBehavior.ADD_TO_HOARD)
     goal_status = diff.hoard_props.get_status(local_uuid)
 
@@ -90,67 +90,60 @@ def _handle_file_is_same(behavior: PullBehavior, local_uuid: str, content_prefs:
 
 
 def _handle_local_only(
-        preferences: PullPreferences, diff: FileOnlyInLocal, hoard: HoardContents,
-        out: StringIO):
-    if preferences.on_file_added_or_present == PullBehavior.ADD_TO_HOARD_AND_CLEANUP:
+        behavior: PullBehavior, local_uuid: str, diff: FileOnlyInLocal, content_prefs: ContentPrefs,
+        hoard: HoardContents, out: StringIO):
+    if behavior == PullBehavior.ADD_TO_HOARD_AND_CLEANUP:
         props = hoard.fsobjects.add_or_replace_file(diff.hoard_file, diff.local_props)
 
         # add status for new repos
         props.set_status(
-            list(preferences.content_prefs.repos_to_add(diff.hoard_file, diff.local_props)),
+            list(content_prefs.repos_to_add(diff.hoard_file, diff.local_props)),
             HoardFileStatus.GET)
 
-        _incoming__safe_mark_for_cleanup(preferences.local_uuid, diff, props, out)
+        _incoming__safe_mark_for_cleanup(local_uuid, diff, props, out)
         out.write(f"<+{diff.hoard_file.as_posix()}\n")
-    elif preferences.on_file_added_or_present == PullBehavior.IGNORE:
+    elif behavior == PullBehavior.IGNORE:
         logging.info(f"Ignoring local-only file {diff.hoard_file}")
         out.write(f"?{diff.hoard_file.as_posix()}\n")
-    elif preferences.on_file_added_or_present == PullBehavior.ADD_TO_HOARD:
+    elif behavior == PullBehavior.ADD_TO_HOARD:
         hoard_props = hoard.fsobjects.add_or_replace_file(diff.hoard_file, diff.local_props)
 
         # add status for new repos
         hoard_props.set_status(
-            preferences.content_prefs.repos_to_add(diff.hoard_file, diff.local_props),
+            content_prefs.repos_to_add(diff.hoard_file, diff.local_props),
             HoardFileStatus.GET)
 
         # set status here
-        hoard_props.mark_available(preferences.local_uuid)
+        hoard_props.mark_available(local_uuid)
 
         out.write(f"+{diff.hoard_file.as_posix()}\n")
     else:
         raise ValueError(
-            f"unrecognized on_file_added_or_present={preferences.on_file_added_or_present} for {diff.hoard_file}")
+            f"unrecognized on_file_added_or_present={behavior} for {diff.hoard_file}")
 
 
 def _handle_file_contents_differ(
-        preferences: PullPreferences, diff: FileContentsDiffer, hoard: HoardContents, out: StringIO):
-    if diff.local_props.last_status == RepoFileStatus.PRESENT:
-        behavior = preferences.on_file_is_different_but_present
-    elif diff.local_props.last_status == RepoFileStatus.ADDED:
-        behavior = preferences.on_file_is_different_and_added
-    elif diff.local_props.last_status == RepoFileStatus.MODIFIED:
-        behavior = preferences.on_file_is_different_and_modified
-    else:
-        raise ValueError(f"Unallowed local_props.last_status={diff.local_props.last_status}")
+        behavior: PullBehavior, local_uuid: str, content_prefs: ContentPrefs,
+        diff: FileContentsDiffer, hoard: HoardContents, out: StringIO):
     assert behavior in (
         PullBehavior.RESTORE_FROM_HOARD, PullBehavior.ADD_TO_HOARD, PullBehavior.ADD_TO_HOARD_AND_CLEANUP)
     logging.info(f"Behavior for differing file: {behavior}")
 
-    goal_status = diff.hoard_props.get_status(preferences.local_uuid)
+    goal_status = diff.hoard_props.get_status(local_uuid)
     if behavior == PullBehavior.ADD_TO_HOARD_AND_CLEANUP:
         logging.info(f"incoming file has different contents.")
         hoard_props = hoard.fsobjects.add_or_replace_file(diff.hoard_file, diff.local_props)
 
         # add status for new repos
         hoard_props.set_status(
-            list(preferences.content_prefs.repos_to_add(diff.hoard_file, diff.local_props)),
+            list(content_prefs.repos_to_add(diff.hoard_file, diff.local_props)),
             HoardFileStatus.GET)
 
-        _incoming__safe_mark_for_cleanup(preferences.local_uuid, diff, hoard_props, out)
+        _incoming__safe_mark_for_cleanup(local_uuid, diff, hoard_props, out)
         out.write(f"u{diff.hoard_file.as_posix()}\n")
     elif behavior == PullBehavior.RESTORE_FROM_HOARD:
         if goal_status == HoardFileStatus.AVAILABLE:  # was backed-up here, get it again
-            diff.hoard_props.mark_to_get([preferences.local_uuid])
+            diff.hoard_props.mark_to_get([local_uuid])
             out.write(f"g{diff.hoard_file.as_posix()}\n")
         elif goal_status in (HoardFileStatus.GET, HoardFileStatus.COPY, HoardFileStatus.MOVE):
             logging.info(f"current file is out of date and had been marked to be obtained: {diff.hoard_file}")
@@ -160,12 +153,12 @@ def _handle_file_contents_differ(
             out.write(f"?{diff.hoard_file.as_posix()}\n")
         elif goal_status == HoardFileStatus.UNKNOWN:
             logging.info(f"Current file is not marked in hoard, but will restore it.")
-            diff.hoard_props.mark_to_get([preferences.local_uuid])
+            diff.hoard_props.mark_to_get([local_uuid])
             out.write(f"RESTORE {diff.hoard_file.as_posix()}\n")
         else:
             raise ValueError(f"Invalid goal status:{goal_status}")
     elif behavior == PullBehavior.ADD_TO_HOARD:
-        reset_local_as_current(hoard, preferences.local_uuid, diff.hoard_file, diff.hoard_props, diff.local_props)
+        reset_local_as_current(hoard, local_uuid, diff.hoard_file, diff.hoard_props, diff.local_props)
 
         if goal_status == HoardFileStatus.AVAILABLE:
             # file was changed in-place, but is different now
@@ -181,31 +174,15 @@ def _handle_file_contents_differ(
         raise ValueError(f"Invalid behavior={behavior}")
 
 
-def _handle_hoard_only(
-        preferences: PullPreferences,
-        diff: FileOnlyInHoardLocalDeleted | FileOnlyInHoardLocalUnknown | FileOnlyInHoardLocalMoved,
-        out: StringIO):
-    if isinstance(diff, FileOnlyInHoardLocalMoved):
-        behavior = preferences.on_hoard_only_local_moved
-    elif isinstance(diff, FileOnlyInHoardLocalUnknown):
-        behavior = preferences.on_hoard_only_local_unknown
-    elif isinstance(diff, FileOnlyInHoardLocalDeleted):
-        behavior = preferences.on_hoard_only_local_deleted
-    else:
-        raise ValueError(f"Invalid diff tyoe {type(diff)}")
-
-    assert behavior in (
-        PullBehavior.IGNORE, PullBehavior.RESTORE_FROM_HOARD, PullBehavior.ACCEPT_FROM_HOARD,
-        PullBehavior.DELETE_FROM_HOARD)
-
-    _handle_hoard_only_with_behavior(diff, behavior, preferences.local_uuid, out)
-
-
 def _handle_hoard_only_with_behavior(
         diff: FileOnlyInHoardLocalDeleted | FileOnlyInHoardLocalUnknown | FileOnlyInHoardLocalMoved,
         behavior: PullBehavior,
         local_uuid: str,
         out: StringIO):
+
+    assert behavior in (
+        PullBehavior.IGNORE, PullBehavior.RESTORE_FROM_HOARD, PullBehavior.ACCEPT_FROM_HOARD,
+        PullBehavior.DELETE_FROM_HOARD)
     goal_status = diff.hoard_props.get_status(local_uuid)
     if behavior == PullBehavior.IGNORE:
         logging.info(f"skipping file {diff.hoard_file} not in local.")
@@ -306,7 +283,7 @@ async def pull_repo_contents_to_hoard(
     diffs_by_type = group_to_dict(all_diffs, key=lambda diff: type(diff))
 
     for dt, diffs in diffs_by_type.items():
-        logging.info(f"# diffs of class {dt}={len(diffs)}")
+        logging.debug(f"# diffs of class {dt}={len(diffs)}")
 
     for diff in diffs_by_type.pop(FileIsSame, []):
         assert isinstance(diff, FileIsSame)
@@ -315,19 +292,49 @@ async def pull_repo_contents_to_hoard(
 
     for diff in diffs_by_type.pop(FileOnlyInLocal, []):
         assert isinstance(diff, FileOnlyInLocal)
-        _handle_local_only(preferences, diff, hoard_contents, out)
+        _handle_local_only(
+            preferences.on_file_added_or_present, preferences.local_uuid, diff, preferences.content_prefs,
+            hoard_contents, out)
 
     for diff in diffs_by_type.pop(FileContentsDiffer, []):
         assert isinstance(diff, FileContentsDiffer)
-        _handle_file_contents_differ(preferences, diff, hoard_contents, out)
+        if diff.local_props.last_status == RepoFileStatus.PRESENT:
+            behavior = preferences.on_file_is_different_but_present
+        elif diff.local_props.last_status == RepoFileStatus.ADDED:
+            behavior = preferences.on_file_is_different_and_added
+        elif diff.local_props.last_status == RepoFileStatus.MODIFIED:
+            behavior = preferences.on_file_is_different_and_modified
+        else:
+            raise ValueError(f"Unallowed local_props.last_status={diff.local_props.last_status}")
+
+        _handle_file_contents_differ(
+            behavior, preferences.local_uuid, preferences.content_prefs, diff, hoard_contents, out)
 
     for diff in diffs_by_type.pop(FileOnlyInHoardLocalDeleted, []):
         assert isinstance(diff, FileOnlyInHoardLocalDeleted)
-        _handle_hoard_only(preferences, diff, out)
+        if isinstance(diff, FileOnlyInHoardLocalMoved):
+            behavior = preferences.on_hoard_only_local_moved
+        elif isinstance(diff, FileOnlyInHoardLocalUnknown):
+            behavior = preferences.on_hoard_only_local_unknown
+        elif isinstance(diff, FileOnlyInHoardLocalDeleted):
+            behavior = preferences.on_hoard_only_local_deleted
+        else:
+            raise ValueError(f"Invalid diff tyoe {type(diff)}")
+
+        _handle_hoard_only_with_behavior(diff, behavior, preferences.local_uuid, out)
 
     for diff in diffs_by_type.pop(FileOnlyInHoardLocalUnknown, []):
         assert isinstance(diff, FileOnlyInHoardLocalUnknown)
-        _handle_hoard_only(preferences, diff, out)
+        if isinstance(diff, FileOnlyInHoardLocalMoved):
+            behavior = preferences.on_hoard_only_local_moved
+        elif isinstance(diff, FileOnlyInHoardLocalUnknown):
+            behavior = preferences.on_hoard_only_local_unknown
+        elif isinstance(diff, FileOnlyInHoardLocalDeleted):
+            behavior = preferences.on_hoard_only_local_deleted
+        else:
+            raise ValueError(f"Invalid diff tyoe {type(diff)}")
+
+        _handle_hoard_only_with_behavior(diff, behavior, preferences.local_uuid, out)
 
     for diff in diffs_by_type.pop(FileOnlyInHoardLocalMoved, []):
         assert isinstance(diff, FileOnlyInHoardLocalMoved)
