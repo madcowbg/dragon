@@ -20,7 +20,7 @@ from command.hoard import Hoard
 from command.pathing import HoardPathing
 from command.pending_file_ops import FileOp, get_pending_operations, CleanupFile, GetFile, CopyFile, MoveFile
 from config import HoardRemote
-from contents_diff import FileIsSame
+from contents_diff import FileIsSame, DiffType
 from exceptions import RepoOpeningFailed
 from gui.app_config import config, _write_config
 from gui.folder_tree import FolderNode, FolderTree, aggregate_on_nodes
@@ -149,7 +149,7 @@ class HoardContentsPendingToPull(Tree):
                         diff async for diff in compare_local_to_hoard(
                             current_contents, hoard_contents, pathing,
                             progress_reporting(self, id="hoard-contents-to-pull", max_frequency=10))
-                        if not isinstance(diff, FileIsSame)]
+                        if not diff.type == DiffType.FileIsSame]
 
             self.op_tree = FolderTree(
                 diffs,

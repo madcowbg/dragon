@@ -19,7 +19,7 @@ from contents.hoard import HoardContents, HoardFile, HoardDir
 from contents.hoard_props import HoardFileStatus, HoardFileProps
 from contents.repo_props import RepoFileProps, RepoFileStatus
 from contents_diff import FileIsSame, FileContentsDiffer, FileOnlyInHoardLocalDeleted, FileOnlyInHoardLocalUnknown, \
-    FileOnlyInHoardLocalMoved, FileOnlyInLocal
+    FileOnlyInHoardLocalMoved, FileOnlyInLocal, DiffType
 from exceptions import MissingRepoContents
 from resolve_uuid import resolve_remote_uuid
 from util import format_size, custom_isabs
@@ -172,21 +172,21 @@ class HoardCommandContents:
 
                     async for diff in compare_local_to_hoard(
                             current_contents, hoard, HoardPathing(self.hoard.config(), self.hoard.paths())):
-                        if isinstance(diff, FileOnlyInLocal):
+                        if diff.type == DiffType.FileOnlyInLocal:
                             if diff.is_added:
                                 out.write(f"ADDED {diff.hoard_file.as_posix()}\n")
                             else:
                                 out.write(f"PRESENT {diff.hoard_file.as_posix()}\n")
-                        elif isinstance(diff, FileContentsDiffer):
+                        elif diff.type == DiffType.FileContentsDiffer:
                             out.write(f"MODIFIED {diff.hoard_file.as_posix()}\n")
-                        elif isinstance(diff, FileOnlyInHoardLocalDeleted):
+                        elif diff.type == DiffType.FileOnlyInHoardLocalDeleted:
                             out.write(f"DELETED {diff.hoard_file.as_posix()}\n")
-                        elif isinstance(diff, FileOnlyInHoardLocalUnknown):
+                        elif diff.type == DiffType.FileOnlyInHoardLocalUnknown:
                             if not ignore_missing:
                                 out.write(f"MISSING {diff.hoard_file.as_posix()}\n")
-                        elif isinstance(diff, FileOnlyInHoardLocalMoved):
+                        elif diff.type == DiffType.FileOnlyInHoardLocalMoved:
                             out.write(f"MOVED {diff.hoard_file.as_posix()}\n")
-                        elif isinstance(diff, FileIsSame):
+                        elif diff.type == DiffType.FileIsSame:
                             pass
                         else:
                             raise ValueError(f"Unused diff class: {type(diff)}")
