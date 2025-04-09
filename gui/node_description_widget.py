@@ -3,15 +3,12 @@ import os
 from io import StringIO
 
 from rich.text import Text
-from textual import work, on
+from textual import work
 from textual.app import ComposeResult
-from textual.binding import Binding
-from textual.containers import Horizontal, Grid, Vertical
 from textual.message import Message
 from textual.reactive import reactive
-from textual.screen import Screen
 from textual.widget import Widget
-from textual.widgets import Label, DataTable, Button
+from textual.widgets import Label, DataTable
 
 from command.contents.command import augment_statuses, execute_get, execute_drop
 from command.fast_path import FastPosixPath
@@ -19,6 +16,7 @@ from command.pathing import HoardPathing
 from config import HoardConfig
 from contents.hoard import HoardFile, HoardDir, HoardContents
 from contents.hoard_props import HoardFileProps, HoardFileStatus
+from gui.confirm_action_screen import ConfirmActionScreen
 from util import format_size, group_to_dict, format_count
 
 
@@ -167,32 +165,6 @@ class DirAvailabilityDataTable(DataTable):
             # TODO make it update tree.
         else:
             self.notify("Cancelling action.")
-
-
-class ConfirmActionScreen(Screen[bool]):
-    BINDINGS = [Binding('esc', 'handle_no', "No")]
-
-    def __init__(self, question: str) -> None:
-        self.question = question
-        super().__init__()
-
-    def compose(self) -> ComposeResult:
-        yield Grid(
-            Vertical(*(Label(line) for line in self.question.splitlines()), id="question"),
-            Button("Yes", id="yes", variant="success"),
-            Button("No", id="no"),
-            id="dialog")
-
-    def on_mount(self):
-        self.query_one("#no").focus()
-
-    @on(Button.Pressed, "#yes")
-    def handle_yes(self) -> None:
-        self.dismiss(True)
-
-    @on(Button.Pressed, "#no")
-    def handle_no(self) -> None:
-        self.dismiss(False)
 
 
 class NodeDescription(Widget):

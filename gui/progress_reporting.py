@@ -14,7 +14,7 @@ from textual.widgets import Label, ProgressBar
 
 
 class StartProgressReporting(Message):
-    def __init__(self, id: str, total: int | None, title: str):
+    def __init__(self, id: str, total: float | int | None, title: str):
         super().__init__()
         self.id = id
         self.title = title
@@ -22,17 +22,47 @@ class StartProgressReporting(Message):
 
 
 class MarkProgressReporting(Message):
-    def __init__(self, id: str, progress: int, is_ended: bool):
+    def __init__(self, id: str, progress: float | int, is_ended: bool):
         super().__init__()
         self.id = id
         self.progress = progress
         self.is_ended = is_ended
 
 
+def progress_reporting_bar(widget: Widget, id: str, max_frequency: float):
+    def alive_bar(total: float, title: str, unit: str):
+        progress_report_title = title + (f" ({unit})" if unit else "")
+        class Monitor:
+            def __init__(self):
+                self.past_time = time()
+                self.cumulative = 0
+
+            def __enter__(self):
+                widget.post_message(StartProgressReporting(id, total, progress_report_title))
+
+                return self.bar
+
+            def __exit__(self, exc_type, exc_val, exc_tb):
+                widget.post_message(MarkProgressReporting(id, self.cumulative, True))
+                return None
+
+            def bar(self, progress: float | int | None):
+                self.cumulative += progress
+                new_time = time()
+                if new_time > self.past_time + 1 / max_frequency:
+                    logging.error(f"marking {self.cumulative} progress for {id}")
+                    widget.post_message(MarkProgressReporting(id, self.cumulative, False))
+                    self.past_time = new_time
+
+        return Monitor()
+
+    return alive_bar
+
+
 T = TypeVar('T')
 
 
-def progress_reporting[T](widget: Widget, id: str, max_frequency: float):
+def progress_reporting_it[T](widget: Widget, id: str, max_frequency: float):
     def alive_it(items: List[T] | Iterable[T], *, title: str, total: float | None = None) -> Iterable[T]:
         total = total if total is not None else len(items) if getattr(items, "__len__", None) is not None else None
         widget.post_message(StartProgressReporting(id, total, title))
@@ -77,7 +107,8 @@ class ProgressReporting(Widget):
             yield Horizontal(Label(data.title, id=f"progress-title-{data.id}"), progress)
 
     async def on_start_progress_reporting(self, event: StartProgressReporting):
-        self.notify(f"Starting progress for ({event.id}) with title {event.title} with total {event.total}")  # todo remove
+        self.notify(
+            f"Starting progress for ({event.id}) with title {event.title} with total {event.total}")  # todo remove
 
         data = self._find_progress_data(event.id)
         if data is None:

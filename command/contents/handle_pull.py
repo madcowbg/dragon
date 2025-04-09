@@ -288,13 +288,18 @@ def _calculate_hoard_only_with_behavior(diff: Diff, behavior: PullIntention, loc
     if behavior == PullIntention.IGNORE:
         logging.info(f"skipping file {diff.hoard_file} not in local.")
 
-        if goal_status not in (HoardFileStatus.CLEANUP, HoardFileStatus.UNKNOWN):
+        if goal_status == HoardFileStatus.CLEANUP:
+            yield RemoveLocalStatusBehavior(diff)
+
+            out.write(f"IGNORED {diff.hoard_file.as_posix()}\n")
+        elif goal_status == HoardFileStatus.UNKNOWN:
+            pass
+        else:
             logging.error(f"File in hoard only, but status in repo is not {HoardFileStatus.CLEANUP}")
             out.write(f"E{diff.hoard_file.as_posix()}\n")
-
-        yield RemoveLocalStatusBehavior(diff)
-        if goal_status != HoardFileStatus.UNKNOWN:
+            yield RemoveLocalStatusBehavior(diff)
             out.write(f"IGNORED {diff.hoard_file.as_posix()}\n")
+
     elif behavior == PullIntention.RESTORE_FROM_HOARD:
         if goal_status == HoardFileStatus.AVAILABLE:  # was backed-up here, get it again
             props = diff.hoard_props

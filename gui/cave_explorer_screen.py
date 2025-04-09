@@ -25,10 +25,10 @@ from command.pending_file_ops import FileOp, get_pending_operations, CleanupFile
 from config import HoardRemote
 from exceptions import RepoOpeningFailed
 from gui.app_config import config, _write_config
+from gui.confirm_action_screen import ConfirmActionScreen
 from gui.folder_tree import FolderNode, FolderTree, aggregate_on_nodes
-from gui.node_description_widget import ConfirmActionScreen
-from gui.progress_reporting import StartProgressReporting, MarkProgressReporting, progress_reporting, \
-    ProgressReporting
+from gui.progress_reporting import StartProgressReporting, MarkProgressReporting, progress_reporting_it, \
+    ProgressReporting, progress_reporting_bar
 
 
 class HoardContentsPendingToSyncFile(Tree[FolderNode[FileOp]]):
@@ -154,7 +154,7 @@ class HoardContentsPendingToPull(Tree[Action]):
 
                     resolutions = await resolution_to_match_repo_and_hoard(
                         current_contents, hoard_contents, pathing, preferences,
-                        progress_reporting(self, id="hoard-contents-to-pull", max_frequency=10))
+                        progress_reporting_it(self, id="hoard-contents-to-pull", max_frequency=10))
 
                     with StringIO() as other_out:
                         actions = list(calculate_actions(preferences, resolutions, pathing, hoard_config, other_out))
@@ -236,8 +236,8 @@ class CaveInfoWidget(Widget):
             with StringIO() as out:
                 await execute_files_push(
                     self.hoard.config(),
-                    self.hoard, [self.remote.uuid], out)
-                # FIXME implement progress_bar=progress_reporting(self, "pull-to-hoard-operation", 10)
+                    self.hoard, [self.remote.uuid], out,
+                    progress_reporting_bar(self, "push-to-files-operation", 10))
                 logging.info(out.getvalue())
 
             await self.recompose()
@@ -254,7 +254,7 @@ class CaveInfoWidget(Widget):
                 await execute_pull(
                     self.hoard, self.remote,
                     ignore_epoch=False, assume_current=False, force_fetch_local_missing=False, out=out,
-                    progress_bar=progress_reporting(self, "pull-to-hoard-operation", 10))
+                    progress_bar=progress_reporting_it(self, "pull-to-hoard-operation", 10))
                 logging.info(out.getvalue())
 
             await self.recompose()
