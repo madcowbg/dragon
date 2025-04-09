@@ -221,7 +221,7 @@ class CaveInfoWidget(Widget):
                         "Push files to repo", variant="primary", id="push_files_to_repo"),
                     HoardContentsPendingToSyncFile(self.hoard, self.remote)),
                 Vertical(
-                    Button("Pull to Hoard", variant="primary"),
+                    Button("Pull to Hoard", variant="primary", id="pull_to_hoard"),
                     HoardContentsPendingToPull(self.hoard, self.remote)
                 ),
                 id="content_trees")
