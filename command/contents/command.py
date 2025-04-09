@@ -8,7 +8,7 @@ from alive_progress import alive_bar, alive_it
 
 from command.content_prefs import ContentPrefs
 from command.contents.comparisons import compare_local_to_hoard
-from command.contents.handle_pull import PullPreferences, pull_repo_contents_to_hoard, reset_local_as_current, \
+from command.contents.handle_pull import PullPreferences, pull_repo_contents_to_hoard, behavior_reset_local_as_current, \
     PullIntention, \
     _handle_local_only
 from command.fast_path import FastPosixPath
@@ -455,7 +455,7 @@ class HoardCommandContents:
                                 logging.info(
                                     f"Local file {local_file} is not marked available, will reset its contents in repo")
 
-                                reset_local_as_current(hoard, repo_uuid, hoard_file, hoard_props, local_props)
+                                behavior_reset_local_as_current(hoard, repo_uuid, hoard_file, hoard_props, local_props)
                                 out.write(f"RESET {hoard_file}\n")
 
                 out.write("DONE")
