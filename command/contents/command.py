@@ -8,7 +8,8 @@ from alive_progress import alive_bar, alive_it
 
 from command.content_prefs import ContentPrefs
 from command.contents.comparisons import compare_local_to_hoard
-from command.contents.handle_pull import PullPreferences, pull_repo_contents_to_hoard, reset_local_as_current, PullBehavior, \
+from command.contents.handle_pull import PullPreferences, pull_repo_contents_to_hoard, reset_local_as_current, \
+    PullBehavior, \
     _handle_local_only
 from command.fast_path import FastPosixPath
 from command.hoard import Hoard
@@ -17,6 +18,7 @@ from command.pending_file_ops import GetFile, CopyFile, CleanupFile, get_pending
 from config import CaveType, HoardRemote
 from contents.hoard import HoardContents, HoardFile, HoardDir
 from contents.hoard_props import HoardFileStatus, HoardFileProps
+from contents.repo import RepoContents
 from contents.repo_props import RepoFileProps, RepoFileStatus
 from contents_diff import DiffType, Diff
 from exceptions import MissingRepoContents
@@ -130,14 +132,7 @@ async def execute_pull(
             logging.info(f"Saving config of remote {remote_obj.uuid}...")
             hoard_contents.config.save_remote_config(current_contents.config)
 
-            if remote_obj.type == CaveType.INCOMING:
-                preferences = _init_pull_preferences_incoming(content_prefs, remote_obj.uuid)
-            elif remote_obj.type == CaveType.BACKUP:
-                preferences = _init_pull_preferences_backup(content_prefs, remote_obj.uuid)
-            else:
-                assert remote_obj.type == CaveType.PARTIAL
-                preferences = _init_pull_preferences_partial(
-                    content_prefs, remote_obj.uuid, assume_current, force_fetch_local_missing)
+            preferences = init_pull_preferences(content_prefs, remote_obj, assume_current, force_fetch_local_missing)
 
             await pull_repo_contents_to_hoard(
                 hoard_contents, pathing, config, current_contents, preferences, out, progress_bar)
@@ -151,9 +146,66 @@ async def execute_pull(
     out.write(f"Sync'ed {remote_obj.name} to hoard!\n")
 
 
+def init_pull_preferences(
+        content_prefs: ContentPrefs, remote_obj: HoardRemote, assume_current: bool, force_fetch_local_missing: bool):
+    if remote_obj.type == CaveType.INCOMING:
+        return _init_pull_preferences_incoming(content_prefs, remote_obj.uuid)
+    elif remote_obj.type == CaveType.BACKUP:
+        return _init_pull_preferences_backup(content_prefs, remote_obj.uuid)
+    else:
+        assert remote_obj.type == CaveType.PARTIAL
+        return _init_pull_preferences_partial(
+            content_prefs, remote_obj.uuid, assume_current, force_fetch_local_missing)
+
+
+async def execute_pring_pending(
+        current_contents: RepoContents, hoard: HoardContents, pathing: HoardPathing, ignore_missing: bool,
+        out: StringIO):
+    async for diff in compare_local_to_hoard(
+            current_contents, hoard, pathing):
+        if diff.diff_type == DiffType.FileOnlyInLocal:
+            if diff.is_added:
+                out.write(f"ADDED {diff.hoard_file.as_posix()}\n")
+            else:
+                out.write(f"PRESENT {diff.hoard_file.as_posix()}\n")
+        elif diff.diff_type == DiffType.FileContentsDiffer:
+            out.write(f"MODIFIED {diff.hoard_file.as_posix()}\n")
+        elif diff.diff_type == DiffType.FileOnlyInHoardLocalDeleted:
+            out.write(f"DELETED {diff.hoard_file.as_posix()}\n")
+        elif diff.diff_type == DiffType.FileOnlyInHoardLocalUnknown:
+            if not ignore_missing:
+                out.write(f"MISSING {diff.hoard_file.as_posix()}\n")
+        elif diff.diff_type == DiffType.FileOnlyInHoardLocalMoved:
+            out.write(f"MOVED {diff.hoard_file.as_posix()}\n")
+        elif diff.diff_type == DiffType.FileIsSame:
+            pass
+        else:
+            raise ValueError(f"Unused diff class: {type(diff)}")
+    out.write("DONE")
+
+
 class HoardCommandContents:
     def __init__(self, hoard: Hoard):
         self.hoard = hoard
+
+    async def pending(self, remote: str, ignore_missing: bool = False):
+        remote_uuid = resolve_remote_uuid(self.hoard.config(), remote)
+
+        logging.info(f"Reading current contents of {remote_uuid}...")
+        connected_repo = self.hoard.connect_to_repo(remote_uuid, require_contents=True)
+        with connected_repo.open_contents(is_readonly=True) as current_contents:
+            logging.info(f"Loading hoard TOML...")
+            async with self.hoard.open_contents(create_missing=False, is_readonly=True) as hoard:
+                logging.info(f"Loaded hoard TOML!")
+                logging.info(f"Computing status ...")
+
+                with StringIO() as out:
+                    out.write(f"Status of {self.hoard.config().remotes[remote_uuid].name}:\n")
+
+                    await execute_pring_pending(
+                        current_contents, hoard, HoardPathing(self.hoard.config(), self.hoard.paths()), ignore_missing,
+                        out)
+                    return out.getvalue()
 
     async def differences(self, remote: str, ignore_missing: bool = False):
         remote_uuid = resolve_remote_uuid(self.hoard.config(), remote)
@@ -169,28 +221,9 @@ class HoardCommandContents:
                 with StringIO() as out:
                     out.write(f"Status of {self.hoard.config().remotes[remote_uuid].name}:\n")
 
-                    async for diff in compare_local_to_hoard(
-                            current_contents, hoard, HoardPathing(self.hoard.config(), self.hoard.paths())):
-                        if diff.diff_type == DiffType.FileOnlyInLocal:
-                            if diff.is_added:
-                                out.write(f"ADDED {diff.hoard_file.as_posix()}\n")
-                            else:
-                                out.write(f"PRESENT {diff.hoard_file.as_posix()}\n")
-                        elif diff.diff_type == DiffType.FileContentsDiffer:
-                            out.write(f"MODIFIED {diff.hoard_file.as_posix()}\n")
-                        elif diff.diff_type == DiffType.FileOnlyInHoardLocalDeleted:
-                            out.write(f"DELETED {diff.hoard_file.as_posix()}\n")
-                        elif diff.diff_type == DiffType.FileOnlyInHoardLocalUnknown:
-                            if not ignore_missing:
-                                out.write(f"MISSING {diff.hoard_file.as_posix()}\n")
-                        elif diff.diff_type == DiffType.FileOnlyInHoardLocalMoved:
-                            out.write(f"MOVED {diff.hoard_file.as_posix()}\n")
-                        elif diff.diff_type == DiffType.FileIsSame:
-                            pass
-                        else:
-                            raise ValueError(f"Unused diff class: {type(diff)}")
-
-                    out.write("DONE")
+                    await execute_pring_pending(
+                        current_contents, hoard, HoardPathing(self.hoard.config(), self.hoard.paths()), ignore_missing,
+                        out)
                     return out.getvalue()
 
     async def status(
@@ -202,9 +235,10 @@ class HoardCommandContents:
                 FastPosixPath(path) if path else None)
             available_states, statuses_sorted = augment_statuses(config, hoard, show_empty, statuses)
 
-            all_stats = ["total", *(s for s in (HoardFileStatus.AVAILABLE.value, HoardFileStatus.GET.value,
-                                                HoardFileStatus.COPY.value, HoardFileStatus.MOVE.value,
-                                                HoardFileStatus.CLEANUP.value) if s in available_states)]
+            all_stats = ["total", *(s for s in (
+                HoardFileStatus.AVAILABLE.value, HoardFileStatus.GET.value,
+                HoardFileStatus.COPY.value, HoardFileStatus.MOVE.value,
+                HoardFileStatus.CLEANUP.value) if s in available_states)]
             with StringIO() as out:
                 out.write(f"|{'Num Files':<25}|")
                 if not hide_time:
