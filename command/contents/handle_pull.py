@@ -1,7 +1,7 @@
 import enum
 import logging
 from io import StringIO
-from typing import List
+from typing import List, Iterable, Tuple
 
 from alive_progress import alive_it
 
@@ -288,71 +288,8 @@ def _move_locally(
 async def pull_repo_contents_to_hoard(
         hoard_contents: HoardContents, pathing: HoardPathing, config: HoardConfig, current_contents: RepoContents,
         preferences: PullPreferences, out: StringIO, progress_tool=alive_it):
-    all_diffs = [diff async for diff in
-                 compare_local_to_hoard(current_contents, hoard_contents, pathing, progress_tool)]
-
-    diffs_by_type = group_to_dict(all_diffs, key=lambda diff: diff.diff_type)
-    for dt, diffs in diffs_by_type.items():
-        logging.debug(f"# diffs of class {dt}={len(diffs)}")
-
-    resolutions: List[(Diff, PullBehavior)] = list()
-
-    for diff in diffs_by_type.pop(DiffType.FileIsSame, []):
-        assert diff.diff_type == DiffType.FileIsSame
-        resolutions.append((diff, preferences.on_same_file_is_present))
-
-    for diff in diffs_by_type.pop(DiffType.FileOnlyInLocal, []):
-        assert diff.diff_type == DiffType.FileOnlyInLocal
-        resolutions.append((diff, preferences.on_file_added_or_present))
-
-    for diff in diffs_by_type.pop(DiffType.FileContentsDiffer, []):
-        assert diff.diff_type == DiffType.FileContentsDiffer
-        if diff.local_props.last_status == RepoFileStatus.PRESENT:
-            behavior = preferences.on_file_is_different_but_present
-        elif diff.local_props.last_status == RepoFileStatus.ADDED:
-            behavior = preferences.on_file_is_different_and_added
-        elif diff.local_props.last_status == RepoFileStatus.MODIFIED:
-            behavior = preferences.on_file_is_different_and_modified
-        else:
-            raise ValueError(f"Unallowed local_props.last_status={diff.local_props.last_status}")
-
-        resolutions.append((diff, behavior))
-
-    for diff in diffs_by_type.pop(DiffType.FileOnlyInHoardLocalDeleted, []):
-        assert diff.diff_type == DiffType.FileOnlyInHoardLocalDeleted
-        if diff.diff_type == DiffType.FileOnlyInHoardLocalMoved:
-            behavior = preferences.on_hoard_only_local_moved
-        elif diff.diff_type == DiffType.FileOnlyInHoardLocalUnknown:
-            behavior = preferences.on_hoard_only_local_unknown
-        elif diff.diff_type == DiffType.FileOnlyInHoardLocalDeleted:
-            behavior = preferences.on_hoard_only_local_deleted
-        else:
-            raise ValueError(f"Invalid diff tyoe {type(diff)}")
-        resolutions.append((diff, behavior))
-
-    for diff in diffs_by_type.pop(DiffType.FileOnlyInHoardLocalUnknown, []):
-        assert diff.diff_type == DiffType.FileOnlyInHoardLocalUnknown
-        if diff.diff_type == DiffType.FileOnlyInHoardLocalMoved:
-            behavior = preferences.on_hoard_only_local_moved
-        elif diff.diff_type == DiffType.FileOnlyInHoardLocalUnknown:
-            behavior = preferences.on_hoard_only_local_unknown
-        elif diff.diff_type == DiffType.FileOnlyInHoardLocalDeleted:
-            behavior = preferences.on_hoard_only_local_deleted
-        else:
-            raise ValueError(f"Invalid diff type {type(diff)}")
-
-        resolutions.append((diff, behavior))
-
-    for diff in diffs_by_type.pop(DiffType.FileOnlyInHoardLocalMoved, []):
-        assert diff.diff_type == DiffType.FileOnlyInHoardLocalMoved
-
-        resolutions.append((diff, preferences.on_hoard_only_local_moved))
-
-    for unrecognized_type, unrecognized_diffs in diffs_by_type.items():
-        logging.error(f"Unrecognized {len(unrecognized_diffs)} of type: {unrecognized_type}")
-
-    if len(diffs_by_type) > 0:
-        raise ValueError(f"Unrecognized diffs of types {list(diffs_by_type.keys())}")
+    resolutions = await resolution_to_match_repo_and_hoard(
+        current_contents, hoard_contents, pathing, preferences, progress_tool)
 
     for diff, behavior in resolutions:
         if diff.diff_type == DiffType.FileIsSame:
@@ -371,6 +308,73 @@ async def pull_repo_contents_to_hoard(
                 behavior, preferences.local_uuid, diff, pathing, hoard_contents, config, out)
         else:
             raise ValueError(f"Invalid diff type {diff.diff_type}")
+
+
+async def resolution_to_match_repo_and_hoard(current_contents, hoard_contents, pathing, preferences, progress_tool):
+    all_diffs = [
+        diff async for diff in compare_local_to_hoard(current_contents, hoard_contents, pathing, progress_tool)]
+    return compute_resolutions(all_diffs, preferences)
+
+
+def compute_resolutions(all_diffs: Iterable[Diff], preferences: PullPreferences) -> Iterable[Tuple[Diff, PullBehavior]]:
+    diffs_by_type = group_to_dict(all_diffs, key=lambda diff: diff.diff_type)
+    for dt, diffs in diffs_by_type.items():
+        logging.debug(f"# diffs of class {dt}={len(diffs)}")
+
+    for diff in diffs_by_type.pop(DiffType.FileIsSame, []):
+        assert diff.diff_type == DiffType.FileIsSame
+        yield diff, preferences.on_same_file_is_present
+
+    for diff in diffs_by_type.pop(DiffType.FileOnlyInLocal, []):
+        assert diff.diff_type == DiffType.FileOnlyInLocal
+        yield diff, preferences.on_file_added_or_present
+
+    for diff in diffs_by_type.pop(DiffType.FileContentsDiffer, []):
+        assert diff.diff_type == DiffType.FileContentsDiffer
+        if diff.local_props.last_status == RepoFileStatus.PRESENT:
+            behavior = preferences.on_file_is_different_but_present
+        elif diff.local_props.last_status == RepoFileStatus.ADDED:
+            behavior = preferences.on_file_is_different_and_added
+        elif diff.local_props.last_status == RepoFileStatus.MODIFIED:
+            behavior = preferences.on_file_is_different_and_modified
+        else:
+            raise ValueError(f"Unallowed local_props.last_status={diff.local_props.last_status}")
+
+        yield diff, behavior
+
+    for diff in diffs_by_type.pop(DiffType.FileOnlyInHoardLocalDeleted, []):
+        assert diff.diff_type == DiffType.FileOnlyInHoardLocalDeleted
+        if diff.diff_type == DiffType.FileOnlyInHoardLocalMoved:
+            behavior = preferences.on_hoard_only_local_moved
+        elif diff.diff_type == DiffType.FileOnlyInHoardLocalUnknown:
+            behavior = preferences.on_hoard_only_local_unknown
+        elif diff.diff_type == DiffType.FileOnlyInHoardLocalDeleted:
+            behavior = preferences.on_hoard_only_local_deleted
+        else:
+            raise ValueError(f"Invalid diff tyoe {type(diff)}")
+        yield diff, behavior
+
+    for diff in diffs_by_type.pop(DiffType.FileOnlyInHoardLocalUnknown, []):
+        assert diff.diff_type == DiffType.FileOnlyInHoardLocalUnknown
+        if diff.diff_type == DiffType.FileOnlyInHoardLocalMoved:
+            behavior = preferences.on_hoard_only_local_moved
+        elif diff.diff_type == DiffType.FileOnlyInHoardLocalUnknown:
+            behavior = preferences.on_hoard_only_local_unknown
+        elif diff.diff_type == DiffType.FileOnlyInHoardLocalDeleted:
+            behavior = preferences.on_hoard_only_local_deleted
+        else:
+            raise ValueError(f"Invalid diff type {type(diff)}")
+
+        yield diff, behavior
+    for diff in diffs_by_type.pop(DiffType.FileOnlyInHoardLocalMoved, []):
+        assert diff.diff_type == DiffType.FileOnlyInHoardLocalMoved
+
+        yield diff, preferences.on_hoard_only_local_moved
+    for unrecognized_type, unrecognized_diffs in diffs_by_type.items():
+        logging.error(f"Unrecognized {len(unrecognized_diffs)} of type: {unrecognized_type}")
+
+    if len(diffs_by_type) > 0:
+        raise ValueError(f"Unrecognized diffs of types {list(diffs_by_type.keys())}")
 
 
 def _incoming__safe_mark_for_cleanup(local_uuid: str, diff: Diff, hoard_file: HoardFileProps, out: StringIO):
