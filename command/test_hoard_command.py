@@ -61,7 +61,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
 
         repo_uuid = cave_cmd.current_uuid()
 
-        res = await hoard_cmd.contents.pending("repo-in-local")
+        res = await hoard_cmd.contents.differences("repo-in-local")
         self.assertEqual(
             f"Status of repo-in-local:\n"
             f"PRESENT /wat/test.me.different\n"
@@ -85,7 +85,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
                     ('/wat/test.me.once', 8, 1, '34fac39930874b0f6bc627c3b3fc4b5e'),
                     ('/wat/test.me.twice', 6, 1, '1881f6f9784fb08bf6690e9763b76ac3')])
 
-        res = await hoard_cmd.contents.pending("repo-in-local")
+        res = await hoard_cmd.contents.differences("repo-in-local")
         self.assertEqual(f"Status of repo-in-local:\nDONE", res.strip())
 
     def _assert_hoard_contents(
@@ -150,14 +150,14 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
                     ('/wat/test.me.once', 8, 1, '34fac39930874b0f6bc627c3b3fc4b5e'),
                     ('/wat/test.me.twice', 6, 2, '1881f6f9784fb08bf6690e9763b76ac3')])
 
-        res = await hoard_cmd.contents.pending("repo-in-local-2")
+        res = await hoard_cmd.contents.differences("repo-in-local-2")
         self.assertEqual(
             f"Status of repo-in-local-2:\n"
             f"MODIFIED /wat/test.me.different\n"
             f"MISSING /wat/test.me.once\n"
             f"DONE", res.strip())
 
-        res = await hoard_cmd.contents.pending("repo-in-local")
+        res = await hoard_cmd.contents.differences("repo-in-local")
         self.assertEqual(f"Status of repo-in-local:\nDONE", res.strip())
 
         res = hoard_cmd.remotes(hide_paths=True)
@@ -194,7 +194,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
 
         self.assertEqual(
             f"Status of repo-in-local:\nDONE",
-            (await hoard_cmd.contents.pending("repo-in-local")).strip())
+            (await hoard_cmd.contents.differences("repo-in-local")).strip())
 
         os.mkdir(join(self.tmpdir.name, "repo", "newdir"))
         write_contents(join(self.tmpdir.name, "repo", "newdir", "newfile.is"), "lhiWFELHFE")
@@ -229,7 +229,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         # as is not refreshed, no change in status
         self.assertEqual(
             f"Status of repo-in-local:\nDONE",
-            (await hoard_cmd.contents.pending("repo-in-local")).strip())
+            (await hoard_cmd.contents.differences("repo-in-local")).strip())
 
         await cave_cmd.refresh(show_details=False)
         self.assertEqual(
@@ -237,7 +237,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             f"ADDED /newdir/newfile.is\n"
             f"DELETED /wat/test.me.different\n"
             f"DONE",
-            (await hoard_cmd.contents.pending("repo-in-local")).strip())
+            (await hoard_cmd.contents.differences("repo-in-local")).strip())
 
         res = await hoard_cmd.contents.pull("repo-in-local")
         self.assertEqual(
@@ -248,7 +248,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
 
         self.assertEqual(
             f"Status of repo-in-local:\n"
-            f"DONE", (await hoard_cmd.contents.pending("repo-in-local")).strip())
+            f"DONE", (await hoard_cmd.contents.differences("repo-in-local")).strip())
 
     async def test_clone(self):
         hoard_cmd = TotalCommand(path=join(self.tmpdir.name, "hoard")).hoard
@@ -270,7 +270,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             "Hoard health stats:\n"
             "DONE", res)
 
-        res = await hoard_cmd.contents.pending(new_uuid)
+        res = await hoard_cmd.contents.differences(new_uuid)
         self.assertEqual(f"Status of cloned-repo:\nDONE", res)
 
     async def test_populate_one_repo_from_other_repo(self):
@@ -292,13 +292,13 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
 
         # status should be still empty hoard
         new_uuid = resolve_remote_uuid(hoard_cmd.hoard.config(), "cloned-repo")
-        res = await hoard_cmd.contents.pending(new_uuid)
+        res = await hoard_cmd.contents.differences(new_uuid)
         self.assertEqual(f"Status of cloned-repo:\nDONE", res)
 
         await hoard_cmd.contents.pull("repo-in-local")
 
         # after population by other repo, it is now lacking files
-        res = await hoard_cmd.contents.pending(new_uuid)
+        res = await hoard_cmd.contents.differences(new_uuid)
         self.assertEqual(
             f"Status of cloned-repo:\n"
             "MISSING /wat/test.me.different\n"
@@ -318,7 +318,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         res = await cloned_cave_cmd.refresh(show_details=False)
         self.assertEqual("Refresh done!", res)
 
-        res = await hoard_cmd.contents.pending(new_uuid)
+        res = await hoard_cmd.contents.differences(new_uuid)
         self.assertEqual(f"Status of cloned-repo:\nDONE", res.strip())
 
         res = await hoard_cmd.files.push(repo="cloned-repo")
@@ -354,7 +354,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = await init_complex_hoard(
             self.tmpdir.name)
 
-        res = await hoard_cmd.contents.pending("repo-partial-name")
+        res = await hoard_cmd.contents.differences("repo-partial-name")
         self.assertEqual(
             f"Status of repo-partial-name:\n"
             f"PRESENT /test.me.1\n"
@@ -496,7 +496,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         res = await full_cave_cmd.refresh(show_details=False)
         self.assertEqual("Refresh done!", res)
 
-        res = await hoard_cmd.contents.pending("repo-full-name")
+        res = await hoard_cmd.contents.differences("repo-full-name")
         self.assertEqual(
             f"Status of repo-full-name:\n"
             f"DONE", res)

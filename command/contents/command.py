@@ -155,7 +155,7 @@ class HoardCommandContents:
     def __init__(self, hoard: Hoard):
         self.hoard = hoard
 
-    async def pending(self, remote: str, ignore_missing: bool = False):
+    async def differences(self, remote: str, ignore_missing: bool = False):
         remote_uuid = resolve_remote_uuid(self.hoard.config(), remote)
 
         logging.info(f"Reading current contents of {remote_uuid}...")

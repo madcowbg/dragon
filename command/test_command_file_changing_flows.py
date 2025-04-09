@@ -716,7 +716,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.pull(partial_cave_cmd.current_uuid())
         self.assertEqual(f"+/test.me.1\n+/wat/test.me.2\nSync'ed repo-partial-name to hoard!\nDONE", res)
 
-        res = await hoard_cmd.contents.pending(full_cave_cmd.current_uuid())
+        res = await hoard_cmd.contents.differences(full_cave_cmd.current_uuid())
         self.assertEqual(
             "Status of repo-full-name:\n"
             "PRESENT /test.me.4\n"
@@ -791,7 +791,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             "MODIFIED_FILE test.me.1\n"
             "Refresh done!", res)
 
-        res = await hoard_cmd.contents.pending(full_cave_cmd.current_uuid())
+        res = await hoard_cmd.contents.differences(full_cave_cmd.current_uuid())
         self.assertEqual(
             "Status of repo-full-name:\n"
             "ADDED /lets_get_it_started/test.me.2-butnew\n"
@@ -931,7 +931,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.pull(partial_cave_cmd.current_uuid())
         self.assertEqual(f"+/test.me.1\n+/wat/test.me.2\nSync'ed repo-partial-name to hoard!\nDONE", res)
 
-        res = await hoard_cmd.contents.pending(full_cave_cmd.current_uuid())
+        res = await hoard_cmd.contents.differences(full_cave_cmd.current_uuid())
         self.assertEqual(
             "Status of repo-full-name:\n"
             "PRESENT /test.me.4\n"
@@ -1025,7 +1025,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             f"UUID: {full_cave_cmd.current_uuid()}\n"
             "  # files = 6 of size 47\n", res)
 
-        res = await hoard_cmd.contents.pending(full_cave_cmd.current_uuid())
+        res = await hoard_cmd.contents.differences(full_cave_cmd.current_uuid())
         self.assertEqual(
             "Status of repo-full-name:\n"
             "ADDED /lets_get_it_started/test.me.2-butnew\n"
@@ -1432,7 +1432,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             "ADDED_FILE lets_get_it_started/test.me.2-butsecond\n"
             "Refresh done!", res)
 
-        res = await hoard_cmd.contents.pending(full_cave_cmd.current_uuid())
+        res = await hoard_cmd.contents.differences(full_cave_cmd.current_uuid())
         self.assertEqual(
             "Status of repo-full-name:\n"
             "ADDED /lets_get_it_started/test.me.2-butnew\n"
