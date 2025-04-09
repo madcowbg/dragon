@@ -56,7 +56,7 @@ class PullPreferences:
         self.on_hoard_only_local_moved = on_hoard_only_local_moved
 
 
-class Behavior(abc.ABC):
+class Action(abc.ABC):
     diff: Diff
 
     def __init__(self, diff: Diff):
@@ -66,7 +66,7 @@ class Behavior(abc.ABC):
     def execute(self, local_uuid: str, content_prefs: ContentPrefs, hoard: HoardContents, out: StringIO) -> None: pass
 
 
-class MarkIsAvailableBehavior(Behavior):
+class MarkIsAvailableBehavior(Action):
     def __init__(self, diff: Diff):
         super().__init__(diff)
 
@@ -75,7 +75,7 @@ class MarkIsAvailableBehavior(Behavior):
 
 
 # todo unify with the case when adding
-class AddToHoardAndCleanupSameBehavior(Behavior):
+class AddToHoardAndCleanupSameBehavior(Action):
     def __init__(self, diff: Diff):
         super().__init__(diff)
 
@@ -93,7 +93,7 @@ class AddToHoardAndCleanupSameBehavior(Behavior):
 
 
 # todo unify with the case when adding
-class AddToHoardAndCleanupNewBehavior(Behavior):
+class AddToHoardAndCleanupNewBehavior(Action):
     def __init__(self, diff: Diff):
         super().__init__(diff)
 
@@ -107,7 +107,7 @@ class AddToHoardAndCleanupNewBehavior(Behavior):
         _incoming__safe_mark_for_cleanup(local_uuid, self.diff, hoard_props, out)
 
 
-class AddNewFileBehavior(Behavior):
+class AddNewFileBehavior(Action):
     def __init__(self, diff: Diff):
         super().__init__(diff)
 
@@ -121,7 +121,7 @@ class AddNewFileBehavior(Behavior):
         hoard_props.mark_available(local_uuid)
 
 
-class MarkToGetBehavior(Behavior):
+class MarkToGetBehavior(Action):
     def __init__(self, diff: Diff):
         super().__init__(diff)
 
@@ -129,7 +129,7 @@ class MarkToGetBehavior(Behavior):
         self.diff.hoard_props.mark_to_get([local_uuid])
 
 
-class ResetLocalAsCurrentBehavior(Behavior):  # fixme a better name
+class ResetLocalAsCurrentBehavior(Action):  # fixme a better name
     def __init__(self, diff: Diff):
         super().__init__(diff)
 
@@ -144,7 +144,7 @@ class ResetLocalAsCurrentBehavior(Behavior):  # fixme a better name
         hoard_props.mark_available(local_uuid)
 
 
-class RemoveLocalStatusBehavior(Behavior):
+class RemoveLocalStatusBehavior(Action):
     def __init__(self, diff: Diff):
         super().__init__(diff)
 
@@ -152,7 +152,7 @@ class RemoveLocalStatusBehavior(Behavior):
         self.diff.hoard_props.remove_status(local_uuid)
 
 
-class DeleteFileFromHoardBehavior(Behavior):
+class DeleteFileFromHoardBehavior(Action):
     def __init__(self, diff: Diff):
         super().__init__(diff)
 
@@ -161,7 +161,7 @@ class DeleteFileFromHoardBehavior(Behavior):
         self.diff.hoard_props.remove_status(local_uuid)
 
 
-class MoveFileBehavior(Behavior):
+class MoveFileBehavior(Action):
     def __init__(self, diff: Diff, config: HoardConfig, pathing: HoardPathing):
         super().__init__(diff)
         self.config = config
@@ -179,7 +179,7 @@ class MoveFileBehavior(Behavior):
 
 
 def _calculate_file_is_same(
-        behavior: PullIntention, local_uuid: str, diff: Diff, out: StringIO) -> Iterable[Behavior]:
+        behavior: PullIntention, local_uuid: str, diff: Diff, out: StringIO) -> Iterable[Action]:
     assert diff.diff_type == DiffType.FileIsSame
 
     assert behavior in (PullIntention.ADD_TO_HOARD_AND_CLEANUP, PullIntention.ADD_TO_HOARD)
@@ -205,7 +205,7 @@ def _calculate_file_is_same(
             raise ValueError(f"unrecognized hoard state for {diff.hoard_file}: {goal_status}")
 
 
-def _calculate_local_only(behavior: PullIntention, diff: Diff, out: StringIO) -> Iterable[Behavior]:
+def _calculate_local_only(behavior: PullIntention, diff: Diff, out: StringIO) -> Iterable[Action]:
     assert diff.diff_type == DiffType.FileOnlyInLocal
 
     if behavior == PullIntention.ADD_TO_HOARD_AND_CLEANUP:
@@ -222,7 +222,7 @@ def _calculate_local_only(behavior: PullIntention, diff: Diff, out: StringIO) ->
 
 
 def _calculate_file_contents_differ(
-        behavior: PullIntention, local_uuid: str, diff: Diff, out: StringIO) -> Iterable[Behavior]:
+        behavior: PullIntention, local_uuid: str, diff: Diff, out: StringIO) -> Iterable[Action]:
     assert diff.diff_type == DiffType.FileContentsDiffer
 
     assert behavior in (
@@ -267,7 +267,7 @@ def _calculate_file_contents_differ(
 
 
 def _calculate_hoard_only_with_behavior(diff: Diff, behavior: PullIntention, local_uuid: str, out: StringIO) -> \
-        Iterable[Behavior]:
+        Iterable[Action]:
     assert diff.diff_type in (
         DiffType.FileOnlyInHoardLocalDeleted, DiffType.FileOnlyInHoardLocalUnknown, DiffType.FileOnlyInHoardLocalMoved)
 
@@ -319,7 +319,7 @@ def _calculate_hoard_only_with_behavior(diff: Diff, behavior: PullIntention, loc
 
 def _calculate_hoard_only_moved(
         behavior: PullIntention, local_uuid: str, diff: Diff, pathing: HoardPathing, config: HoardConfig,
-        out: StringIO) -> Iterable[Behavior]:
+        out: StringIO) -> Iterable[Action]:
     assert diff.diff_type == DiffType.FileOnlyInHoardLocalMoved
     if behavior == PullIntention.MOVE_IN_HOARD:
         goal_status = diff.hoard_props.get_status(local_uuid)
@@ -365,25 +365,26 @@ async def pull_repo_contents_to_hoard(
     resolutions = await resolution_to_match_repo_and_hoard(
         current_contents, hoard_contents, pathing, preferences, progress_tool)
 
+    for action in calculate_actions(preferences, resolutions, pathing, config, out):
+        action.execute(preferences.local_uuid, preferences.content_prefs, hoard_contents, out)
+
+def calculate_actions(
+        preferences: PullPreferences, resolutions: Iterable[Tuple[Diff, PullIntention]],
+        pathing: HoardPathing, config: HoardConfig,
+        out: StringIO) -> Iterable[Action]:
     for diff, behavior in resolutions:
         if diff.diff_type == DiffType.FileIsSame:
-            for b in _calculate_file_is_same(behavior, preferences.local_uuid, diff, out):
-                b.execute(preferences.local_uuid, preferences.content_prefs, hoard_contents, out)
+            yield from _calculate_file_is_same(behavior, preferences.local_uuid, diff, out)
         elif diff.diff_type == DiffType.FileOnlyInLocal:
-            for b in _calculate_local_only(behavior, diff, out):
-                b.execute(preferences.local_uuid, preferences.content_prefs, hoard_contents, out)
+            yield from _calculate_local_only(behavior, diff, out)
         elif diff.diff_type == DiffType.FileContentsDiffer:
-            for b in _calculate_file_contents_differ(behavior, preferences.local_uuid, diff, out):
-                b.execute(preferences.local_uuid, preferences.content_prefs, hoard_contents, out)
+            yield from _calculate_file_contents_differ(behavior, preferences.local_uuid, diff, out)
         elif diff.diff_type == DiffType.FileOnlyInHoardLocalDeleted:
-            for b in _calculate_hoard_only_with_behavior(diff, behavior, preferences.local_uuid, out):
-                b.execute(preferences.local_uuid, preferences.content_prefs, hoard_contents, out)
+            yield from _calculate_hoard_only_with_behavior(diff, behavior, preferences.local_uuid, out)
         elif diff.diff_type == DiffType.FileOnlyInHoardLocalUnknown:
-            for b in _calculate_hoard_only_with_behavior(diff, behavior, preferences.local_uuid, out):
-                b.execute(preferences.local_uuid, preferences.content_prefs, hoard_contents, out)
+            yield from _calculate_hoard_only_with_behavior(diff, behavior, preferences.local_uuid, out)
         elif diff.diff_type == DiffType.FileOnlyInHoardLocalMoved:
-            for b in _calculate_hoard_only_moved(behavior, preferences.local_uuid, diff, pathing, config, out):
-                b.execute(preferences.local_uuid, preferences.content_prefs, hoard_contents, out)
+            yield from _calculate_hoard_only_moved(behavior, preferences.local_uuid, diff, pathing, config, out)
         else:
             raise ValueError(f"Invalid diff type {diff.diff_type}")
 
