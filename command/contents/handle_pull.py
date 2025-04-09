@@ -109,6 +109,26 @@ def behavior_reset_local_as_current(
     hoard_props.mark_available(remote_uuid)
 
 
+def behavior_remove_local_status(diff, local_uuid):
+    diff.hoard_props.remove_status(local_uuid)
+
+
+def behavior_delete_file_from_hoard(diff, local_uuid):
+    diff.hoard_props.mark_to_delete_everywhere()
+    diff.hoard_props.remove_status(local_uuid)
+
+
+def behavior_move_file(hoard, config, pathing, local_uuid, diff, out):
+    hoard_new_path = pathing.in_local(
+        FastPosixPath(diff.local_props.last_related_fullpath), local_uuid) \
+        .at_hoard().as_pure_path
+    hoard_new_path_props = hoard.fsobjects[hoard_new_path]
+    assert isinstance(hoard_new_path_props, HoardFileProps)
+    assert hoard_new_path_props.fasthash == diff.hoard_props.fasthash and \
+           hoard_new_path_props.fasthash == diff.local_props.fasthash
+    _move_locally(config, local_uuid, diff, hoard_new_path.as_posix(), hoard_new_path_props, out)
+
+
 def _handle_file_is_same(
         behavior: PullIntention, local_uuid: str, content_prefs: ContentPrefs, diff: Diff, out: StringIO):
     assert diff.diff_type == DiffType.FileIsSame
@@ -219,7 +239,7 @@ def _handle_hoard_only_with_behavior(
             logging.error(f"File in hoard only, but status in repo is not {HoardFileStatus.CLEANUP}")
             out.write(f"E{diff.hoard_file.as_posix()}\n")
 
-        diff.hoard_props.remove_status(local_uuid)
+        behavior_remove_local_status(diff, local_uuid)
         if goal_status != HoardFileStatus.UNKNOWN:
             out.write(f"IGNORED {diff.hoard_file.as_posix()}\n")
     elif behavior == PullIntention.RESTORE_FROM_HOARD:
@@ -229,7 +249,7 @@ def _handle_hoard_only_with_behavior(
 
             out.write(f"g{diff.hoard_file.as_posix()}\n")
         elif goal_status == HoardFileStatus.CLEANUP:  # file already deleted
-            diff.hoard_props.remove_status(local_uuid)
+            behavior_remove_local_status(diff, local_uuid)
         elif goal_status in (HoardFileStatus.GET, HoardFileStatus.COPY, HoardFileStatus.MOVE):
             pass
         elif goal_status == HoardFileStatus.UNKNOWN:
@@ -242,12 +262,11 @@ def _handle_hoard_only_with_behavior(
         else:  # file was here, is no longer
             logging.info(f"deleting file {diff.hoard_file} because it was deleted in local")
 
-            diff.hoard_props.mark_to_delete_everywhere()
-            diff.hoard_props.remove_status(local_uuid)
+            behavior_delete_file_from_hoard(diff, local_uuid)
             out.write(f"-{diff.hoard_file.as_posix()}\n")
     elif behavior == PullIntention.ACCEPT_FROM_HOARD:
         if goal_status == HoardFileStatus.CLEANUP:  # file already deleted
-            diff.hoard_props.remove_status(local_uuid)
+            behavior_remove_local_status(diff, local_uuid)
             out.write(f"ACCEPT_CLEANUP {diff.hoard_file.as_posix()}\n")
         else:
             logging.info(f"Ignoring missing file {diff.hoard_file}, desired state={goal_status}")
@@ -263,15 +282,7 @@ def _handle_hoard_only_moved(
     if behavior == PullIntention.MOVE_IN_HOARD:
         goal_status = diff.hoard_props.get_status(local_uuid)
         if goal_status == HoardFileStatus.AVAILABLE:
-            hoard_new_path = pathing.in_local(
-                FastPosixPath(diff.local_props.last_related_fullpath), local_uuid) \
-                .at_hoard().as_pure_path
-            hoard_new_path_props = hoard.fsobjects[hoard_new_path]
-            assert isinstance(hoard_new_path_props, HoardFileProps)
-            assert hoard_new_path_props.fasthash == diff.hoard_props.fasthash and \
-                   hoard_new_path_props.fasthash == diff.local_props.fasthash
-
-            _move_locally(config, local_uuid, diff, hoard_new_path.as_posix(), hoard_new_path_props, out)
+            behavior_move_file(hoard, config, pathing, local_uuid, diff, out)
         elif goal_status == HoardFileStatus.UNKNOWN:
             logging.info(f"File {diff.hoard_file} is unknown, can't move!")
         else:
