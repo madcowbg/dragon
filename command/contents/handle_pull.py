@@ -286,18 +286,18 @@ async def pull_repo_contents_to_hoard(
         logging.debug(f"# diffs of class {dt}={len(diffs)}")
 
     for diff in diffs_by_type.pop(FileIsSame, []):
-        assert diff.type == DiffType.FileIsSame
+        assert diff.diff_type == DiffType.FileIsSame
         _handle_file_is_same(
             preferences.on_same_file_is_present, preferences.local_uuid, preferences.content_prefs, diff, out)
 
     for diff in diffs_by_type.pop(FileOnlyInLocal, []):
-        assert diff.type == DiffType.FileOnlyInLocal
+        assert diff.diff_type == DiffType.FileOnlyInLocal
         _handle_local_only(
             preferences.on_file_added_or_present, preferences.local_uuid, diff, preferences.content_prefs,
             hoard_contents, out)
 
     for diff in diffs_by_type.pop(FileContentsDiffer, []):
-        assert diff.type == DiffType.FileContentsDiffer
+        assert diff.diff_type == DiffType.FileContentsDiffer
         if diff.local_props.last_status == RepoFileStatus.PRESENT:
             behavior = preferences.on_file_is_different_but_present
         elif diff.local_props.last_status == RepoFileStatus.ADDED:
@@ -311,12 +311,12 @@ async def pull_repo_contents_to_hoard(
             behavior, preferences.local_uuid, preferences.content_prefs, diff, hoard_contents, out)
 
     for diff in diffs_by_type.pop(FileOnlyInHoardLocalDeleted, []):
-        assert diff.type == DiffType.FileOnlyInHoardLocalDeleted
-        if diff.type == DiffType.FileOnlyInHoardLocalMoved:
+        assert diff.diff_type == DiffType.FileOnlyInHoardLocalDeleted
+        if diff.diff_type == DiffType.FileOnlyInHoardLocalMoved:
             behavior = preferences.on_hoard_only_local_moved
-        elif diff.type == DiffType.FileOnlyInHoardLocalUnknown:
+        elif diff.diff_type == DiffType.FileOnlyInHoardLocalUnknown:
             behavior = preferences.on_hoard_only_local_unknown
-        elif diff.type == DiffType.FileOnlyInHoardLocalDeleted:
+        elif diff.diff_type == DiffType.FileOnlyInHoardLocalDeleted:
             behavior = preferences.on_hoard_only_local_deleted
         else:
             raise ValueError(f"Invalid diff tyoe {type(diff)}")
@@ -324,12 +324,12 @@ async def pull_repo_contents_to_hoard(
         _handle_hoard_only_with_behavior(diff, behavior, preferences.local_uuid, out)
 
     for diff in diffs_by_type.pop(FileOnlyInHoardLocalUnknown, []):
-        assert diff.type == DiffType.FileOnlyInHoardLocalUnknown
-        if diff.type == DiffType.FileOnlyInHoardLocalMoved:
+        assert diff.diff_type == DiffType.FileOnlyInHoardLocalUnknown
+        if diff.diff_type == DiffType.FileOnlyInHoardLocalMoved:
             behavior = preferences.on_hoard_only_local_moved
-        elif diff.type == DiffType.FileOnlyInHoardLocalUnknown:
+        elif diff.diff_type == DiffType.FileOnlyInHoardLocalUnknown:
             behavior = preferences.on_hoard_only_local_unknown
-        elif diff.type == DiffType.FileOnlyInHoardLocalDeleted:
+        elif diff.diff_type == DiffType.FileOnlyInHoardLocalDeleted:
             behavior = preferences.on_hoard_only_local_deleted
         else:
             raise ValueError(f"Invalid diff tyoe {type(diff)}")
@@ -337,7 +337,7 @@ async def pull_repo_contents_to_hoard(
         _handle_hoard_only_with_behavior(diff, behavior, preferences.local_uuid, out)
 
     for diff in diffs_by_type.pop(FileOnlyInHoardLocalMoved, []):
-        assert diff.type == DiffType.FileOnlyInHoardLocalMoved
+        assert diff.diff_type == DiffType.FileOnlyInHoardLocalMoved
         _handle_hoard_only_moved(
             preferences.on_hoard_only_local_moved, preferences.local_uuid, diff, pathing, hoard_contents, config, out)
     for unrecognized_type, unrecognized_diffs in diffs_by_type.items():

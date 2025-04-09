@@ -16,7 +16,7 @@ class DiffType(enum.Enum):
 
 class Diff:
     def __init__(self, diff_type: DiffType):
-        self.type = diff_type
+        self.diff_type = diff_type
 
 
 class FileOnlyInLocal(Diff):

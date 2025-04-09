@@ -172,21 +172,21 @@ class HoardCommandContents:
 
                     async for diff in compare_local_to_hoard(
                             current_contents, hoard, HoardPathing(self.hoard.config(), self.hoard.paths())):
-                        if diff.type == DiffType.FileOnlyInLocal:
+                        if diff.diff_type == DiffType.FileOnlyInLocal:
                             if diff.is_added:
                                 out.write(f"ADDED {diff.hoard_file.as_posix()}\n")
                             else:
                                 out.write(f"PRESENT {diff.hoard_file.as_posix()}\n")
-                        elif diff.type == DiffType.FileContentsDiffer:
+                        elif diff.diff_type == DiffType.FileContentsDiffer:
                             out.write(f"MODIFIED {diff.hoard_file.as_posix()}\n")
-                        elif diff.type == DiffType.FileOnlyInHoardLocalDeleted:
+                        elif diff.diff_type == DiffType.FileOnlyInHoardLocalDeleted:
                             out.write(f"DELETED {diff.hoard_file.as_posix()}\n")
-                        elif diff.type == DiffType.FileOnlyInHoardLocalUnknown:
+                        elif diff.diff_type == DiffType.FileOnlyInHoardLocalUnknown:
                             if not ignore_missing:
                                 out.write(f"MISSING {diff.hoard_file.as_posix()}\n")
-                        elif diff.type == DiffType.FileOnlyInHoardLocalMoved:
+                        elif diff.diff_type == DiffType.FileOnlyInHoardLocalMoved:
                             out.write(f"MOVED {diff.hoard_file.as_posix()}\n")
-                        elif diff.type == DiffType.FileIsSame:
+                        elif diff.diff_type == DiffType.FileIsSame:
                             pass
                         else:
                             raise ValueError(f"Unused diff class: {type(diff)}")

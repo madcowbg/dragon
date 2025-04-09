@@ -149,7 +149,7 @@ class HoardContentsPendingToPull(Tree):
                         diff async for diff in compare_local_to_hoard(
                             current_contents, hoard_contents, pathing,
                             progress_reporting(self, id="hoard-contents-to-pull", max_frequency=10))
-                        if not diff.type == DiffType.FileIsSame]
+                        if not diff.diff_type == DiffType.FileIsSame]
 
             self.op_tree = FolderTree(
                 diffs,
