@@ -455,7 +455,9 @@ class HoardCommandContents:
                                 logging.info(
                                     f"Local file {local_file} is not marked available, will reset its contents in repo")
 
-                                behavior_reset_local_as_current(hoard, repo_uuid, hoard_file, hoard_props, local_props)
+                                diff = Diff(
+                                    DiffType.FileContentsDiffer, local_file, hoard_file, local_props, hoard_props, None)
+                                behavior_reset_local_as_current(diff, hoard, repo_uuid)
                                 out.write(f"RESET {hoard_file}\n")
 
                 out.write("DONE")

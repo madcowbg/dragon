@@ -1,3 +1,4 @@
+import abc
 import enum
 import logging
 from io import StringIO
@@ -55,78 +56,164 @@ class PullPreferences:
         self.on_hoard_only_local_moved = on_hoard_only_local_moved
 
 
+class Behavior(abc.ABC):
+    diff: Diff
+
+    def __init__(self, diff: Diff):
+        self.diff = diff
+
+    @abc.abstractmethod
+    def execute(self, local_uuid: str, content_prefs: ContentPrefs, hoard: HoardContents, out: StringIO) -> None: pass
+
+
+class MarkIsAvailableBehavior(Behavior):
+    def __init__(self, diff: Diff):
+        super().__init__(diff)
+
+    def execute(self, local_uuid: str, content_prefs: ContentPrefs, hoard: HoardContents, out: StringIO):
+        self.diff.hoard_props.mark_available(local_uuid)
+
+
 def behavior_mark_is_added(diff, local_uuid, out):
     logging.info(f"mark {diff.hoard_file} as available here!")
-    diff.hoard_props.mark_available(local_uuid)
+    MarkIsAvailableBehavior(diff).execute(local_uuid, None, None, None)
+
+
+class AddToHoardAndCleanupSameBehavior(Behavior):
+    def __init__(self, diff: Diff):
+        super().__init__(diff)
+
+    def execute(self, local_uuid: str, content_prefs: ContentPrefs, hoard: HoardContents, out: StringIO):
+        already_available = self.diff.hoard_props.by_status(HoardFileStatus.AVAILABLE)
+
+        # content prefs want to add it, and if not in an already available repo
+        repos_to_add = [
+            uuid for uuid in content_prefs.repos_to_add(self.diff.hoard_file, self.diff.local_props)
+            if uuid not in already_available]
+
+        # add status for new repos
+        self.diff.hoard_props.set_status(repos_to_add, HoardFileStatus.GET)
+        _incoming__safe_mark_for_cleanup(local_uuid, self.diff, self.diff.hoard_props, out)
 
 
 # todo unify with the case when adding
 def behavior_add_to_hoard_and_cleanup_same(content_prefs, local_uuid, diff: Diff, out):
-    already_available = diff.hoard_props.by_status(HoardFileStatus.AVAILABLE)
-
-    # content prefs want to add it, and if not in an already available repo
-    repos_to_add = [
-        uuid for uuid in content_prefs.repos_to_add(diff.hoard_file, diff.local_props)
-        if uuid not in already_available]
-
-    # add status for new repos
-    diff.hoard_props.set_status(repos_to_add, HoardFileStatus.GET)
-    _incoming__safe_mark_for_cleanup(local_uuid, diff, diff.hoard_props, out)
+    AddToHoardAndCleanupSameBehavior(diff).execute(local_uuid, content_prefs, None, out)
 
 
 # todo unify with the case when adding
-def behaviour_add_to_hoard_and_cleanup_new(content_prefs, diff, hoard: HoardContents, local_uuid, out):
-    hoard_props = hoard.fsobjects.add_or_replace_file(diff.hoard_file, diff.local_props)
+class AddToHoardAndCleanupNewBehavior(Behavior):
+    def __init__(self, diff: Diff):
+        super().__init__(diff)
 
-    # add status for new repos
-    hoard_props.set_status(
-        list(content_prefs.repos_to_add(diff.hoard_file, diff.local_props)),
-        HoardFileStatus.GET)
-    _incoming__safe_mark_for_cleanup(local_uuid, diff, hoard_props, out)
+    def execute(self, local_uuid: str, content_prefs: ContentPrefs, hoard: HoardContents, out: StringIO):
+        hoard_props = hoard.fsobjects.add_or_replace_file(self.diff.hoard_file, self.diff.local_props)
+
+        # add status for new repos
+        hoard_props.set_status(
+            list(content_prefs.repos_to_add(self.diff.hoard_file, self.diff.local_props)),
+            HoardFileStatus.GET)
+        _incoming__safe_mark_for_cleanup(local_uuid, self.diff, hoard_props, out)
+
+
+def behaviour_add_to_hoard_and_cleanup_new(content_prefs, diff, hoard: HoardContents, local_uuid, out):
+    AddToHoardAndCleanupNewBehavior(diff).execute(local_uuid, content_prefs, hoard, out)
+
+
+class AddNewFileBehavior(Behavior):
+    def __init__(self, diff: Diff):
+        super().__init__(diff)
+
+    def execute(self, local_uuid: str, content_prefs: ContentPrefs, hoard: HoardContents, out: StringIO):
+        hoard_props = hoard.fsobjects.add_or_replace_file(self.diff.hoard_file, self.diff.local_props)
+        # add status for new repos
+        hoard_props.set_status(
+            content_prefs.repos_to_add(self.diff.hoard_file, self.diff.local_props),
+            HoardFileStatus.GET)
+        # set status here
+        hoard_props.mark_available(local_uuid)
 
 
 def behavior_add_file_new(content_prefs, diff, hoard, local_uuid, out):
-    hoard_props = hoard.fsobjects.add_or_replace_file(diff.hoard_file, diff.local_props)
-    # add status for new repos
-    hoard_props.set_status(
-        content_prefs.repos_to_add(diff.hoard_file, diff.local_props),
-        HoardFileStatus.GET)
-    # set status here
-    hoard_props.mark_available(local_uuid)
+    AddNewFileBehavior(diff).execute(local_uuid, content_prefs, hoard, out)
+
+
+class MarkToGetBehavior(Behavior):
+    def __init__(self, diff: Diff):
+        super().__init__(diff)
+
+    def execute(self, local_uuid: str, content_prefs: ContentPrefs, hoard: HoardContents, out: StringIO):
+        self.diff.hoard_props.mark_to_get([local_uuid])
 
 
 def behavior_mark_to_get(diff, local_uuid):
-    diff.hoard_props.mark_to_get([local_uuid])
+    MarkToGetBehavior(diff).execute(local_uuid, None, None, None)
+
+
+class ResetLocalAsCurrentBehavior(Behavior):  # fixme a better name
+    def __init__(self, diff: Diff):
+        super().__init__(diff)
+
+    def execute(self, local_uuid: str, content_prefs: ContentPrefs, hoard: HoardContents, out: StringIO):
+        hoard_file = self.diff.hoard_file
+        hoard_props = self.diff.hoard_props
+        local_props = self.diff.local_props
+        past_available = hoard_props.by_statuses(HoardFileStatus.AVAILABLE, HoardFileStatus.GET, HoardFileStatus.COPY)
+
+        hoard_props = hoard.fsobjects.add_or_replace_file(hoard_file, local_props)
+        hoard_props.mark_to_get(past_available)
+        hoard_props.mark_available(local_uuid)
 
 
 def behavior_reset_local_as_current(
-        hoard: HoardContents, remote_uuid: str, hoard_file: FastPosixPath, hoard_props: HoardFileProps,
-        local_props: RepoFileProps):
-    past_available = hoard_props.by_statuses(HoardFileStatus.AVAILABLE, HoardFileStatus.GET, HoardFileStatus.COPY)
+        diff: Diff, hoard: HoardContents, remote_uuid: str):
+    ResetLocalAsCurrentBehavior(diff).execute(remote_uuid, None, hoard, None)
 
-    hoard_props = hoard.fsobjects.add_or_replace_file(hoard_file, local_props)
-    hoard_props.mark_to_get(past_available)
-    hoard_props.mark_available(remote_uuid)
+
+class RemoveLocalStatusBehavior(Behavior):
+    def __init__(self, diff: Diff):
+        super().__init__(diff)
+
+    def execute(self, local_uuid: str, content_prefs: ContentPrefs, hoard: HoardContents, out: StringIO):
+        self.diff.hoard_props.remove_status(local_uuid)
 
 
 def behavior_remove_local_status(diff, local_uuid):
-    diff.hoard_props.remove_status(local_uuid)
+    RemoveLocalStatusBehavior(diff).execute(local_uuid, None, None, None)
+
+
+class DeleteFileFromHoardBehavior(Behavior):
+    def __init__(self, diff: Diff):
+        super().__init__(diff)
+
+    def execute(self, local_uuid: str, content_prefs: ContentPrefs, hoard: HoardContents, out: StringIO):
+        self.diff.hoard_props.mark_to_delete_everywhere()
+        self.diff.hoard_props.remove_status(local_uuid)
 
 
 def behavior_delete_file_from_hoard(diff, local_uuid):
-    diff.hoard_props.mark_to_delete_everywhere()
-    diff.hoard_props.remove_status(local_uuid)
+    DeleteFileFromHoardBehavior(diff).execute(local_uuid, None, None, None)
+
+
+class MoveFileBehavior(Behavior):
+    def __init__(self, diff: Diff, config: HoardConfig, pathing: HoardPathing):
+        super().__init__(diff)
+        self.config = config
+        self.pathing = pathing
+
+    def execute(self, local_uuid: str, content_prefs: ContentPrefs, hoard: HoardContents, out: StringIO):
+        hoard_new_path = self.pathing.in_local(
+            FastPosixPath(self.diff.local_props.last_related_fullpath), local_uuid) \
+            .at_hoard().as_pure_path
+        hoard_new_path_props = hoard.fsobjects[hoard_new_path]
+        assert isinstance(hoard_new_path_props, HoardFileProps)
+        assert hoard_new_path_props.fasthash == self.diff.hoard_props.fasthash and \
+               hoard_new_path_props.fasthash == self.diff.local_props.fasthash
+        _move_locally(self.config, local_uuid, self.diff, hoard_new_path.as_posix(), hoard_new_path_props, out)
 
 
 def behavior_move_file(hoard, config, pathing, local_uuid, diff, out):
-    hoard_new_path = pathing.in_local(
-        FastPosixPath(diff.local_props.last_related_fullpath), local_uuid) \
-        .at_hoard().as_pure_path
-    hoard_new_path_props = hoard.fsobjects[hoard_new_path]
-    assert isinstance(hoard_new_path_props, HoardFileProps)
-    assert hoard_new_path_props.fasthash == diff.hoard_props.fasthash and \
-           hoard_new_path_props.fasthash == diff.local_props.fasthash
-    _move_locally(config, local_uuid, diff, hoard_new_path.as_posix(), hoard_new_path_props, out)
+    MoveFileBehavior(diff, config, pathing).execute(local_uuid, None, hoard, out)
 
 
 def _handle_file_is_same(
@@ -204,7 +291,7 @@ def _handle_file_contents_differ(
         else:
             raise ValueError(f"Invalid goal status:{goal_status}")
     elif behavior == PullIntention.ADD_TO_HOARD:
-        behavior_reset_local_as_current(hoard, local_uuid, diff.hoard_file, diff.hoard_props, diff.local_props)
+        behavior_reset_local_as_current(diff, hoard, local_uuid)
 
         if goal_status == HoardFileStatus.AVAILABLE:
             # file was changed in-place, but is different now
