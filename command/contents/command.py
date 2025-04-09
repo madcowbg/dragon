@@ -47,39 +47,39 @@ def _init_pull_preferences_partial(
         assume_current: bool = False, force_fetch_local_missing: bool = False) -> PullPreferences:
     return PullPreferences(
         remote_uuid, content_prefs,
-        on_same_file_is_present=PullBehavior.ADD,
-        on_file_added_or_present=PullBehavior.ADD,
-        on_file_is_different_and_modified=PullBehavior.ADD,
-        on_file_is_different_and_added=PullBehavior.ADD,
+        on_same_file_is_present=PullBehavior.ADD_TO_HOARD,
+        on_file_added_or_present=PullBehavior.ADD_TO_HOARD,
+        on_file_is_different_and_modified=PullBehavior.ADD_TO_HOARD,
+        on_file_is_different_and_added=PullBehavior.ADD_TO_HOARD,
         on_file_is_different_but_present=
-        PullBehavior.RESTORE if not assume_current else PullBehavior.ADD,
-        on_hoard_only_local_moved=PullBehavior.MOVE_ON_HOARD,
+        PullBehavior.RESTORE_FROM_HOARD if not assume_current else PullBehavior.ADD_TO_HOARD,
+        on_hoard_only_local_moved=PullBehavior.MOVE_IN_HOARD,
         on_hoard_only_local_deleted=
-        PullBehavior.DELETE_FROM_HOARD if not force_fetch_local_missing else PullBehavior.RESTORE_AS_HOARD,
+        PullBehavior.DELETE_FROM_HOARD if not force_fetch_local_missing else PullBehavior.RESTORE_FROM_HOARD,
         on_hoard_only_local_unknown=PullBehavior.ACCEPT_FROM_HOARD)
 
 
 def _init_pull_preferences_backup(content_prefs: ContentPrefs, remote_uuid: str) -> PullPreferences:
     return PullPreferences(
         remote_uuid, content_prefs,
-        on_same_file_is_present=PullBehavior.ADD,
+        on_same_file_is_present=PullBehavior.ADD_TO_HOARD,
         on_file_added_or_present=PullBehavior.IGNORE,
-        on_file_is_different_and_modified=PullBehavior.RESTORE,
-        on_file_is_different_and_added=PullBehavior.RESTORE,
-        on_file_is_different_but_present=PullBehavior.RESTORE,
-        on_hoard_only_local_moved=PullBehavior.RESTORE_AS_HOARD,
-        on_hoard_only_local_deleted=PullBehavior.RESTORE_AS_HOARD,
-        on_hoard_only_local_unknown=PullBehavior.RESTORE_AS_HOARD)
+        on_file_is_different_and_modified=PullBehavior.RESTORE_FROM_HOARD,
+        on_file_is_different_and_added=PullBehavior.RESTORE_FROM_HOARD,
+        on_file_is_different_but_present=PullBehavior.RESTORE_FROM_HOARD,
+        on_hoard_only_local_moved=PullBehavior.RESTORE_FROM_HOARD,
+        on_hoard_only_local_deleted=PullBehavior.RESTORE_FROM_HOARD,
+        on_hoard_only_local_unknown=PullBehavior.RESTORE_FROM_HOARD)
 
 
 def _init_pull_preferences_incoming(content_prefs: ContentPrefs, remote_uuid: str) -> PullPreferences:
     return PullPreferences(
         remote_uuid, content_prefs,
-        on_same_file_is_present=PullBehavior.ADD_TO_OTHERS_AND_CLEANUP,
-        on_file_added_or_present=PullBehavior.ADD_TO_OTHERS_AND_CLEANUP,
-        on_file_is_different_and_modified=PullBehavior.ADD_TO_OTHERS_AND_CLEANUP,
-        on_file_is_different_and_added=PullBehavior.ADD_TO_OTHERS_AND_CLEANUP,
-        on_file_is_different_but_present=PullBehavior.ADD_TO_OTHERS_AND_CLEANUP,
+        on_same_file_is_present=PullBehavior.ADD_TO_HOARD_AND_CLEANUP,
+        on_file_added_or_present=PullBehavior.ADD_TO_HOARD_AND_CLEANUP,
+        on_file_is_different_and_modified=PullBehavior.ADD_TO_HOARD_AND_CLEANUP,
+        on_file_is_different_and_added=PullBehavior.ADD_TO_HOARD_AND_CLEANUP,
+        on_file_is_different_but_present=PullBehavior.ADD_TO_HOARD_AND_CLEANUP,
         on_hoard_only_local_moved=PullBehavior.IGNORE,
         on_hoard_only_local_deleted=PullBehavior.IGNORE,
         on_hoard_only_local_unknown=PullBehavior.IGNORE)
@@ -401,7 +401,7 @@ class HoardCommandContents:
                             _handle_local_only(
                                 PullPreferences(
                                     remote.uuid, content_prefs,
-                                    on_same_file_is_present=PullBehavior.ADD,
+                                    on_same_file_is_present=PullBehavior.ADD_TO_HOARD,
                                     on_file_added_or_present=PullBehavior.FAIL,
                                     on_file_is_different_and_modified=PullBehavior.FAIL,
                                     on_file_is_different_and_added=PullBehavior.FAIL,
