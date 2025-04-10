@@ -1,4 +1,5 @@
 import logging
+import traceback
 from io import StringIO
 from sqlite3 import OperationalError
 from typing import TypeVar, Dict
@@ -23,7 +24,7 @@ from command.hoard import Hoard
 from command.pathing import HoardPathing
 from command.pending_file_ops import FileOp, get_pending_operations, CleanupFile, GetFile, CopyFile, MoveFile
 from config import HoardRemote, latency_order, ConnectionLatency, ConnectionSpeed
-from exceptions import RepoOpeningFailed
+from exceptions import RepoOpeningFailed, WrongRepo, MissingRepoContents, MissingRepo
 from gui.app_config import config, _write_config
 from gui.confirm_action_screen import ConfirmActionScreen
 from gui.folder_tree import FolderNode, FolderTree, aggregate_on_nodes
@@ -257,7 +258,6 @@ class CaveInfoWidget(Widget):
 
             self.post_message(CaveInfoWidget.RemoteSettingChanged())
 
-
     @on(Select.Changed, "#repo-speed")
     def repo_speed_changed(self, event: Select[ConnectionSpeed].Changed):
         paths = self.hoard.paths()
@@ -351,8 +351,23 @@ class CaveExplorerScreen(Screen):
                     for latency, repos in sorted(latency_to_repos.items(), key=lambda lr: latency_order(lr[0])):
                         yield Static(f"Latency: {latency.value}", classes="repo-group")
                         for remote in sorted(repos, key=lambda r: r.name):
+                            try:
+                                self.hoard.connect_to_repo(remote.uuid, require_contents=True)
+                                style = "green"
+                            except MissingRepo as mr:
+                                style = "dim"
+                            except MissingRepoContents as mrc:
+                                style = "dim red"
+                            except WrongRepo as wr:
+                                style = "dim strike"
+                            except Exception as e:
+                                traceback.print_exception(e)
+                                logging.error(e)
+                                style = "red strike"
+
                             yield RadioButton(
-                                remote.name, name=remote.uuid, id=f"uuid-{remote.uuid}", value=remote == self.remote)
+                                Text().append(remote.name, style),
+                                name=remote.uuid, id=f"uuid-{remote.uuid}", value=remote == self.remote)
 
             yield CaveInfoWidget(self.hoard, self.remote)
 
