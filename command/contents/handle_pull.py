@@ -302,8 +302,7 @@ def _calculate_hoard_only_with_behavior(diff: Diff, behavior: PullIntention, loc
 
     elif behavior == PullIntention.RESTORE_FROM_HOARD:
         if goal_status == HoardFileStatus.AVAILABLE:  # was backed-up here, get it again
-            props = diff.hoard_props
-            props.mark_to_get([local_uuid])
+            yield MarkToGetBehavior(diff)
 
             out.write(f"g{diff.hoard_file.as_posix()}\n")
         elif goal_status == HoardFileStatus.CLEANUP:  # file already deleted

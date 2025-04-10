@@ -175,10 +175,12 @@ class HoardContentsPendingToPull(Tree[Action]):
             self._expand_subtree(self.root)
 
         except RepoOpeningFailed as e:
-            logging.error(f"Repo opening failed: {e}")
+            traceback.print_exception(e)
+            logging.error(f"RepoOpeningFailed : {e}")
             self.root.label = PENDING_TO_PULL + " (FAILED TO OPEN)"
         except OperationalError as e:
-            logging.error(f"Repo opening failed: {e}")
+            traceback.print_exception(e)
+            logging.error(f"OperationalError: {e}")
             self.root.label = PENDING_TO_PULL + " (INVALID CONTENTS)"
 
     def on_tree_node_expanded(self, event: Tree.NodeExpanded):
