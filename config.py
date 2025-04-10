@@ -22,6 +22,11 @@ class HoardRemote:
     def name(self):
         return self.doc["name"] if "name" in self.doc else "INVALID"
 
+    @name.setter
+    def name(self, new_name: str):
+        assert isinstance(new_name, str)
+        self.doc["name"] = new_name
+
     @property
     def mounted_at(self) -> FastPosixPath | None:
         return FastPosixPath(self.doc["mounted_at"]) if "mounted_at" in self.doc else None
@@ -130,10 +135,20 @@ class CavePath:
         assert "speed" in self.doc
         return ConnectionSpeed(self.doc["speed"])
 
+    @speed.setter
+    def speed(self, speed: ConnectionSpeed):
+        assert isinstance(speed, ConnectionSpeed)
+        self.doc["speed"] = speed.value
+
     @property
     def latency(self) -> ConnectionLatency:
         assert "latency" in self.doc
         return ConnectionLatency(self.doc["latency"])
+
+    @latency.setter
+    def latency(self, latency: ConnectionLatency):
+        assert isinstance(latency, ConnectionLatency)
+        self.doc["latency"] = latency.value
 
     def prioritize_speed_over_latency(self) -> int:
         return connection_speed_order(self.speed) * 100 + latency_order(self.latency)

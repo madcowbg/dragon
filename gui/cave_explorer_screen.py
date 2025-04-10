@@ -8,11 +8,11 @@ from textual import work, on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.css.query import NoMatches
+from textual.message import Message
 from textual.reactive import reactive
 from textual.screen import Screen
 from textual.widget import Widget
-from textual.widgets import Tree, Static, Header, Footer, Select, RichLog, Button, RadioSet, RadioButton, Label
-from textual.widgets._select import BLANK
+from textual.widgets import Tree, Static, Header, Footer, Select, RichLog, Button, RadioSet, RadioButton, Label, Input
 from textual.widgets._tree import TreeNode
 
 from command.content_prefs import ContentPrefs
@@ -22,7 +22,7 @@ from command.files.command import execute_files_push
 from command.hoard import Hoard
 from command.pathing import HoardPathing
 from command.pending_file_ops import FileOp, get_pending_operations, CleanupFile, GetFile, CopyFile, MoveFile
-from config import HoardRemote, latency_order
+from config import HoardRemote, latency_order, ConnectionLatency, ConnectionSpeed
 from exceptions import RepoOpeningFailed
 from gui.app_config import config, _write_config
 from gui.confirm_action_screen import ConfirmActionScreen
@@ -202,6 +202,9 @@ class HoardContentsPendingToPull(Tree[Action]):
 
 
 class CaveInfoWidget(Widget):
+    class RemoteSettingChanged(Message):
+        pass
+
     hoard: Hoard | None = reactive(None)
     remote: HoardRemote | None = reactive(None, recompose=True)
 
@@ -214,8 +217,24 @@ class CaveInfoWidget(Widget):
         if self.remote is None:
             yield Static("Please choose a cave.")
         else:
-            yield Static(self.remote.name)
-            yield Static(self.remote.uuid)
+            yield Static("UUID: " + self.remote.uuid, classes="repo-setting-group")
+
+            with Horizontal(classes="repo-setting-group"):
+                yield Static("Name", classes="repo-setting-label")
+                yield Input(value=self.remote.name, placeholder="Remote Name", id="repo-name", restrict="..+")
+
+            with Horizontal(classes="repo-setting-group"):
+                yield Static("Latency", classes="repo-setting-label")
+                yield Select[ConnectionLatency](
+                    value=self.hoard.paths()[self.remote.uuid].latency, id="repo-latency",
+                    options=((l.value, l) for l in ConnectionLatency), allow_blank=False)
+
+            with Horizontal(classes="repo-setting-group"):
+                yield Static("Speed", classes="repo-setting-label")
+                yield Select[ConnectionSpeed](
+                    value=self.hoard.paths()[self.remote.uuid].speed, id="repo-speed",
+                    options=((s.value, s) for s in ConnectionSpeed), allow_blank=False)
+
             yield Horizontal(
                 Vertical(
                     Button(
@@ -226,6 +245,36 @@ class CaveInfoWidget(Widget):
                     HoardContentsPendingToPull(self.hoard, self.remote)
                 ),
                 id="content_trees")
+
+    @on(Input.Changed, "#repo-name")
+    def repo_name_changed(self, event: Input.Changed):
+        hoard_config = self.hoard.config()
+        if hoard_config.remotes[self.remote.uuid].name != event.value:
+            hoard_config.remotes[self.remote.uuid].name = event.value
+            hoard_config.write()
+
+            self.remote = hoard_config.remotes[self.remote.uuid]
+
+            self.post_message(CaveInfoWidget.RemoteSettingChanged())
+
+
+    @on(Select.Changed, "#repo-speed")
+    def repo_speed_changed(self, event: Select[ConnectionSpeed].Changed):
+        paths = self.hoard.paths()
+        if paths[self.remote.uuid].speed != event.value:
+            paths[self.remote.uuid].speed = event.value
+            paths.write()
+
+            self.post_message(CaveInfoWidget.RemoteSettingChanged())
+
+    @on(Select.Changed, "#repo-latency")
+    def repo_latency_changed(self, event: Select[ConnectionLatency].Changed):
+        paths = self.hoard.paths()
+        if paths[self.remote.uuid].latency != event.value:
+            paths[self.remote.uuid].latency = event.value
+            paths.write()
+
+            self.post_message(CaveInfoWidget.RemoteSettingChanged())
 
     @on(Button.Pressed, "#push_files_to_repo")
     @work
@@ -310,13 +359,17 @@ class CaveExplorerScreen(Screen):
         yield ProgressReporting()
         yield RichLog(id="cave_explorer_log")
 
+    @on(CaveInfoWidget.RemoteSettingChanged)
+    async def cave_settings_changed(self):
+        await self.recompose()
+
     def on_radio_set_changed(self, event: RadioSet.Changed):
         if self.hoard is None:
             return
 
-        uuid = resolve_remote_uuid(self.hoard.config(), event.pressed.name)
-        if uuid is None:
-            self.notify(f"Invalid repo selected - {event.pressed.name}!", severity="error")
+        uuid = event.pressed.id[5:]
+        if self.hoard.config().remotes[uuid] is None:
+            self.notify(f"Invalid repo selected - {event.pressed.name} with uuid {uuid}!", severity="error")
             return
 
         self.remote = self.hoard.config().remotes[uuid]
