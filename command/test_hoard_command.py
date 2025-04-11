@@ -442,12 +442,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         self.assertEqual("Refresh done!", res)
 
         res = await hoard_cmd.contents.pull("repo-incoming-name")
-        self.assertEqual(
-            "CLEANUP_SAME /test.me.4\n"
-            "CLEANUP_SAME /test.me.5\n"
-            "CLEANUP_SAME /wat/test.me.6\n"
-            "CLEANUP_DIFFERENT /wat/test.me.3\n"
-            "Sync'ed repo-incoming-name to hoard!\nDONE", res.strip())
+        self.assertEqual("Sync'ed repo-incoming-name to hoard!\nDONE", res.strip())
 
         res = await hoard_cmd.contents.ls(skip_folders=True)
         self.assertEqual(

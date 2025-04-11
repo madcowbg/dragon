@@ -59,10 +59,6 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
             "Sync'ed repo-partial-name to hoard!",
             "Sync'ed repo-full-name to hoard!",
             "Sync'ed repo-backup-name to hoard!",
-            'CLEANUP_SAME /test.me.4',
-            'CLEANUP_SAME /test.me.5',
-            'CLEANUP_SAME /wat/test.me.6',
-            'CLEANUP_DIFFERENT /wat/test.me.3',
             "Sync'ed repo-incoming-name to hoard!",
             'DONE'], res.splitlines())
 
@@ -92,21 +88,12 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
         self.assertEqual(["Sync'ed repo-full-name to hoard!", 'DONE'], res.splitlines())
 
         res = await hoard_cmd.contents.pending_pull(incoming_cave_cmd.current_uuid())
-        self.assertEqual([
-            'Status of repo-incoming-name:',
-            'MARK_FOR_CLEANUP_BEHAVIOR /test.me.4',
-            'MARK_FOR_CLEANUP_BEHAVIOR /test.me.5',
-            'MARK_FOR_CLEANUP_BEHAVIOR /wat/test.me.6',
-            'MARK_FOR_CLEANUP_BEHAVIOR /wat/test.me.3'], res.splitlines())
+        self.assertEqual(['Status of repo-incoming-name:', ], res.splitlines())
 
         res = await incoming_cave_cmd.refresh()
         self.assertEqual(['NO CHANGES', 'Refresh done!'], res.splitlines())
 
         res = await hoard_cmd.contents.pull(incoming_cave_cmd.current_uuid())
         self.assertEqual([
-            'CLEANUP_SAME /test.me.4',
-            'CLEANUP_SAME /test.me.5',
-            'CLEANUP_SAME /wat/test.me.6',
-            'CLEANUP_DIFFERENT /wat/test.me.3',
             "Sync'ed repo-incoming-name to hoard!",
             'DONE'], res.splitlines())

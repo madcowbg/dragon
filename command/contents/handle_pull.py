@@ -203,13 +203,16 @@ def _calculate_file_is_same(
 
     assert behavior in (PullIntention.CLEANUP, PullIntention.ADD_TO_HOARD)
 
+    goal_status = diff.hoard_props.get_status(local_uuid)
     if behavior == PullIntention.CLEANUP:
-        logging.info(f"file scheduled for cleanup")
-        yield MarkForCleanupBehavior(diff)
-        out.write(f"CLEANUP_SAME {diff.hoard_file.as_posix()}\n")
+        if goal_status == HoardFileStatus.CLEANUP:
+            logging.debug(f"Skipping {diff.hoard_file} - is already marked for cleanup")
+        else:
+            logging.debug(f"file scheduled for cleanup")
+            yield MarkForCleanupBehavior(diff)
+            out.write(f"CLEANUP_SAME {diff.hoard_file.as_posix()}\n")
     else:
         assert behavior == PullIntention.ADD_TO_HOARD
-        goal_status = diff.hoard_props.get_status(local_uuid)
         if goal_status in (HoardFileStatus.GET, HoardFileStatus.COPY, HoardFileStatus.MOVE, HoardFileStatus.UNKNOWN):
             logging.info(f"mark {diff.hoard_file} as available here!")
             yield MarkIsAvailableBehavior(diff)
@@ -253,8 +256,11 @@ def _calculate_file_contents_differ(
         yield AddToHoardAndCleanupNewBehavior(diff)
         out.write(f"ADDING_CHANGED_TO_HOARD {diff.hoard_file.as_posix()}\n")
     elif behavior == PullIntention.CLEANUP:
-        yield MarkForCleanupBehavior(diff)
-        out.write(f"CLEANUP_DIFFERENT {diff.hoard_file.as_posix()}\n")
+        if goal_status == HoardFileStatus.CLEANUP:
+            logging.debug(f"Skipping {diff.hoard_file} - is already marked for cleanup")
+        else:
+            yield MarkForCleanupBehavior(diff)
+            out.write(f"CLEANUP_DIFFERENT {diff.hoard_file.as_posix()}\n")
     elif behavior == PullIntention.RESTORE_FROM_HOARD:
         if goal_status == HoardFileStatus.AVAILABLE:  # was backed-up here, get it again
             yield MarkToGetBehavior(diff)
