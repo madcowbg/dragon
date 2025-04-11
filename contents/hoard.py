@@ -236,7 +236,8 @@ class HoardFSObjects:
     def __iter__(self) -> Iterable[Tuple[FastPosixPath, HoardFileProps]]:
         curr = self.parent.conn.cursor()
         curr.row_factory = self._read_as_path_to_props
-        yield from curr.execute("SELECT fullpath, fsobject_id, isdir, size, fasthash FROM fsobject WHERE isdir = FALSE ")
+        yield from curr.execute(
+            "SELECT fullpath, fsobject_id, isdir, size, fasthash FROM fsobject WHERE isdir = FALSE ")
 
     @property
     def dangling_files(self) -> Iterable[Tuple[FastPosixPath, HoardFileProps]]:
@@ -269,6 +270,16 @@ class HoardFSObjects:
             "  SELECT 1 FROM fspresence "
             "  WHERE fspresence.fsobject_id = fsobject.fsobject_id AND uuid = ? AND status = ?)",
             (remote_uuid, HoardFileStatus.AVAILABLE.value))
+
+    def to_get_in_repo(self, remote_uuid: str) -> Iterable[Tuple[FastPosixPath, HoardFileProps]]:
+        curr = self.parent.conn.cursor()
+        curr.row_factory = self._read_as_path_to_props
+        yield from curr.execute(
+            "SELECT fullpath, fsobject_id, isdir, size, fasthash FROM fsobject "
+            "WHERE isdir = FALSE AND EXISTS ("
+            "  SELECT 1 FROM fspresence "
+            "  WHERE fspresence.fsobject_id = fsobject.fsobject_id AND uuid = ? AND status = ?)",
+            (remote_uuid, HoardFileStatus.GET.value))
 
     async def in_folder(self, folder: FastPosixPath) -> AsyncGenerator[
         Tuple[FastPosixPath, HoardFileProps]]:
@@ -320,7 +331,8 @@ class HoardFSObjects:
         for fsobject_id, fullpath, isdir, size, fasthash in self.parent.conn.execute(
                 "SELECT fsobject.fsobject_id, fullpath, isdir, size, fasthash "
                 "FROM fsobject JOIN fspresence on fsobject.fsobject_id = fspresence.fsobject_id "
-                "WHERE fspresence.uuid = ? and fspresence.status in (?, ?, ?) AND isdir = FALSE ", (repo_uuid, *STATUSES_TO_FETCH)):
+                "WHERE fspresence.uuid = ? and fspresence.status in (?, ?, ?) AND isdir = FALSE ",
+                (repo_uuid, *STATUSES_TO_FETCH)):
             assert not isdir
             yield fullpath, HoardFileProps(self.parent, fsobject_id, size, fasthash)
 
@@ -328,7 +340,8 @@ class HoardFSObjects:
         for fsobject_id, fullpath, isdir, size, fasthash in self.parent.conn.execute(
                 "SELECT fsobject.fsobject_id, fullpath, isdir, size, fasthash "
                 "FROM fsobject JOIN fspresence ON fsobject.fsobject_id = fspresence.fsobject_id "
-                "WHERE fspresence.uuid = ? AND fspresence.status = ? AND isdir = FALSE ", (repo_uuid, HoardFileStatus.CLEANUP.value)):
+                "WHERE fspresence.uuid = ? AND fspresence.status = ? AND isdir = FALSE ",
+                (repo_uuid, HoardFileStatus.CLEANUP.value)):
             assert not isdir
             yield FastPosixPath(fullpath), HoardFileProps(self.parent, fsobject_id, size, fasthash)
 

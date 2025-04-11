@@ -1,9 +1,11 @@
 import logging
 import os
+from typing import List
 
 from command.repo import ConnectedRepo
 from config import HoardConfig, HoardPaths
 from contents.hoard import HoardContents, HOARD_CONTENTS_FILENAME
+from exceptions import RepoOpeningFailed
 from resolve_uuid import load_config, load_paths, CONFIG_FILE
 
 
@@ -25,6 +27,14 @@ class Hoard:
         logging.info(f"Using repo contents {remote_uuid} in {remote_path}...")
         return ConnectedRepo(remote_path, remote_uuid, require_contents)
 
+    def can_connect_to_repo(self, remote_uuid: str) -> bool:
+        try:
+            self.connect_to_repo(remote_uuid, require_contents=True)
+            return True
+        except RepoOpeningFailed as of:
+            logging.debug(of)
+            return False
+
     def open_contents(self, create_missing: bool = False, is_readonly: bool = True) -> HoardContents:
         hoard_contents_filename = os.path.join(self.hoardpath, HOARD_CONTENTS_FILENAME)
         if not os.path.isfile(os.path.join(self.hoardpath, CONFIG_FILE)):
@@ -34,3 +44,8 @@ class Hoard:
                 f"Hoard contents file {hoard_contents_filename} is not available,"
                 f" but --create-missing = False")
         return HoardContents.load(self.hoardpath, is_readonly)
+
+    def available_remotes(self) -> List[str]:
+        return [
+            remote.uuid for remote in self.config().remotes.all()
+            if self.can_connect_to_repo(remote.uuid)]

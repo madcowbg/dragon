@@ -54,8 +54,10 @@ class BackupSizes:
 
 class BackupSet:
     def __init__(self, mounted_at: FastPosixPath, backups: List[HoardRemote], pathing: HoardPathing,
-                 hoard: HoardContents):
+                 hoard: HoardContents, available_remotes: List[str]):
         self.backups = dict((backup.uuid, backup) for backup in backups)
+        self.available_backups = set(backup.uuid for backup in backups if backup.uuid in available_remotes)
+
         self.uuids = sorted(list(self.backups.keys()))
         self.pathing = pathing
 
@@ -68,8 +70,8 @@ class BackupSet:
             logging.warning("No backups are defined.")
 
     def repos_to_backup_to(
-            self, hoard_file: FastPosixPath, hoard_props: Optional[HoardFileProps], file_size: int) -> List[
-        HoardRemote]:
+            self, hoard_file: FastPosixPath, hoard_props: Optional[HoardFileProps], file_size: int,
+            available_only: bool) -> List[HoardRemote]:
 
         past_backups = self.currently_scheduled_backups(hoard_file, hoard_props) if hoard_props is not None else []
 
@@ -79,7 +81,7 @@ class BackupSet:
                 f"Skipping {hoard_file}, requested backups {len(past_backups)} >= {self.num_backup_copies_desired}")
             return []
 
-        return self.reserve_new_backups(hoard_file, file_size, past_backups)
+        return self.reserve_new_backups(hoard_file, file_size, past_backups, available_only)
 
     def repos_to_clean(self, hoard_file: FastPosixPath, hoard_props: Optional[HoardFileProps], file_size: int) -> List[
         HoardRemote]:
@@ -125,11 +127,14 @@ class BackupSet:
             if uuid in self.backups and is_path_available(self.pathing, hoard_file, uuid)]
 
     def reserve_new_backups(
-            self, hoard_file: FastPosixPath, file_size: int, past_backups: List[HoardRemote]) -> List[HoardRemote]:
+            self, hoard_file: FastPosixPath, file_size: int, past_backups: List[HoardRemote],
+            available_only: bool) -> List[HoardRemote]:
 
         allowed_backups = [
             backup for uuid, backup in self.backups.items()
-            if is_path_available(self.pathing, hoard_file, uuid) and backup not in past_backups]
+            if is_path_available(self.pathing, hoard_file, uuid)
+               and backup not in past_backups
+               and (not available_only or backup.uuid in self.available_backups)]
 
         new_possible_backups = sorted(
             allowed_backups, key=self.backup_sizes.remaining_pct, reverse=True)
@@ -162,27 +167,27 @@ class BackupSet:
         return good_remotes
 
     @staticmethod
-    def all(config: HoardConfig, pathing: HoardPathing, hoard: HoardContents) -> List["BackupSet"]:
+    def all(config: HoardConfig, pathing: HoardPathing, hoard: HoardContents, available_remotes: List[str]) -> List["BackupSet"]:
         sets: Dict[FastPosixPath, List[HoardRemote]] = dict()
         for remote in config.remotes.all():
             if remote.type == CaveType.BACKUP:
                 if remote.mounted_at not in sets:
                     sets[remote.mounted_at] = []
                 sets[remote.mounted_at].append(remote)
-        return [BackupSet(mounted_at, s, pathing, hoard) for mounted_at, s in sets.items()]
+        return [BackupSet(mounted_at, s, pathing, hoard, available_remotes) for mounted_at, s in sets.items()]
 
 
 STATUSES_DECLARED_TO_FETCH = [HoardFileStatus.GET, HoardFileStatus.COPY, HoardFileStatus.AVAILABLE]
 
 
 class ContentPrefs:
-    def __init__(self, config: HoardConfig, pathing: HoardPathing, hoard: HoardContents):
+    def __init__(self, config: HoardConfig, pathing: HoardPathing, hoard: HoardContents, available_remotes: List[str]):
         self.config = config
         self._partials_with_fetch_new: List[HoardRemote] = [
             r for r in config.remotes.all() if
             r.type == CaveType.PARTIAL and r.fetch_new]
 
-        self._backup_sets = BackupSet.all(config, pathing, hoard)
+        self._backup_sets = BackupSet.all(config, pathing, hoard, available_remotes)
         self.pathing = pathing
         self.hoard = hoard
 
@@ -194,7 +199,8 @@ class ContentPrefs:
                 yield r.uuid
 
         for b in self._backup_sets:
-            yield from map(lambda remote: remote.uuid, b.repos_to_backup_to(hoard_file, hoard_props, local_props.size))
+            yield from map(
+                lambda remote: remote.uuid, b.repos_to_backup_to(hoard_file, hoard_props, local_props.size, True))
 
     def can_cleanup(
             self, hoard_file: FastPosixPath, hoard_props: HoardFileProps, repo_uuid: str, out: StringIO) -> bool:

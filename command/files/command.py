@@ -84,7 +84,7 @@ class HoardCommandFiles:
 async def execute_files_push(config: HoardConfig, hoard: Hoard, repo_uuids: List[str], out: StringIO, progress_bar):
     pathing = HoardPathing(config, hoard.paths())
     async with hoard.open_contents(False, is_readonly=False) as hoard_contents:
-        content_prefs = ContentPrefs(config, pathing, hoard_contents)
+        content_prefs = ContentPrefs(config, pathing, hoard_contents, hoard.available_remotes())
         logging.info("try getting all requested files, per repo")
 
         logging.info("Finding files that need copy, for easy lookup")
@@ -95,7 +95,7 @@ async def execute_files_push(config: HoardConfig, hoard: Hoard, repo_uuids: List
             await _fetch_files_in_repo(content_prefs, hoard_contents, repo_uuid, pathing, out, progress_bar)
 
         logging.info("Finding files that need copy - will not cleanup them!")
-        content_prefs = ContentPrefs(config, pathing, hoard_contents)
+        content_prefs = ContentPrefs(config, pathing, hoard_contents, hoard.available_remotes())
         logging.info(f"Found {len(content_prefs.files_to_copy)} hashes to copy, won't cleanup them.")
         logging.info("try cleaning unneeded files, per repo")
         for repo_uuid in repo_uuids:

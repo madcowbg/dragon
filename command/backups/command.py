@@ -24,7 +24,7 @@ class HoardCommandBackups:
 
         logging.info(f"Loading hoard...")
         async with self.hoard.open_contents(create_missing=False, is_readonly=True) as hoard:
-            backup_sets = BackupSet.all(config, pathing, hoard)
+            backup_sets = BackupSet.all(config, pathing, hoard, self.hoard.available_remotes())
             backup_media = set(sum((list(b.backups.keys()) for b in backup_sets), []))
             count_backup_media = len(backup_media)
 
@@ -77,7 +77,7 @@ class HoardCommandBackups:
 
         logging.info(f"Loading hoard...")
         async with self.hoard.open_contents(create_missing=False, is_readonly=False) as hoard:
-            backup_sets = BackupSet.all(config, pathing, hoard)
+            backup_sets = BackupSet.all(config, pathing, hoard, self.hoard.available_remotes())
 
             with StringIO() as out:
                 for backup_set in backup_sets:
@@ -87,7 +87,8 @@ class HoardCommandBackups:
 
                     print(f"Considering backup set at {backup_set.mounted_at} with {len(backup_set.backups)} media")
                     hoard_file: command.fast_path.FastPosixPath
-                    for hoard_file, hoard_props in alive_it([s async for s in hoard.fsobjects.in_folder(backup_set.mounted_at)]):
+                    for hoard_file, hoard_props in alive_it(
+                            [s async for s in hoard.fsobjects.in_folder(backup_set.mounted_at)]):
                         assert hoard_file.is_relative_to(backup_set.mounted_at)
                         assert isinstance(hoard_props, HoardFileProps)
 
@@ -105,20 +106,20 @@ class HoardCommandBackups:
                 out.write("DONE")
                 return out.getvalue()
 
-    async def assign(self):
+    async def assign(self, available_only: bool):
         logging.info("Loading config")
         config = self.hoard.config()
         pathing = HoardPathing(config, self.hoard.paths())
 
         logging.info(f"Loading hoard...")
         async with self.hoard.open_contents(create_missing=False, is_readonly=False) as hoard:
-            backup_sets = BackupSet.all(config, pathing, hoard)
+            backup_sets = BackupSet.all(config, pathing, hoard, self.hoard.available_remotes())
 
             with StringIO() as out:
                 for backup_set in backup_sets:
                     added_cnt: Dict[HoardRemote, int] = dict()
                     added_size: Dict[HoardRemote, int] = dict()
-                    out.write(f"set: {backup_set.mounted_at} with {len(backup_set.backups)} media\n")
+                    out.write(f"set: {backup_set.mounted_at} with {len(backup_set.available_backups)}/{len(backup_set.backups)} media\n")
 
                     print(f"Considering backup set at {backup_set.mounted_at} with {len(backup_set.backups)} media")
                     hoard_file: command.fast_path.FastPosixPath
@@ -130,7 +131,7 @@ class HoardCommandBackups:
                         assert isinstance(hoard_props, HoardFileProps)
 
                         new_repos_to_backup_to = backup_set.repos_to_backup_to(
-                            hoard_file, hoard_props, hoard_props.size)
+                            hoard_file, hoard_props, hoard_props.size, available_only)
 
                         if len(new_repos_to_backup_to) == 0:
                             logging.info(f"No new backups for {hoard_file}.")
@@ -153,4 +154,35 @@ class HoardCommandBackups:
                     for repo, cnt in sorted(added_cnt.items(), key=lambda rc: rc[0].name):
                         out.write(f" {repo.name} <- {cnt} files ({format_size(added_size[repo])})\n")
                 out.write("DONE")
+                return out.getvalue()
+
+    async def unassign(self, all_unavailable: bool):
+        assert all_unavailable == True  # TODO implement more targeted
+
+        logging.info("Loading config")
+        config = self.hoard.config()
+        pathing = HoardPathing(config, self.hoard.paths())
+
+        logging.info(f"Loading hoard...")
+        async with self.hoard.open_contents(create_missing=False, is_readonly=False) as hoard:
+            available_remotes = self.hoard.available_remotes()
+            backup_sets = BackupSet.all(config, pathing, hoard, available_remotes)
+
+            with StringIO() as out:
+                for backup_set in backup_sets:
+                    print(f"Considering backup set at {backup_set.mounted_at} with {len(backup_set.backups)} media")
+
+                    for remote in backup_set.backups.values():
+                        if remote.uuid in available_remotes:
+                            out.write(f"Remote {remote.name} is available, will not unassign\n")
+                            continue
+
+                        out.write(f"Remote {remote.name} is not available, will unassign pending gets:\n")
+
+                        async with self.hoard.open_contents(False, False) as hoard_contents:
+                            for hoard_file, hoard_props in hoard_contents.fsobjects.to_get_in_repo(remote.uuid):
+                                assert hoard_props.get_status(remote.uuid) == HoardFileStatus.GET
+
+                                hoard_props.remove_status(remote.uuid)
+                                out.write(f"WONT_GET {hoard_file.as_posix()}\n")
                 return out.getvalue()

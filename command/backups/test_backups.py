@@ -1,4 +1,5 @@
 import os
+import shutil
 import tempfile
 from os.path import join
 from unittest import IsolatedAsyncioTestCase
@@ -426,9 +427,9 @@ class TestBackups(IsolatedAsyncioTestCase):
             ' 1: 4 files (304)',
             'DONE'], res.splitlines())
 
-        res = await hoard_cmd.backups.assign()
+        res = await hoard_cmd.backups.assign(available_only=False)
         self.assertEqual(
-            'set: / with 4 media\n'
+            'set: / with 4/4 media\n'
             ' backup-2 <- 1 files (77)\n'
             ' backup-3 <- 2 files (76)\n'
             ' backup-4 <- 1 files (77)\n'
@@ -538,3 +539,75 @@ class TestBackups(IsolatedAsyncioTestCase):
         await backup_1_cmd.refresh(show_details=False)
 
         return backup_1_cmd
+
+    async def test_reassign_backup_when_repo_is_unavailable(self):
+        hoard_cmd, partial_cave_cmd, full_cave_cmd, incoming_cave_cmd = await init_complex_hoard(self.tmpdir.name)
+
+        await hoard_cmd.contents.pull(all=True)
+
+        backup_1_cmd = await self._init_and_refresh_repo("repo-backup-1")
+        backup_2_cmd = await self._init_and_refresh_repo("repo-backup-2")
+
+        hoard_cmd.add_remote(
+            remote_path=join(self.tmpdir.name, "repo-backup-1"), name="backup-1", mount_point="/",
+            type=CaveType.BACKUP)
+        hoard_cmd.add_remote(
+            remote_path=join(self.tmpdir.name, "repo-backup-2"), name="backup-2", mount_point="/",
+            type=CaveType.BACKUP)
+
+        res = await hoard_cmd.contents.pull(all=True)
+        self.assertEqual([
+            'Skipping update as past epoch 1 is not after hoard epoch 1',
+            'Skipping update as past epoch 1 is not after hoard epoch 1',
+            'Skipping update as past epoch 1 is not after hoard epoch 1',
+            '=/test.me.1',
+            '=/wat/test.me.3',
+            "Sync'ed backup-1 to hoard!",
+            '=/test.me.1',
+            "Sync'ed backup-2 to hoard!",
+            'DONE'], res.splitlines())
+
+        res = await hoard_cmd.backups.assign(available_only=False)
+        self.assertEqual([
+            'set: / with 2/2 media',
+            ' backup-1 <- 1 files (60)',
+            ' backup-2 <- 3 files (170)',
+            'DONE'], res.splitlines())
+
+        res = await hoard_cmd.backups.health()
+        self.assertEqual([
+            '# backup sets: 1',
+            '# backups: 2',
+            'scheduled count:',
+            ' 1: 5 files (320)',
+            ' 2: 1 files (60)',
+            'available count:',
+            ' 0: 4 files (230)',
+            ' 1: 1 files (90)',
+            ' 2: 1 files (60)',
+            'get_or_copy count:',
+            ' 0: 2 files (150)',
+            ' 1: 2 files (93)',
+            ' 2: 2 files (137)',
+            'move count:',
+            ' 0: 6 files (380)',
+            'cleanup count:',
+            ' 0: 2 files (76)',
+            ' 1: 4 files (304)',
+            'DONE'], res.splitlines())
+
+        shutil.move(join(self.tmpdir.name, "repo-backup-2"), join(self.tmpdir.name, "repo-backup-2-removed"))
+
+        res = await hoard_cmd.backups.unassign(all_unavailable=True)
+        self.assertEqual([
+            'Remote backup-1 is available, will not unassign',
+            'Remote backup-2 is not available, will unassign pending gets:',
+            'WONT_GET /wat/test.me.2',
+            'WONT_GET /test.me.4',
+            'WONT_GET /wat/test.me.6'], res.splitlines())
+
+        res = await hoard_cmd.backups.assign(available_only=True)
+        self.assertEqual([
+            'set: / with 1/2 media',
+            ' backup-1 <- 3 files (170)',
+            'DONE'], res.splitlines())

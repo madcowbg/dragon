@@ -106,7 +106,7 @@ async def execute_pull(
     logging.info(f"Loading hoard contents TOML...")
     async with hoard.open_contents(create_missing=False, is_readonly=False) as hoard_contents:
         logging.info(f"Loaded hoard contents TOML!")
-        content_prefs = ContentPrefs(config, pathing, hoard_contents)
+        content_prefs = ContentPrefs(config, pathing, hoard_contents, hoard.available_remotes())
 
         try:
             connected_repo = hoard.connect_to_repo(remote_obj.uuid, require_contents=True)
@@ -205,7 +205,7 @@ class HoardCommandContents:
                     out.write(f"Status of {remote_obj.name}:\n")
 
                     pathing = HoardPathing(config, self.hoard.paths())
-                    content_prefs = ContentPrefs(config, pathing, hoard_contents)
+                    content_prefs = ContentPrefs(config, pathing, hoard_contents, self.hoard.available_remotes())
 
                     preferences = init_pull_preferences(
                         content_prefs, remote_obj, assume_current=False, force_fetch_local_missing=False)
@@ -430,7 +430,7 @@ class HoardCommandContents:
 
         logging.info(f"Loading hoard contents...")
         async with self.hoard.open_contents(create_missing=False, is_readonly=False) as hoard:
-            content_prefs = ContentPrefs(config, pathing, hoard)
+            content_prefs = ContentPrefs(config, pathing, hoard, self.hoard.available_remotes())
 
             with StringIO() as out:
                 out.write(f"{config.remotes[repo_uuid].name}:\n")
