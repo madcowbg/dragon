@@ -9,6 +9,7 @@ from typing import List, Dict, Optional
 
 import aioshutil
 
+from command.content_prefs import ContentPrefs
 from command.fast_path import FastPosixPath
 from command.pathing import HoardPathing
 from config import HoardConfig, HoardPaths
@@ -19,8 +20,8 @@ from util import to_mb, format_size
 
 
 async def _fetch_files_in_repo(
-        hoard: HoardContents, repo_uuid: str, pathing: HoardPathing,
-        files_requiring_copy: Dict[str, List[str]], out: StringIO, progress_bar):
+        content_prefs: ContentPrefs, hoard: HoardContents, repo_uuid: str, pathing: HoardPathing,
+        out: StringIO, progress_bar):
     files_to_fetch = sorted(hoard.fsobjects.to_fetch(repo_uuid))
     total_size = sum(f[1].size for f in files_to_fetch)
 
@@ -55,7 +56,7 @@ async def _fetch_files_in_repo(
                     assert goal_status != HoardFileStatus.UNKNOWN
 
                     if goal_status == HoardFileStatus.COPY:
-                        candidates_to_copy = files_requiring_copy.get(hoard_props.fasthash, [])
+                        candidates_to_copy = content_prefs.files_to_copy.get(hoard_props.fasthash, [])
                         logging.info(f"# of candidates to copy: {len(candidates_to_copy)}")
 
                         local_filepath = pathing.in_hoard(FastPosixPath(hoard_file)).at_local(repo_uuid)
@@ -111,68 +112,33 @@ async def _fetch_files_in_repo(
 
 
 async def _cleanup_files_in_repo(
-        hoard: HoardContents, config: HoardConfig, repo_uuid: str, pathing: HoardPathing,
-        files_requiring_copy: Dict[str, any], out: StringIO, progress_bar):
+        content_prefs: ContentPrefs, hoard: HoardContents, repo_uuid: str, pathing: HoardPathing,
+        out: StringIO, progress_bar):
     files_to_cleanup = sorted(hoard.fsobjects.to_cleanup(repo_uuid))
     with progress_bar(to_mb(sum(f[1].size for f in files_to_cleanup)), unit="MB", title="Cleaning files") as bar:
         for hoard_file, hoard_props in files_to_cleanup:
             assert isinstance(hoard_props, HoardFileProps)
 
-            goal_status = hoard_props.get_status(repo_uuid)
+            assert hoard_props.get_status(repo_uuid) == HoardFileStatus.CLEANUP
 
-            assert goal_status != HoardFileStatus.AVAILABLE
-            assert goal_status != HoardFileStatus.GET
-            assert goal_status != HoardFileStatus.UNKNOWN
+            local_path = pathing.in_hoard(hoard_file).at_local(repo_uuid)
+            if content_prefs.can_cleanup(hoard_file, hoard_props, repo_uuid, out):
+                logging.info("file doesn't need to be copied anymore, cleaning")
+                hoard_props.remove_status(repo_uuid)
 
-            if goal_status == HoardFileStatus.CLEANUP:
-                to_be_got = hoard_props.by_status(HoardFileStatus.GET)
-                to_be_moved_to = hoard.fsobjects.where_to_move(repo_uuid, FastPosixPath(hoard_file))
+                logging.info(f"deleting {local_path.on_device_path()}...")
 
-                local_path = pathing.in_hoard(FastPosixPath(hoard_file)).at_local(repo_uuid)
-                local_file_to_delete = local_path.as_pure_path.as_posix()
+                try:
+                    if os.path.exists(local_path.on_device_path()):
+                        os.remove(local_path.on_device_path())
 
-                if hoard_props.fasthash in files_requiring_copy:
-                    logging.info(f"file with fasthash {hoard_props.fasthash} to be copied, retaining")
-                    out.write(f"~h {local_file_to_delete}\n")
-                elif len(to_be_got) > 0:
-                    logging.info(f"file needs to be copied in {len(to_be_got)} places, retaining")
-                    names_to_get = list(sorted(config.remotes[uuid].name for uuid in to_be_got))
-                    out.write(f"NEEDS_COPY {names_to_get} {local_file_to_delete}\n")
-                elif len(to_be_moved_to) > 0:
-                    logging.info(f"file needs to be moved to {to_be_moved_to}, retaining")
-                    out.write(f"NEED_TO_BE_MOVED {local_file_to_delete}\n")
-                else:
-                    logging.info("file doesn't need to be copied anymore, cleaning")
-                    hoard_props.remove_status(repo_uuid)
+                    out.write(f"d {local_path.as_pure_path.as_posix()}\n")
+                    logging.info("file deleted!")
+                except FileNotFoundError as e:
+                    out.write(f"E {local_path.as_pure_path.as_posix()}\n")
+                    logging.error(e)
 
-                    logging.info(f"deleting {local_path.on_device_path()}...")
-
-                    try:
-                        if os.path.exists(local_path.on_device_path()):
-                            os.remove(local_path.on_device_path())
-
-                        out.write(f"d {local_file_to_delete}\n")
-                        logging.info("file deleted!")
-                    except FileNotFoundError as e:
-                        out.write(f"E {local_file_to_delete}\n")
-                        logging.error(e)
-            else:
-                raise ValueError(f"Unexpected status {goal_status.value}")
             bar(to_mb(hoard_props.size))
-
-
-def _find_files_to_copy(hoard: HoardContents) -> Dict[str, List[str]]:
-    fasthashes_to_copy = [
-        props.fasthash for filepath, props in hoard.fsobjects
-        if len(props.by_status(HoardFileStatus.COPY)) > 0]
-
-    files_to_copy: Dict[str, List[str]] = dict((h, []) for h in fasthashes_to_copy)
-    for filepath, props in hoard.fsobjects:
-        assert isinstance(props, HoardFileProps)
-        if props.fasthash in fasthashes_to_copy:
-            files_to_copy[props.fasthash].append(filepath.as_posix())
-
-    return files_to_copy
 
 
 async def _restore_from_another_repo(

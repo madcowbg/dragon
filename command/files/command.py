@@ -5,8 +5,9 @@ from typing import Optional, List, Dict
 
 from alive_progress import alive_bar
 
+from command.content_prefs import ContentPrefs
 from command.contents.command import clean_dangling_files
-from command.files.file_operations import _find_files_to_copy, _fetch_files_in_repo, _cleanup_files_in_repo
+from command.files.file_operations import _fetch_files_in_repo, _cleanup_files_in_repo
 
 from command.hoard import Hoard
 from command.pathing import HoardPathing
@@ -83,22 +84,23 @@ class HoardCommandFiles:
 async def execute_files_push(config: HoardConfig, hoard: Hoard, repo_uuids: List[str], out: StringIO, progress_bar):
     pathing = HoardPathing(config, hoard.paths())
     async with hoard.open_contents(False, is_readonly=False) as hoard_contents:
+        content_prefs = ContentPrefs(config, pathing, hoard_contents)
         logging.info("try getting all requested files, per repo")
 
         logging.info("Finding files that need copy, for easy lookup")
-        files_to_copy = _find_files_to_copy(hoard_contents)
         for repo_uuid in repo_uuids:
             logging.info(f"fetching for {config.remotes[repo_uuid].name}")
             out.write(f"{config.remotes[repo_uuid].name}:\n")
 
-            await _fetch_files_in_repo(hoard_contents, repo_uuid, pathing, files_to_copy, out, progress_bar)
+            await _fetch_files_in_repo(content_prefs, hoard_contents, repo_uuid, pathing, out, progress_bar)
+
         logging.info("Finding files that need copy - will not cleanup them!")
-        files_to_copy = _find_files_to_copy(hoard_contents)
-        logging.info(f"Found {len(files_to_copy)} hashes to copy, won't cleanup them.")
+        content_prefs = ContentPrefs(config, pathing, hoard_contents)
+        logging.info(f"Found {len(content_prefs.files_to_copy)} hashes to copy, won't cleanup them.")
         logging.info("try cleaning unneeded files, per repo")
         for repo_uuid in repo_uuids:
             logging.info(f"cleaning repo {config.remotes[repo_uuid].name}")
             out.write(f"{config.remotes[repo_uuid].name}:\n")
 
-            await _cleanup_files_in_repo(hoard_contents, config, repo_uuid, pathing, files_to_copy, out, progress_bar)
+            await _cleanup_files_in_repo(content_prefs, hoard_contents, repo_uuid, pathing, out, progress_bar)
         clean_dangling_files(hoard_contents, out)

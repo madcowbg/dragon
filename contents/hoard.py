@@ -324,13 +324,13 @@ class HoardFSObjects:
             assert not isdir
             yield fullpath, HoardFileProps(self.parent, fsobject_id, size, fasthash)
 
-    def to_cleanup(self, repo_uuid: str) -> Generator[Tuple[str, HoardFileProps], None, None]:
+    def to_cleanup(self, repo_uuid: str) -> Generator[Tuple[FastPosixPath, HoardFileProps], None, None]:
         for fsobject_id, fullpath, isdir, size, fasthash in self.parent.conn.execute(
                 "SELECT fsobject.fsobject_id, fullpath, isdir, size, fasthash "
                 "FROM fsobject JOIN fspresence ON fsobject.fsobject_id = fspresence.fsobject_id "
                 "WHERE fspresence.uuid = ? AND fspresence.status = ? AND isdir = FALSE ", (repo_uuid, HoardFileStatus.CLEANUP.value)):
             assert not isdir
-            yield fullpath, HoardFileProps(self.parent, fsobject_id, size, fasthash)
+            yield FastPosixPath(fullpath), HoardFileProps(self.parent, fsobject_id, size, fasthash)
 
     def where_to_move(self, remote: str, hoard_file: FastPosixPath) -> List[str]:
         assert hoard_file.is_absolute()

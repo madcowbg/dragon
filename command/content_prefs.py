@@ -1,4 +1,8 @@
 import logging
+from io import StringIO
+
+from propcache import cached_property
+
 from command.fast_path import FastPosixPath
 from typing import List, Optional, Generator, Dict
 
@@ -49,7 +53,8 @@ class BackupSizes:
 
 
 class BackupSet:
-    def __init__(self, mounted_at: FastPosixPath, backups: List[HoardRemote], pathing: HoardPathing, hoard: HoardContents):
+    def __init__(self, mounted_at: FastPosixPath, backups: List[HoardRemote], pathing: HoardPathing,
+                 hoard: HoardContents):
         self.backups = dict((backup.uuid, backup) for backup in backups)
         self.uuids = sorted(list(self.backups.keys()))
         self.pathing = pathing
@@ -63,7 +68,8 @@ class BackupSet:
             logging.warning("No backups are defined.")
 
     def repos_to_backup_to(
-            self, hoard_file: FastPosixPath, hoard_props: Optional[HoardFileProps], file_size: int) -> List[HoardRemote]:
+            self, hoard_file: FastPosixPath, hoard_props: Optional[HoardFileProps], file_size: int) -> List[
+        HoardRemote]:
 
         past_backups = self.currently_scheduled_backups(hoard_file, hoard_props) if hoard_props is not None else []
 
@@ -178,6 +184,7 @@ class ContentPrefs:
 
         self._backup_sets = BackupSet.all(config, pathing, hoard)
         self.pathing = pathing
+        self.hoard = hoard
 
     def repos_to_add(
             self, hoard_file: FastPosixPath, local_props: RepoFileProps,
@@ -188,3 +195,47 @@ class ContentPrefs:
 
         for b in self._backup_sets:
             yield from map(lambda remote: remote.uuid, b.repos_to_backup_to(hoard_file, hoard_props, local_props.size))
+
+    def can_cleanup(
+            self, hoard_file: FastPosixPath, hoard_props: HoardFileProps, repo_uuid: str, out: StringIO) -> bool:
+        to_be_got = hoard_props.by_status(HoardFileStatus.GET)
+        to_be_moved_to = self.hoard.fsobjects.where_to_move(repo_uuid, hoard_file)
+
+        local_path = self.pathing.in_hoard(hoard_file).at_local(repo_uuid)
+        local_file_to_delete = local_path.as_pure_path.as_posix()
+
+        if hoard_props.fasthash in self.files_to_copy:
+            logging.info(f"file with fasthash {hoard_props.fasthash} to be copied, retaining")
+            out.write(f"~h {local_file_to_delete}\n")
+            return False
+
+        if len(to_be_got) > 0:
+            logging.info(f"file needs to be copied in {len(to_be_got)} places, retaining")
+            names_to_get = list(sorted(self.config.remotes[uuid].name for uuid in to_be_got))
+            out.write(f"NEEDS_COPY {names_to_get} {local_file_to_delete}\n")
+            return False
+
+        if len(to_be_moved_to) > 0:
+            logging.info(f"file needs to be moved to {to_be_moved_to}, retaining")
+            out.write(f"NEED_TO_BE_MOVED {local_file_to_delete}\n")
+            return False
+
+        return True
+
+    @cached_property
+    def files_to_copy(self) -> Dict[str, List[str]]:
+        return _find_files_to_copy(self.hoard)
+
+
+def _find_files_to_copy(hoard: HoardContents) -> Dict[str, List[str]]:
+    fasthashes_to_copy = [
+        props.fasthash for filepath, props in hoard.fsobjects
+        if len(props.by_status(HoardFileStatus.COPY)) > 0]
+
+    files_to_copy: Dict[str, List[str]] = dict((h, []) for h in fasthashes_to_copy)
+    for filepath, props in hoard.fsobjects:
+        assert isinstance(props, HoardFileProps)
+        if props.fasthash in fasthashes_to_copy:
+            files_to_copy[props.fasthash].append(filepath.as_posix())
+
+    return files_to_copy
