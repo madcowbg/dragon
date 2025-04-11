@@ -31,7 +31,7 @@ from gui.folder_tree import FolderNode, FolderTree, aggregate_on_nodes
 from gui.progress_reporting import StartProgressReporting, MarkProgressReporting, progress_reporting_it, \
     ProgressReporting, progress_reporting_bar
 from resolve_uuid import resolve_remote_uuid
-from util import group_to_dict
+from util import group_to_dict, format_count, format_size
 
 
 class HoardContentsPendingToSyncFile(Tree[FolderNode[FileOp]]):
@@ -49,6 +49,8 @@ class HoardContentsPendingToSyncFile(Tree[FolderNode[FileOp]]):
         self.counts = None
         self.ops_cnt = None
 
+        self.show_size = True
+
         self.expanded = set()
 
     async def on_mount(self):
@@ -60,7 +62,7 @@ class HoardContentsPendingToSyncFile(Tree[FolderNode[FileOp]]):
         self.counts = await aggregate_counts(self.op_tree)
         self.ops_cnt = aggregate_on_nodes(
             self.op_tree,
-            lambda node: {op_to_str(node.data): 1},
+            lambda node: {op_to_str(node.data): node.data.hoard_props.size if self.show_size else 1},
             sum_dicts)
 
         self.root.data = self.op_tree.root
@@ -88,7 +90,7 @@ class HoardContentsPendingToSyncFile(Tree[FolderNode[FileOp]]):
             for (op_type, order), v in sorted(pending.items(), key=lambda x: x[0][1]):
                 cnts_label.append(
                     op_type, style="green" if op_type == "get" else "strike dim" if op_type == "cleanup" else "none") \
-                    .append(" ").append(str(v), style="dim").append(",")
+                    .append(" ").append(format_size(v) if self.show_size else format_count(v), style="dim").append(",")
         cnts_label.append("}")
         return cnts_label
 
