@@ -64,4 +64,9 @@ files that it requests to get or copy.
 
 `dragon hoard gui` - runs a Textual-based GUI exploring a hoard's contents.
 
-<img src="doc/hoard-explorer-gui-example.png"/>
+Hoard explorer - showing all the files that are being tracked.
+
+<img src="doc/hoard-explorer-gui-example-hoard-explorer.png"/>
+
+Cave operations - showing what sync operations are scheduled to be executed.
+<img src="doc/hoard-explorer-gui-example-cave-ops.png"/>
