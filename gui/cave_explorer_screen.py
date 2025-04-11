@@ -238,6 +238,12 @@ class CaveInfoWidget(Widget):
                     value=self.hoard.paths()[self.remote.uuid].speed, id="repo-speed",
                     options=((s.value, s) for s in ConnectionSpeed), allow_blank=False)
 
+            with Horizontal(classes="repo-setting-group"):
+                yield Static("Min copies before cleanup", classes="repo-setting-label")
+                yield Input(
+                    value=str(self.remote.min_copies_before_cleanup), placeholder="min copies",
+                    id="repo-min-copies-before-cleanup", type="integer")
+
             yield Horizontal(
                 Vertical(
                     Button(
@@ -251,7 +257,20 @@ class CaveInfoWidget(Widget):
                 ),
                 id="content_trees")
 
-    @on(Input.Changed, "#repo-name")
+    @on(Input.Submitted, "#repo-min-copies-before-cleanup")
+    def repo_min_copies_before_cleanup_changed(self, event: Input.Changed):
+        assert event.input.id == "repo-min-copies-before-cleanup"
+
+        hoard_config = self.hoard.config()
+        if hoard_config.remotes[self.remote.uuid].min_copies_before_cleanup != int(event.value):
+            hoard_config.remotes[self.remote.uuid].min_copies_before_cleanup = int(event.value)
+            hoard_config.write()
+
+            self.remote = hoard_config.remotes[self.remote.uuid]
+
+            self.post_message(CaveInfoWidget.RemoteSettingChanged())
+
+    @on(Input.Submitted, "#repo-name")
     def repo_name_changed(self, event: Input.Changed):
         hoard_config = self.hoard.config()
         if hoard_config.remotes[self.remote.uuid].name != event.value:

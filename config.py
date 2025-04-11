@@ -1,6 +1,8 @@
 import enum
 import os
 import pathlib
+import sys
+
 from command.fast_path import FastPosixPath
 from typing import Dict, Any, Optional, List, Generator
 
@@ -51,6 +53,14 @@ class HoardRemote:
     @fetch_new.setter
     def fetch_new(self, value: bool):
         self.doc["fetch_new"] = value
+
+    @property
+    def min_copies_before_cleanup(self):
+        return self.doc.get("min_copies_before_cleanup", 10)
+
+    @min_copies_before_cleanup.setter
+    def min_copies_before_cleanup(self, value: int):
+        self.doc["min_copies_before_cleanup"] = value
 
     def __eq__(self, other):
         return isinstance(other, HoardRemote) and self.uuid == other.uuid and self.doc == other.doc

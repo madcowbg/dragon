@@ -199,20 +199,23 @@ class ContentPrefs:
     def can_cleanup(
             self, hoard_file: FastPosixPath, hoard_props: HoardFileProps, repo_uuid: str, out: StringIO) -> bool:
         to_be_got = hoard_props.by_status(HoardFileStatus.GET)
+        is_available = hoard_props.by_status(HoardFileStatus.AVAILABLE)
         to_be_moved_to = self.hoard.fsobjects.where_to_move(repo_uuid, hoard_file)
 
-        local_path = self.pathing.in_hoard(hoard_file).at_local(repo_uuid)
-        local_file_to_delete = local_path.as_pure_path.as_posix()
+        local_file_to_delete = self.pathing.in_hoard(hoard_file).at_local(repo_uuid).as_pure_path.as_posix()
 
-        if hoard_props.fasthash in self.files_to_copy:
+        if hoard_props.fasthash in self.files_to_copy:  # fixme that copy functionality is kinda pointless and complicating
             logging.info(f"file with fasthash {hoard_props.fasthash} to be copied, retaining")
             out.write(f"~h {local_file_to_delete}\n")
             return False
 
-        if len(to_be_got) > 0:
-            logging.info(f"file needs to be copied in {len(to_be_got)} places, retaining")
+        required_min_copies = self.config.remotes[repo_uuid].min_copies_before_cleanup
+        if len(to_be_got) > 0 and len(is_available) < required_min_copies:
+            logging.info(
+                f"file needs to be copied in {len(to_be_got)} places, "
+                f"has {len(is_available)} < {required_min_copies} - will retain here.")
             names_to_get = list(sorted(self.config.remotes[uuid].name for uuid in to_be_got))
-            out.write(f"NEEDS_COPY {names_to_get} {local_file_to_delete}\n")
+            out.write(f"NEEDS_MORE_COPIES ({len(is_available)}) {names_to_get} {local_file_to_delete}\n")
             return False
 
         if len(to_be_moved_to) > 0:

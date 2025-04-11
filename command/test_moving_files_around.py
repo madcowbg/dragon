@@ -145,9 +145,9 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
             'repo-incoming-name:',
             'repo-incoming-name:',
             'd test.me.4',
-            "NEEDS_COPY ['repo-backup-name', 'repo-full-name'] test.me.5",
+            "NEEDS_MORE_COPIES (0) ['repo-backup-name', 'repo-full-name'] test.me.5",
             'd wat/test.me.3',
-            "NEEDS_COPY ['repo-backup-name', 'repo-full-name'] wat/test.me.6",
+            "NEEDS_MORE_COPIES (0) ['repo-backup-name', 'repo-full-name'] wat/test.me.6",
             'DONE'], res.splitlines())
 
         res = await hoard_cmd.files.push(backup_cave_cmd.current_uuid())
@@ -169,8 +169,21 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
         self.assertEqual([
             'repo-incoming-name:',
             'repo-incoming-name:',
-            "NEEDS_COPY ['repo-full-name'] test.me.5",
-            "NEEDS_COPY ['repo-full-name'] wat/test.me.6",
+            "NEEDS_MORE_COPIES (1) ['repo-full-name'] test.me.5",
+            "NEEDS_MORE_COPIES (1) ['repo-full-name'] wat/test.me.6",
+            'DONE'], res.splitlines())
+
+        # change setting to allow cleanup earlier
+        config = hoard_cmd.hoard.config()
+        config.remotes[incoming_cave_cmd.current_uuid()].min_copies_before_cleanup = 1
+        config.write()
+
+        res = await hoard_cmd.files.push(incoming_cave_cmd.current_uuid())
+        self.assertEqual([
+            'repo-incoming-name:',
+            'repo-incoming-name:',
+            'd test.me.5',
+            'd wat/test.me.6',
             'DONE'], res.splitlines())
 
         res = await hoard_cmd.files.push(full_cave_cmd.current_uuid())
@@ -179,12 +192,4 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
             '+ test.me.5',
             '+ wat/test.me.6',
             'repo-full-name:',
-            'DONE'], res.splitlines())
-
-        res = await hoard_cmd.files.push(incoming_cave_cmd.current_uuid())
-        self.assertEqual([
-            'repo-incoming-name:',
-            'repo-incoming-name:',
-            'd test.me.5',
-            'd wat/test.me.6',
             'DONE'], res.splitlines())

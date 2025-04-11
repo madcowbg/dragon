@@ -47,7 +47,7 @@ def walk_repo(repo: str, hoard_ignore: HoardIgnore) -> Iterable[Tuple[pathlib.Pa
 
 
 class FileDeleted:
-    def __init__(self, missing_relpath: FastPosixPath, details: str = "MOVED"):
+    def __init__(self, missing_relpath: FastPosixPath, details: str):
         self.missing_relpath = missing_relpath
         self.details = details
 
@@ -151,7 +151,7 @@ async def compute_changes_from_diffs(diffs_stream: AsyncGenerator[RepoDiffs], re
 
         if len(candidates_file_to_hash) == 0:
             logging.info(f"File {missing_relpath} has no suitable copy, marking as deleted.")
-            yield FileDeleted(missing_relpath)
+            yield FileDeleted(missing_relpath, "DELETED_NO_COPY")
         elif len(candidates_file_to_hash) == 1:
             moved_to_file, moved_file_hash = candidates_file_to_hash[0]
             assert missing_file_props.fasthash == moved_file_hash
