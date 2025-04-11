@@ -100,13 +100,13 @@ class TestBackups(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull(all=True)
         self.assertEqual(
-            "+/test.me.1\n"
-            "+/wat/test.me.2\n"
+            "ADD_NEW_TO_HOARD /test.me.1\n"
+            "ADD_NEW_TO_HOARD /wat/test.me.2\n"
             "Sync'ed repo-partial-name to hoard!\n"
             "=/test.me.1\n"
             "=/wat/test.me.2\n"
-            "+/test.me.4\n"
-            "+/wat/test.me.3\n"
+            "ADD_NEW_TO_HOARD /test.me.4\n"
+            "ADD_NEW_TO_HOARD /wat/test.me.3\n"
             "Sync'ed repo-full-name to hoard!\n"
             "ADD_TO_HOARD_AND_CLEANUP /test.me.4\n"
             "<+/test.me.5\n"
@@ -197,13 +197,13 @@ class TestBackups(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull(all=True)
         self.assertEqual(
-            "+/test.me.1\n"
-            "+/wat/test.me.2\n"
+            "ADD_NEW_TO_HOARD /test.me.1\n"
+            "ADD_NEW_TO_HOARD /wat/test.me.2\n"
             "Sync'ed repo-partial-name to hoard!\n"
             "=/test.me.1\n"
             "=/wat/test.me.2\n"
-            "+/test.me.4\n"
-            "+/wat/test.me.3\n"
+            "ADD_NEW_TO_HOARD /test.me.4\n"
+            "ADD_NEW_TO_HOARD /wat/test.me.3\n"
             "Sync'ed repo-full-name to hoard!\n"
             "ADD_TO_HOARD_AND_CLEANUP /test.me.4\n"
             "<+/test.me.5\n"

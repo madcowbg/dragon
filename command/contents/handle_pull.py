@@ -226,7 +226,7 @@ def _calculate_local_only(behavior: PullIntention, diff: Diff, out: StringIO) ->
         out.write(f"?{diff.hoard_file.as_posix()}\n")
     elif behavior == PullIntention.ADD_TO_HOARD:
         yield AddNewFileBehavior(diff)
-        out.write(f"+{diff.hoard_file.as_posix()}\n")
+        out.write(f"ADD_NEW_TO_HOARD {diff.hoard_file.as_posix()}\n")
     else:
         raise ValueError(f"unrecognized on_file_added_or_present={behavior} for {diff.hoard_file}")
 

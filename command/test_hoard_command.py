@@ -79,9 +79,9 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull("repo-in-local")
         self.assertEqual(
-            "+/wat/test.me.different\n"
-            "+/wat/test.me.once\n"
-            "+/wat/test.me.twice\n"
+            "ADD_NEW_TO_HOARD /wat/test.me.different\n"
+            "ADD_NEW_TO_HOARD /wat/test.me.once\n"
+            "ADD_NEW_TO_HOARD /wat/test.me.twice\n"
             "Sync'ed repo-in-local to hoard!\nDONE", res.strip())
 
         async with hoard_cmd.hoard.open_contents(False, is_readonly=True) as hoard_contents:
@@ -255,7 +255,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull("repo-in-local")
         self.assertEqual(
-            "+/newdir/newfile.is\n"
+            "ADD_NEW_TO_HOARD /newdir/newfile.is\n"
             "DELETE_FROM_HOARD /wat/test.me.different\n"
             "remove dangling /wat/test.me.different\n"
             "Sync'ed repo-in-local to hoard!\nDONE", res)
@@ -382,7 +382,10 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             "DONE", res.strip())
 
         res = await hoard_cmd.contents.pull("repo-partial-name")
-        self.assertEqual("+/test.me.1\n+/wat/test.me.2\nSync'ed repo-partial-name to hoard!\nDONE", res.strip())
+        self.assertEqual(
+        "ADD_NEW_TO_HOARD /test.me.1\n"
+        "ADD_NEW_TO_HOARD /wat/test.me.2\n"
+        "Sync'ed repo-partial-name to hoard!\nDONE", res.strip())
 
         res = await hoard_cmd.contents.ls(skip_folders=True)
         self.assertEqual(
@@ -403,8 +406,8 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         self.assertEqual(
             "=/test.me.1\n"
             "=/wat/test.me.2\n"
-            "+/test.me.4\n"
-            "+/wat/test.me.3\n"
+            "ADD_NEW_TO_HOARD /test.me.4\n"
+            "ADD_NEW_TO_HOARD /wat/test.me.3\n"
             "Sync'ed repo-full-name to hoard!\nDONE", res.strip())
 
         res = await hoard_cmd.contents.pull("repo-full-name", ignore_epoch=True)  # does nothing ...
@@ -528,13 +531,13 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull(all=True)
         self.assertEqual(
-            "+/test.me.1\n"
-            "+/wat/test.me.2\n"
+            "ADD_NEW_TO_HOARD /test.me.1\n"
+            "ADD_NEW_TO_HOARD /wat/test.me.2\n"
             "Sync'ed repo-partial-name to hoard!\n"
             "=/test.me.1\n"
             "=/wat/test.me.2\n"
-            "+/test.me.4\n"
-            "+/wat/test.me.3\n"
+            "ADD_NEW_TO_HOARD /test.me.4\n"
+            "ADD_NEW_TO_HOARD /wat/test.me.3\n"
             "Sync'ed repo-full-name to hoard!\n"
             "=/test.me.1\n"
             "=/wat/test.me.3\n"
@@ -663,11 +666,11 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull("repo-full-name")
         self.assertEqual(
-            "+/test.me.1\n"
-            "+/test.me.4\n"
-            "+/wat/inner/another.file\n"
-            "+/wat/test.me.2\n"
-            "+/wat/test.me.3\n"
+            "ADD_NEW_TO_HOARD /test.me.1\n"
+            "ADD_NEW_TO_HOARD /test.me.4\n"
+            "ADD_NEW_TO_HOARD /wat/inner/another.file\n"
+            "ADD_NEW_TO_HOARD /wat/test.me.2\n"
+            "ADD_NEW_TO_HOARD /wat/test.me.3\n"
             "Sync'ed repo-full-name to hoard!\nDONE", res)
 
         os.mkdir(join(self.tmpdir.name, "repo-cloned-wat"))
@@ -709,7 +712,10 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         self.assertEqual("Refresh done!", res)
 
         res = await hoard_cmd.contents.get(repo="repo-cloned-wat", path="")
-        self.assertEqual("+/wat/test.me.2\n+/wat/test.me.3\nConsidered 3 files.\nDONE", res)
+        self.assertEqual(
+            "+/wat/test.me.2\n"
+            "+/wat/test.me.3\n"
+            "Considered 3 files.\nDONE", res)
 
         res = await hoard_cmd.files.push("repo-cloned-wat")
         self.assertEqual(
@@ -740,8 +746,8 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull("repo-partial-name")
         self.assertEqual(
-            "+/first-point/test.me.1\n"
-            "+/first-point/wat/test.me.2\n"
+            "ADD_NEW_TO_HOARD /first-point/test.me.1\n"
+            "ADD_NEW_TO_HOARD /first-point/wat/test.me.2\n"
             "Sync'ed repo-partial-name to hoard!\nDONE", res.strip())
 
         res = hoard_cmd.remotes(hide_paths=True)
@@ -850,8 +856,8 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             mount_point="/first-point",
             type=CaveType.PARTIAL, fetch_new=True)
 
-        # "+/first-point/test.me.1\n"
-        # "+/first-point/wat/test.me.2\n"
+        # "ADD_NEW_TO_HOARD /first-point/test.me.1\n"
+        # "ADD_NEW_TO_HOARD /first-point/wat/test.me.2\n"
         await hoard_cmd.contents.pull("repo-partial-name")
 
         res = await hoard_cmd.move_mounts(from_path="/first-point", to_path="/moved-data")
@@ -909,7 +915,10 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             self.tmpdir.name)
 
         res = await hoard_cmd.contents.pull("repo-partial-name")
-        self.assertEqual("+/test.me.1\n+/wat/test.me.2\nSync'ed repo-partial-name to hoard!\nDONE", res)
+        self.assertEqual(
+            "ADD_NEW_TO_HOARD /test.me.1\n"
+            "ADD_NEW_TO_HOARD /wat/test.me.2\n"
+            "Sync'ed repo-partial-name to hoard!\nDONE", res)
 
         res = await hoard_cmd.contents.pull("repo-backup-name")
         self.assertEqual("=/test.me.1\n?/wat/test.me.3\nSync'ed repo-backup-name to hoard!\nDONE", res)
@@ -1015,7 +1024,10 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         self.assertEqual("Refresh done!", res)
 
         res = await hoard_cmd.contents.pull(partial_cave_cmd.current_uuid())
-        self.assertEqual("+/test.me.1\n+/wat/test.me.2\nSync'ed repo-partial-name to hoard!\nDONE", res)
+        self.assertEqual(
+            "ADD_NEW_TO_HOARD /test.me.1\n"
+            "ADD_NEW_TO_HOARD /wat/test.me.2\n"
+            "Sync'ed repo-partial-name to hoard!\nDONE", res)
 
         full_cave_cmd = TotalCommand(path=join(tmpdir, "repo-full")).cave
         full_cave_cmd.init()
@@ -1031,8 +1043,8 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             "Skipping update as past epoch 1 is not after hoard epoch 1\n"
             "=/test.me.1\n"
             "=/wat/test.me.2\n"
-            "+/test.me.4\n"
-            "+/wat/test.me.3\n"
+            "ADD_NEW_TO_HOARD /test.me.4\n"
+            "ADD_NEW_TO_HOARD /wat/test.me.3\n"
             "Sync'ed repo-full-name to hoard!\n"
             "DONE", res)
 
