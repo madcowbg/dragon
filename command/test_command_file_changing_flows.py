@@ -1260,45 +1260,45 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             "ADD_NEW_TO_HOARD /test.me.1-newlocation\n"
             # expected error - move will fail, but the fallback is to just get it
             "ERROR_ON_MOVE bad current status = HoardFileStatus.GET, won't move.\n"
+            "DELETE_FROM_HOARD /test.me.1\n"
             "Sync'ed repo-partial-name to hoard!\n"
             "DONE", res)
 
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
-        self.assertEqual(
-            "|Num Files                |total     |available |get       |cleanup   |\n"
-            "|repo-backup-name         |         7|         6|         1|          |\n"
-            "|repo-copy-name           |         7|         6|         1|          |\n"
-            "|repo-full-name           |         7|         6|         1|          |\n"
-            "|repo-partial-name        |         3|         1|         1|         1|\n"
-            "\n"
-            "|Size                     |total     |available |get       |cleanup   |\n"
-            "|repo-backup-name         |        53|        47|         6|          |\n"
-            "|repo-copy-name           |        53|        47|         6|          |\n"
-            "|repo-full-name           |        53|        47|         6|          |\n"
-            "|repo-partial-name        |        19|         6|         5|         8|\n", res)
+        self.assertEqual([
+            '|Num Files                |total     |available |get       |cleanup   |',
+            '|repo-backup-name         |         7|         5|         1|         1|',
+            '|repo-copy-name           |         7|         5|         1|         1|',
+            '|repo-full-name           |         7|         5|         1|         1|',
+            '|repo-partial-name        |         2|         1|          |         1|',
+            '',
+            '|Size                     |total     |available |get       |cleanup   |',
+            '|repo-backup-name         |        53|        42|         6|         5|',
+            '|repo-copy-name           |        53|        42|         6|         5|',
+            '|repo-full-name           |        53|        42|         6|         5|',
+            '|repo-partial-name        |        14|         6|          |         8|'], res.splitlines())
 
         res = await hoard_cmd.files.push(partial_cave_cmd.current_uuid())
         self.assertEqual(
             "repo-partial-name:\n"
-            "+ test.me.1\n"
             "repo-partial-name:\n"
             "d wat/test.me.2\n"
             "remove dangling /wat/test.me.2\n"
             "DONE", res)
 
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
-        self.assertEqual(
-            "|Num Files                |total     |available |get       |\n"
-            "|repo-backup-name         |         7|         6|         1|\n"
-            "|repo-copy-name           |         7|         6|         1|\n"
-            "|repo-full-name           |         7|         6|         1|\n"
-            "|repo-partial-name        |         2|         2|          |\n"
-            "\n"
-            "|Size                     |total     |available |get       |\n"
-            "|repo-backup-name         |        53|        47|         6|\n"
-            "|repo-copy-name           |        53|        47|         6|\n"
-            "|repo-full-name           |        53|        47|         6|\n"
-            "|repo-partial-name        |        11|        11|          |\n", res)
+        self.assertEqual([
+            '|Num Files                |total     |available |get       |cleanup   |',
+            '|repo-backup-name         |         7|         5|         1|         1|',
+            '|repo-copy-name           |         7|         5|         1|         1|',
+            '|repo-full-name           |         7|         5|         1|         1|',
+            '|repo-partial-name        |         1|         1|          |          |',
+            '',
+            '|Size                     |total     |available |get       |cleanup   |',
+            '|repo-backup-name         |        53|        42|         6|         5|',
+            '|repo-copy-name           |        53|        42|         6|         5|',
+            '|repo-full-name           |        53|        42|         6|         5|',
+            '|repo-partial-name        |         6|         6|          |          |'], res.splitlines())
 
     async def test_moving_of_files_before_first_refresh(self):
         hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = \

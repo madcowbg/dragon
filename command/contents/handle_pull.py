@@ -337,12 +337,14 @@ def _calculate_hoard_only_moved(
     assert diff.diff_type == DiffType.FileOnlyInHoardLocalMoved
     if behavior == PullIntention.MOVE_IN_HOARD:
         goal_status = diff.hoard_props.get_status(local_uuid)
-        if goal_status == HoardFileStatus.AVAILABLE:
-            yield MoveFileBehavior(diff, config, pathing)
-        elif goal_status == HoardFileStatus.UNKNOWN:
+        if goal_status == HoardFileStatus.UNKNOWN:
             logging.info(f"File {diff.hoard_file} is unknown, can't move!")
+        elif goal_status == HoardFileStatus.AVAILABLE:
+            yield MoveFileBehavior(diff, config, pathing)
         else:
             out.write(f"ERROR_ON_MOVE bad current status = {goal_status}, won't move.\n")
+            yield DeleteFileFromHoardBehavior(diff)
+            out.write(f"DELETE_FROM_HOARD {diff.hoard_file.as_posix()}\n")
     else:
         assert behavior in (
             PullIntention.IGNORE, PullIntention.RESTORE_FROM_HOARD, PullIntention.ACCEPT_FROM_HOARD,

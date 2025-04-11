@@ -82,6 +82,7 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
         self.assertEqual([
             'ADD_NEW_TO_HOARD /wat2/test.me.3',
             "ERROR_ON_MOVE bad current status = HoardFileStatus.GET, won't move.",
+            'DELETE_FROM_HOARD /wat/test.me.3',
             "Sync'ed repo-full-name to hoard!",
             'DONE'], res.splitlines())
 
@@ -90,7 +91,24 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
         self.assertEqual(['NO CHANGES', 'Refresh done!'], res.splitlines())
 
         res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
+        self.assertEqual(["Sync'ed repo-full-name to hoard!", 'DONE'], res.splitlines())
+
+        res = await hoard_cmd.contents.pending_pull(incoming_cave_cmd.current_uuid())
         self.assertEqual([
-            "ERROR_ON_MOVE bad current status = HoardFileStatus.GET, won't move.",
-            "Sync'ed repo-full-name to hoard!",
+            'Status of repo-incoming-name:',
+            'ADD_TO_HOARD_AND_CLEANUP_SAME_BEHAVIOR /test.me.4',
+            'ADD_TO_HOARD_AND_CLEANUP_SAME_BEHAVIOR /test.me.5',
+            'ADD_TO_HOARD_AND_CLEANUP_SAME_BEHAVIOR /wat/test.me.3',  # fixme BAD!!!
+            'ADD_TO_HOARD_AND_CLEANUP_SAME_BEHAVIOR /wat/test.me.6'], res.splitlines())
+
+        res = await incoming_cave_cmd.refresh()
+        self.assertEqual(['NO CHANGES', 'Refresh done!'], res.splitlines())
+
+        res = await hoard_cmd.contents.pull(incoming_cave_cmd.current_uuid())
+        self.assertEqual([
+            'ADD_TO_HOARD_AND_CLEANUP /test.me.4',
+            'ADD_TO_HOARD_AND_CLEANUP /test.me.5',
+            'ADD_TO_HOARD_AND_CLEANUP /wat/test.me.3',  # fixme BAD!!!
+            'ADD_TO_HOARD_AND_CLEANUP /wat/test.me.6',
+            "Sync'ed repo-incoming-name to hoard!",
             'DONE'], res.splitlines())
