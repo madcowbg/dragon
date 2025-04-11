@@ -383,9 +383,9 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull("repo-partial-name")
         self.assertEqual(
-        "ADD_NEW_TO_HOARD /test.me.1\n"
-        "ADD_NEW_TO_HOARD /wat/test.me.2\n"
-        "Sync'ed repo-partial-name to hoard!\nDONE", res.strip())
+            "ADD_NEW_TO_HOARD /test.me.1\n"
+            "ADD_NEW_TO_HOARD /wat/test.me.2\n"
+            "Sync'ed repo-partial-name to hoard!\nDONE", res.strip())
 
         res = await hoard_cmd.contents.ls(skip_folders=True)
         self.assertEqual(
@@ -432,10 +432,10 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull("repo-incoming-name")
         self.assertEqual(
-            "ADD_TO_HOARD_AND_CLEANUP /test.me.4\n"
-            "<+/test.me.5\n"
-            "<+/wat/test.me.6\n"
-            "u/wat/test.me.3\n"
+            "CLEANUP_SAME /test.me.4\n"
+            "INCOMING_TO_HOARD /test.me.5\n"
+            "INCOMING_TO_HOARD /wat/test.me.6\n"
+            "CLEANUP_DIFFERENT /wat/test.me.3\n"
             "Sync'ed repo-incoming-name to hoard!\nDONE", res.strip())
 
         res = await incoming_cave_cmd.refresh(show_details=False)
@@ -443,10 +443,10 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull("repo-incoming-name")
         self.assertEqual(
-            "ADD_TO_HOARD_AND_CLEANUP /test.me.4\n"
-            "ADD_TO_HOARD_AND_CLEANUP /test.me.5\n"
-            "ADD_TO_HOARD_AND_CLEANUP /wat/test.me.3\n"
-            "ADD_TO_HOARD_AND_CLEANUP /wat/test.me.6\n"
+            "CLEANUP_SAME /test.me.4\n"
+            "CLEANUP_SAME /test.me.5\n"
+            "CLEANUP_SAME /wat/test.me.6\n"
+            "CLEANUP_DIFFERENT /wat/test.me.3\n"
             "Sync'ed repo-incoming-name to hoard!\nDONE", res.strip())
 
         res = await hoard_cmd.contents.ls(skip_folders=True)
@@ -455,7 +455,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             "/test.me.4 = a:1 g:1 c:1\n"
             "/test.me.5 = g:2 c:1\n"
             "/wat/test.me.2 = a:2 g:1\n"
-            "/wat/test.me.3 = g:2 c:1\n"
+            "/wat/test.me.3 = a:2 c:1\n"
             "/wat/test.me.6 = g:2 c:1\n"
             "DONE", res)
 
@@ -469,10 +469,10 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         await hoard_cmd.contents.pull("repo-backup-name")  # just registers the files already in backup
         res = await hoard_cmd.contents.pull("repo-incoming-name")
         self.assertEqual(
-            "ADD_TO_HOARD_AND_CLEANUP /test.me.4\n"
-            "<+/test.me.5\n"
-            "<+/wat/test.me.6\n"
-            "u/wat/test.me.3\n"
+            "CLEANUP_SAME /test.me.4\n"
+            "INCOMING_TO_HOARD /test.me.5\n"
+            "INCOMING_TO_HOARD /wat/test.me.6\n"
+            "CLEANUP_DIFFERENT /wat/test.me.3\n"
             "Sync'ed repo-incoming-name to hoard!\nDONE", res)
 
         res = await hoard_cmd.contents.ls(skip_folders=True)
@@ -481,7 +481,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             "/test.me.4 = a:1 g:1 c:1\n"
             "/test.me.5 = g:2 c:1\n"
             "/wat/test.me.2 = a:2 g:1\n"
-            "/wat/test.me.3 = g:2 c:1\n"
+            "/wat/test.me.3 = a:2 c:1\n"
             "/wat/test.me.6 = g:2 c:1\n"
             "DONE", res)
 
@@ -493,7 +493,6 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         self.assertEqual(
             f"repo-full-name:\n"
             "+ test.me.5\n"
-            "+ wat/test.me.3\n"
             "+ wat/test.me.6\n"
             f"repo-full-name:\n"
             "DONE", res)
@@ -512,7 +511,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             "/test.me.4 = a:1 g:1 c:1\n"
             "/test.me.5 = a:1 g:1 c:1\n"
             "/wat/test.me.2 = a:2 g:1\n"
-            "/wat/test.me.3 = a:1 g:1 c:1\n"
+            "/wat/test.me.3 = a:2 c:1\n"
             "/wat/test.me.6 = a:1 g:1 c:1\n"
             "DONE", res)
 
@@ -542,28 +541,27 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             "=/test.me.1\n"
             "=/wat/test.me.3\n"
             "Sync'ed repo-backup-name to hoard!\n"
-            "ADD_TO_HOARD_AND_CLEANUP /test.me.4\n"
-            "<+/test.me.5\n"
-            "<+/wat/test.me.6\n"
-            "u/wat/test.me.3\n"
+            "CLEANUP_SAME /test.me.4\n"
+            "INCOMING_TO_HOARD /test.me.5\n"
+            "INCOMING_TO_HOARD /wat/test.me.6\n"
+            "CLEANUP_DIFFERENT /wat/test.me.3\n"
             "Sync'ed repo-incoming-name to hoard!\n"
             "DONE", res)
 
         res = await hoard_cmd.contents.status(hide_disk_sizes=True)
-        self.assertEqual(
-            ""
-            "|Num Files                |             updated|total     |available |get       |cleanup   |\n"
-            "|repo-backup-name         |                 now|         6|         1|         5|          |\n"
-            "|repo-full-name           |                 now|         6|         3|         3|          |\n"
-            "|repo-incoming-name       |                 now|         4|          |          |         4|\n"
-            "|repo-partial-name        |                 now|         2|         2|          |          |\n"
-            "\n"
-            "|Size                     |             updated|total     |available |get       |cleanup   |\n"
-            "|repo-backup-name         |                 now|        46|         6|        40|          |\n"
-            "|repo-full-name           |                 now|        46|        25|        21|          |\n"
-            "|repo-incoming-name       |                 now|        32|          |          |        32|\n"
-            "|repo-partial-name        |                 now|        14|        14|          |          |\n",
-            res)
+        self.assertEqual([
+            '|Num Files                |             updated|total     |available |get       |cleanup   |',
+            '|repo-backup-name         |                 now|         6|         2|         4|          |',
+            '|repo-full-name           |                 now|         6|         4|         2|          |',
+            '|repo-incoming-name       |                 now|         4|          |          |         4|',
+            '|repo-partial-name        |                 now|         2|         2|          |          |',
+            '',
+            '|Size                     |             updated|total     |available |get       |cleanup   |',
+            '|repo-backup-name         |                 now|        47|        16|        31|          |',
+            '|repo-full-name           |                 now|        47|        35|        12|          |',
+            '|repo-incoming-name       |                 now|        33|          |          |        33|',
+            '|repo-partial-name        |                 now|        14|        14|          |          |'],
+            res.splitlines())
 
     async def test_sync_hoard_file_contents_all(self):
         populate_repotypes(self.tmpdir.name)
@@ -575,45 +573,42 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         await hoard_cmd.contents.pull("repo-backup-name")  # just registers the files already in backup
         await hoard_cmd.contents.pull("repo-incoming-name")
 
-        res = await hoard_cmd.contents.status(hide_disk_sizes=True)
-        self.assertEqual(
-            ""
-            "|Num Files                |             updated|total     |available |get       |cleanup   |\n"
-            "|repo-backup-name         |                 now|         6|         1|         5|          |\n"
-            "|repo-full-name           |                 now|         6|         3|         3|          |\n"
-            "|repo-incoming-name       |                 now|         4|          |          |         4|\n"
-            "|repo-partial-name        |                 now|         2|         2|          |          |\n"
-            "\n"
-            "|Size                     |             updated|total     |available |get       |cleanup   |\n"
-            "|repo-backup-name         |                 now|        46|         6|        40|          |\n"
-            "|repo-full-name           |                 now|        46|        25|        21|          |\n"
-            "|repo-incoming-name       |                 now|        32|          |          |        32|\n"
-            "|repo-partial-name        |                 now|        14|        14|          |          |\n",
-            res)
+        res = await hoard_cmd.contents.status(hide_disk_sizes=True, hide_time=True)
+        self.assertEqual([
+            '|Num Files                |total     |available |get       |cleanup   |',
+            '|repo-backup-name         |         6|         2|         4|          |',
+            '|repo-full-name           |         6|         4|         2|          |',
+            '|repo-incoming-name       |         4|          |          |         4|',
+            '|repo-partial-name        |         2|         2|          |          |',
+            '',
+            '|Size                     |total     |available |get       |cleanup   |',
+            '|repo-backup-name         |        47|        16|        31|          |',
+            '|repo-full-name           |        47|        35|        12|          |',
+            '|repo-incoming-name       |        33|          |          |        33|',
+            '|repo-partial-name        |        14|        14|          |          |'],
+            res.splitlines())
 
         res = await hoard_cmd.files.push(all=True)
-        self.assertEqual(
-            f"repo-partial-name:\n"
-            f"repo-full-name:\n"
-            "+ test.me.5\n"
-            "+ wat/test.me.3\n"
-            "+ wat/test.me.6\n"
-            f"repo-backup-name:\n"
-            "+ test.me.4\n"
-            "+ test.me.5\n"
-            "+ wat/test.me.2\n"
-            "+ wat/test.me.3\n"
-            "+ wat/test.me.6\n"
-            f"repo-incoming-name:\n"
-            f"repo-partial-name:\n"
-            f"repo-full-name:\n"
-            f"repo-backup-name:\n"
-            f"repo-incoming-name:\n"
-            "d test.me.4\n"
-            "d test.me.5\n"
-            "d wat/test.me.3\n"
-            "d wat/test.me.6\n"
-            "DONE", res)
+        self.assertEqual([
+            'repo-partial-name:',
+            'repo-full-name:',
+            '+ test.me.5',
+            '+ wat/test.me.6',
+            'repo-backup-name:',
+            '+ test.me.4',
+            '+ test.me.5',
+            '+ wat/test.me.2',
+            '+ wat/test.me.6',
+            'repo-incoming-name:',
+            'repo-partial-name:',
+            'repo-full-name:',
+            'repo-backup-name:',
+            'repo-incoming-name:',
+            'd test.me.4',
+            'd test.me.5',
+            'd wat/test.me.3',
+            'd wat/test.me.6',
+            'DONE'], res.splitlines())
 
         self.assertEqual([
             'repo-partial/test.me.1',

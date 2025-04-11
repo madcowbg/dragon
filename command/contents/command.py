@@ -76,11 +76,11 @@ def _init_pull_preferences_backup(content_prefs: ContentPrefs, remote_uuid: str)
 def _init_pull_preferences_incoming(content_prefs: ContentPrefs, remote_uuid: str) -> PullPreferences:
     return PullPreferences(
         remote_uuid, content_prefs,
-        on_same_file_is_present=PullIntention.ADD_TO_HOARD_AND_CLEANUP,
+        on_same_file_is_present=PullIntention.CLEANUP,
         on_file_added_or_present=PullIntention.ADD_TO_HOARD_AND_CLEANUP,
         on_file_is_different_and_modified=PullIntention.ADD_TO_HOARD_AND_CLEANUP,
         on_file_is_different_and_added=PullIntention.ADD_TO_HOARD_AND_CLEANUP,
-        on_file_is_different_but_present=PullIntention.ADD_TO_HOARD_AND_CLEANUP,
+        on_file_is_different_but_present=PullIntention.CLEANUP,
         on_hoard_only_local_moved=PullIntention.IGNORE,
         on_hoard_only_local_deleted=PullIntention.IGNORE,
         on_hoard_only_local_unknown=PullIntention.IGNORE)

@@ -108,10 +108,10 @@ class TestBackups(IsolatedAsyncioTestCase):
             "ADD_NEW_TO_HOARD /test.me.4\n"
             "ADD_NEW_TO_HOARD /wat/test.me.3\n"
             "Sync'ed repo-full-name to hoard!\n"
-            "ADD_TO_HOARD_AND_CLEANUP /test.me.4\n"
-            "<+/test.me.5\n"
-            "<+/wat/test.me.6\n"
-            "u/wat/test.me.3\n"
+            "CLEANUP_SAME /test.me.4\n"
+            "INCOMING_TO_HOARD /test.me.5\n"
+            "INCOMING_TO_HOARD /wat/test.me.6\n"
+            "CLEANUP_DIFFERENT /wat/test.me.3\n"
             "Sync'ed repo-incoming-name to hoard!\n"
             "DONE", res)
 
@@ -123,7 +123,7 @@ class TestBackups(IsolatedAsyncioTestCase):
             "/test.me.5 = g:1 c:1\n"
             "/wat\n"
             "/wat/test.me.2 = a:2\n"
-            "/wat/test.me.3 = g:1 c:1\n"
+            "/wat/test.me.3 = a:1 c:1\n"
             "/wat/test.me.6 = g:1 c:1\n"
             "DONE", res)
 
@@ -131,7 +131,7 @@ class TestBackups(IsolatedAsyncioTestCase):
         self.assertEqual(
             "repo-incoming-name:\n"
             "TO_CLEANUP (is in 1) /test.me.4\n"
-            "TO_CLEANUP (is in 0) /wat/test.me.3\n"
+            "TO_CLEANUP (is in 1) /wat/test.me.3\n"
             "TO_CLEANUP (is in 0) /test.me.5\n"
             "TO_CLEANUP (is in 0) /wat/test.me.6\n"
             "DONE", res)
@@ -145,7 +145,6 @@ class TestBackups(IsolatedAsyncioTestCase):
             f"repo-partial-name:\n"
             f"repo-full-name:\n"
             "+ test.me.5\n"
-            "+ wat/test.me.3\n"
             "+ wat/test.me.6\n"
             f"repo-incoming-name:\n"
             f"repo-partial-name:\n"
@@ -196,165 +195,160 @@ class TestBackups(IsolatedAsyncioTestCase):
             type=CaveType.BACKUP)
 
         res = await hoard_cmd.contents.pull(all=True)
-        self.assertEqual(
-            "ADD_NEW_TO_HOARD /test.me.1\n"
-            "ADD_NEW_TO_HOARD /wat/test.me.2\n"
-            "Sync'ed repo-partial-name to hoard!\n"
-            "=/test.me.1\n"
-            "=/wat/test.me.2\n"
-            "ADD_NEW_TO_HOARD /test.me.4\n"
-            "ADD_NEW_TO_HOARD /wat/test.me.3\n"
-            "Sync'ed repo-full-name to hoard!\n"
-            "ADD_TO_HOARD_AND_CLEANUP /test.me.4\n"
-            "<+/test.me.5\n"
-            "<+/wat/test.me.6\n"
-            "u/wat/test.me.3\n"
-            "Sync'ed repo-incoming-name to hoard!\n"
-            "=/test.me.1\n"
-            "RESTORE /wat/test.me.3\n"
-            "Sync'ed backup-1 to hoard!\n"
-            "=/test.me.1\n"
-            "Sync'ed backup-2 to hoard!\n"
-            "?/test.me.obsolete\n"
-            "Sync'ed backup-3 to hoard!\n"
-            "Sync'ed backup-4 to hoard!\n"
-            "DONE", res)
+        self.assertEqual([
+            'ADD_NEW_TO_HOARD /test.me.1',
+            'ADD_NEW_TO_HOARD /wat/test.me.2',
+            "Sync'ed repo-partial-name to hoard!",
+            '=/test.me.1',
+            '=/wat/test.me.2',
+            'ADD_NEW_TO_HOARD /test.me.4',
+            'ADD_NEW_TO_HOARD /wat/test.me.3',
+            "Sync'ed repo-full-name to hoard!",
+            'CLEANUP_SAME /test.me.4',
+            'INCOMING_TO_HOARD /test.me.5',
+            'INCOMING_TO_HOARD /wat/test.me.6',
+            'CLEANUP_DIFFERENT /wat/test.me.3',
+            "Sync'ed repo-incoming-name to hoard!",
+            '=/test.me.1',
+            '=/wat/test.me.3',
+            "Sync'ed backup-1 to hoard!",
+            '=/test.me.1',
+            "Sync'ed backup-2 to hoard!",
+            '?/test.me.obsolete',
+            "Sync'ed backup-3 to hoard!",
+            "Sync'ed backup-4 to hoard!",
+            'DONE'], res.splitlines())
 
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
-        self.assertEqual(
-            "|Num Files                |total     |available |get       |cleanup   |\n"
-            "|backup-1                 |         3|         1|         2|          |\n"
-            "|backup-2                 |         3|         1|         2|          |\n"
-            "|backup-3                 |         2|          |         2|          |\n"
-            "|backup-4                 |         1|          |         1|          |\n"
-            "|repo-full-name           |         6|         3|         3|          |\n"
-            "|repo-incoming-name       |         4|          |          |         4|\n"
-            "|repo-partial-name        |         2|         2|          |          |\n"
-            "\n"
-            "|Size                     |total     |available |get       |cleanup   |\n"
-            "|backup-1                 |       129|        60|        69|          |\n"
-            "|backup-2                 |       153|        60|        93|          |\n"
-            "|backup-3                 |       154|          |       154|          |\n"
-            "|backup-4                 |         9|          |         9|          |\n"
-            "|repo-full-name           |       299|       153|       146|          |\n"
-            "|repo-incoming-name       |       223|          |          |       223|\n"
-            "|repo-partial-name        |        76|        76|          |          |\n", res)
+        self.assertEqual([
+            '|Num Files                |total     |available |get       |cleanup   |',
+            '|backup-1                 |         3|         2|         1|          |',
+            '|backup-2                 |         3|         1|         2|          |',
+            '|backup-3                 |         1|          |         1|          |',
+            '|backup-4                 |         1|          |         1|          |',
+            '|repo-full-name           |         6|         4|         2|          |',
+            '|repo-incoming-name       |         4|          |          |         4|',
+            '|repo-partial-name        |         2|         2|          |          |',
+            '',
+            '|Size                     |total     |available |get       |cleanup   |',
+            '|backup-1                 |       227|       150|        77|          |',
+            '|backup-2                 |       136|        60|        76|          |',
+            '|backup-3                 |        77|          |        77|          |',
+            '|backup-4                 |        90|          |        90|          |',
+            '|repo-full-name           |       380|       243|       137|          |',
+            '|repo-incoming-name       |       304|          |          |       304|',
+            '|repo-partial-name        |        76|        76|          |          |'], res.splitlines())
 
         res = await hoard_cmd.contents.status(path="/wat", hide_time=True, hide_disk_sizes=True)
-        self.assertEqual(
-            "|Num Files                |total     |available |get       |cleanup   |\n"
-            "|backup-1                 |         1|          |         1|          |\n"
-            "|backup-2                 |         1|          |         1|          |\n"
-            "|backup-3                 |         1|          |         1|          |\n"
-            "|backup-4                 |         1|          |         1|          |\n"
-            "|repo-full-name           |         3|         1|         2|          |\n"
-            "|repo-incoming-name       |         2|          |          |         2|\n"
-            "|repo-partial-name        |         1|         1|          |          |\n"
-            "\n"
-            "|Size                     |total     |available |get       |cleanup   |\n"
-            "|backup-1                 |         9|          |         9|          |\n"
-            "|backup-2                 |        16|          |        16|          |\n"
-            "|backup-3                 |        77|          |        77|          |\n"
-            "|backup-4                 |         9|          |         9|          |\n"
-            "|repo-full-name           |       102|        16|        86|          |\n"
-            "|repo-incoming-name       |        86|          |          |        86|\n"
-            "|repo-partial-name        |        16|        16|          |          |\n", res)
+        self.assertEqual([
+            '|Num Files                |total     |available |get       |cleanup   |',
+            '|backup-1                 |         2|         1|         1|          |',
+            '|backup-2                 |         1|          |         1|          |',
+            '|backup-4                 |         1|          |         1|          |',
+            '|repo-full-name           |         3|         2|         1|          |',
+            '|repo-incoming-name       |         2|          |          |         2|',
+            '|repo-partial-name        |         1|         1|          |          |',
+            '',
+            '|Size                     |total     |available |get       |cleanup   |',
+            '|backup-1                 |       167|        90|        77|          |',
+            '|backup-2                 |        16|          |        16|          |',
+            '|backup-4                 |        90|          |        90|          |',
+            '|repo-full-name           |       183|       106|        77|          |',
+            '|repo-incoming-name       |       167|          |          |       167|',
+            '|repo-partial-name        |        16|        16|          |          |'], res.splitlines())
 
         res = await hoard_cmd.backups.health()
-        self.assertEqual(
-            "# backup sets: 1\n"
-            "# backups: 4\n"
-            "scheduled count:\n"
-            " 1: 3 files (153)\n"
-            " 2: 3 files (146)\n"
-            "available count:\n"
-            " 0: 5 files (239)\n"
-            " 2: 1 files (60)\n"
-            "get_or_copy count:\n"
-            " 0: 1 files (60)\n"
-            " 1: 1 files (16)\n"
-            " 2: 3 files (214)\n"
-            " 3: 1 files (9)\n"
-            "move count:\n"
-            " 0: 6 files (299)\n"
-            "cleanup count:\n"
-            " 0: 2 files (76)\n"
-            " 1: 4 files (223)\n"
-            "DONE", res)
+        self.assertEqual([
+            '# backup sets: 1',
+            '# backups: 4',
+            'scheduled count:',
+            ' 1: 4 files (230)',
+            ' 2: 2 files (150)',
+            'available count:',
+            ' 0: 4 files (230)',
+            ' 1: 1 files (90)',
+            ' 2: 1 files (60)',
+            'get_or_copy count:',
+            ' 0: 1 files (60)',
+            ' 1: 3 files (183)',
+            ' 2: 2 files (137)',
+            'move count:',
+            ' 0: 6 files (380)',
+            'cleanup count:',
+            ' 0: 2 files (76)',
+            ' 1: 4 files (304)',
+            'DONE'], res.splitlines())
 
         res = await hoard_cmd.files.push(all=True)
-        self.assertEqual(
-            "repo-partial-name:\n"
-            "repo-full-name:\n"
-            "+ test.me.5\n"
-            "+ wat/test.me.3\n"
-            "+ wat/test.me.6\n"
-            "repo-incoming-name:\n"
-            "backup-1:\n"
-            "+ test.me.5\n"
-            "+ wat/test.me.3\n"
-            "backup-2:\n"
-            "+ test.me.4\n"
-            "+ wat/test.me.2\n"
-            "backup-3:\n"
-            "+ test.me.4\n"
-            "+ wat/test.me.6\n"
-            "backup-4:\n"
-            "+ wat/test.me.3\n"
-            "repo-partial-name:\n"
-            "repo-full-name:\n"
-            "repo-incoming-name:\n"
-            "d test.me.4\n"
-            "d test.me.5\n"
-            "d wat/test.me.3\n"
-            "d wat/test.me.6\n"
-            "backup-1:\n"
-            "backup-2:\n"
-            "backup-3:\n"
-            "backup-4:\n"
-            "DONE", res)
+        self.assertEqual([
+            'repo-partial-name:',
+            'repo-full-name:',
+            '+ test.me.5',
+            '+ wat/test.me.6',
+            'repo-incoming-name:',
+            'backup-1:',
+            '+ wat/test.me.6',
+            'backup-2:',
+            '+ test.me.5',
+            '+ wat/test.me.2',
+            'backup-3:',
+            '+ test.me.4',
+            'backup-4:',
+            '+ wat/test.me.3',
+            'repo-partial-name:',
+            'repo-full-name:',
+            'repo-incoming-name:',
+            'd test.me.4',
+            'd test.me.5',
+            'd wat/test.me.3',
+            'd wat/test.me.6',
+            'backup-1:',
+            'backup-2:',
+            'backup-3:',
+            'backup-4:',
+            'DONE'], res.splitlines())
 
         res = await hoard_cmd.backups.health()
-        self.assertEqual(
-            "# backup sets: 1\n"
-            "# backups: 4\n"
-            "scheduled count:\n"
-            " 1: 3 files (153)\n"
-            " 2: 3 files (146)\n"
-            "available count:\n"
-            " 1: 3 files (153)\n"
-            " 2: 3 files (146)\n"
-            "get_or_copy count:\n"
-            " 0: 6 files (299)\n"
-            "move count:\n"
-            " 0: 6 files (299)\n"
-            "cleanup count:\n"
-            " 0: 6 files (299)\n"
-            "DONE", res)
+        self.assertEqual([
+            '# backup sets: 1',
+            '# backups: 4',
+            'scheduled count:',
+            ' 1: 4 files (230)',
+            ' 2: 2 files (150)',
+            'available count:',
+            ' 1: 4 files (230)',
+            ' 2: 2 files (150)',
+            'get_or_copy count:',
+            ' 0: 6 files (380)',
+            'move count:',
+            ' 0: 6 files (380)',
+            'cleanup count:',
+            ' 0: 6 files (380)',
+            'DONE'], res.splitlines())
 
         res = await hoard_cmd.contents.drop(repo="backup-2", path="wat")
         self.assertEqual(
-            'DROP /wat/test.me.2\n'
-            "Considered 3 files, 1 marked for cleanup, 0 won't be downloaded, 2 are skipped.\n"
-            'DONE', res)
+            ['DROP /wat/test.me.2',
+             "Considered 3 files, 1 marked for cleanup, 0 won't be downloaded, 2 are skipped.",
+             'DONE'], res.splitlines())
 
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
-        self.assertEqual(
-            '|Num Files                |total     |available |cleanup   |\n'
-            '|backup-1                 |         3|         3|          |\n'
-            '|backup-2                 |         3|         2|         1|\n'
-            '|backup-3                 |         2|         2|          |\n'
-            '|backup-4                 |         1|         1|          |\n'
-            '|repo-full-name           |         6|         6|          |\n'
-            '|repo-partial-name        |         2|         2|          |\n'
-            '\n'
-            '|Size                     |total     |available |cleanup   |\n'
-            '|backup-1                 |       129|       129|          |\n'
-            '|backup-2                 |       153|       137|        16|\n'
-            '|backup-3                 |       154|       154|          |\n'
-            '|backup-4                 |         9|         9|          |\n'
-            '|repo-full-name           |       299|       299|          |\n'
-            '|repo-partial-name        |        76|        76|          |\n', res)
+        self.assertEqual([
+            '|Num Files                |total     |available |cleanup   |',
+            '|backup-1                 |         3|         3|          |',
+            '|backup-2                 |         3|         2|         1|',
+            '|backup-3                 |         1|         1|          |',
+            '|backup-4                 |         1|         1|          |',
+            '|repo-full-name           |         6|         6|          |',
+            '|repo-partial-name        |         2|         2|          |',
+            '',
+            '|Size                     |total     |available |cleanup   |',
+            '|backup-1                 |       227|       227|          |',
+            '|backup-2                 |       136|       120|        16|',
+            '|backup-3                 |        77|        77|          |',
+            '|backup-4                 |        90|        90|          |',
+            '|repo-full-name           |       380|       380|          |',
+            '|repo-partial-name        |        76|        76|          |'], res.splitlines())
 
     async def test_add_backup_repos_over_time(self):
         hoard_cmd, partial_cave_cmd, full_cave_cmd, incoming_cave_cmd = await init_complex_hoard(self.tmpdir.name)
@@ -385,7 +379,7 @@ class TestBackups(IsolatedAsyncioTestCase):
             "Skipping update as past epoch 1 is not after hoard epoch 1\n"
             "Skipping update as past epoch 1 is not after hoard epoch 1\n"
             "=/test.me.1\n"
-            "RESTORE /wat/test.me.3\n"
+            "=/wat/test.me.3\n"
             "Sync'ed backup-1 to hoard!\n"
             "=/test.me.1\n"
             "Sync'ed backup-2 to hoard!\n"
@@ -395,42 +389,42 @@ class TestBackups(IsolatedAsyncioTestCase):
             "DONE", res)
 
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
-        self.assertEqual(
-            "|Num Files                |total     |available |get       |cleanup   |\n"
-            "|backup-1                 |         2|         1|         1|          |\n"
-            "|backup-2                 |         1|         1|          |          |\n"
-            "|repo-full-name           |         6|         3|         3|          |\n"
-            "|repo-incoming-name       |         4|          |          |         4|\n"
-            "|repo-partial-name        |         2|         2|          |          |\n"
-            "\n"
-            "|Size                     |total     |available |get       |cleanup   |\n"
-            "|backup-1                 |        69|        60|         9|          |\n"
-            "|backup-2                 |        60|        60|          |          |\n"
-            "|repo-full-name           |       299|       153|       146|          |\n"
-            "|repo-incoming-name       |       223|          |          |       223|\n"
-            "|repo-partial-name        |        76|        76|          |          |\n", res)
+        self.assertEqual([
+            '|Num Files                |total     |available |get       |cleanup   |',
+            '|backup-1                 |         2|         2|          |          |',
+            '|backup-2                 |         1|         1|          |          |',
+            '|repo-full-name           |         6|         4|         2|          |',
+            '|repo-incoming-name       |         4|          |          |         4|',
+            '|repo-partial-name        |         2|         2|          |          |',
+            '',
+            '|Size                     |total     |available |get       |cleanup   |',
+            '|backup-1                 |       150|       150|          |          |',
+            '|backup-2                 |        60|        60|          |          |',
+            '|repo-full-name           |       380|       243|       137|          |',
+            '|repo-incoming-name       |       304|          |          |       304|',
+            '|repo-partial-name        |        76|        76|          |          |'], res.splitlines())
 
         res = await hoard_cmd.backups.health()
-        self.assertEqual(
-            "# backup sets: 1\n"
-            "# backups: 4\n"
-            "scheduled count:\n"
-            " 0: 4 files (230)\n"
-            " 1: 1 files (9)\n"
-            " 2: 1 files (60)\n"
-            "available count:\n"
-            " 0: 5 files (239)\n"
-            " 2: 1 files (60)\n"
-            "get_or_copy count:\n"
-            " 0: 3 files (153)\n"
-            " 1: 2 files (137)\n"
-            " 2: 1 files (9)\n"
-            "move count:\n"
-            " 0: 6 files (299)\n"
-            "cleanup count:\n"
-            " 0: 2 files (76)\n"
-            " 1: 4 files (223)\n"
-            "DONE", res)
+        self.assertEqual([
+            '# backup sets: 1',
+            '# backups: 4',
+            'scheduled count:',
+            ' 0: 4 files (230)',
+            ' 1: 1 files (90)',
+            ' 2: 1 files (60)',
+            'available count:',
+            ' 0: 4 files (230)',
+            ' 1: 1 files (90)',
+            ' 2: 1 files (60)',
+            'get_or_copy count:',
+            ' 0: 4 files (243)',
+            ' 1: 2 files (137)',
+            'move count:',
+            ' 0: 6 files (380)',
+            'cleanup count:',
+            ' 0: 2 files (76)',
+            ' 1: 4 files (304)',
+            'DONE'], res.splitlines())
 
         res = await hoard_cmd.backups.assign()
         self.assertEqual(
@@ -441,72 +435,73 @@ class TestBackups(IsolatedAsyncioTestCase):
             'DONE', res)
 
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
-        self.assertEqual(
-            "|Num Files                |total     |available |get       |cleanup   |\n"
-            "|backup-1                 |         2|         1|         1|          |\n"
-            "|backup-2                 |         2|         1|         1|          |\n"
-            "|backup-3                 |         2|          |         2|          |\n"
-            "|backup-4                 |         1|          |         1|          |\n"
-            "|repo-full-name           |         6|         3|         3|          |\n"
-            "|repo-incoming-name       |         4|          |          |         4|\n"
-            "|repo-partial-name        |         2|         2|          |          |\n"
-            "\n"
-            "|Size                     |total     |available |get       |cleanup   |\n"
-            "|backup-1                 |        69|        60|         9|          |\n"
-            "|backup-2                 |       137|        60|        77|          |\n"
-            "|backup-3                 |        76|          |        76|          |\n"
-            "|backup-4                 |        77|          |        77|          |\n"
-            "|repo-full-name           |       299|       153|       146|          |\n"
-            "|repo-incoming-name       |       223|          |          |       223|\n"
-            "|repo-partial-name        |        76|        76|          |          |\n", res)
+        self.assertEqual([
+            '|Num Files                |total     |available |get       |cleanup   |',
+            '|backup-1                 |         2|         2|          |          |',
+            '|backup-2                 |         2|         1|         1|          |',
+            '|backup-3                 |         2|          |         2|          |',
+            '|backup-4                 |         1|          |         1|          |',
+            '|repo-full-name           |         6|         4|         2|          |',
+            '|repo-incoming-name       |         4|          |          |         4|',
+            '|repo-partial-name        |         2|         2|          |          |',
+            '',
+            '|Size                     |total     |available |get       |cleanup   |',
+            '|backup-1                 |       150|       150|          |          |',
+            '|backup-2                 |       137|        60|        77|          |',
+            '|backup-3                 |        76|          |        76|          |',
+            '|backup-4                 |        77|          |        77|          |',
+            '|repo-full-name           |       380|       243|       137|          |',
+            '|repo-incoming-name       |       304|          |          |       304|',
+            '|repo-partial-name        |        76|        76|          |          |'], res.splitlines())
 
         res = await hoard_cmd.contents.drop(repo="backup-1", path="wat")
         self.assertEqual(
-            'WONT_GET /wat/test.me.3\n'  # fixme wrong
-            "Considered 3 files, 0 marked for cleanup, 1 won't be downloaded, 2 are skipped.\n"
+            'DROP /wat/test.me.3\n'
+            "Considered 3 files, 1 marked for cleanup, 0 won't be downloaded, 2 are skipped.\n"
             'DONE', res)
 
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
-        self.assertEqual(
-            '|Num Files                |total     |available |get       |cleanup   |\n'
-            '|backup-1                 |         1|         1|          |          |\n'
-            '|backup-2                 |         2|         1|         1|          |\n'
-            '|backup-3                 |         2|          |         2|          |\n'
-            '|backup-4                 |         1|          |         1|          |\n'
-            '|repo-full-name           |         6|         3|         3|          |\n'
-            '|repo-incoming-name       |         4|          |          |         4|\n'
-            '|repo-partial-name        |         2|         2|          |          |\n'
-            '\n'
-            '|Size                     |total     |available |get       |cleanup   |\n'
-            '|backup-1                 |        60|        60|          |          |\n'
-            '|backup-2                 |       137|        60|        77|          |\n'
-            '|backup-3                 |        76|          |        76|          |\n'
-            '|backup-4                 |        77|          |        77|          |\n'
-            '|repo-full-name           |       299|       153|       146|          |\n'
-            '|repo-incoming-name       |       223|          |          |       223|\n'
-            '|repo-partial-name        |        76|        76|          |          |\n', res)
+        self.assertEqual([
+            '|Num Files                |total     |available |get       |cleanup   |',
+            '|backup-1                 |         2|         1|          |         1|',
+            '|backup-2                 |         2|         1|         1|          |',
+            '|backup-3                 |         2|          |         2|          |',
+            '|backup-4                 |         1|          |         1|          |',
+            '|repo-full-name           |         6|         4|         2|          |',
+            '|repo-incoming-name       |         4|          |          |         4|',
+            '|repo-partial-name        |         2|         2|          |          |',
+            '',
+            '|Size                     |total     |available |get       |cleanup   |',
+            '|backup-1                 |       150|        60|          |        90|',
+            '|backup-2                 |       137|        60|        77|          |',
+            '|backup-3                 |        76|          |        76|          |',
+            '|backup-4                 |        77|          |        77|          |',
+            '|repo-full-name           |       380|       243|       137|          |',
+            '|repo-incoming-name       |       304|          |          |       304|',
+            '|repo-partial-name        |        76|        76|          |          |'], res.splitlines())
 
         res = await hoard_cmd.backups.health()
-        self.assertEqual(
-            '# backup sets: 1\n'
-            '# backups: 4\n'
-            'scheduled count:\n'
-            ' 0: 1 files (9)\n'
-            ' 1: 4 files (230)\n'
-            ' 2: 1 files (60)\n'
-            'available count:\n'
-            ' 0: 5 files (239)\n'
-            ' 2: 1 files (60)\n'
-            'get_or_copy count:\n'
-            ' 0: 1 files (60)\n'
-            ' 1: 3 files (102)\n'
-            ' 2: 2 files (137)\n'
-            "move count:\n"
-            " 0: 6 files (299)\n"
-            'cleanup count:\n'
-            ' 0: 2 files (76)\n'
-            ' 1: 4 files (223)\n'
-            'DONE', res)
+        self.assertEqual([
+            '# backup sets: 1',
+            '# backups: 4',
+            'scheduled count:',
+            ' 0: 1 files (90)',
+            ' 1: 4 files (230)',
+            ' 2: 1 files (60)',
+            'available count:',
+            ' 0: 5 files (320)',
+            ' 2: 1 files (60)',
+            'get_or_copy count:',
+            ' 0: 2 files (150)',
+            ' 1: 2 files (93)',
+            ' 2: 2 files (137)',
+            'move count:',
+            ' 0: 6 files (380)',
+            'cleanup count:',
+            ' 0: 2 files (76)',
+            ' 1: 3 files (214)',
+            ' 2: 1 files (90)',
+            'DONE'], res.splitlines())
 
         res = await hoard_cmd.backups.clean()
         # self.assertEqual(  fixme make it run stably
@@ -516,25 +511,26 @@ class TestBackups(IsolatedAsyncioTestCase):
         self.assertEqual(3, len(res.splitlines()))
 
         res = await hoard_cmd.backups.health()
-        self.assertEqual(
-            '# backup sets: 1\n'
-            '# backups: 4\n'
-            'scheduled count:\n'
-            ' 0: 1 files (9)\n'
-            ' 1: 5 files (290)\n'
-            'available count:\n'
-            ' 0: 5 files (239)\n'
-            ' 1: 1 files (60)\n'
-            'get_or_copy count:\n'
-            ' 0: 1 files (60)\n'
-            ' 1: 3 files (102)\n'
-            ' 2: 2 files (137)\n'
-            "move count:\n"
-            " 0: 6 files (299)\n"
-            'cleanup count:\n'
-            ' 0: 1 files (16)\n'
-            ' 1: 5 files (283)\n'
-            'DONE', res)
+        self.assertEqual([
+            '# backup sets: 1',
+            '# backups: 4',
+            'scheduled count:',
+            ' 0: 1 files (90)',
+            ' 1: 5 files (290)',
+            'available count:',
+            ' 0: 5 files (320)',
+            ' 1: 1 files (60)',
+            'get_or_copy count:',
+            ' 0: 2 files (150)',
+            ' 1: 2 files (93)',
+            ' 2: 2 files (137)',
+            'move count:',
+            ' 0: 6 files (380)',
+            'cleanup count:',
+            ' 0: 1 files (16)',
+            ' 1: 4 files (274)',
+            ' 2: 1 files (90)',
+            'DONE'], res.splitlines())
 
     async def _init_and_refresh_repo(self, backup_folder: str) -> RepoCommand:
         backup_1_cmd = TotalCommand(path=join(self.tmpdir.name, backup_folder)).cave

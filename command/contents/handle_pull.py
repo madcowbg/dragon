@@ -24,6 +24,7 @@ class PullIntention(enum.Enum):
     FAIL = None
     ADD_TO_HOARD = "add_to_hoard"
     IGNORE = "ignore"
+    CLEANUP = "cleanup"
     ADD_TO_HOARD_AND_CLEANUP = "add_to_hoard_and_cleanup"
     RESTORE_FROM_HOARD = "restore_from_hoard"
     MOVE_IN_HOARD = "move_in_hoard"
@@ -139,6 +140,14 @@ class MarkToGetBehavior(Action):
         self.diff.hoard_props.mark_to_get([local_uuid])
 
 
+class MarkForCleanupBehavior(Action):
+    def __init__(self, diff: Diff):
+        super().__init__(diff)
+
+    def execute(self, local_uuid: str, content_prefs: ContentPrefs, hoard: HoardContents, out: StringIO):
+        self.diff.hoard_props.mark_for_cleanup([local_uuid])
+
+
 class ResetLocalAsCurrentBehavior(Action):  # fixme a better name
     def __init__(self, diff: Diff):
         super().__init__(diff)
@@ -192,13 +201,12 @@ def _calculate_file_is_same(
         behavior: PullIntention, local_uuid: str, diff: Diff, out: StringIO) -> Iterable[Action]:
     assert diff.diff_type == DiffType.FileIsSame
 
-    assert behavior in (PullIntention.ADD_TO_HOARD_AND_CLEANUP, PullIntention.ADD_TO_HOARD)
+    assert behavior in (PullIntention.CLEANUP, PullIntention.ADD_TO_HOARD)
 
-    if behavior == PullIntention.ADD_TO_HOARD_AND_CLEANUP:
-        logging.info(f"incoming file is already recorded in hoard.")
-
-        yield AddToHoardAndCleanupSameBehavior(diff)
-        out.write(f"ADD_TO_HOARD_AND_CLEANUP {diff.hoard_file.as_posix()}\n")
+    if behavior == PullIntention.CLEANUP:
+        logging.info(f"file scheduled for cleanup")
+        yield MarkForCleanupBehavior(diff)
+        out.write(f"CLEANUP_SAME {diff.hoard_file.as_posix()}\n")
     else:
         assert behavior == PullIntention.ADD_TO_HOARD
         goal_status = diff.hoard_props.get_status(local_uuid)
@@ -220,7 +228,7 @@ def _calculate_local_only(behavior: PullIntention, diff: Diff, out: StringIO) ->
 
     if behavior == PullIntention.ADD_TO_HOARD_AND_CLEANUP:
         yield AddToHoardAndCleanupNewBehavior(diff)
-        out.write(f"<+{diff.hoard_file.as_posix()}\n")
+        out.write(f"INCOMING_TO_HOARD {diff.hoard_file.as_posix()}\n")
     elif behavior == PullIntention.IGNORE:
         logging.info(f"Ignoring local-only file {diff.hoard_file}")
         out.write(f"?{diff.hoard_file.as_posix()}\n")
@@ -236,13 +244,17 @@ def _calculate_file_contents_differ(
     assert diff.diff_type == DiffType.FileContentsDiffer
 
     assert behavior in (
-        PullIntention.RESTORE_FROM_HOARD, PullIntention.ADD_TO_HOARD, PullIntention.ADD_TO_HOARD_AND_CLEANUP)
+        PullIntention.RESTORE_FROM_HOARD, PullIntention.ADD_TO_HOARD, PullIntention.ADD_TO_HOARD_AND_CLEANUP,
+        PullIntention.CLEANUP)
     logging.info(f"Behavior for differing file: {behavior}")
 
     goal_status = diff.hoard_props.get_status(local_uuid)
     if behavior == PullIntention.ADD_TO_HOARD_AND_CLEANUP:
         yield AddToHoardAndCleanupNewBehavior(diff)
-        out.write(f"u{diff.hoard_file.as_posix()}\n")
+        out.write(f"ADDING_CHANGED_TO_HOARD {diff.hoard_file.as_posix()}\n")
+    elif behavior == PullIntention.CLEANUP:
+        yield MarkForCleanupBehavior(diff)
+        out.write(f"CLEANUP_DIFFERENT {diff.hoard_file.as_posix()}\n")
     elif behavior == PullIntention.RESTORE_FROM_HOARD:
         if goal_status == HoardFileStatus.AVAILABLE:  # was backed-up here, get it again
             yield MarkToGetBehavior(diff)

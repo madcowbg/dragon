@@ -34,10 +34,10 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
             '=/test.me.1',
             '=/wat/test.me.3',
             "Sync'ed repo-backup-name to hoard!",
-            'ADD_TO_HOARD_AND_CLEANUP /test.me.4',
-            '<+/test.me.5',
-            '<+/wat/test.me.6',
-            'u/wat/test.me.3',
+            'CLEANUP_SAME /test.me.4',
+            'INCOMING_TO_HOARD /test.me.5',
+            'INCOMING_TO_HOARD /wat/test.me.6',
+            'CLEANUP_DIFFERENT /wat/test.me.3',
             "Sync'ed repo-incoming-name to hoard!",
             'DONE'], res.splitlines())
 
@@ -57,14 +57,12 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.pull(all=True)
         self.assertEqual([
             "Sync'ed repo-partial-name to hoard!",
-            'ALREADY_MARKED_GET /wat/test.me.3',
             "Sync'ed repo-full-name to hoard!",
-            'ALREADY_MARKED_GET /wat/test.me.3',
             "Sync'ed repo-backup-name to hoard!",
-            'ADD_TO_HOARD_AND_CLEANUP /test.me.4',  # FIXME bad, I think - should not try to re-add them
-            'ADD_TO_HOARD_AND_CLEANUP /test.me.5',
-            'ADD_TO_HOARD_AND_CLEANUP /wat/test.me.3',
-            'ADD_TO_HOARD_AND_CLEANUP /wat/test.me.6',
+            'CLEANUP_SAME /test.me.4',
+            'CLEANUP_SAME /test.me.5',
+            'CLEANUP_SAME /wat/test.me.6',
+            'CLEANUP_DIFFERENT /wat/test.me.3',
             "Sync'ed repo-incoming-name to hoard!",
             'DONE'], res.splitlines())
 
@@ -81,8 +79,8 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
         self.assertEqual([
             'ADD_NEW_TO_HOARD /wat2/test.me.3',
-            "ERROR_ON_MOVE bad current status = HoardFileStatus.GET, won't move.",
-            'DELETE_FROM_HOARD /wat/test.me.3',
+            'MOVE repo-backup-name: /wat/test.me.3 to /wat2/test.me.3',
+            'CLEANUP_MOVED /wat/test.me.3',
             "Sync'ed repo-full-name to hoard!",
             'DONE'], res.splitlines())
 
@@ -96,19 +94,19 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.pending_pull(incoming_cave_cmd.current_uuid())
         self.assertEqual([
             'Status of repo-incoming-name:',
-            'ADD_TO_HOARD_AND_CLEANUP_SAME_BEHAVIOR /test.me.4',
-            'ADD_TO_HOARD_AND_CLEANUP_SAME_BEHAVIOR /test.me.5',
-            'ADD_TO_HOARD_AND_CLEANUP_SAME_BEHAVIOR /wat/test.me.3',  # fixme BAD!!!
-            'ADD_TO_HOARD_AND_CLEANUP_SAME_BEHAVIOR /wat/test.me.6'], res.splitlines())
+            'MARK_FOR_CLEANUP_BEHAVIOR /test.me.4',
+            'MARK_FOR_CLEANUP_BEHAVIOR /test.me.5',
+            'MARK_FOR_CLEANUP_BEHAVIOR /wat/test.me.6',
+            'MARK_FOR_CLEANUP_BEHAVIOR /wat/test.me.3'], res.splitlines())
 
         res = await incoming_cave_cmd.refresh()
         self.assertEqual(['NO CHANGES', 'Refresh done!'], res.splitlines())
 
         res = await hoard_cmd.contents.pull(incoming_cave_cmd.current_uuid())
         self.assertEqual([
-            'ADD_TO_HOARD_AND_CLEANUP /test.me.4',
-            'ADD_TO_HOARD_AND_CLEANUP /test.me.5',
-            'ADD_TO_HOARD_AND_CLEANUP /wat/test.me.3',  # fixme BAD!!!
-            'ADD_TO_HOARD_AND_CLEANUP /wat/test.me.6',
+            'CLEANUP_SAME /test.me.4',
+            'CLEANUP_SAME /test.me.5',
+            'CLEANUP_SAME /wat/test.me.6',
+            'CLEANUP_DIFFERENT /wat/test.me.3',
             "Sync'ed repo-incoming-name to hoard!",
             'DONE'], res.splitlines())
