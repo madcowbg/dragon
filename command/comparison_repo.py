@@ -323,11 +323,11 @@ async def compute_difference_between_contents_and_filesystem(
 
 async def compute_difference_filtered_by_path(
         contents: RepoContents, repo_path: str, hoard_ignore: HoardIgnore,
-        allowed_paths: List[str]) -> AsyncGenerator[RepoDiffs]:
+        allowed_paths: List[pathlib.PurePosixPath]) -> AsyncGenerator[RepoDiffs]:
     for allowed_path in alive_it(allowed_paths, title="Checking updates"):
         path_on_device = pathlib.Path(allowed_path).absolute()
 
-        local_path = FastPosixPath(path_on_device.relative_to(repo_path))
+        local_path = path_on_device.relative_to(repo_path)
         if hoard_ignore.matches(local_path):
             logging.info("ignoring a file")
             continue
@@ -338,17 +338,17 @@ async def compute_difference_filtered_by_path(
             existing_prop = contents.fsobjects.get_existing(local_path)
             assert isinstance(existing_prop, RepoFileProps)
             if not path_on_device.is_file():
-                yield FileNotInFilesystem(local_path, existing_prop)
+                yield FileNotInFilesystem(FastPosixPath(local_path), existing_prop)
             else:
                 stats = os.stat(path_on_device)
                 fasthash = fast_hash(path_on_device)
                 if existing_prop.fasthash == fasthash:
-                    yield RepoFileSame(local_path, existing_prop, stats.st_mtime)
+                    yield RepoFileSame(FastPosixPath(local_path), existing_prop, stats.st_mtime)
                 else:
-                    yield RepoFileDifferent(local_path, existing_prop, stats.st_mtime, stats.st_size, fasthash)
+                    yield RepoFileDifferent(FastPosixPath(local_path), existing_prop, stats.st_mtime, stats.st_size, fasthash)
         else:
             if path_on_device.is_file():
-                yield FileNotInRepo(local_path)
+                yield FileNotInRepo(FastPosixPath(local_path))
             elif path_on_device.is_dir():
                 pass
             else:

@@ -18,7 +18,7 @@ class HoardIgnore:
     def __init__(self, ignore_globs_list: List[str]):
         self.ignore_globs_list = ignore_globs_list
 
-    def matches(self, fullpath: command.fast_path.FastPosixPath) -> bool:
+    def matches(self, fullpath: pathlib.PurePath) -> bool:
         for glob in self.ignore_globs_list:
             if fullpath.full_match(glob, case_sensitive=False):
                 return True

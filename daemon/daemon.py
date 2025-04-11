@@ -1,15 +1,14 @@
 import asyncio
 import logging
 import threading
-from asyncio import Queue
 from io import StringIO
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from threading import Thread
 from time import sleep
-from typing import List
 
 import fire
-from watchdog.events import FileSystemEventHandler, FileSystemEvent, DirModifiedEvent
+from watchdog.events import FileSystemEventHandler, FileSystemEvent, DirModifiedEvent, FileOpenedEvent, FileClosedEvent, \
+    FileClosedNoWriteEvent
 from watchdog.observers import Observer
 
 from command.comparison_repo import find_repo_changes, \
@@ -25,8 +24,7 @@ class RepoWatcher(FileSystemEventHandler):
         self.hoard_path = hoard_path
         self.hoard_ignore = hoard_ignore
 
-        self.queue: Queue[str] = Queue()
-        self.queue_contents = set[str]()
+        self._queue: set[PurePosixPath] = set()
 
         self.lock = threading.Lock()
 
@@ -35,19 +33,24 @@ class RepoWatcher(FileSystemEventHandler):
             logging.debug("skipping directory event: %s", event)
             return
 
+        if isinstance(event, FileOpenedEvent) or isinstance(event, FileClosedEvent) or \
+                isinstance(event, FileClosedNoWriteEvent):
+            logging.debug("skipping non-write event: %s", event)
+            return
+
         logging.debug("processing event: %s", event)
 
         self.add_file_or_folder(event.src_path)
         self.add_file_or_folder(event.dest_path)
-        logging.debug(f"# queue contents: {len(self.queue_contents)}")
+        logging.debug(f"# queue contents: {len(self._queue)}")
 
     def add_file_or_folder(self, path):
         if path == '':
             return
 
-        src_path = FastPosixPath(Path(path).absolute())
+        src_path = PurePosixPath(Path(path).absolute())
         with self.lock:
-            if src_path in self.queue_contents:
+            if src_path in self._queue:
                 return
 
             rel_path = src_path.relative_to(self.hoard_path)
@@ -57,8 +60,13 @@ class RepoWatcher(FileSystemEventHandler):
 
             logging.info("add %s", src_path)
 
-            self.queue_contents.add(path)
-            self.queue.put_nowait(path)
+            self._queue.add(path)
+
+    def pop_queue(self) -> set[PurePosixPath]:
+        with self.lock:
+            current = self._queue
+            self._queue = set()
+            return current
 
 
 async def updater(
@@ -67,15 +75,8 @@ async def updater(
     logging.info("Start updating!")
     while True:
         logging.debug("Getting current queue...")
-        allowed_paths: List[str] = []
-        while not watcher.queue.empty():
-            with watcher.lock:
-                item = watcher.queue.get_nowait()
-                watcher.queue.task_done()
-                allowed_paths.append(item)
-                if item in watcher.queue_contents:
-                    watcher.queue_contents.remove(item)
 
+        allowed_paths: list[PurePosixPath] = list(watcher.pop_queue())
         if len(allowed_paths) == 0:
             logging.debug("No items to check, sleeping for %r seconds", sleep_interval)
             sleep(sleep_interval)
@@ -93,7 +94,7 @@ async def updater(
             with StringIO() as out:
                 diffs = compute_difference_filtered_by_path(contents, connected_repo.path, hoard_ignore, allowed_paths)
 
-                for change in compute_changes_from_diffs(diffs, connected_repo.path, RepoFileStatus.ADDED):
+                async for change in compute_changes_from_diffs(diffs, connected_repo.path, RepoFileStatus.ADDED):
                     _apply_repo_change_to_contents(change, contents, False, out)
 
                 logging.info(out.getvalue())
@@ -153,7 +154,7 @@ async def refresh_all(connected_repo, hoard_ignore):
 
         logging.info(f"Bumped epoch to {contents.config.epoch}")
         with StringIO() as out:
-            for change in await find_repo_changes(
+            async for change in find_repo_changes(
                     connected_repo.path, contents, hoard_ignore, RepoFileStatus.ADDED, skip_integrity_checks=False):
                 _apply_repo_change_to_contents(change, contents, False, out)
             logging.info(out.getvalue())
