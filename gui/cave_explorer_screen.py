@@ -7,7 +7,7 @@ from typing import TypeVar, Dict
 from rich.text import Text
 from textual import work, on
 from textual.app import ComposeResult
-from textual.containers import Horizontal, Vertical
+from textual.containers import Horizontal, Vertical, Grid
 from textual.css.query import NoMatches
 from textual.message import Message
 from textual.reactive import reactive
@@ -222,29 +222,26 @@ class CaveInfoWidget(Widget):
         else:
             yield Static("UUID: " + self.remote.uuid, classes="repo-setting-group")
 
-            with Horizontal(classes="repo-setting-group"):
+            with Grid(classes="repo-setting-grid"):
                 yield Static("Name", classes="repo-setting-label")
                 yield Input(value=self.remote.name, placeholder="Remote Name", id="repo-name", restrict="..+")
 
-            with Horizontal(classes="repo-setting-group"):
+
                 yield Static("Type", classes="repo-setting-label")
                 yield Select[CaveType](
                     value=self.hoard.config().remotes[self.remote.uuid].type, id="repo-type",
                     options=((s.value, s) for s in CaveType), allow_blank=False)
 
-            with Horizontal(classes="repo-setting-group"):
                 yield Static("Latency", classes="repo-setting-label")
                 yield Select[ConnectionLatency](
                     value=self.hoard.paths()[self.remote.uuid].latency, id="repo-latency",
                     options=((l.value, l) for l in ConnectionLatency), allow_blank=False)
 
-            with Horizontal(classes="repo-setting-group"):
                 yield Static("Speed", classes="repo-setting-label")
                 yield Select[ConnectionSpeed](
                     value=self.hoard.paths()[self.remote.uuid].speed, id="repo-speed",
                     options=((s.value, s) for s in ConnectionSpeed), allow_blank=False)
 
-            with Horizontal(classes="repo-setting-group"):
                 yield Static("Min copies before cleanup", classes="repo-setting-label")
                 yield Input(
                     value=str(self.remote.min_copies_before_cleanup), placeholder="min copies",
