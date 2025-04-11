@@ -198,7 +198,7 @@ def _calculate_file_is_same(
         logging.info(f"incoming file is already recorded in hoard.")
 
         yield AddToHoardAndCleanupSameBehavior(diff)
-        out.write(f"-{diff.hoard_file.as_posix()}\n")
+        out.write(f"ADD_TO_HOARD_AND_CLEANUP {diff.hoard_file.as_posix()}\n")
     else:
         assert behavior == PullIntention.ADD_TO_HOARD
         goal_status = diff.hoard_props.get_status(local_uuid)
@@ -320,7 +320,7 @@ def _calculate_hoard_only_with_behavior(diff: Diff, behavior: PullIntention, loc
             logging.info(f"deleting file {diff.hoard_file} because it was deleted in local")
 
             yield DeleteFileFromHoardBehavior(diff)
-            out.write(f"-{diff.hoard_file.as_posix()}\n")
+            out.write(f"DELETE_FROM_HOARD {diff.hoard_file.as_posix()}\n")
     elif behavior == PullIntention.ACCEPT_FROM_HOARD:
         if goal_status == HoardFileStatus.CLEANUP:  # file already deleted
             yield RemoveLocalStatusBehavior(diff)

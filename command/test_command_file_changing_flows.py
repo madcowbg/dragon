@@ -123,7 +123,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
         self.assertEqual(
             f"+/wat/test.me.z\n"
-            f"-/wat/test.me.3\n"
+            f"DELETE_FROM_HOARD /wat/test.me.3\n"
             f"remove dangling /wat/test.me.3\n"
             f"Sync'ed repo-full-name to hoard!\nDONE", res)
 
@@ -278,7 +278,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
         self.assertEqual(
             f"+/wat/test.me.z\n"
-            f"-/wat/test.me.3\n"
+            f"DELETE_FROM_HOARD /wat/test.me.3\n"
             f"remove dangling /wat/test.me.3\n"
             f"Sync'ed repo-full-name to hoard!\nDONE", res)
 
@@ -331,7 +331,10 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         self.assertEqual("Refresh done!", res)
 
         res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
-        self.assertEqual(f"-/wat/test.me.2\nSync'ed repo-full-name to hoard!\nDONE", res)
+        self.assertEqual(
+            f"DELETE_FROM_HOARD /wat/test.me.2\n"
+            f"Sync'ed repo-full-name to hoard!\n"
+            f"DONE", res)
 
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual(
@@ -829,7 +832,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             "+/lets_get_it_started/test.me.4-renamed\n"  # todo should not be logged, as we move it
             "+/test.me.added\n"
             "u/test.me.1\n"
-            "-/wat/test.me.2\n"
+            "DELETE_FROM_HOARD /wat/test.me.2\n"
             "MOVE repo-copy-name: /test.me.4 to /lets_get_it_started/test.me.4-renamed\n"
             "CLEANUP_MOVED /test.me.4\n"
             "Sync'ed repo-full-name to hoard!\n"
@@ -1074,7 +1077,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             "+/lets_get_it_started/test.me.4-renamed\n"  # todo should not be logged, as we move it
             "+/test.me.added\n"
             "u/test.me.1\n"
-            "-/wat/test.me.2\n"
+            "DELETE_FROM_HOARD /wat/test.me.2\n"
             "MOVE repo-backup-name: /test.me.4 to /lets_get_it_started/test.me.4-renamed\n"
             "MOVE repo-copy-name: /test.me.4 to /lets_get_it_started/test.me.4-renamed\n"
             "CLEANUP_MOVED /test.me.4\n"
@@ -1481,7 +1484,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         self.assertEqual(
             "+/lets_get_it_started/test.me.2-butnew\n"
             "+/lets_get_it_started/test.me.2-butsecond\n"
-            "-/wat/test.me.2\n"
+            "DELETE_FROM_HOARD /wat/test.me.2\n"
             "Sync'ed repo-full-name to hoard!\n"
             "DONE", res)
 

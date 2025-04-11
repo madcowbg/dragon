@@ -256,7 +256,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.pull("repo-in-local")
         self.assertEqual(
             "+/newdir/newfile.is\n"
-            "-/wat/test.me.different\n"
+            "DELETE_FROM_HOARD /wat/test.me.different\n"
             "remove dangling /wat/test.me.different\n"
             "Sync'ed repo-in-local to hoard!\nDONE", res)
 
@@ -429,7 +429,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull("repo-incoming-name")
         self.assertEqual(
-            "-/test.me.4\n"
+            "ADD_TO_HOARD_AND_CLEANUP /test.me.4\n"
             "<+/test.me.5\n"
             "<+/wat/test.me.6\n"
             "u/wat/test.me.3\n"
@@ -440,10 +440,10 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull("repo-incoming-name")
         self.assertEqual(
-            "-/test.me.4\n"
-            "-/test.me.5\n"
-            "-/wat/test.me.3\n"
-            "-/wat/test.me.6\n"
+            "ADD_TO_HOARD_AND_CLEANUP /test.me.4\n"
+            "ADD_TO_HOARD_AND_CLEANUP /test.me.5\n"
+            "ADD_TO_HOARD_AND_CLEANUP /wat/test.me.3\n"
+            "ADD_TO_HOARD_AND_CLEANUP /wat/test.me.6\n"
             "Sync'ed repo-incoming-name to hoard!\nDONE", res.strip())
 
         res = await hoard_cmd.contents.ls(skip_folders=True)
@@ -466,7 +466,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         await hoard_cmd.contents.pull("repo-backup-name")  # just registers the files already in backup
         res = await hoard_cmd.contents.pull("repo-incoming-name")
         self.assertEqual(
-            "-/test.me.4\n"
+            "ADD_TO_HOARD_AND_CLEANUP /test.me.4\n"
             "<+/test.me.5\n"
             "<+/wat/test.me.6\n"
             "u/wat/test.me.3\n"
@@ -539,7 +539,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             "=/test.me.1\n"
             "=/wat/test.me.3\n"
             "Sync'ed repo-backup-name to hoard!\n"
-            "-/test.me.4\n"
+            "ADD_TO_HOARD_AND_CLEANUP /test.me.4\n"
             "<+/test.me.5\n"
             "<+/wat/test.me.6\n"
             "u/wat/test.me.3\n"
