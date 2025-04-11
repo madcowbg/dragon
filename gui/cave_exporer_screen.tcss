@@ -27,6 +27,10 @@ CaveInfoWidget {
     height: 100%
 }
 
+#pane-contents-pull, #pane-files-pushed {
+    width: 50%
+}
+
 RichLog#cave_explorer_log {
     height:auto;
     min-height: 5%
