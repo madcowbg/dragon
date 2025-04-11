@@ -111,8 +111,8 @@ async def _fetch_files_in_repo(
 
 
 async def _cleanup_files_in_repo(
-        hoard: HoardContents, repo_uuid: str, pathing: HoardPathing, files_requiring_copy: Dict[str, any],
-        out: StringIO, progress_bar):
+        hoard: HoardContents, config: HoardConfig, repo_uuid: str, pathing: HoardPathing,
+        files_requiring_copy: Dict[str, any], out: StringIO, progress_bar):
     files_to_cleanup = sorted(hoard.fsobjects.to_cleanup(repo_uuid))
     with progress_bar(to_mb(sum(f[1].size for f in files_to_cleanup)), unit="MB", title="Cleaning files") as bar:
         for hoard_file, hoard_props in files_to_cleanup:
@@ -136,7 +136,8 @@ async def _cleanup_files_in_repo(
                     out.write(f"~h {local_file_to_delete}\n")
                 elif len(to_be_got) > 0:
                     logging.info(f"file needs to be copied in {len(to_be_got)} places, retaining")
-                    out.write(f"~ {local_file_to_delete}\n")
+                    names_to_get = list(sorted(config.remotes[uuid].name for uuid in to_be_got))
+                    out.write(f"NEEDS_COPY {names_to_get} {local_file_to_delete}\n")
                 elif len(to_be_moved_to) > 0:
                     logging.info(f"file needs to be moved to {to_be_moved_to}, retaining")
                     out.write(f"NEED_TO_BE_MOVED {local_file_to_delete}\n")

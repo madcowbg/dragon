@@ -506,4 +506,4 @@ def _incoming__safe_mark_for_cleanup(local_uuid: str, diff: Diff, hoard_file: Ho
         logging.error(f"No place will preserve {diff.hoard_file}, will NOT cleanup.")
         hoard_file.mark_available(local_uuid)
 
-        out.write(f"~{diff.hoard_file.as_posix()}\n")
+        out.write(f"NO_REPO_ACCEPTING {diff.hoard_file.as_posix()}\n")
