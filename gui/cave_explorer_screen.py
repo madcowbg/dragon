@@ -23,7 +23,7 @@ from command.files.command import execute_files_push
 from command.hoard import Hoard
 from command.pathing import HoardPathing
 from command.pending_file_ops import FileOp, get_pending_operations, CleanupFile, GetFile, CopyFile, MoveFile
-from config import HoardRemote, latency_order, ConnectionLatency, ConnectionSpeed
+from config import HoardRemote, latency_order, ConnectionLatency, ConnectionSpeed, CaveType
 from exceptions import RepoOpeningFailed, WrongRepo, MissingRepoContents, MissingRepo
 from gui.app_config import config, _write_config
 from gui.confirm_action_screen import ConfirmActionScreen
@@ -227,6 +227,12 @@ class CaveInfoWidget(Widget):
                 yield Input(value=self.remote.name, placeholder="Remote Name", id="repo-name", restrict="..+")
 
             with Horizontal(classes="repo-setting-group"):
+                yield Static("Type", classes="repo-setting-label")
+                yield Select[CaveType](
+                    value=self.hoard.config().remotes[self.remote.uuid].type, id="repo-type",
+                    options=((s.value, s) for s in CaveType), allow_blank=False)
+
+            with Horizontal(classes="repo-setting-group"):
                 yield Static("Latency", classes="repo-setting-label")
                 yield Select[ConnectionLatency](
                     value=self.hoard.paths()[self.remote.uuid].latency, id="repo-latency",
@@ -257,6 +263,19 @@ class CaveInfoWidget(Widget):
                 ),
                 id="content_trees")
 
+    @on(Select.Changed, "#repo-type")
+    def repo_type_changed(self, event: Select.Changed):
+        assert event.select.id == "repo-type"
+
+        hoard_config = self.hoard.config()
+        if hoard_config.remotes[self.remote.uuid].type != CaveType(event.value):
+            hoard_config.remotes[self.remote.uuid].type = CaveType(event.value)
+            hoard_config.write()
+
+            self.remote = hoard_config.remotes[self.remote.uuid]
+
+            self.run_worker(self.recompose())
+
     @on(Input.Submitted, "#repo-min-copies-before-cleanup")
     def repo_min_copies_before_cleanup_changed(self, event: Input.Changed):
         assert event.input.id == "repo-min-copies-before-cleanup"
@@ -268,7 +287,7 @@ class CaveInfoWidget(Widget):
 
             self.remote = hoard_config.remotes[self.remote.uuid]
 
-            self.post_message(CaveInfoWidget.RemoteSettingChanged())
+            self.run_worker(self.recompose())
 
     @on(Input.Submitted, "#repo-name")
     def repo_name_changed(self, event: Input.Changed):
