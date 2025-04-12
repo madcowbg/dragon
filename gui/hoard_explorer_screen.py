@@ -2,15 +2,15 @@ import logging
 import pathlib
 import traceback
 
-from textual import work
+from textual import work, on
 from textual.app import ComposeResult
-from textual.containers import Horizontal
+from textual.containers import Horizontal, Grid
 from textual.css.query import NoMatches
 from textual.message import Message
 from textual.reactive import reactive, var
 from textual.screen import Screen
 from textual.widget import Widget
-from textual.widgets import Label, Tree, Header, Footer, Input, Static, Switch
+from textual.widgets import Label, Tree, Header, Footer, Input, Static, Switch, Collapsible
 
 from command.fast_path import FastPosixPath
 from command.hoard import Hoard
@@ -28,9 +28,8 @@ class HoardExplorerWidget(Widget):
     hoard_contents: HoardContents | None = var(None)
     hoard_path: pathlib.Path | None = var(None)
 
-    def __init__(self, hoard_path: pathlib.Path, *children: Widget):
+    def __init__(self, *children: Widget):
         super().__init__(*children)
-        self.hoard_path = hoard_path
 
     def compose(self) -> ComposeResult:
         if self.hoard_contents is not None:
@@ -83,46 +82,38 @@ class HoardExplorerWidget(Widget):
         self.query_one(HoardTreeWidget).refresh_file_label(event.hoard_file)
 
 
-class HoardExplorerScreen(Screen):
-    CSS_PATH = "hoard_explorer_screen.tcss"
-    AUTO_FOCUS = HoardExplorerWidget
-
+class HoardExplorerSettings(Widget):
     class ChangeHoardPath(Message):
         def __init__(self, new_path: pathlib.Path):
             super().__init__()
             self.new_path = new_path
 
-    hoard_path: pathlib.Path = reactive(None)
+    class ChangeCanModify(Message):
+        def __init__(self, value: bool):
+            super().__init__()
+            self.value = value
+
+    hoard_path: pathlib.Path = reactive(lambda: pathlib.Path(config.get("hoard_path", ".")))
     can_modify: bool = reactive(default=False)
+
+    def __init__(self, *children: Widget):
+        super().__init__(*children)
+
+    def compose(self) -> ComposeResult:
+        with Grid(id="hoard-explorer-settings-grid"):
+            yield Static("Hoard:")
+            yield Input(value=self.hoard_path.as_posix(), id="hoard_path_input")
+            yield Static("Can modify?")
+            yield Switch(value=self.can_modify, id="switch_can_modify")
 
     def watch_hoard_path(self, hoard_path: pathlib.Path):
         if hoard_path is None:
             return
 
-        try:
-            screen = self.query_one(HoardExplorerWidget)
-            screen.hoard_path = self.hoard_path
-        except NoMatches:
-            pass
+        self.post_message(HoardExplorerSettings.ChangeHoardPath(hoard_path))
 
-        self.post_message(HoardExplorerScreen.ChangeHoardPath(hoard_path))
-
-    def watch_can_modify(self, new_val: bool, old_val: bool):
-        if new_val != old_val:
-            screen = self.query_one(HoardExplorerWidget)
-            screen.can_modify = self.can_modify
-
-    def compose(self) -> ComposeResult:
-        yield Header()
-        yield Footer()
-
-        self.hoard_path = pathlib.Path(config.get("hoard_path", "."))
-
-        yield Horizontal(
-            Label("Hoard:"), Input(value=self.hoard_path.as_posix(), id="hoard_path_input"),
-            Static("Can modify?"), Switch(value=self.can_modify, id="switch_can_modify"),
-            classes="horizontal_config_line")
-        yield HoardExplorerWidget(self.hoard_path)
+    def watch_can_modify(self):
+        self.post_message(HoardExplorerSettings.ChangeCanModify(self.can_modify))
 
     def on_switch_changed(self, event: Switch.Changed):
         if event.switch == self.query_one("#switch_can_modify"):
@@ -138,3 +129,38 @@ class HoardExplorerScreen(Screen):
                 self.notify(f"New hoard path: {self.hoard_path}")
             else:
                 self.notify(f"Hoard path: {self.hoard_path} does not exist!", severity="error")
+
+
+class HoardExplorerScreen(Screen):
+    CSS_PATH = "hoard_explorer_screen.tcss"
+    AUTO_FOCUS = HoardExplorerWidget
+
+    def compose(self) -> ComposeResult:
+        yield Header()
+        yield Footer()
+
+        with Collapsible(title="Hoard Settings"):
+            yield HoardExplorerSettings()
+        yield HoardExplorerWidget()
+
+    @on(HoardExplorerSettings.ChangeCanModify)
+    def on_change_can_modify(self, event: HoardExplorerSettings.ChangeCanModify):
+        try:
+            screen = self.query_one(HoardExplorerWidget)
+            screen.can_modify = event.value
+        except NoMatches:
+            pass
+
+    @on(HoardExplorerSettings.ChangeHoardPath)
+    def on_change_path(self, event: HoardExplorerSettings.ChangeHoardPath):
+        try:
+            screen = self.query_one(HoardExplorerWidget)
+            screen.hoard_path = event.new_path
+        except NoMatches:
+            pass
+
+        try:
+            collapsible = self.query_one("#top-bar-settings", Collapsible)
+            collapsible.title = f"Hoard: {event.new_path.as_posix()}"
+        except NoMatches:
+            pass

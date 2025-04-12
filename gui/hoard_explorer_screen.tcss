@@ -1,15 +1,8 @@
 
-.horizontal_config_line {
-    height: 3;
-    align-vertical: middle;
-}
+
 
 .horizontal_config_line Label, .horizontal_config_line Static {
     padding: 1;
-}
-
-#hoard_path_input {
-    width: 50%;
 }
 
 Static {
@@ -28,4 +21,21 @@ HoardTreeWidget {
 
 .remote_location {
     margin-left: 1;
+}
+
+HoardExplorerSettings {
+    height: auto
+}
+
+#hoard-explorer-settings-grid {
+    grid-size: 6;
+    height: auto;
+
+    #hoard_path_input {
+        column-span: 3;
+    }
+
+    Static {
+        padding: 1;
+    }
 }

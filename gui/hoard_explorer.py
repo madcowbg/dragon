@@ -3,6 +3,7 @@ import os
 import pathlib
 import subprocess
 
+from textual import on
 from textual.app import App, ComposeResult
 from textual.screen import Screen
 from textual.widgets import Header, Footer, Label
@@ -10,7 +11,8 @@ from textual.widgets import Header, Footer, Label
 from command.hoard import Hoard
 from gui.app_config import config, _write_config
 from gui.cave_explorer_screen import CaveExplorerScreen
-from gui.hoard_explorer_screen import HoardExplorerScreen
+from gui.hoard_explorer_screen import HoardExplorerScreen, HoardExplorerSettings
+
 
 class HoardStateScreen(Screen):
 
@@ -46,7 +48,8 @@ class HoardExplorerApp(App):
         """An action to toggle dark mode."""
         self.theme = "textual-dark" if self.theme == "textual-light" else "textual-light"
 
-    def on_hoard_explorer_screen_change_hoard_path(self, event: HoardExplorerScreen.ChangeHoardPath):
+    @on(HoardExplorerSettings.ChangeHoardPath)
+    def on_change_hoard_path(self, event: HoardExplorerSettings.ChangeHoardPath):
         self.get_screen("cave_explorer", CaveExplorerScreen).hoard = Hoard(event.new_path.as_posix())
 
     def action_open_cave_file(self, filepath: str):
