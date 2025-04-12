@@ -2,6 +2,7 @@ import logging
 import os
 import pathlib
 import random
+import traceback
 from asyncio import TaskGroup
 from io import StringIO
 from itertools import batched
@@ -283,7 +284,7 @@ async def compute_difference_between_contents_and_filesystem(
                 bar()
 
     with alive_bar(len(file_path_matches), title="Checking maybe mod files") as m_bar:
-        async def find_size_mtime_of(file_fullpath: pathlib.Path) -> RepoDiffs:
+        async def find_size_mtime_of(file_fullpath: pathlib.Path) -> AsyncGenerator[RepoDiffs]:
             try:
                 stats = await aiofiles.os.stat(file_fullpath)
 
@@ -291,15 +292,17 @@ async def compute_difference_between_contents_and_filesystem(
                 props = contents.fsobjects.get_existing(file_path_local)
                 if skip_integrity_checks:
                     if props.mtime == stats.st_mtime and props.size == stats.st_size:
-                        return RepoFileWeakSame(file_path_local, props)
+                        yield RepoFileWeakSame(file_path_local, props)
                     else:
-                        return RepoFileWeakDifferent(file_path_local, props, stats.st_mtime, stats.st_size)
+                        yield RepoFileWeakDifferent(file_path_local, props, stats.st_mtime, stats.st_size)
                 else:
                     fasthash = await fast_hash_async(file_fullpath)
                     if props.fasthash == fasthash:
-                        return RepoFileSame(file_path_local, props, stats.st_mtime)
+                        yield RepoFileSame(file_path_local, props, stats.st_mtime)
                     else:
-                        return RepoFileDifferent(file_path_local, props, stats.st_mtime, stats.st_size, fasthash)
+                        yield RepoFileDifferent(file_path_local, props, stats.st_mtime, stats.st_size, fasthash)
+            except OSError as e:
+                logging.error(e)
             finally:
                 m_bar()
 
@@ -307,7 +310,7 @@ async def compute_difference_between_contents_and_filesystem(
             tasks = []
 
             async def run(batch: List[pathlib.Path]):
-                return [await find_size_mtime_of(file) for file in batch]
+                return [d for file in batch async for d in find_size_mtime_of(file)]
 
             random.shuffle(file_path_matches)
             files_batch: List[pathlib.Path]
