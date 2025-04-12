@@ -10,6 +10,7 @@ from command.hoard import Hoard
 from command.pathing import HoardPathing
 from config import HoardRemote
 from contents.hoard_props import HoardFileStatus, HoardFileProps
+from resolve_uuid import resolve_remote_uuid
 from util import format_size, format_percent, group_to_dict
 
 
@@ -119,12 +120,13 @@ class HoardCommandBackups:
                 for backup_set in backup_sets:
                     added_cnt: Dict[HoardRemote, int] = dict()
                     added_size: Dict[HoardRemote, int] = dict()
-                    out.write(f"set: {backup_set.mounted_at} with {len(backup_set.available_backups)}/{len(backup_set.backups)} media\n")
+                    out.write(
+                        f"set: {backup_set.mounted_at} with {len(backup_set.available_backups)}/{len(backup_set.backups)} media\n")
 
                     print(f"Considering backup set at {backup_set.mounted_at} with {len(backup_set.backups)} media")
                     hoard_file: command.fast_path.FastPosixPath
                     for hoard_file, hoard_props in alive_it(
-                            [s async for s in hoard.fsobjects.in_folder(backup_set.mounted_at)]):
+                            [s async for s in hoard.fsobjects.in_folder_non_deleted(backup_set.mounted_at)]):
                         assert hoard_file.is_relative_to(backup_set.mounted_at), \
                             f"{hoard_file} not rel to {backup_set.mounted_at}"
 
@@ -156,11 +158,23 @@ class HoardCommandBackups:
                 out.write("DONE")
                 return out.getvalue()
 
-    async def unassign(self, all_unavailable: bool):
-        assert all_unavailable == True  # TODO implement more targeted
-
+    async def unassign(self, repo: str | None = None, all_unavailable: bool = False):
         logging.info("Loading config")
         config = self.hoard.config()
+
+        if repo is not None:
+            assert not all_unavailable, "Either provide a repo or use --all-unavailable."
+            repo_uuid = resolve_remote_uuid(self.hoard.config(), repo)
+            remote_to_unassign = self.hoard.config().remotes[repo_uuid]
+            if remote_to_unassign is None:
+                return f"Can't find repo {repo} with uuid {repo_uuid}!"
+        else:
+            assert all_unavailable == True
+            remote_to_unassign = None
+
+        assert (all_unavailable and remote_to_unassign is None) \
+               or (remote_to_unassign is not None and not all_unavailable)
+
         pathing = HoardPathing(config, self.hoard.paths())
 
         logging.info(f"Loading hoard...")
@@ -173,11 +187,15 @@ class HoardCommandBackups:
                     print(f"Considering backup set at {backup_set.mounted_at} with {len(backup_set.backups)} media")
 
                     for remote in backup_set.backups.values():
-                        if remote.uuid in available_remotes:
+                        if all_unavailable and remote.uuid in available_remotes:
                             out.write(f"Remote {remote.name} is available, will not unassign\n")
                             continue
 
-                        out.write(f"Remote {remote.name} is not available, will unassign pending gets:\n")
+                        if not all_unavailable and remote.uuid != remote_to_unassign.uuid:
+                            out.write(f"Skipping {remote.name}!")
+                            continue
+
+                        out.write(f"Unassigning from {remote.name}:\n")
 
                         async with self.hoard.open_contents(False, False) as hoard_contents:
                             for hoard_file, hoard_props in hoard_contents.fsobjects.to_get_in_repo(remote.uuid):

@@ -297,6 +297,28 @@ class HoardFSObjects:
                 (f"{folder_with_trailing}%", folder)):
             yield fp
 
+    async def in_folder_non_deleted(self, folder: FastPosixPath) -> AsyncGenerator[
+        Tuple[FastPosixPath, HoardFileProps]]:
+        assert custom_isabs(folder.as_posix())  # from 3.13 behavior change...
+
+        folder = folder.as_posix()
+        folder_with_trailing = folder if folder.endswith("/") else folder + "/"
+        assert folder_with_trailing.endswith('/')
+
+        curr = self.parent.conn.cursor()
+        curr.row_factory = self._read_as_path_to_props
+
+        for fp in curr.execute(
+                "SELECT fullpath, fsobject_id, isdir, size, fasthash FROM fsobject "
+                "WHERE isdir = FALSE "
+                "  AND (fullpath like ? or fullpath = ?) "
+                "  AND EXISTS ("
+                "    SELECT 1 FROM fspresence "
+                "    WHERE fsobject.fsobject_id = fspresence.fsobject_id "
+                "      AND status != ?)",
+                (f"{folder_with_trailing}%", folder, HoardFileStatus.CLEANUP.value)):
+            yield fp
+
     def str_to_props(self) -> Iterable[Tuple[str, bool]]:
         curr = self.parent.conn.cursor()
 

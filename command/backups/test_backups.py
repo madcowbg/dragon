@@ -601,7 +601,7 @@ class TestBackups(IsolatedAsyncioTestCase):
         res = await hoard_cmd.backups.unassign(all_unavailable=True)
         self.assertEqual([
             'Remote backup-1 is available, will not unassign',
-            'Remote backup-2 is not available, will unassign pending gets:',
+            'Unassigning from backup-2:',
             'WONT_GET /wat/test.me.2',
             'WONT_GET /test.me.4',
             'WONT_GET /wat/test.me.6'], res.splitlines())
@@ -610,4 +610,39 @@ class TestBackups(IsolatedAsyncioTestCase):
         self.assertEqual([
             'set: / with 1/2 media',
             ' backup-1 <- 3 files (170)',
+            'DONE'], res.splitlines())
+
+    async def test_reassign_backup_when_unassigning_custom_repo(self):
+        hoard_cmd, partial_cave_cmd, full_cave_cmd, incoming_cave_cmd = await init_complex_hoard(self.tmpdir.name)
+
+        await hoard_cmd.contents.pull(all=True)
+
+        backup_1_cmd = await self._init_and_refresh_repo("repo-backup-1")
+        backup_2_cmd = await self._init_and_refresh_repo("repo-backup-2")
+
+        hoard_cmd.add_remote(
+            remote_path=join(self.tmpdir.name, "repo-backup-1"), name="backup-1", mount_point="/",
+            type=CaveType.BACKUP)
+        hoard_cmd.add_remote(
+            remote_path=join(self.tmpdir.name, "repo-backup-2"), name="backup-2", mount_point="/",
+            type=CaveType.BACKUP)
+
+        await hoard_cmd.contents.pull(all=True)
+        res = await hoard_cmd.backups.assign(available_only=False)
+        self.assertEqual([
+            'set: / with 2/2 media',
+            ' backup-1 <- 1 files (60)',
+            ' backup-2 <- 3 files (170)',
+            'DONE'], res.splitlines())
+
+        res = await hoard_cmd.backups.unassign(repo="backup-1")
+        self.assertEqual([
+            'Unassigning from backup-1:',
+            'WONT_GET /test.me.5',
+            'Skipping backup-2!'], res.splitlines())
+
+        res = await hoard_cmd.backups.assign(available_only=False)
+        self.assertEqual([
+            'set: / with 2/2 media',
+            ' backup-1 <- 1 files (60)',
             'DONE'], res.splitlines())

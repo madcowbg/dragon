@@ -530,7 +530,7 @@ async def execute_get(
     assert path_in_hoard.is_absolute()
     considered = 0
     print(f"Iterating over {len(hoard.fsobjects)} files and folders...")
-    for hoard_file, hoard_props in alive_it([s async for s in hoard.fsobjects.in_folder(path_in_hoard)]):
+    for hoard_file, hoard_props in alive_it([s async for s in hoard.fsobjects.in_folder_non_deleted(path_in_hoard)]):
         assert isinstance(hoard_props, HoardFileProps)
 
         local_file = pathing.in_hoard(hoard_file).at_local(repo_uuid)

@@ -177,7 +177,7 @@ class BackupSet:
         return [BackupSet(mounted_at, s, pathing, hoard, available_remotes) for mounted_at, s in sets.items()]
 
 
-STATUSES_DECLARED_TO_FETCH = [HoardFileStatus.GET, HoardFileStatus.COPY, HoardFileStatus.AVAILABLE]
+STATUSES_DECLARED_TO_FETCH = [HoardFileStatus.GET, HoardFileStatus.COPY, HoardFileStatus.MOVE, HoardFileStatus.AVAILABLE]
 
 
 class ContentPrefs:
