@@ -50,7 +50,6 @@ def progress_reporting_bar(widget: Widget, id: str, max_frequency: float):
                 self.cumulative += progress
                 new_time = time()
                 if new_time > self.past_time + 1 / max_frequency:
-                    logging.error(f"marking {self.cumulative} progress for {id}")
                     widget.post_message(MarkProgressReporting(id, self.cumulative, False))
                     self.past_time = new_time
 
@@ -74,7 +73,6 @@ def progress_reporting_it[T](widget: Widget, id: str, max_frequency: float):
 
             new_time = time()
             if new_time > past_time + 1 / max_frequency:
-                logging.error(f"marking {idx} progress for {id}")
                 widget.post_message(MarkProgressReporting(id, idx, False))
                 past_time = new_time
 
@@ -140,7 +138,6 @@ class ProgressReporting(Widget):
             logging.error(f"no bar for {data.id}")
             return
 
-        logging.error(f"updating {data.id} to {data.progress}")
         pb.progress = event.progress
         data.progress = event.progress
         if event.is_ended:

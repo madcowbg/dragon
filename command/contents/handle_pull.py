@@ -190,11 +190,15 @@ class MoveFileBehavior(Action):
         hoard_new_path = self.pathing.in_local(
             FastPosixPath(self.diff.local_props.last_related_fullpath), local_uuid) \
             .at_hoard().as_pure_path
-        hoard_new_path_props = hoard.fsobjects[hoard_new_path]
-        assert isinstance(hoard_new_path_props, HoardFileProps)
-        assert hoard_new_path_props.fasthash == self.diff.hoard_props.fasthash and \
-               hoard_new_path_props.fasthash == self.diff.local_props.fasthash
-        _move_locally(self.config, local_uuid, self.diff, hoard_new_path.as_posix(), hoard_new_path_props, out)
+
+        if hoard_new_path in hoard.fsobjects:
+            hoard_new_path_props = hoard.fsobjects[hoard_new_path]
+            assert isinstance(hoard_new_path_props, HoardFileProps)
+            assert hoard_new_path_props.fasthash == self.diff.hoard_props.fasthash and \
+                   hoard_new_path_props.fasthash == self.diff.local_props.fasthash
+            _move_locally(self.config, local_uuid, self.diff, hoard_new_path.as_posix(), hoard_new_path_props, out)
+        else:  # todo add unit tests for that case
+            self.diff.hoard_props.mark_to_get([local_uuid])
 
 
 def _calculate_file_is_same(

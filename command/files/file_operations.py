@@ -192,6 +192,9 @@ async def _restore_file(fetch_fullpath: PathLike, to_fullpath: PathLike, hoard_p
         return True, to_fullpath
     except aioshutil.SameFileError as e:
         logging.error(f"Are same file: {e}")
+    except PermissionError as e:
+        logging.error(f"Permission error: {e}")
+    return False, None
 
 
 async def _restore_from_copy(
@@ -214,4 +217,6 @@ async def _restore_from_copy(
             return True, restored_file
         else:
             logging.info(f"Restore FAILED.")
-    return False, None
+
+    logging.info("Trying to fully restore instead of move as a last resort.")
+    return _restore_from_another_repo(local_filepath.at_hoard(), repo_uuid, hoard_props, pathing._config, pathing._paths)

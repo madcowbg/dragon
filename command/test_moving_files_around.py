@@ -228,3 +228,67 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
         self.assertEqual([
             'set: / with 1/1 media',
             'DONE'], res.splitlines())
+
+    async def test_moving_files_twice_fallbacks_to_get(self):
+        hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = \
+            await init_complex_hoard(self.tmpdir.name)
+
+        await hoard_cmd.contents.pull(all=True)
+
+        # move a file that is already in repo-full
+        Path(join(self.tmpdir.name, "repo-full/wat2")).mkdir(parents=True, exist_ok=True)
+        shutil.move(
+            join(self.tmpdir.name, "repo-full/wat/test.me.3"),
+            join(self.tmpdir.name, "repo-full/wat2/test.me.3"))
+
+        res = await full_cave_cmd.refresh()
+        self.assertEqual([
+            'MOVED wat/test.me.3 TO wat2/test.me.3',
+            'Refresh done!'], res.splitlines())
+
+        res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
+        self.assertEqual([
+            'ADD_NEW_TO_HOARD /wat2/test.me.3',
+            'MOVE repo-backup-name: /wat/test.me.3 to /wat2/test.me.3',
+            'CLEANUP_MOVED /wat/test.me.3',
+            "Sync'ed repo-full-name to hoard!",
+            'DONE'], res.splitlines())
+
+        Path(join(self.tmpdir.name, "repo-full/wat3")).mkdir(parents=True, exist_ok=True)
+        shutil.move(
+            join(self.tmpdir.name, "repo-full/wat2/test.me.3"),
+            join(self.tmpdir.name, "repo-full/wat3/test.me.3"))
+
+        res = await full_cave_cmd.refresh()
+        self.assertEqual([
+            'MOVED wat2/test.me.3 TO wat3/test.me.3',
+            'Refresh done!'], res.splitlines())
+
+        res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
+        self.assertEqual([
+            'ADD_NEW_TO_HOARD /wat3/test.me.3',
+            'CLEANUP_MOVED /wat2/test.me.3',
+            "Sync'ed repo-full-name to hoard!",
+            'DONE'], res.splitlines())
+
+        res = await hoard_cmd.files.push(full_cave_cmd.current_uuid())
+        self.assertEqual([
+            'repo-full-name:',
+            '+ test.me.5',
+            '+ wat/test.me.6',
+            'repo-full-name:',
+            'DONE'], res.splitlines())
+
+        res = await hoard_cmd.files.push(backup_cave_cmd.current_uuid())
+        self.assertEqual([
+            'repo-backup-name:',
+            '+ test.me.4',
+            '+ test.me.5',
+            '+ wat/test.me.2',
+            '+ wat/test.me.6',
+            '+ wat3/test.me.3',
+            'repo-backup-name:',
+            'd wat/test.me.3',
+            'd wat2/test.me.3',
+            'remove dangling /wat2/test.me.3',
+            'DONE'], res.splitlines())
