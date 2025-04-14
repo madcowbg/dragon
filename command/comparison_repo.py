@@ -100,10 +100,10 @@ type RepoChange = FileIsSame | FileDeleted | FileModified | FileMoved | FileAdde
 
 async def find_repo_changes(
         repo_path: str, contents: RepoContents, hoard_ignore: HoardIgnore,
-        add_new_with_status: RepoFileStatus, skip_integrity_checks: bool) -> AsyncGenerator[RepoChange]:
+        add_new_with_status: RepoFileStatus) -> AsyncGenerator[RepoChange]:
     logging.info(f"Comparing contents and filesystem...")
     diffs_stream = compute_difference_between_contents_and_filesystem(
-        contents, repo_path, hoard_ignore, skip_integrity_checks)
+        contents, repo_path, hoard_ignore)
 
     async for diff in compute_changes_from_diffs(diffs_stream, repo_path, add_new_with_status):
         yield diff
@@ -118,13 +118,6 @@ async def compute_changes_from_diffs(diffs_stream: AsyncGenerator[RepoDiffs], re
         if isinstance(diff, FileNotInFilesystem):
             logging.debug(f"File not found, marking for removal: {diff.filepath}")
             files_maybe_removed.append((diff.filepath, diff.props))
-        elif isinstance(diff, RepoFileWeakSame):
-            logging.debug("Skipping file as size and mtime is the same!!!")
-            yield FileIsSame(diff.filepath)
-        elif isinstance(diff, RepoFileWeakDifferent):
-            logging.debug(f"File {diff.filepath} is weakly different, adding to check.")
-            files_to_add_or_update[pathlib.Path(repo_path).joinpath(diff.filepath)] = \
-                (RepoFileStatus.MODIFIED, diff.props)
         elif isinstance(diff, RepoFileSame):
             logging.debug(f"File {diff.filepath} is same.")
             yield FileIsSame(diff.filepath)
@@ -209,24 +202,6 @@ class FileNotInFilesystem:
         self.props = props
 
 
-class RepoFileWeakSame:
-    def __init__(self, filepath: FastPosixPath, props: RepoFileProps):
-        assert not filepath.is_absolute()
-        self.filepath = filepath
-        self.props = props
-
-
-class RepoFileWeakDifferent:
-    def __init__(self, filepath: FastPosixPath, props: RepoFileProps, mtime: float, size: int):
-        assert not filepath.is_absolute()
-
-        self.filepath = filepath
-        self.props = props
-
-        self.mtime = mtime
-        self.size = size
-
-
 class RepoFileDifferent:
     def __init__(self, filepath: FastPosixPath, props: RepoFileProps, mtime: float, size: int, fasthash: str):
         assert not filepath.is_absolute()
@@ -253,8 +228,7 @@ class FileNotInRepo:
 
 
 async def compute_difference_between_contents_and_filesystem(
-        contents: RepoContents, repo_path: str, hoard_ignore: HoardIgnore,
-        skip_integrity_checks: bool) -> AsyncGenerator[RepoDiffs]:
+        contents: RepoContents, repo_path: str, hoard_ignore: HoardIgnore) -> AsyncGenerator[RepoDiffs]:
     current_repo_path = pathlib.Path(repo_path)
     for obj_path, props in alive_it(
             list(contents.fsobjects.existing()),
@@ -290,17 +264,12 @@ async def compute_difference_between_contents_and_filesystem(
 
                 file_path_local = command.fast_path.FastPosixPath(file_fullpath).relative_to(repo_path)
                 props = contents.fsobjects.get_existing(file_path_local)
-                if skip_integrity_checks:
-                    if props.mtime == stats.st_mtime and props.size == stats.st_size:
-                        yield RepoFileWeakSame(file_path_local, props)
-                    else:
-                        yield RepoFileWeakDifferent(file_path_local, props, stats.st_mtime, stats.st_size)
+
+                fasthash = await fast_hash_async(file_fullpath)
+                if props.fasthash == fasthash:
+                    yield RepoFileSame(file_path_local, props, stats.st_mtime)
                 else:
-                    fasthash = await fast_hash_async(file_fullpath)
-                    if props.fasthash == fasthash:
-                        yield RepoFileSame(file_path_local, props, stats.st_mtime)
-                    else:
-                        yield RepoFileDifferent(file_path_local, props, stats.st_mtime, stats.st_size, fasthash)
+                    yield RepoFileDifferent(file_path_local, props, stats.st_mtime, stats.st_size, fasthash)
             except OSError as e:
                 logging.error(e)
             finally:

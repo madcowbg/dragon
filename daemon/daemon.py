@@ -154,8 +154,7 @@ async def refresh_all(connected_repo, hoard_ignore):
 
         logging.info(f"Bumped epoch to {contents.config.epoch}")
         with StringIO() as out:
-            async for change in find_repo_changes(
-                    connected_repo.path, contents, hoard_ignore, RepoFileStatus.ADDED, skip_integrity_checks=False):
+            async for change in find_repo_changes(connected_repo.path, contents, hoard_ignore, RepoFileStatus.ADDED):
                 _apply_repo_change_to_contents(change, contents, False, out)
             logging.info(out.getvalue())
 

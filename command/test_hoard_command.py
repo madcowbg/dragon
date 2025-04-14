@@ -228,7 +228,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
 
         # touch file without changing contents, no difference
         pathlib.Path(join(self.tmpdir.name, "repo/wat/test.me.once")).touch()
-        res = await cave_cmd.status(skip_integrity_checks=True)  # fixme that flag doesn't work, remove or rethink
+        res = await cave_cmd.status()
         self.assertEqual(
             f"{cave_cmd.current_uuid()}:\n"
             "files:\n"

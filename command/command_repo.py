@@ -43,7 +43,7 @@ class RepoCommand(object):
 
         return f"Repo initialized at {self.repo.path}"
 
-    async def refresh(self, skip_integrity_checks: bool = False, show_details: bool = True):
+    async def refresh(self, show_details: bool = True):
         """ Refreshes the cache of the current hoard folder """
         connected_repo = self.repo.open_repo().connect(False)
         if connected_repo is None:
@@ -70,8 +70,7 @@ class RepoCommand(object):
             logging.info(f"Bumped epoch to {contents.config.epoch}")
 
             with StringIO() as out:
-                async for change in find_repo_changes(
-                        self.repo.path, contents, hoard_ignore, add_new_with_status, skip_integrity_checks):
+                async for change in find_repo_changes(self.repo.path, contents, hoard_ignore, add_new_with_status):
                     _apply_repo_change_to_contents(change, contents, show_details, out)
 
                 logging.info("Ends updating, setting is_dirty to FALSE")
@@ -106,7 +105,7 @@ class RepoCommand(object):
                     f"  # files = {stats.num_files} of size {format_size(stats.total_size)}\n"])
                 return out.getvalue()
 
-    async def status(self, skip_integrity_checks: bool = False):
+    async def status(self):
         try:
             connected_repo = self.repo.open_repo().connect(False)
             current_uuid = connected_repo.current_uuid
@@ -128,9 +127,7 @@ class RepoCommand(object):
 
         with contents:
             print("Calculating diffs between repo and filesystem...")
-            async for change in find_repo_changes(
-                    self.repo.path, contents, hoard_ignore,
-                    RepoFileStatus.ADDED, skip_integrity_checks):
+            async for change in find_repo_changes(self.repo.path, contents, hoard_ignore, RepoFileStatus.ADDED):
                 if isinstance(change, FileIsSame):
                     files_same.append(change.relpath)
                 elif isinstance(change, FileDeleted):
