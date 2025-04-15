@@ -37,11 +37,11 @@ class TestDaemon(IsolatedAsyncioTestCase):
         await asyncio.sleep(0.1)
         daemon_task.cancel()
 
-        res = cave_cmd.status_index(show_dates=False)
+        res = cave_cmd.status_index(show_dates=False, show_epoch=False)
         self.assertEqual([
-            'wat/test.me.different: present @ 1',
-            'wat/test.me.once: present @ 1',
-            'wat/test.me.twice: present @ 1',
+            'wat/test.me.different: present',
+            'wat/test.me.once: present',
+            'wat/test.me.twice: present',
             '--- SUMMARY ---',
             'Result for local',
             'Max size: 3.6TB',
@@ -55,12 +55,12 @@ class TestDaemon(IsolatedAsyncioTestCase):
         # fixme weird and random-prone to fix the life of the daemon - maybe monitor it another way?
         await asyncio.sleep(0.1)
 
-        res = cave_cmd.status_index(show_dates=False)
+        res = cave_cmd.status_index(show_dates=False, show_epoch=False)
         self.assertEqual([
-            'wat/test.add.with.daemon: added @ 3',
-            'wat/test.me.different: present @ 1',
-            'wat/test.me.once: present @ 1',
-            'wat/test.me.twice: present @ 1',
+            'wat/test.add.with.daemon: added',
+            'wat/test.me.different: present',
+            'wat/test.me.once: present',
+            'wat/test.me.twice: present',
             '--- SUMMARY ---',
             'Result for local',
             'Max size: 3.6TB',
@@ -74,13 +74,13 @@ class TestDaemon(IsolatedAsyncioTestCase):
             join(self.tmpdir.name, "repo/test.me.different"))
         await asyncio.sleep(0.1)
 
-        res = cave_cmd.status_index(show_dates=False)
+        res = cave_cmd.status_index(show_dates=False, show_epoch=False)
         self.assertEqual([
-            'test.me.different: added @ 6',
-            'wat/test.add.with.daemon: added @ 3',
-            'wat/test.me.different: moved_from @ 6',
-            'wat/test.me.once: deleted @ 5',
-            'wat/test.me.twice: present @ 1',
+            'test.me.different: added',
+            'wat/test.add.with.daemon: added',
+            'wat/test.me.different: moved_from',
+            'wat/test.me.once: deleted',
+            'wat/test.me.twice: present',
             '--- SUMMARY ---',
             'Result for local',
             'Max size: 3.6TB',

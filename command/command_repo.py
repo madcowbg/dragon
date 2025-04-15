@@ -83,7 +83,7 @@ class RepoCommand(object):
                 out.write(f"Refresh done!")
                 return out.getvalue()
 
-    def status_index(self, show_files: bool = True, show_dates: bool = True):
+    def status_index(self, show_files: bool = True, show_dates: bool = True, show_epoch = True):
         remote_uuid = self.current_uuid()
 
         logging.info(f"Reading repo {self.repo.path}...")
@@ -93,7 +93,7 @@ class RepoCommand(object):
             with StringIO() as out:
                 if show_files:
                     for file_or_dir, props in contents.fsobjects.all_status():
-                        out.write(f"{file_or_dir.as_posix()}: {props.last_status.value} @ {props.last_update_epoch}\n")
+                        out.write(f"{file_or_dir.as_posix()}: {props.last_status.value}{'' if not show_epoch else f' @ {props.last_update_epoch}'}\n")
                     out.write("--- SUMMARY ---\n")
 
                 stats = contents.fsobjects.stats_existing
