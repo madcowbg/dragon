@@ -6,7 +6,8 @@ from pathlib import Path, PurePosixPath
 
 import fire
 from watchdog.events import FileSystemEventHandler, FileSystemEvent, DirModifiedEvent, FileOpenedEvent, FileClosedEvent, \
-    FileClosedNoWriteEvent
+    FileClosedNoWriteEvent, FileModifiedEvent, DirCreatedEvent, FileCreatedEvent, DirDeletedEvent, DirMovedEvent, \
+    FileMovedEvent, FileDeletedEvent
 from watchdog.observers import Observer
 
 from command.comparison_repo import find_repo_changes, \
@@ -26,21 +27,26 @@ class RepoWatcher(FileSystemEventHandler):
 
         self.lock = threading.Lock()
 
-    def on_any_event(self, event: FileSystemEvent):
-        if isinstance(event, DirModifiedEvent):
-            logging.debug("skipping directory event: %s", event)
-            return
+    def on_modified(self, event: DirModifiedEvent | FileModifiedEvent):
+        if isinstance(event, FileModifiedEvent):
+            logging.info("processing modified: %s", event)
+            self.add_file_or_folder(event.src_path)
 
-        if isinstance(event, FileOpenedEvent) or isinstance(event, FileClosedEvent) or \
-                isinstance(event, FileClosedNoWriteEvent):
-            logging.debug("skipping non-write event: %s", event)
-            return
+    def on_created(self, event: DirCreatedEvent | FileCreatedEvent) -> None:
+        if isinstance(event, FileCreatedEvent):
+            logging.info("processing create: %s", event)
+            self.add_file_or_folder(event.src_path)
 
-        logging.debug("processing event: %s", event)
+    def on_deleted(self, event: DirDeletedEvent | FileDeletedEvent) -> None:
+        if isinstance(event, FileDeletedEvent):
+            logging.info("processing delete: %s", event)
+            self.add_file_or_folder(event.src_path)
 
-        self.add_file_or_folder(event.src_path)
-        self.add_file_or_folder(event.dest_path)
-        logging.debug(f"# queue contents: {len(self._queue)}")
+    def on_moved(self, event: DirMovedEvent | FileMovedEvent) -> None:
+        if isinstance(event, FileMovedEvent):
+            logging.info("processing move: %s", event)
+            self.add_file_or_folder(event.src_path)
+            self.add_file_or_folder(event.dest_path)
 
     def add_file_or_folder(self, path: str):
         if path == '':
@@ -107,7 +113,8 @@ async def updater(
     logging.info("Ending updating!")
 
 
-async def run_daemon(path: str, assume_current: bool = False, sleep_interval: float = 10, between_runs_interval: float = 1):
+async def run_daemon(path: str, assume_current: bool = False, sleep_interval: float = 10,
+                     between_runs_interval: float = 1):
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(funcName)20s() - %(message)s',
