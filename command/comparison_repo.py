@@ -243,9 +243,10 @@ class FilesystemState:
 
         # finds all that are not marked as DELETED or MOVED_FROM, matching against current contents
         self.contents.conn.execute(
-            f"CREATE VIEW IF NOT EXISTS temp.filesystem_repo_matched AS SELECT fo.fullpath AS fo_fullpath, "
-            f"  fo.size, fo.mtime, fo.fasthash, fo.md5, fo.last_status, fo.last_update_epoch, fo.last_related_fullpath, "
-            f"  ff.fullpath as ff_fullpath, ff.size, ff.mtime, ff.fasthash, ff.md5, ff.error "
+            f"CREATE VIEW IF NOT EXISTS temp.filesystem_repo_matched AS "
+            f"SELECT IFNULL(fo.fullpath, ff.fullpath) AS fullpath, "
+            f"  fo.size as fo_size, fo.mtime, fo.fasthash, fo.md5, fo.last_status, fo.last_update_epoch, fo.last_related_fullpath, "
+            f"  ff.size as ff_size, ff.mtime, ff.fasthash, ff.md5, ff.error "
             f"FROM ("
             f"  SELECT * FROM fsobject "
             f"  WHERE fsobject.isdir = FALSE "
@@ -267,7 +268,7 @@ class FilesystemState:
         curr = self.contents.conn.cursor()
         curr.row_factory = lambda _, row: FastPosixPath(row[0])
 
-        yield from curr.execute("SELECT fo_fullpath FROM temp.filesystem_repo_matched WHERE ff_fullpath IS NULL")
+        yield from curr.execute("SELECT fullpath FROM temp.filesystem_repo_matched WHERE ff_size IS NULL")
 
     def mark_error(self, fullpath: FastPosixPath, error: str):
         self.contents.conn.execute(
@@ -276,33 +277,32 @@ class FilesystemState:
 
     def diffs(self) -> Iterable[RepoDiffs]:
         def build_diff(_, row) -> RepoDiffs:
-            fo_fullpath, fo_size, fo_mtime, fo_fasthash, fo_md5, fo_last_status, fo_last_update_epoch, fo_last_related_fullpath, \
-                ff_fullpath, ff_size, ff_mtime, ff_fasthash, ff_md5, ff_error = row
+            fullpath_s, fo_size, fo_mtime, fo_fasthash, fo_md5, fo_last_status, fo_last_update_epoch, fo_last_related_fullpath, \
+                ff_size, ff_mtime, ff_fasthash, ff_md5, ff_error = row
 
+            assert fullpath_s is not None
+            fullpath = FastPosixPath(fullpath_s)
             if ff_error is not None:
-                assert fo_fullpath is not None
                 return ErrorReadingFilesystem(
-                    FastPosixPath(fo_fullpath), RepoFileProps(
+                    fullpath, RepoFileProps(
                         fo_size, fo_mtime, fo_fasthash, fo_md5, fo_last_status,
                         fo_last_update_epoch, fo_last_related_fullpath))
-            elif fo_fullpath is None:
-                return FileNotInRepo(FastPosixPath(ff_fullpath))
-            elif ff_fullpath is None:
-                return FileNotInFilesystem(FastPosixPath(fo_fullpath), RepoFileProps(
+            elif fo_size is None:
+                return FileNotInRepo(fullpath)
+            elif ff_size is None:
+                return FileNotInFilesystem(fullpath, RepoFileProps(
                     fo_size, fo_mtime, fo_fasthash, fo_md5, fo_last_status,
                     fo_last_update_epoch, fo_last_related_fullpath))
             else:
-                assert ff_fullpath == fo_fullpath
-
                 props = RepoFileProps(
                     fo_size, fo_mtime, fo_fasthash, fo_md5, fo_last_status,
                     fo_last_update_epoch, fo_last_related_fullpath)
                 filesystem_prop = FileDesc(ff_size, ff_mtime, ff_fasthash, ff_md5)
 
                 if fo_fasthash == ff_fasthash:
-                    return RepoFileSame(FastPosixPath(fo_fullpath), props, filesystem_prop)
+                    return RepoFileSame(fullpath, props, filesystem_prop)
                 else:
-                    return RepoFileDifferent(FastPosixPath(fo_fullpath), props, filesystem_prop)
+                    return RepoFileDifferent(fullpath, props, filesystem_prop)
 
         curr = self.contents.conn.cursor()
         curr.row_factory = build_diff
