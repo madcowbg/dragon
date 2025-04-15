@@ -42,7 +42,7 @@ class RepoWatcher(FileSystemEventHandler):
         self.add_file_or_folder(event.dest_path)
         logging.debug(f"# queue contents: {len(self._queue)}")
 
-    def add_file_or_folder(self, path):
+    def add_file_or_folder(self, path: str):
         if path == '':
             return
 
@@ -58,7 +58,7 @@ class RepoWatcher(FileSystemEventHandler):
 
             logging.info("add %s", src_path)
 
-            self._queue.add(path)
+            self._queue.add(src_path)
 
     def pop_queue(self) -> set[PurePosixPath]:
         with self.lock:
@@ -135,13 +135,14 @@ async def run_daemon(path: str, assume_current: bool = False, sleep_interval: fl
         updater_task = asyncio.create_task(updater(
             event_handler, connected_repo, hoard_ignore, sleep_interval, between_runs_interval))
 
-        def wait_for_observer_to_stop():
-            while observer.is_alive():
-                observer.join(1)
+        try:
+            def wait_for_observer_to_stop():
+                while observer.is_alive():
+                    observer.join(1)
 
-        await asyncio.get_event_loop().run_in_executor(None, wait_for_observer_to_stop)
-
-        updater_task.cancel("Observer has exited!")
+            await asyncio.get_event_loop().run_in_executor(None, wait_for_observer_to_stop)
+        finally:
+            updater_task.cancel("Observer has exited!")
     finally:
         observer.stop()
         observer.join()

@@ -271,46 +271,55 @@ class FilesystemState:
             (fullpath.as_posix(), error))
 
     def diffs(self) -> Iterable[RepoDiffs]:
-        def build_diff(_, row) -> RepoDiffs:
-            fullpath_s, fo_size, fo_mtime, fo_fasthash, fo_md5, fo_last_status, fo_last_update_epoch, fo_last_related_fullpath, \
-                ff_size, ff_mtime, ff_fasthash, ff_md5, ff_error = row
-
-            assert fullpath_s is not None
-            fullpath = FastPosixPath(fullpath_s)
-            if ff_error is not None:
-                return ErrorReadingFilesystem(
-                    fullpath, RepoFileProps(
-                        fo_size, fo_mtime, fo_fasthash, fo_md5, fo_last_status,
-                        fo_last_update_epoch, fo_last_related_fullpath))
-            elif fo_size is None:
-                assert ff_size is not None
-                return FileNotInRepo(fullpath, FileDesc(ff_size, ff_mtime, ff_fasthash, ff_md5))
-            elif ff_size is None:
-                return FileNotInFilesystem(fullpath, RepoFileProps(
-                    fo_size, fo_mtime, fo_fasthash, fo_md5, fo_last_status,
-                    fo_last_update_epoch, fo_last_related_fullpath))
-            else:
-                props = RepoFileProps(
-                    fo_size, fo_mtime, fo_fasthash, fo_md5, fo_last_status,
-                    fo_last_update_epoch, fo_last_related_fullpath)
-                filesystem_prop = FileDesc(ff_size, ff_mtime, ff_fasthash, ff_md5)
-
-                if fo_fasthash == ff_fasthash:
-                    return RepoFileSame(fullpath, props, filesystem_prop)
-                else:
-                    return RepoFileDifferent(fullpath, props, filesystem_prop)
-
         curr = self.contents.conn.cursor()
         curr.row_factory = build_diff
 
         yield from curr.execute("SELECT * FROM filesystem_repo_matched ")
+
+    def diffs_at(self, allowed_paths: List[FastPosixPath]) -> Iterable[RepoDiffs]:
+        curr = self.contents.conn.cursor()
+        curr.row_factory = build_diff
+
+        yield from curr.execute(
+            f"SELECT * FROM filesystem_repo_matched WHERE fullpath in ({','.join('?' * len(allowed_paths))})",
+            [p.as_posix() for p in allowed_paths])
+
+
+def build_diff(_, row) -> RepoDiffs:
+    fullpath_s, fo_size, fo_mtime, fo_fasthash, fo_md5, fo_last_status, fo_last_update_epoch, fo_last_related_fullpath, \
+        ff_size, ff_mtime, ff_fasthash, ff_md5, ff_error = row
+
+    assert fullpath_s is not None
+    fullpath = FastPosixPath(fullpath_s)
+    if ff_error is not None:
+        return ErrorReadingFilesystem(
+            fullpath, RepoFileProps(
+                fo_size, fo_mtime, fo_fasthash, fo_md5, fo_last_status,
+                fo_last_update_epoch, fo_last_related_fullpath))
+    elif fo_size is None:
+        assert ff_size is not None
+        return FileNotInRepo(fullpath, FileDesc(ff_size, ff_mtime, ff_fasthash, ff_md5))
+    elif ff_size is None:
+        return FileNotInFilesystem(fullpath, RepoFileProps(
+            fo_size, fo_mtime, fo_fasthash, fo_md5, fo_last_status,
+            fo_last_update_epoch, fo_last_related_fullpath))
+    else:
+        props = RepoFileProps(
+            fo_size, fo_mtime, fo_fasthash, fo_md5, fo_last_status,
+            fo_last_update_epoch, fo_last_related_fullpath)
+        filesystem_prop = FileDesc(ff_size, ff_mtime, ff_fasthash, ff_md5)
+
+        if fo_fasthash == ff_fasthash:
+            return RepoFileSame(fullpath, props, filesystem_prop)
+        else:
+            return RepoFileDifferent(fullpath, props, filesystem_prop)
 
 
 async def compute_difference_between_contents_and_filesystem(
         contents: RepoContents, repo_path: str, hoard_ignore: HoardIgnore,
         njobs: int = 32) -> AsyncGenerator[RepoDiffs]:
     async with FilesystemState(contents) as state:
-        async def run_it(file_path_full: pathlib.Path):
+        async def add_discovered_files(file_path_full: pathlib.Path):
             file_path_local = FastPosixPath(file_path_full.relative_to(repo_path))
             try:
                 filesystem_prop = await read_filesystem_desc(file_path_full)
@@ -319,7 +328,7 @@ async def compute_difference_between_contents_and_filesystem(
                 logging.error(e)
                 state.mark_error(file_path_local, str(e))
 
-        await process_async(walk_filesystem(contents, hoard_ignore, repo_path), run_it, njobs=njobs)
+        await process_async(walk_filesystem(contents, hoard_ignore, repo_path), add_discovered_files, njobs=njobs)
 
         for repo_file in alive_it(state.files_not_found(), title="Verifying unmatched files"):
             try:
@@ -357,35 +366,31 @@ async def read_filesystem_desc(file_fullpath: pathlib.Path) -> FileDesc:
 async def compute_difference_filtered_by_path(
         contents: RepoContents, repo_path: str, hoard_ignore: HoardIgnore,
         allowed_paths: List[pathlib.PurePosixPath]) -> AsyncGenerator[RepoDiffs]:
-    for allowed_path in alive_it(allowed_paths, title="Checking updates"):
-        path_on_device = pathlib.Path(allowed_path).absolute()
+    async with FilesystemState(contents) as state:
+        local_paths: List[Tuple[pathlib.Path, FastPosixPath]] = []
+        for allowed_path in alive_it(allowed_paths, title="Checking updates"):
+            path_on_device = pathlib.Path(allowed_path).absolute()
+            local_path = path_on_device.relative_to(repo_path)
 
-        local_path = path_on_device.relative_to(repo_path)
-        if hoard_ignore.matches(local_path):
-            logging.info("ignoring a file")
-            continue
+            if hoard_ignore.matches(local_path):
+                logging.info("ignoring a file")
+                continue
 
-        if contents.fsobjects.in_existing(local_path):
-            logging.debug(f"{local_path} is in contents, check")
+            local_paths.append((path_on_device, FastPosixPath(local_path)))
 
-            existing_prop = contents.fsobjects.get_existing(local_path)
-            assert isinstance(existing_prop, RepoFileProps)
-            if not path_on_device.is_file():
-                yield FileNotInFilesystem(FastPosixPath(local_path), existing_prop)
-            else:
-                file_desc = await read_filesystem_desc(path_on_device)
-                if existing_prop.fasthash == file_desc.fasthash:
-                    yield RepoFileSame(FastPosixPath(local_path), existing_prop, file_desc)
+        for path_on_device, file_path_local in local_paths:
+            try:
+                if path_on_device.is_file():
+                    filesystem_prop = await read_filesystem_desc(path_on_device)
+                    state.mark_file(file_path_local, filesystem_prop)
                 else:
-                    yield RepoFileDifferent(FastPosixPath(local_path), existing_prop, file_desc)
-        else:
-            if path_on_device.is_file():
-                file_desc = await read_filesystem_desc(path_on_device)
-                yield FileNotInRepo(FastPosixPath(local_path), file_desc)
-            elif path_on_device.is_dir():
-                pass
-            else:
-                logging.error(f"Bad type of object in {local_path}.")
+                    pass  # file is not here, and is not a permission error
+            except OSError as e:
+                logging.error(e)
+                state.mark_error(file_path_local, str(e))
+
+        for diff in state.diffs_at([file for _, file in local_paths]):
+            yield diff
 
 
 def _apply_repo_change_to_contents(

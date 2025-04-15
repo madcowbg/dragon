@@ -27,11 +27,11 @@ class TestDaemon(IsolatedAsyncioTestCase):
         self.assertEqual(f"Repo initialized at {cave_path}", res)
 
         res = await cave_cmd.refresh()
-        self.assertEqual([
+        self.assertSetEqual({
             'PRESENT_FILE wat/test.me.different',
             'PRESENT_FILE wat/test.me.once',
             'PRESENT_FILE wat/test.me.twice',
-            'Refresh done!'], res.splitlines())
+            'Refresh done!'}, set(res.splitlines()))
 
         daemon_task = asyncio.create_task(run_daemon(cave_path, False, 0.01, 0.01))
         await asyncio.sleep(0.1)

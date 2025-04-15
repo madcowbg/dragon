@@ -160,5 +160,5 @@ class RepoCommand(object):
 
                 return out.getvalue()
 
-    def watch(self, assume_current: bool = False):
-        run_daemon(self.repo.path, assume_current)
+    async def watch(self, assume_current: bool = False):
+        await run_daemon(self.repo.path, assume_current)
