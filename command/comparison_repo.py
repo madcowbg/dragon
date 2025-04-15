@@ -373,11 +373,11 @@ async def compute_difference_filtered_by_path(
             else:
                 stats = os.stat(path_on_device)
                 fasthash = fast_hash(path_on_device)
+                file_desc = FileDesc(stats.st_size, stats.st_mtime, fasthash, None)
                 if existing_prop.fasthash == fasthash:
-                    yield RepoFileSame(FastPosixPath(local_path), existing_prop, stats.st_mtime)
+                    yield RepoFileSame(FastPosixPath(local_path), existing_prop, file_desc)
                 else:
-                    yield RepoFileDifferent(FastPosixPath(local_path), existing_prop, stats.st_mtime, stats.st_size,
-                                            fasthash)
+                    yield RepoFileDifferent(FastPosixPath(local_path), existing_prop, file_desc)
         else:
             if path_on_device.is_file():
                 yield FileNotInRepo(FastPosixPath(local_path))
