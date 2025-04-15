@@ -2,6 +2,7 @@ import logging
 import os
 import pathlib
 from io import StringIO
+from pathlib import Path
 from typing import Iterable, Tuple, Dict, Optional, List, AsyncGenerator
 
 import aiofiles.os
@@ -12,8 +13,8 @@ from command.fast_path import FastPosixPath
 from command.hoard_ignore import HoardIgnore
 from contents.repo import RepoContents
 from contents.repo_props import RepoFileStatus, RepoFileProps, FileDesc
-from hashing import find_hashes, fast_hash_async, fast_hash
-from util import group_to_dict, run_in_separate_loop, process_async
+from hashing import fast_hash_async
+from util import group_to_dict, process_async
 
 type RepoDiffs = (FileNotInFilesystem | FileNotInRepo | RepoFileSame | RepoFileDifferent | ErrorReadingFilesystem)
 
@@ -105,7 +106,7 @@ async def find_repo_changes(
 
 async def compute_changes_from_diffs(diffs_stream: AsyncGenerator[RepoDiffs], repo_path: str,
                                      add_new_with_status: RepoFileStatus):
-    files_to_add_or_update: Dict[pathlib.Path, Tuple[RepoFileStatus, Optional[RepoFileProps]]] = {}
+    files_to_add_or_update: Dict[pathlib.Path, Tuple[RepoFileStatus, Optional[RepoFileProps], FileDesc]] = {}
     files_maybe_removed: List[Tuple[FastPosixPath, RepoFileProps]] = []
 
     async for diff in diffs_stream:
@@ -118,26 +119,26 @@ async def compute_changes_from_diffs(diffs_stream: AsyncGenerator[RepoDiffs], re
         elif isinstance(diff, RepoFileDifferent):
             logging.debug(f"File {diff.filepath} is different, adding to check.")
             files_to_add_or_update[pathlib.Path(repo_path).joinpath(diff.filepath)] = \
-                (RepoFileStatus.MODIFIED, diff.repo_props)
+                (RepoFileStatus.MODIFIED, diff.repo_props, diff.filesystem_prop)
         elif isinstance(diff, FileNotInRepo):
             logging.debug(f"File {diff.filepath} not in repo, adding.")
             files_to_add_or_update[pathlib.Path(repo_path).joinpath(diff.filepath)] = \
-                (add_new_with_status, None)
+                (add_new_with_status, None, diff.filesystem_prop)
         elif isinstance(diff, ErrorReadingFilesystem):
             logging.error(f"File {diff.filepath} could not be read! Ignoring...")
         else:
             raise ValueError(f"unknown diff type: {diff}")
 
     logging.info(f"Detected {len(files_maybe_removed)} possible deletions.")
-    logging.info(f"Hashing {len(files_to_add_or_update)} files to add:")
-    file_hashes = run_in_separate_loop(find_hashes(list(files_to_add_or_update.keys())))
+    _file_hashes: dict[Path, str] = dict(
+        (file, file_desc.fasthash) for file, (_, _, file_desc) in files_to_add_or_update.items())
     inverse_hashes: Dict[str, List[Tuple[pathlib.Path, str]]] = group_to_dict(
-        file_hashes.items(),
+        _file_hashes.items(),
         key=lambda file_to_hash: file_to_hash[1])
     for missing_relpath, missing_file_props in alive_it(files_maybe_removed, title="Detecting moves"):
         candidates_file_to_hash = [
             (file, fasthash) for (file, fasthash) in inverse_hashes.get(missing_file_props.fasthash, [])
-            if files_to_add_or_update.get(file, (None, None))[0] == RepoFileStatus.ADDED]
+            if files_to_add_or_update.get(file, (None, None, None))[0] == RepoFileStatus.ADDED]
 
         if len(candidates_file_to_hash) == 0:
             logging.info(f"File {missing_relpath} has no suitable copy, marking as deleted.")
@@ -166,27 +167,17 @@ async def compute_changes_from_diffs(diffs_stream: AsyncGenerator[RepoDiffs], re
                 f"Multiple new file candidates for {missing_relpath}, fallbacks to delete/new")
             yield FileDeleted(missing_relpath, details="REMOVED_FILE_FALLBACK_TOO_MANY")
 
-    for fullpath, (requested_status, old_props) in alive_it(
-            files_to_add_or_update.items(), title=f"Adding {len(files_to_add_or_update)} files"):
+    for fullpath, (requested_status, old_props, file_desc) in files_to_add_or_update.items():
         relpath = command.fast_path.FastPosixPath(fullpath).relative_to(repo_path)
 
-        if fullpath not in file_hashes:
-            logging.warning(f"Skipping {fullpath} as it doesn't have a computed hash!")
-            continue
-        try:
-            size = os.path.getsize(fullpath)
-            mtime = os.path.getmtime(fullpath)
-            if requested_status == RepoFileStatus.MODIFIED:
-                if old_props.size == size and old_props.fasthash == file_hashes[fullpath]:
-                    yield FileIsSame(relpath)
-                else:
-                    yield FileModified(relpath, size, mtime, file_hashes[fullpath])
+        if requested_status == RepoFileStatus.MODIFIED:
+            if old_props.fasthash == file_desc.fasthash:
+                yield FileIsSame(relpath)
             else:
-                assert old_props is None
-                yield FileAdded(relpath, size, mtime, file_hashes[fullpath], requested_status)
-        except FileNotFoundError as e:
-            logging.error("Error while adding file!")
-            logging.error(e)
+                yield FileModified(relpath, file_desc.size, file_desc.mtime, file_desc.fasthash)
+        else:
+            assert old_props is None
+            yield FileAdded(relpath, file_desc.size, file_desc.mtime, file_desc.fasthash, requested_status)
 
     logging.info(f"Files read!")
 
@@ -218,9 +209,10 @@ class RepoFileSame:
 
 
 class FileNotInRepo:
-    def __init__(self, filepath: FastPosixPath):
+    def __init__(self, filepath: FastPosixPath, filesystem_prop: FileDesc):
         assert not filepath.is_absolute()
         self.filepath = filepath
+        self.filesystem_prop = filesystem_prop
 
 
 class ErrorReadingFilesystem:
@@ -291,7 +283,8 @@ class FilesystemState:
                         fo_size, fo_mtime, fo_fasthash, fo_md5, fo_last_status,
                         fo_last_update_epoch, fo_last_related_fullpath))
             elif fo_size is None:
-                return FileNotInRepo(fullpath)
+                assert ff_size is not None
+                return FileNotInRepo(fullpath, FileDesc(ff_size, ff_mtime, ff_fasthash, ff_md5))
             elif ff_size is None:
                 return FileNotInFilesystem(fullpath, RepoFileProps(
                     fo_size, fo_mtime, fo_fasthash, fo_md5, fo_last_status,
@@ -335,7 +328,7 @@ async def compute_difference_between_contents_and_filesystem(
                 if not file_on_device.is_file() or hoard_ignore.matches(file_on_device):
                     pass  # will yield as missing
                 else:
-                    filesystem_prop = await read_filesystem_desc(file_on_device)
+                    filesystem_prop = await read_filesystem_desc(file_on_device)  # todo how likely are we to get here?
                     state.mark_file(repo_file, filesystem_prop)
             except OSError as e:
                 logging.error(e)
@@ -380,16 +373,15 @@ async def compute_difference_filtered_by_path(
             if not path_on_device.is_file():
                 yield FileNotInFilesystem(FastPosixPath(local_path), existing_prop)
             else:
-                stats = os.stat(path_on_device)
-                fasthash = fast_hash(path_on_device)
-                file_desc = FileDesc(stats.st_size, stats.st_mtime, fasthash, None)
-                if existing_prop.fasthash == fasthash:
+                file_desc = await read_filesystem_desc(path_on_device)
+                if existing_prop.fasthash == file_desc.fasthash:
                     yield RepoFileSame(FastPosixPath(local_path), existing_prop, file_desc)
                 else:
                     yield RepoFileDifferent(FastPosixPath(local_path), existing_prop, file_desc)
         else:
             if path_on_device.is_file():
-                yield FileNotInRepo(FastPosixPath(local_path))
+                file_desc = await read_filesystem_desc(path_on_device)
+                yield FileNotInRepo(FastPosixPath(local_path), file_desc)
             elif path_on_device.is_dir():
                 pass
             else:

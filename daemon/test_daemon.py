@@ -72,7 +72,7 @@ class TestDaemon(IsolatedAsyncioTestCase):
         shutil.move(
             join(self.tmpdir.name, "repo/wat/test.me.different"),
             join(self.tmpdir.name, "repo/test.me.different"))
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(0.2)
 
         res = cave_cmd.status_index(show_dates=False, show_epoch=False)
         self.assertEqual([
