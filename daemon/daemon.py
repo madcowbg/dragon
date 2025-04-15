@@ -3,8 +3,6 @@ import logging
 import threading
 from io import StringIO
 from pathlib import Path, PurePosixPath
-from threading import Thread
-from time import sleep
 
 import fire
 from watchdog.events import FileSystemEventHandler, FileSystemEvent, DirModifiedEvent, FileOpenedEvent, FileClosedEvent, \
@@ -71,7 +69,7 @@ class RepoWatcher(FileSystemEventHandler):
 
 async def updater(
         watcher: RepoWatcher, connected_repo: ConnectedRepo, hoard_ignore: HoardIgnore,
-        sleep_interval: int = 10, between_runs_interval: int = 1):
+        sleep_interval: float, between_runs_interval: float):
     logging.info("Start updating!")
     while True:
         logging.debug("Getting current queue...")
@@ -79,7 +77,7 @@ async def updater(
         allowed_paths: list[PurePosixPath] = list(watcher.pop_queue())
         if len(allowed_paths) == 0:
             logging.debug("No items to check, sleeping for %r seconds", sleep_interval)
-            sleep(sleep_interval)
+            await asyncio.sleep(sleep_interval)
             continue
 
         # now we have a batch, process it
@@ -104,12 +102,12 @@ async def updater(
             assert not contents.config.is_dirty
 
         logging.debug("Sleeping between runs for %r seconds", between_runs_interval)
-        sleep(between_runs_interval)
+        await asyncio.sleep(between_runs_interval)
 
     logging.info("Ending updating!")
 
 
-def run_daemon(path: str, assume_current: bool = False):
+async def run_daemon(path: str, assume_current: bool = False, sleep_interval: float = 10, between_runs_interval: float = 1):
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(funcName)20s() - %(message)s',
@@ -132,16 +130,18 @@ def run_daemon(path: str, assume_current: bool = False):
         connected_repo = repo.open_repo().connect(require_contents=True)
 
         if not assume_current:
-            asyncio.run(refresh_all(connected_repo, hoard_ignore))
+            await refresh_all(connected_repo, hoard_ignore)
 
-        def run_updater():
-            asyncio.run(updater(event_handler, connected_repo, hoard_ignore))
+        updater_task = asyncio.create_task(updater(
+            event_handler, connected_repo, hoard_ignore, sleep_interval, between_runs_interval))
 
-        updater_thread = Thread(target=run_updater, daemon=True)
-        updater_thread.start()
+        def wait_for_observer_to_stop():
+            while observer.is_alive():
+                observer.join(1)
 
-        while observer.is_alive():
-            observer.join(1)
+        await asyncio.get_event_loop().run_in_executor(None, wait_for_observer_to_stop)
+
+        updater_task.cancel("Observer has exited!")
     finally:
         observer.stop()
         observer.join()
