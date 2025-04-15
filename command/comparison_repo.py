@@ -334,7 +334,7 @@ async def compute_difference_between_contents_and_filesystem(
             try:
                 file_on_device = pathlib.Path(repo_path).joinpath(repo_file)
                 logging.debug(f"Checking {repo_file} for existence at {file_on_device}...")
-                if not file_on_device.is_file() or hoard_ignore.matches(file_on_device):
+                if hoard_ignore.matches(pathlib.PurePosixPath(repo_file)) or not file_on_device.is_file():
                     pass  # will yield as missing
                 else:
                     filesystem_prop = await read_filesystem_desc(file_on_device)  # todo how likely are we to get here?
@@ -367,20 +367,17 @@ async def compute_difference_filtered_by_path(
         contents: RepoContents, repo_path: str, hoard_ignore: HoardIgnore,
         allowed_paths: List[pathlib.PurePosixPath]) -> AsyncGenerator[RepoDiffs]:
     async with FilesystemState(contents) as state:
-        local_paths: List[Tuple[pathlib.Path, FastPosixPath]] = []
+        local_paths: List[Tuple[pathlib.Path, pathlib.Path]] = []
         for allowed_path in alive_it(allowed_paths, title="Checking updates"):
             path_on_device = pathlib.Path(allowed_path).absolute()
             local_path = path_on_device.relative_to(repo_path)
 
-            if hoard_ignore.matches(local_path):
-                logging.info("ignoring a file")
-                continue
+            local_paths.append((path_on_device, local_path))
 
-            local_paths.append((path_on_device, FastPosixPath(local_path)))
-
-        for path_on_device, file_path_local in local_paths:
+        for path_on_device, local_path in local_paths:
+            file_path_local = FastPosixPath(local_path)
             try:
-                if path_on_device.is_file():
+                if not hoard_ignore.matches(local_path) and path_on_device.is_file():
                     filesystem_prop = await read_filesystem_desc(path_on_device)
                     state.mark_file(file_path_local, filesystem_prop)
                 else:
@@ -389,7 +386,7 @@ async def compute_difference_filtered_by_path(
                 logging.error(e)
                 state.mark_error(file_path_local, str(e))
 
-        for diff in state.diffs_at([file for _, file in local_paths]):
+        for diff in state.diffs_at([FastPosixPath(file) for _, file in local_paths]):
             yield diff
 
 

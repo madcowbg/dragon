@@ -19,6 +19,7 @@ class HoardIgnore:
         self.ignore_globs_list = ignore_globs_list
 
     def matches(self, fullpath: pathlib.PurePath) -> bool:
+        assert isinstance(fullpath, pathlib.PurePath)
         for glob in self.ignore_globs_list:
             if fullpath.full_match(glob, case_sensitive=False):
                 return True
