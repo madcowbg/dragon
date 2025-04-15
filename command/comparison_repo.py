@@ -233,36 +233,45 @@ class FilesystemState:
 
     async def __aenter__(self):
         self.contents.conn.execute(
-            "CREATE TEMP TABLE IF NOT EXISTS filesystem_files ( "
+            "CREATE TABLE IF NOT EXISTS temp.filesystem_files ( "
             "  fullpath TEXT NOT NULL UNIQUE, "
             "  size INTEGER, "
             "  mtime REAL, "
             "  fasthash TEXT, "
             "  md5 TEXT, "
             "  error TEXT) ")
+
+        # finds all that are not marked as DELETED or MOVED_FROM, matching against current contents
+        self.contents.conn.execute(
+            f"CREATE VIEW IF NOT EXISTS temp.filesystem_repo_matched AS SELECT fo.fullpath AS fo_fullpath, "
+            f"  fo.size, fo.mtime, fo.fasthash, fo.md5, fo.last_status, fo.last_update_epoch, fo.last_related_fullpath, "
+            f"  ff.fullpath as ff_fullpath, ff.size, ff.mtime, ff.fasthash, ff.md5, ff.error "
+            f"FROM ("
+            f"  SELECT * FROM fsobject "
+            f"  WHERE fsobject.isdir = FALSE "
+            f"    AND fsobject.last_status NOT IN ('{RepoFileStatus.DELETED.value}', '{RepoFileStatus.MOVED_FROM.value}')) AS fo "
+            f"  FULL OUTER JOIN filesystem_files as ff ON fo.fullpath = ff.fullpath ")
+
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        self.contents.conn.execute("DELETE FROM filesystem_files")
+        self.contents.conn.execute("DELETE FROM temp.filesystem_files")
         return None
 
     def mark_file(self, fullpath: FastPosixPath, file_desc: FileDesc) -> None:
         self.contents.conn.execute(
-            "INSERT INTO filesystem_files (fullpath, size, mtime, fasthash, md5) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO temp.filesystem_files (fullpath, size, mtime, fasthash, md5) VALUES (?, ?, ?, ?, ?)",
             (fullpath.as_posix(), file_desc.size, file_desc.mtime, file_desc.fasthash, file_desc.md5))
 
     def files_not_found(self) -> Iterable[FastPosixPath]:
         curr = self.contents.conn.cursor()
         curr.row_factory = lambda _, row: FastPosixPath(row[0])
 
-        yield from curr.execute(
-            "SELECT fsobject.fullpath "
-            "FROM fsobject LEFT OUTER JOIN filesystem_files on fsobject.fullpath = fsobject.fullpath "
-            "WHERE fsobject.isdir = FALSE AND filesystem_files.fullpath IS NULL")
+        yield from curr.execute("SELECT fo_fullpath FROM temp.filesystem_repo_matched WHERE ff_fullpath IS NULL")
 
     def mark_error(self, fullpath: FastPosixPath, error: str):
         self.contents.conn.execute(
-            "INSERT INTO filesystem_files (fullpath, error) VALUES (?, ?)",
+            "INSERT INTO temp.filesystem_files (fullpath, error) VALUES (?, ?)",
             (fullpath.as_posix(), error))
 
     def diffs(self) -> Iterable[RepoDiffs]:
@@ -298,14 +307,7 @@ class FilesystemState:
         curr = self.contents.conn.cursor()
         curr.row_factory = build_diff
 
-        # finds all that are not marked as DELETED or MOVED_FROM, matching against current contents
-        yield from curr.execute(
-            "SELECT fo.fullpath, "
-            "  fo.size, fo.mtime, fo.fasthash, fo.md5, fo.last_status, fo.last_update_epoch, fo.last_related_fullpath, "
-            "  ff.fullpath, ff.size, ff.mtime, ff.fasthash, ff.md5, ff.error "
-            "FROM (SELECT * FROM fsobject WHERE fsobject.isdir = FALSE AND fsobject.last_status NOT IN (?, ?)) AS fo "
-            "  FULL OUTER JOIN filesystem_files as ff ON fo.fullpath = ff.fullpath ",
-            (RepoFileStatus.DELETED.value, RepoFileStatus.MOVED_FROM.value))
+        yield from curr.execute("SELECT * FROM filesystem_repo_matched ")
 
 
 async def compute_difference_between_contents_and_filesystem(
