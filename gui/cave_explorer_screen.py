@@ -297,7 +297,10 @@ class CaveInfoWidget(Widget):
                     HoardContentsPendingToSyncFile(self.hoard, self.remote),
                     id="pane-files-pushed", ),
                 Vertical(
-                    Button("`contents pull`", variant="primary", id="pull_to_hoard"),
+                    Horizontal(
+                        Button("`contents pull`", variant="primary", id="pull_to_hoard"),
+                                Button("`contents restore`", variant="default", id="restore_from_hoard", disabled=True),
+                            ),
                     HoardContentsPendingToPull(self.hoard, self.remote),
                     id="pane-contents-pull",
                 ),
