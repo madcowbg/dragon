@@ -1661,3 +1661,16 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             '/wat/test.me.3 = a:2 c:1',
             '/wat/test.me.6 = a:1 g:1 c:1',
             'DONE'], res.splitlines())
+
+        res = await full_cave_cmd.refresh()
+        self.assertEqual([
+            'MOVED test.me.6-moved TO wat/test.me.6',
+            'MODIFIED_FILE test.me.4',
+            'ADDED_FILE wat/test.me.2',
+            'Refresh done!'], res.splitlines())
+
+        res = await hoard_cmd.contents.pending_pull(full_cave_cmd.current_uuid())
+        self.assertEqual(['Status of repo-full-name:'], res.splitlines())
+
+        res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
+        self.assertEqual(["Sync'ed repo-full-name to hoard!", 'DONE'], res.splitlines())
