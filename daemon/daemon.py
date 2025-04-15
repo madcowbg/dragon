@@ -5,9 +5,8 @@ from io import StringIO
 from pathlib import Path, PurePosixPath
 
 import fire
-from watchdog.events import FileSystemEventHandler, FileSystemEvent, DirModifiedEvent, FileOpenedEvent, FileClosedEvent, \
-    FileClosedNoWriteEvent, FileModifiedEvent, DirCreatedEvent, FileCreatedEvent, DirDeletedEvent, DirMovedEvent, \
-    FileMovedEvent, FileDeletedEvent
+from watchdog.events import FileSystemEventHandler, DirModifiedEvent, FileModifiedEvent, DirCreatedEvent, \
+    FileCreatedEvent, DirDeletedEvent, FileDeletedEvent, DirMovedEvent, FileMovedEvent
 from watchdog.observers import Observer
 
 from command.comparison_repo import find_repo_changes, \
@@ -58,11 +57,12 @@ class RepoWatcher(FileSystemEventHandler):
                 return
 
             rel_path = src_path.relative_to(self.hoard_path)
+            logging.debug(f"Considering relative path {rel_path}...")
             if self.hoard_ignore.matches(rel_path):
                 logging.debug(f"Skipping {src_path} as it is in hoard ignore.")
                 return
 
-            logging.info("add %s", src_path)
+            logging.info("Add %s as touched", src_path)
 
             self._queue.add(src_path)
 
