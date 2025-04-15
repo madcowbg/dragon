@@ -181,10 +181,8 @@ class HoardContentsPendingToPull(Tree[Action]):
             repo = self.hoard.connect_to_repo(self.remote.uuid, True)
             with repo.open_contents(is_readonly=True) as current_contents:
                 async with self.hoard.open_contents(create_missing=False, is_readonly=True) as hoard_contents:
-                    content_prefs = ContentPrefs(hoard_config, pathing, hoard_contents, self.hoard.available_remotes())
-
                     preferences = init_pull_preferences(
-                        content_prefs, self.remote, assume_current=False, force_fetch_local_missing=False)
+                        self.remote, assume_current=False, force_fetch_local_missing=False)
 
                     resolutions = await resolution_to_match_repo_and_hoard(
                         current_contents, hoard_contents, pathing, preferences,
@@ -386,9 +384,9 @@ class CaveInfoWidget(Widget):
                     f"{self.remote.name}({self.remote.uuid}\n"
                     f"into hoard?")):
             with StringIO() as out:
+                preferences = init_pull_preferences(self.remote, assume_current=False, force_fetch_local_missing=False)
                 await execute_pull(
-                    self.hoard, self.remote,
-                    ignore_epoch=False, assume_current=False, force_fetch_local_missing=False, out=out,
+                    self.hoard, preferences, ignore_epoch=False, out=out,
                     progress_bar=progress_reporting_it(self, "pull-to-hoard-operation", 10))
                 logging.info(out.getvalue())
 

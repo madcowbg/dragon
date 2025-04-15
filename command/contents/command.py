@@ -44,10 +44,10 @@ def _file_stats(props: HoardFileProps) -> str:
 
 
 def _init_pull_preferences_partial(
-        content_prefs: ContentPrefs, remote_uuid: str,
-        assume_current: bool = False, force_fetch_local_missing: bool = False) -> PullPreferences:
+        remote_uuid: str, assume_current: bool = False,
+        force_fetch_local_missing: bool = False) -> PullPreferences:
     return PullPreferences(
-        remote_uuid, content_prefs,
+        remote_uuid,
         on_same_file_is_present=PullIntention.ADD_TO_HOARD,
         on_file_added_or_present=PullIntention.ADD_TO_HOARD,
         on_file_is_different_and_modified=PullIntention.ADD_TO_HOARD,
@@ -60,9 +60,9 @@ def _init_pull_preferences_partial(
         on_hoard_only_local_unknown=PullIntention.ACCEPT_FROM_HOARD)
 
 
-def _init_pull_preferences_backup(content_prefs: ContentPrefs, remote_uuid: str) -> PullPreferences:
+def _init_pull_preferences_backup(remote_uuid: str) -> PullPreferences:
     return PullPreferences(
-        remote_uuid, content_prefs,
+        remote_uuid,
         on_same_file_is_present=PullIntention.ADD_TO_HOARD,
         on_file_added_or_present=PullIntention.IGNORE,
         on_file_is_different_and_modified=PullIntention.RESTORE_FROM_HOARD,
@@ -73,9 +73,9 @@ def _init_pull_preferences_backup(content_prefs: ContentPrefs, remote_uuid: str)
         on_hoard_only_local_unknown=PullIntention.RESTORE_FROM_HOARD)
 
 
-def _init_pull_preferences_incoming(content_prefs: ContentPrefs, remote_uuid: str) -> PullPreferences:
+def _init_pull_preferences_incoming(remote_uuid: str) -> PullPreferences:
     return PullPreferences(
-        remote_uuid, content_prefs,
+        remote_uuid,
         on_same_file_is_present=PullIntention.CLEANUP,
         on_file_added_or_present=PullIntention.ADD_TO_HOARD_AND_CLEANUP,
         on_file_is_different_and_modified=PullIntention.ADD_TO_HOARD_AND_CLEANUP,
@@ -98,9 +98,9 @@ def augment_statuses(config, hoard, show_empty, statuses):
 
 
 async def execute_pull(
-        hoard: Hoard, remote_obj: HoardRemote, ignore_epoch: bool, assume_current: bool,
-        force_fetch_local_missing: bool, out: StringIO, progress_bar=alive_it):
+        hoard: Hoard, preferences: PullPreferences, ignore_epoch: bool, out: StringIO, progress_bar=alive_it):
     config = hoard.config()
+    remote_uuid = preferences.local_uuid
     pathing = HoardPathing(config, hoard.paths())
 
     logging.info(f"Loading hoard contents TOML...")
@@ -109,53 +109,52 @@ async def execute_pull(
         content_prefs = ContentPrefs(config, pathing, hoard_contents, hoard.available_remotes())
 
         try:
-            connected_repo = hoard.connect_to_repo(remote_obj.uuid, require_contents=True)
+            connected_repo = hoard.connect_to_repo(remote_uuid, require_contents=True)
             current_contents = connected_repo.open_contents(is_readonly=True)
         except MissingRepoContents as e:
             logging.error(e)
-            out.write(f"Repo {remote_obj.uuid} has no current contents available!\n")
+            out.write(f"Repo {remote_uuid} has no current contents available!\n")
             return
 
         with current_contents:
             if current_contents.config.is_dirty:
                 logging.error(
-                    f"{remote_obj.uuid} is_dirty = TRUE, so the refresh is not complete - can't use current repo.")
-                out.write(f"Skipping update as {remote_obj.uuid} is not fully calculated!\n")
+                    f"{remote_uuid} is_dirty = TRUE, so the refresh is not complete - can't use current repo.")
+                out.write(f"Skipping update as {remote_uuid} is not fully calculated!\n")
                 return
 
-            if not ignore_epoch and hoard_contents.config.remote_epoch(
-                    remote_obj.uuid) >= current_contents.config.epoch:
+            if not ignore_epoch \
+                    and hoard_contents.config.remote_epoch(remote_uuid) >= current_contents.config.epoch:
                 out.write(f"Skipping update as past epoch {current_contents.config.epoch} "
-                          f"is not after hoard epoch {hoard_contents.config.remote_epoch(remote_obj.uuid)}\n")
+                          f"is not after hoard epoch {hoard_contents.config.remote_epoch(remote_uuid)}\n")
                 return
 
-            logging.info(f"Saving config of remote {remote_obj.uuid}...")
+            logging.info(f"Saving config of remote {remote_uuid}...")
             hoard_contents.config.save_remote_config(current_contents.config)
 
-            preferences = init_pull_preferences(content_prefs, remote_obj, assume_current, force_fetch_local_missing)
 
             await pull_repo_contents_to_hoard(
-                hoard_contents, pathing, config, current_contents, preferences, out, progress_bar)
+                hoard_contents, pathing, config, current_contents, preferences, content_prefs, out, progress_bar)
 
-            logging.info(f"Updating epoch of {remote_obj.uuid} to {current_contents.config.epoch}")
+            logging.info(f"Updating epoch of {remote_uuid} to {current_contents.config.epoch}")
             hoard_contents.config.mark_up_to_date(
-                remote_obj.uuid, current_contents.config.epoch, current_contents.config.updated)
+                remote_uuid, current_contents.config.epoch, current_contents.config.updated)
 
         clean_dangling_files(hoard_contents, out)
 
-    out.write(f"Sync'ed {remote_obj.name} to hoard!\n")
+    out.write(f"Sync'ed {config.remotes[remote_uuid].name} to hoard!\n")
 
 
 def init_pull_preferences(
-        content_prefs: ContentPrefs, remote_obj: HoardRemote, assume_current: bool, force_fetch_local_missing: bool):
+        remote_obj: HoardRemote, assume_current: bool,
+        force_fetch_local_missing: bool) -> PullPreferences:
     if remote_obj.type == CaveType.INCOMING:
-        return _init_pull_preferences_incoming(content_prefs, remote_obj.uuid)
+        return _init_pull_preferences_incoming(remote_obj.uuid)
     elif remote_obj.type == CaveType.BACKUP:
-        return _init_pull_preferences_backup(content_prefs, remote_obj.uuid)
+        return _init_pull_preferences_backup(remote_obj.uuid)
     else:
         assert remote_obj.type == CaveType.PARTIAL
-        return _init_pull_preferences_partial(
-            content_prefs, remote_obj.uuid, assume_current, force_fetch_local_missing)
+        return _init_pull_preferences_partial(remote_obj.uuid, assume_current, force_fetch_local_missing)
 
 
 async def execute_pring_pending(
@@ -192,6 +191,9 @@ class HoardCommandContents:
         config = self.hoard.config()
         remote_uuid = resolve_remote_uuid(config, remote)
 
+        remote_obj = config.remotes[remote_uuid]
+        preferences = init_pull_preferences(remote_obj, assume_current=False, force_fetch_local_missing=False)
+
         logging.info(f"Reading current contents of {remote_uuid}...")
         connected_repo = self.hoard.connect_to_repo(remote_uuid, require_contents=True)
         with connected_repo.open_contents(is_readonly=True) as current_contents:
@@ -201,14 +203,9 @@ class HoardCommandContents:
                 logging.info(f"Computing status ...")
 
                 with StringIO() as out:
-                    remote_obj = config.remotes[remote_uuid]
                     out.write(f"Status of {remote_obj.name}:\n")
 
                     pathing = HoardPathing(config, self.hoard.paths())
-                    content_prefs = ContentPrefs(config, pathing, hoard_contents, self.hoard.available_remotes())
-
-                    preferences = init_pull_preferences(
-                        content_prefs, remote_obj, assume_current=False, force_fetch_local_missing=False)
 
                     resolutions = await resolution_to_match_repo_and_hoard(
                         current_contents, hoard_contents, pathing, preferences, alive_it)
@@ -416,7 +413,8 @@ class HoardCommandContents:
                     out.write(f"Remote {remote_uuid} is not mounted!\n")
                     continue
 
-                await execute_pull(self.hoard, remote_obj, ignore_epoch, assume_current, force_fetch_local_missing, out)
+                preferences = init_pull_preferences(remote_obj, assume_current, force_fetch_local_missing)
+                await execute_pull(self.hoard, preferences, ignore_epoch, out)
 
             out.write("DONE")
             return out.getvalue()
@@ -445,7 +443,7 @@ class HoardCommandContents:
                         if hoard_file not in hoard.fsobjects:
                             logging.info(f"Local file {local_file} will be handled to hoard.")
                             preferences = PullPreferences(
-                                remote.uuid, content_prefs,
+                                remote.uuid,
                                 on_same_file_is_present=PullIntention.ADD_TO_HOARD,
                                 on_file_added_or_present=PullIntention.FAIL,
                                 on_file_is_different_and_modified=PullIntention.FAIL,
@@ -458,7 +456,7 @@ class HoardCommandContents:
                             added = local_props.last_status == RepoFileStatus.ADDED
                             diff = Diff(DiffType.FileOnlyInLocal, local_file, hoard_file, local_props, None, added)
                             for b in _calculate_local_only(preferences.on_file_added_or_present, diff, out):
-                                b.execute(preferences.local_uuid, preferences.content_prefs, hoard, out)
+                                b.execute(preferences.local_uuid, content_prefs, hoard, out)
                             out.write(f"READD {hoard_file}\n")
                         else:
                             hoard_props = hoard.fsobjects[hoard_file]

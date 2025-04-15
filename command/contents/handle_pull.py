@@ -34,7 +34,7 @@ class PullIntention(enum.Enum):
 
 class PullPreferences:
     def __init__(
-            self, local_uuid: str, content_prefs: ContentPrefs,
+            self, local_uuid: str,
             on_same_file_is_present: PullIntention,
             on_file_added_or_present: PullIntention,
             on_file_is_different_and_modified: PullIntention,
@@ -44,7 +44,6 @@ class PullPreferences:
             on_hoard_only_local_unknown: PullIntention,
             on_hoard_only_local_moved: PullIntention):
         self.local_uuid = local_uuid
-        self.content_prefs = content_prefs
 
         self.on_same_file_is_present = on_same_file_is_present
         self.on_file_added_or_present = on_file_added_or_present
@@ -399,12 +398,12 @@ def _move_locally(
 
 async def pull_repo_contents_to_hoard(
         hoard_contents: HoardContents, pathing: HoardPathing, config: HoardConfig, current_contents: RepoContents,
-        preferences: PullPreferences, out: StringIO, progress_tool=alive_it):
+        preferences: PullPreferences, content_prefs: ContentPrefs, out: StringIO, progress_tool=alive_it):
     resolutions = await resolution_to_match_repo_and_hoard(
         current_contents, hoard_contents, pathing, preferences, progress_tool)
 
     for action in calculate_actions(preferences, resolutions, pathing, config, out):
-        action.execute(preferences.local_uuid, preferences.content_prefs, hoard_contents, out)
+        action.execute(preferences.local_uuid, content_prefs, hoard_contents, out)
 
 def calculate_actions(
         preferences: PullPreferences, resolutions: Iterable[Tuple[Diff, PullIntention]],
