@@ -17,7 +17,7 @@ from textual.widgets import Tree, Static, Header, Footer, Select, RichLog, Butto
 from textual.widgets._tree import TreeNode
 
 from command.content_prefs import ContentPrefs
-from command.contents.command import execute_pull, init_pull_preferences
+from command.contents.command import execute_pull, init_pull_preferences, pull_prefs_to_restore_from_hoard
 from command.contents.handle_pull import resolution_to_match_repo_and_hoard, calculate_actions, Action, \
     MarkIsAvailableBehavior, AddToHoardAndCleanupSameBehavior, AddToHoardAndCleanupNewBehavior, AddNewFileBehavior, \
     MarkToGetBehavior, MarkForCleanupBehavior, ResetLocalAsCurrentBehavior, RemoveLocalStatusBehavior, \
@@ -128,6 +128,7 @@ def sum_dicts(old: Dict[T, any], new: Dict[T, any]) -> Dict[T, any]:
 
 
 PENDING_TO_PULL = 'Hoard vs Repo contents'
+
 
 def pull_op_to_str(act: Action):
     if isinstance(act, MarkIsAvailableBehavior):
@@ -243,9 +244,10 @@ class HoardContentsPendingToPull(Tree[Action]):
             for (op_type, order), v in sorted(pending.items(), key=lambda x: x[0][1]):
                 cnts_label.append(op_type) \
                     .append(" ").append(format_size(v) if self.show_size else format_count(v), style="dim").append(",")
-                    # op_type, style="green" if op_type == "get" else "strike dim" if op_type == "cleanup" else "none") \
+                # op_type, style="green" if op_type == "get" else "strike dim" if op_type == "cleanup" else "none") \
         cnts_label.append("}")
         return cnts_label
+
 
 class CaveInfoWidget(Widget):
     class RemoteSettingChanged(Message):
@@ -269,7 +271,6 @@ class CaveInfoWidget(Widget):
                 yield Static("Name", classes="repo-setting-label")
                 yield Input(value=self.remote.name, placeholder="Remote Name", id="repo-name", restrict="..+")
 
-
                 yield Static("Type", classes="repo-setting-label")
                 yield Select[CaveType](
                     value=self.hoard.config().remotes[self.remote.uuid].type, id="repo-type",
@@ -290,21 +291,16 @@ class CaveInfoWidget(Widget):
                     value=str(self.remote.min_copies_before_cleanup), placeholder="min copies",
                     id="repo-min-copies-before-cleanup", type="integer")
 
-            yield Horizontal(
-                Vertical(
-                    Button(
-                        "`files push`", variant="primary", id="push_files_to_repo"),
-                    HoardContentsPendingToSyncFile(self.hoard, self.remote),
-                    id="pane-files-pushed", ),
-                Vertical(
-                    Horizontal(
-                        Button("`contents pull`", variant="primary", id="pull_to_hoard"),
-                                Button("`contents restore`", variant="default", id="restore_from_hoard", disabled=True),
-                            ),
-                    HoardContentsPendingToPull(self.hoard, self.remote),
-                    id="pane-contents-pull",
-                ),
-                id="content_trees")
+            with Horizontal(id="content_trees"):
+                with Vertical(id="pane-files-pushed"):
+                    yield Button("`files push`", variant="primary", id="push_files_to_repo")
+                    yield HoardContentsPendingToSyncFile(self.hoard, self.remote)
+
+                with Vertical(id="pane-contents-pull"):
+                    with Horizontal():
+                        yield Button("`contents pull`", variant="primary", id="pull_to_hoard")
+                        yield Button("`contents restore`", variant="default", id="restore_from_hoard")
+                    yield HoardContentsPendingToPull(self.hoard, self.remote)
 
     @on(Select.Changed, "#repo-type")
     def repo_type_changed(self, event: Select.Changed):
@@ -391,6 +387,23 @@ class CaveInfoWidget(Widget):
                 await execute_pull(
                     self.hoard, preferences, ignore_epoch=False, out=out,
                     progress_bar=progress_reporting_it(self, "pull-to-hoard-operation", 10))
+                logging.info(out.getvalue())
+
+            await self.recompose()
+
+    @on(Button.Pressed, "#restore_from_hoard")
+    @work
+    async def restore_from_hoard(self):
+        if await self.app.push_screen_wait(
+                ConfirmActionScreen(
+                    f"Are you sure you want to RESTORE contents from hoard to repo: \n"
+                    f"{self.remote.name}({self.remote.uuid}\n"
+                    f"")):
+            with StringIO() as out:
+                preferences = pull_prefs_to_restore_from_hoard(self.remote.uuid)
+                await execute_pull(
+                    self.hoard, preferences, ignore_epoch=False, out=out,
+                    progress_bar=progress_reporting_it(self, "restore-from-hoard-operation", 10))
                 logging.info(out.getvalue())
 
             await self.recompose()
