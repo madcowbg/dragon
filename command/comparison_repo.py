@@ -274,7 +274,7 @@ class FilesystemState:
         curr = self.contents.conn.cursor()
         curr.row_factory = build_diff
 
-        yield from curr.execute("SELECT * FROM filesystem_repo_matched ")
+        yield from curr.execute("SELECT * FROM filesystem_repo_matched ORDER BY fullpath")
 
     def diffs_at(self, allowed_paths: List[FastPosixPath]) -> Iterable[RepoDiffs]:
         curr = self.contents.conn.cursor()
