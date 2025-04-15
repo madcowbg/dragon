@@ -1,13 +1,7 @@
-import enum
 import logging
 import os
 import pathlib
-import random
-import traceback
-from asyncio import TaskGroup
 from io import StringIO
-from itertools import batched
-from os import PathLike
 from typing import Iterable, Tuple, Dict, Optional, List, AsyncGenerator
 
 import aiofiles.os
@@ -21,9 +15,7 @@ from contents.repo_props import RepoFileStatus, RepoFileProps, FileDesc
 from hashing import find_hashes, fast_hash_async, fast_hash
 from util import group_to_dict, run_in_separate_loop
 
-type RepoDiffs = (
-        FileNotInFilesystem | FileNotInRepo
-        | RepoFileWeakSame | RepoFileWeakDifferent | RepoFileSame | RepoFileDifferent)
+type RepoDiffs = (FileNotInFilesystem | FileNotInRepo | RepoFileSame | RepoFileDifferent | ErrorReadingFilesystem)
 
 
 def walk_repo(repo: str, hoard_ignore: HoardIgnore) -> Iterable[Tuple[pathlib.Path | None, pathlib.Path | None]]:
