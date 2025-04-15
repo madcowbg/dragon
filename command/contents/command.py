@@ -419,6 +419,36 @@ class HoardCommandContents:
             out.write("DONE")
             return out.getvalue()
 
+    async def restore(self, remote: str):
+        logging.info("Loading config")
+        config = self.hoard.config()
+
+        remote_uuids = [remote]
+        with StringIO() as out:
+            for remote_uuid in remote_uuids:
+                remote_uuid = resolve_remote_uuid(self.hoard.config(), remote_uuid)
+                remote_obj = config.remotes[remote_uuid]
+                logging.info(f"Pulling contents of {remote_obj.name}[{remote_uuid}].")
+
+                if remote_obj is None or remote_obj.mounted_at is None:
+                    out.write(f"Remote {remote_uuid} is not mounted!\n")
+                    continue
+
+                preferences = PullPreferences(
+                    remote_uuid,
+                    on_same_file_is_present=PullIntention.ADD_TO_HOARD,
+                    on_file_added_or_present=PullIntention.CLEANUP,
+                    on_file_is_different_and_modified=PullIntention.RESTORE_FROM_HOARD,
+                    on_file_is_different_and_added=PullIntention.RESTORE_FROM_HOARD,
+                    on_file_is_different_but_present=PullIntention.RESTORE_FROM_HOARD,
+                    on_hoard_only_local_moved=PullIntention.RESTORE_FROM_HOARD,
+                    on_hoard_only_local_deleted=PullIntention.RESTORE_FROM_HOARD,
+                    on_hoard_only_local_unknown=PullIntention.RESTORE_FROM_HOARD)
+                await execute_pull(self.hoard, preferences, ignore_epoch=False, out=out)
+
+            out.write("DONE")
+            return out.getvalue()
+
     async def reset_with_existing(self, repo: str):
         config = self.hoard.config()
         pathing = HoardPathing(config, self.hoard.paths())

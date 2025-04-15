@@ -76,6 +76,7 @@ class Action(abc.ABC):
     @abc.abstractmethod
     def execute(self, local_uuid: str, content_prefs: ContentPrefs, hoard: HoardContents, out: StringIO) -> None: pass
 
+
 class MarkIsAvailableBehavior(Action):
     def __init__(self, diff: Diff):
         super().__init__(diff)
@@ -129,6 +130,17 @@ class AddNewFileBehavior(Action):
             HoardFileStatus.GET)
         # set status here
         hoard_props.mark_available(local_uuid)
+
+
+class AddFileToDeleteBehavior(Action):
+    def __init__(self, diff: Diff):
+        super().__init__(diff)
+
+    def execute(self, local_uuid: str, content_prefs: ContentPrefs, hoard: HoardContents, out: StringIO):
+        hoard_props = hoard.fsobjects.add_or_replace_file(self.diff.hoard_file, self.diff.local_props)
+
+        # set status here to clean up
+        hoard_props.mark_for_cleanup([local_uuid])
 
 
 class MarkToGetBehavior(Action):
@@ -241,6 +253,9 @@ def _calculate_local_only(behavior: PullIntention, diff: Diff, out: StringIO) ->
     elif behavior == PullIntention.ADD_TO_HOARD:
         yield AddNewFileBehavior(diff)
         out.write(f"ADD_NEW_TO_HOARD {diff.hoard_file.as_posix()}\n")
+    elif behavior == PullIntention.CLEANUP:
+        yield AddFileToDeleteBehavior(diff)
+        out.write(f"DELETE {diff.hoard_file.as_posix()}\n")
     else:
         raise ValueError(f"unrecognized on_file_added_or_present={behavior} for {diff.hoard_file}")
 
@@ -404,6 +419,7 @@ async def pull_repo_contents_to_hoard(
 
     for action in calculate_actions(preferences, resolutions, pathing, config, out):
         action.execute(preferences.local_uuid, content_prefs, hoard_contents, out)
+
 
 def calculate_actions(
         preferences: PullPreferences, resolutions: Iterable[Tuple[Diff, PullIntention]],
