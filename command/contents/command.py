@@ -195,6 +195,39 @@ def pull_prefs_to_restore_from_hoard(remote_uuid):
         on_hoard_only_local_unknown=PullIntention.RESTORE_FROM_HOARD)
 
 
+async def clear_pending_file_ops(hoard: Hoard, repo_uuid: str, out: StringIO):
+    pathing = HoardPathing(hoard.config(), hoard.paths())
+
+    logging.info(f"Loading hoard contents...")
+    async with hoard.open_contents(create_missing=False, is_readonly=False) as hoard_contents:
+        out.write(f"{hoard.config().remotes[repo_uuid].name}:\n")
+
+        logging.info(f"Iterating over pending ops in {repo_uuid} to reset pending ops")
+
+        ops = list(get_pending_operations(hoard_contents, repo_uuid))
+        print(f"Clearing {len(ops)} pending operations...")
+        for op in alive_it(ops):
+            local_file = pathing.in_hoard(op.hoard_file).at_local(repo_uuid).as_pure_path.as_posix()
+            assert local_file is not None
+
+            if isinstance(op, GetFile):
+                logging.info(f"File to get {local_file} is already missing, removing status.")
+                op.hoard_props.remove_status(repo_uuid)
+
+                out.write(f"WONT_GET {op.hoard_file.as_posix()}\n")
+            elif isinstance(op, CopyFile):
+                logging.info(
+                    f"File to get {local_file} is already missing, removing status.")
+                op.hoard_props.remove_status(repo_uuid)
+                out.write(f"WONT_COPY {op.hoard_file.as_posix()}\n")
+            elif isinstance(op, CleanupFile):
+                op.hoard_props.remove_status(repo_uuid)
+
+                out.write(f"WONT_CLEANUP {op.hoard_file.as_posix()}\n")
+            else:
+                raise ValueError(f"Unhandled op type: {type(op)}")
+
+
 class HoardCommandContents:
     def __init__(self, hoard: Hoard):
         self.hoard = hoard
@@ -506,42 +539,14 @@ class HoardCommandContents:
 
     async def reset(self, repo: str):
         config = self.hoard.config()
-        pathing = HoardPathing(config, self.hoard.paths())
 
         repo_uuid = resolve_remote_uuid(config, repo)
 
-        logging.info(f"Loading hoard contents...")
-        async with self.hoard.open_contents(create_missing=False, is_readonly=False) as hoard:
-            with StringIO() as out:
-                out.write(f"{config.remotes[repo_uuid].name}:\n")
+        with StringIO() as out:
+            await clear_pending_file_ops(self.hoard, repo_uuid, out)
 
-                logging.info(f"Iterating over pending ops in {repo_uuid} to reset pending ops")
-
-                ops = list(get_pending_operations(hoard, repo_uuid))
-                print(f"Clearing {len(ops)} pending operations...")
-                for op in alive_it(ops):
-                    local_file = pathing.in_hoard(op.hoard_file).at_local(repo_uuid).as_pure_path.as_posix()
-                    assert local_file is not None
-
-                    if isinstance(op, GetFile):
-                        logging.info(f"File to get {local_file} is already missing, removing status.")
-                        op.hoard_props.remove_status(repo_uuid)
-
-                        out.write(f"WONT_GET {op.hoard_file.as_posix()}\n")
-                    elif isinstance(op, CopyFile):
-                        logging.info(
-                            f"File to get {local_file} is already missing, removing status.")
-                        op.hoard_props.remove_status(repo_uuid)
-                        out.write(f"WONT_COPY {op.hoard_file.as_posix()}\n")
-                    elif isinstance(op, CleanupFile):
-                        op.hoard_props.remove_status(repo_uuid)
-
-                        out.write(f"WONT_CLEANUP {op.hoard_file.as_posix()}\n")
-                    else:
-                        raise ValueError(f"Unhandled op type: {type(op)}")
-
-                out.write("DONE")
-                return out.getvalue()
+            out.write("DONE")
+            return out.getvalue()
 
 
 async def _execute_get(

@@ -16,8 +16,8 @@ from textual.widget import Widget
 from textual.widgets import Tree, Static, Header, Footer, Select, RichLog, Button, RadioSet, RadioButton, Input
 from textual.widgets._tree import TreeNode
 
-from command.content_prefs import ContentPrefs
-from command.contents.command import execute_pull, init_pull_preferences, pull_prefs_to_restore_from_hoard
+from command.contents.command import execute_pull, init_pull_preferences, pull_prefs_to_restore_from_hoard, \
+    clear_pending_file_ops
 from command.contents.handle_pull import resolution_to_match_repo_and_hoard, calculate_actions, Action, \
     MarkIsAvailableBehavior, AddToHoardAndCleanupSameBehavior, AddToHoardAndCleanupNewBehavior, AddNewFileBehavior, \
     MarkToGetBehavior, MarkForCleanupBehavior, ResetLocalAsCurrentBehavior, RemoveLocalStatusBehavior, \
@@ -293,7 +293,9 @@ class CaveInfoWidget(Widget):
 
             with Horizontal(id="content_trees"):
                 with Vertical(id="pane-files-pushed"):
-                    yield Button("`files push`", variant="primary", id="push_files_to_repo")
+                    with Horizontal():
+                        yield Button("`files push`", variant="primary", id="push_files_to_repo")
+                        yield Button("`contents reset`", variant="default", id="reset_pending_file_ops")
                     yield HoardContentsPendingToSyncFile(self.hoard, self.remote)
 
                 with Vertical(id="pane-contents-pull"):
@@ -370,6 +372,21 @@ class CaveInfoWidget(Widget):
                     self.hoard.config(),
                     self.hoard, [self.remote.uuid], out,
                     progress_reporting_bar(self, "push-to-files-operation", 10))
+                logging.info(out.getvalue())
+
+            await self.recompose()
+
+    @on(Button.Pressed, "#reset_pending_file_ops")
+    @work
+    async def reset_pending_file_ops(self):
+        if await self.app.push_screen_wait(
+                ConfirmActionScreen(
+                    f"Are you sure you want to RESET PENDING FILE OPS for repo: \n"
+                    f"{self.remote.name}({self.remote.uuid}\n"
+                    f"?")):
+            pathing = HoardPathing(self.hoard.config(), self.hoard.paths())
+            with StringIO() as out:
+                await clear_pending_file_ops(self.hoard, self.remote.uuid, out)
                 logging.info(out.getvalue())
 
             await self.recompose()
