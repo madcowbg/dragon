@@ -1,11 +1,10 @@
 import asyncio
 import os
 import threading
-from asyncio import Queue, TaskGroup
+from asyncio import TaskGroup, QueueShutDown
 from itertools import groupby
 from sqlite3 import Cursor, Row
-from typing import List, Tuple, Any, Callable, Coroutine, Dict, TypeVar, Iterable
-import queue
+from typing import List, Any, Callable, Coroutine, Dict, TypeVar, Iterable
 
 COUNT_KILO, COUNT_MEGA, COUNT_GIGA, COUNT_TERA = 10 ** 3, 10 ** 6, 10 ** 9, 10 ** 12
 
@@ -46,66 +45,12 @@ def to_mb(size: int) -> int:
 R = TypeVar('R')
 
 
-def run_async_in_parallel(
-        args: List[Tuple[Any, ...]], fun: Callable[[Any, ...], Coroutine[Any, Any, R]], ntasks: int = 10) -> List[R]:
-    q: Queue[Tuple[int, Any]] = asyncio.Queue()
-    for i, item in enumerate(args):
-        q.put_nowait((i, item))
-
-    result_per_invocation: Dict[int, Any] = dict()
-
-    async def process_item():
-        while not q.empty():
-            idx, input_tuple = await q.get()
-            result = await fun(*input_tuple)
-            q.task_done()
-
-            assert idx not in result_per_invocation
-            result_per_invocation[idx] = result
-
-    async def run_all():
-        async with TaskGroup() as tg:
-            for _ in range(ntasks):
-                tg.create_task(process_item())
-
-            await q.join()
-
-    run_in_separate_loop(run_all())
-
-    return [v for i, v in sorted(result_per_invocation.items())]
-
-
 def run_in_separate_loop(coro: Coroutine[Any, Any, R]) -> R:
     value = []
     thread = threading.Thread(target=lambda: value.append(asyncio.run(coro)))
     thread.start()
     thread.join()
     return value[0]
-
-
-def run_in_parallel_threads(
-        args: List[Tuple[Any, ...]], fun: Callable[[Any, ...], R], ntasks: int = 10) -> List[R]:
-    q: queue.SimpleQueue[Tuple[int, Any]] = queue.SimpleQueue()
-    for i, item in enumerate(args):
-        q.put_nowait((i, item))
-
-    result_per_invocation: Dict[int, Any] = dict()
-
-    def process_item():
-        while not q.empty():
-            idx, input_tuple = q.get_nowait()
-            result = fun(*input_tuple)
-
-            assert idx not in result_per_invocation
-            result_per_invocation[idx] = result
-
-    threads = [threading.Thread(target=process_item) for _ in range(ntasks)]
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join()
-
-    return [v for i, v in sorted(result_per_invocation.items())]
 
 
 FIRST_VALUE: Callable[[Cursor, Row], Any] = lambda cursor, row: row[0] if row is not None else None
@@ -138,3 +83,31 @@ def pretty_truncate(text: str, size: int) -> str:
         return text
     left_len = (size - 3) // 2
     return text[:left_len] + "..." + text[-(size - 3 - left_len):]
+
+
+async def process_async(data: Iterable[T], func: Callable[[T], Coroutine], njobs):
+    async with TaskGroup() as tg_walking:
+        q = asyncio.Queue(maxsize=njobs)
+
+        async def fill_queue():
+            nonlocal q, data
+            for p in data:
+                await q.put(p)
+            await q.join()
+            q.shutdown()
+
+        async def process_queue():
+            nonlocal q
+            while True:
+                try:
+                    item = await q.get()
+                    try:
+                        await func(item)
+                    finally:
+                        q.task_done()
+                except QueueShutDown:
+                    return
+
+        for _ in range(njobs):
+            tg_walking.create_task(process_queue())
+        tg_walking.create_task(fill_queue())
