@@ -1481,8 +1481,8 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await full_cave_cmd.refresh()
         self.assertEqual(
             "REMOVED_FILE_FALLBACK_TOO_MANY wat/test.me.2\n"
-            "ADDED_FILE lets_get_it_started/test.me.2-butnew\n"
             "ADDED_FILE lets_get_it_started/test.me.2-butsecond\n"
+            "ADDED_FILE lets_get_it_started/test.me.2-butnew\n"
             "Refresh done!", res)
 
         res = await hoard_cmd.contents.differences(full_cave_cmd.current_uuid())
