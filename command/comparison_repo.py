@@ -313,16 +313,10 @@ class FilesystemState:
 async def compute_difference_between_contents_and_filesystem(
         contents: RepoContents, repo_path: str, hoard_ignore: HoardIgnore) -> AsyncGenerator[RepoDiffs]:
     async with FilesystemState(contents) as state:
-
-        with alive_bar(total=contents.fsobjects.len_existing(), title="Walking filesystem") as bar:
-            for file_path_full, dir_path_full in walk_repo(repo_path, hoard_ignore):
-                if file_path_full is not None:
-                    assert dir_path_full is None
-
-                    filesystem_prop = await read_filesystem_desc(file_path_full)
-                    file_path_local = FastPosixPath(file_path_full.relative_to(repo_path))
-                    state.mark_file(file_path_local, filesystem_prop)
-                    bar()
+        for file_path_full in walk_filesystem(contents, hoard_ignore, repo_path):
+            filesystem_prop = await read_filesystem_desc(file_path_full)
+            file_path_local = FastPosixPath(file_path_full.relative_to(repo_path))
+            state.mark_file(file_path_local, filesystem_prop)
 
         for repo_file in state.files_not_found():
             try:
@@ -339,6 +333,15 @@ async def compute_difference_between_contents_and_filesystem(
 
         for diff in state.diffs():
             yield diff
+
+
+def walk_filesystem(contents, hoard_ignore, repo_path) -> Iterable[pathlib.Path]:
+    with alive_bar(total=contents.fsobjects.len_existing(), title="Walking filesystem") as bar:
+        for file_path_full, dir_path_full in walk_repo(repo_path, hoard_ignore):
+            if file_path_full is not None:
+                assert dir_path_full is None
+                yield file_path_full
+                bar()
 
 
 async def read_filesystem_desc(file_fullpath: pathlib.Path) -> FileDesc:
