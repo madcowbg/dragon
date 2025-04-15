@@ -13,12 +13,15 @@ from textual.message import Message
 from textual.reactive import reactive
 from textual.screen import Screen
 from textual.widget import Widget
-from textual.widgets import Tree, Static, Header, Footer, Select, RichLog, Button, RadioSet, RadioButton, Label, Input
+from textual.widgets import Tree, Static, Header, Footer, Select, RichLog, Button, RadioSet, RadioButton, Input
 from textual.widgets._tree import TreeNode
 
 from command.content_prefs import ContentPrefs
 from command.contents.command import execute_pull, init_pull_preferences
-from command.contents.handle_pull import resolution_to_match_repo_and_hoard, calculate_actions, Action
+from command.contents.handle_pull import resolution_to_match_repo_and_hoard, calculate_actions, Action, \
+    MarkIsAvailableBehavior, AddToHoardAndCleanupSameBehavior, AddToHoardAndCleanupNewBehavior, AddNewFileBehavior, \
+    MarkToGetBehavior, MarkForCleanupBehavior, ResetLocalAsCurrentBehavior, RemoveLocalStatusBehavior, \
+    DeleteFileFromHoardBehavior, MoveFileBehavior
 from command.files.command import execute_files_push
 from command.hoard import Hoard
 from command.pathing import HoardPathing
@@ -30,7 +33,6 @@ from gui.confirm_action_screen import ConfirmActionScreen
 from gui.folder_tree import FolderNode, FolderTree, aggregate_on_nodes
 from gui.progress_reporting import StartProgressReporting, MarkProgressReporting, progress_reporting_it, \
     ProgressReporting, progress_reporting_bar
-from resolve_uuid import resolve_remote_uuid
 from util import group_to_dict, format_count, format_size
 
 
@@ -127,6 +129,30 @@ def sum_dicts(old: Dict[T, any], new: Dict[T, any]) -> Dict[T, any]:
 
 PENDING_TO_PULL = 'Hoard vs Repo contents'
 
+def pull_op_to_str(act: Action):
+    if isinstance(act, MarkIsAvailableBehavior):
+        return "mark_avail", 25
+    elif isinstance(act, AddToHoardAndCleanupSameBehavior):
+        return "absorb", 5
+    elif isinstance(act, AddToHoardAndCleanupNewBehavior):
+        return "absorb", 5
+    elif isinstance(act, AddNewFileBehavior):
+        return "add", 10
+    elif isinstance(act, MarkToGetBehavior):
+        return "mark_get", 40
+    elif isinstance(act, MarkForCleanupBehavior):
+        return "mark_deleted", 92
+    elif isinstance(act, ResetLocalAsCurrentBehavior):
+        return "reset_to_local", 20
+    elif isinstance(act, RemoveLocalStatusBehavior):
+        return "unmark", 91
+    elif isinstance(act, DeleteFileFromHoardBehavior):
+        return "delete", 90
+    elif isinstance(act, MoveFileBehavior):
+        return "move", 30
+    else:
+        raise ValueError(f"Unsupported action: {act}")
+
 
 class HoardContentsPendingToPull(Tree[Action]):
     hoard: Hoard | None = reactive(None)
@@ -140,6 +166,9 @@ class HoardContentsPendingToPull(Tree[Action]):
 
         self.op_tree = None
         self.counts = None
+        self.ops_cnt = None
+
+        self.show_size = False
 
         self.expanded = set()
 
@@ -152,10 +181,8 @@ class HoardContentsPendingToPull(Tree[Action]):
             repo = self.hoard.connect_to_repo(self.remote.uuid, True)
             with repo.open_contents(is_readonly=True) as current_contents:
                 async with self.hoard.open_contents(create_missing=False, is_readonly=True) as hoard_contents:
-                    content_prefs = ContentPrefs(hoard_config, pathing, hoard_contents, self.hoard.available_remotes())
-
                     preferences = init_pull_preferences(
-                        content_prefs, self.remote, assume_current=False, force_fetch_local_missing=False)
+                        self.remote, assume_current=False, force_fetch_local_missing=False)
 
                     resolutions = await resolution_to_match_repo_and_hoard(
                         current_contents, hoard_contents, pathing, preferences,
@@ -168,6 +195,10 @@ class HoardContentsPendingToPull(Tree[Action]):
             self.op_tree = FolderTree[Action](actions, lambda action: action.file_being_acted_on.as_posix())
 
             self.counts = await aggregate_counts(self.op_tree)
+            self.ops_cnt = aggregate_on_nodes(
+                self.op_tree,
+                lambda node: {pull_op_to_str(node.data): node.data.hoard_props.size if self.show_size else 1},
+                sum_dicts)
 
             self.root.label = PENDING_TO_PULL + f" ({len(actions)})"
             self.root.data = self.op_tree.root
@@ -199,12 +230,22 @@ class HoardContentsPendingToPull(Tree[Action]):
     def _expand_subtree(self, node: TreeNode[FolderNode[Action]]):
         for _, folder in node.data.folders.items():
             folder_name = Text().append(folder.name).append(" ").append(f"({self.counts[folder]})", style="dim")
-            # cnts_label = self._pretty_folder_label_descriptor(folder)
-            folder_label = folder_name  # .append(" ").append(cnts_label)
+            cnts_label = self._pretty_folder_label_descriptor(folder)
+            folder_label = folder_name.append(" ").append(cnts_label)
             node.add(folder_label, data=folder)
         for _, file in node.data.files.items():
             node.add_leaf(f"{type(file.data)}: {file.data.file_being_acted_on}", data=node.data)
 
+    def _pretty_folder_label_descriptor(self, folder: FolderNode[FileOp]) -> Text:
+        cnts_label = Text().append("{")
+        pending = self.ops_cnt[folder]
+        if pending is not None:
+            for (op_type, order), v in sorted(pending.items(), key=lambda x: x[0][1]):
+                cnts_label.append(op_type) \
+                    .append(" ").append(format_size(v) if self.show_size else format_count(v), style="dim").append(",")
+                    # op_type, style="green" if op_type == "get" else "strike dim" if op_type == "cleanup" else "none") \
+        cnts_label.append("}")
+        return cnts_label
 
 class CaveInfoWidget(Widget):
     class RemoteSettingChanged(Message):
@@ -252,11 +293,11 @@ class CaveInfoWidget(Widget):
             yield Horizontal(
                 Vertical(
                     Button(
-                        "Push files to repo", variant="primary", id="push_files_to_repo"),
+                        "`files push`", variant="primary", id="push_files_to_repo"),
                     HoardContentsPendingToSyncFile(self.hoard, self.remote),
                     id="pane-files-pushed", ),
                 Vertical(
-                    Button("Pull to Hoard", variant="primary", id="pull_to_hoard"),
+                    Button("`contents pull`", variant="primary", id="pull_to_hoard"),
                     HoardContentsPendingToPull(self.hoard, self.remote),
                     id="pane-contents-pull",
                 ),
@@ -343,9 +384,9 @@ class CaveInfoWidget(Widget):
                     f"{self.remote.name}({self.remote.uuid}\n"
                     f"into hoard?")):
             with StringIO() as out:
+                preferences = init_pull_preferences(self.remote, assume_current=False, force_fetch_local_missing=False)
                 await execute_pull(
-                    self.hoard, self.remote,
-                    ignore_epoch=False, assume_current=False, force_fetch_local_missing=False, out=out,
+                    self.hoard, preferences, ignore_epoch=False, out=out,
                     progress_bar=progress_reporting_it(self, "pull-to-hoard-operation", 10))
                 logging.info(out.getvalue())
 

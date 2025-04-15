@@ -3,12 +3,10 @@ import logging
 import threading
 from io import StringIO
 from pathlib import Path, PurePosixPath
-from threading import Thread
-from time import sleep
 
 import fire
-from watchdog.events import FileSystemEventHandler, FileSystemEvent, DirModifiedEvent, FileOpenedEvent, FileClosedEvent, \
-    FileClosedNoWriteEvent
+from watchdog.events import FileSystemEventHandler, DirModifiedEvent, FileModifiedEvent, DirCreatedEvent, \
+    FileCreatedEvent, DirDeletedEvent, FileDeletedEvent, DirMovedEvent, FileMovedEvent
 from watchdog.observers import Observer
 
 from command.comparison_repo import find_repo_changes, \
@@ -28,23 +26,28 @@ class RepoWatcher(FileSystemEventHandler):
 
         self.lock = threading.Lock()
 
-    def on_any_event(self, event: FileSystemEvent):
-        if isinstance(event, DirModifiedEvent):
-            logging.debug("skipping directory event: %s", event)
-            return
+    def on_modified(self, event: DirModifiedEvent | FileModifiedEvent):
+        if isinstance(event, FileModifiedEvent):
+            logging.info("processing modified: %s", event)
+            self.add_file_or_folder(event.src_path)
 
-        if isinstance(event, FileOpenedEvent) or isinstance(event, FileClosedEvent) or \
-                isinstance(event, FileClosedNoWriteEvent):
-            logging.debug("skipping non-write event: %s", event)
-            return
+    def on_created(self, event: DirCreatedEvent | FileCreatedEvent) -> None:
+        if isinstance(event, FileCreatedEvent):
+            logging.info("processing create: %s", event)
+            self.add_file_or_folder(event.src_path)
 
-        logging.debug("processing event: %s", event)
+    def on_deleted(self, event: DirDeletedEvent | FileDeletedEvent) -> None:
+        if isinstance(event, FileDeletedEvent):
+            logging.info("processing delete: %s", event)
+            self.add_file_or_folder(event.src_path)
 
-        self.add_file_or_folder(event.src_path)
-        self.add_file_or_folder(event.dest_path)
-        logging.debug(f"# queue contents: {len(self._queue)}")
+    def on_moved(self, event: DirMovedEvent | FileMovedEvent) -> None:
+        if isinstance(event, FileMovedEvent):
+            logging.info("processing move: %s", event)
+            self.add_file_or_folder(event.src_path)
+            self.add_file_or_folder(event.dest_path)
 
-    def add_file_or_folder(self, path):
+    def add_file_or_folder(self, path: str):
         if path == '':
             return
 
@@ -54,13 +57,14 @@ class RepoWatcher(FileSystemEventHandler):
                 return
 
             rel_path = src_path.relative_to(self.hoard_path)
+            logging.debug(f"Considering relative path {rel_path}...")
             if self.hoard_ignore.matches(rel_path):
                 logging.debug(f"Skipping {src_path} as it is in hoard ignore.")
                 return
 
-            logging.info("add %s", src_path)
+            logging.info("Add %s as touched", src_path)
 
-            self._queue.add(path)
+            self._queue.add(src_path)
 
     def pop_queue(self) -> set[PurePosixPath]:
         with self.lock:
@@ -71,7 +75,7 @@ class RepoWatcher(FileSystemEventHandler):
 
 async def updater(
         watcher: RepoWatcher, connected_repo: ConnectedRepo, hoard_ignore: HoardIgnore,
-        sleep_interval: int = 10, between_runs_interval: int = 1):
+        sleep_interval: float, between_runs_interval: float):
     logging.info("Start updating!")
     while True:
         logging.debug("Getting current queue...")
@@ -79,7 +83,7 @@ async def updater(
         allowed_paths: list[PurePosixPath] = list(watcher.pop_queue())
         if len(allowed_paths) == 0:
             logging.debug("No items to check, sleeping for %r seconds", sleep_interval)
-            sleep(sleep_interval)
+            await asyncio.sleep(sleep_interval)
             continue
 
         # now we have a batch, process it
@@ -104,12 +108,13 @@ async def updater(
             assert not contents.config.is_dirty
 
         logging.debug("Sleeping between runs for %r seconds", between_runs_interval)
-        sleep(between_runs_interval)
+        await asyncio.sleep(between_runs_interval)
 
     logging.info("Ending updating!")
 
 
-def run_daemon(path: str, assume_current: bool = False):
+async def run_daemon(path: str, assume_current: bool = False, sleep_interval: float = 10,
+                     between_runs_interval: float = 1):
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(funcName)20s() - %(message)s',
@@ -132,16 +137,19 @@ def run_daemon(path: str, assume_current: bool = False):
         connected_repo = repo.open_repo().connect(require_contents=True)
 
         if not assume_current:
-            asyncio.run(refresh_all(connected_repo, hoard_ignore))
+            await refresh_all(connected_repo, hoard_ignore)
 
-        def run_updater():
-            asyncio.run(updater(event_handler, connected_repo, hoard_ignore))
+        updater_task = asyncio.create_task(updater(
+            event_handler, connected_repo, hoard_ignore, sleep_interval, between_runs_interval))
 
-        updater_thread = Thread(target=run_updater, daemon=True)
-        updater_thread.start()
+        try:
+            def wait_for_observer_to_stop():
+                while observer.is_alive():
+                    observer.join(1)
 
-        while observer.is_alive():
-            observer.join(1)
+            await asyncio.get_event_loop().run_in_executor(None, wait_for_observer_to_stop)
+        finally:
+            updater_task.cancel("Observer has exited!")
     finally:
         observer.stop()
         observer.join()
@@ -154,8 +162,7 @@ async def refresh_all(connected_repo, hoard_ignore):
 
         logging.info(f"Bumped epoch to {contents.config.epoch}")
         with StringIO() as out:
-            async for change in find_repo_changes(
-                    connected_repo.path, contents, hoard_ignore, RepoFileStatus.ADDED, skip_integrity_checks=False):
+            async for change in find_repo_changes(connected_repo.path, contents, hoard_ignore, RepoFileStatus.ADDED):
                 _apply_repo_change_to_contents(change, contents, False, out)
             logging.info(out.getvalue())
 

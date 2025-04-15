@@ -810,10 +810,10 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         self.assertEqual(
             "MOVED test.me.4 TO lets_get_it_started/test.me.4-renamed\n"
             "REMOVED_FILE_FALLBACK_TOO_MANY wat/test.me.2\n"
-            "ADDED_FILE test.me.added\n"
             "ADDED_FILE lets_get_it_started/test.me.2-butnew\n"
             "ADDED_FILE lets_get_it_started/test.me.2-butsecond\n"
             "MODIFIED_FILE test.me.1\n"
+            "ADDED_FILE test.me.added\n"
             "Refresh done!", res)
 
         res = await hoard_cmd.contents.differences(full_cave_cmd.current_uuid())
@@ -930,11 +930,11 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
 
         res = await copy_cave_cmd.refresh()
         self.assertEqual(
-            "ADDED_FILE test.me.1\n"
-            "ADDED_FILE test.me.added\n"
             "ADDED_FILE lets_get_it_started/test.me.2-butnew\n"
             "ADDED_FILE lets_get_it_started/test.me.2-butsecond\n"
             "ADDED_FILE lets_get_it_started/test.me.4-renamed\n"
+            "ADDED_FILE test.me.1\n"
+            "ADDED_FILE test.me.added\n"
             "ADDED_FILE wat/test.me.3\n"
             "Refresh done!", res)
 
@@ -1045,10 +1045,10 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         self.assertEqual(
             "MOVED test.me.4 TO lets_get_it_started/test.me.4-renamed\n"
             "REMOVED_FILE_FALLBACK_TOO_MANY wat/test.me.2\n"
-            "ADDED_FILE test.me.added\n"
             "ADDED_FILE lets_get_it_started/test.me.2-butnew\n"
             "ADDED_FILE lets_get_it_started/test.me.2-butsecond\n"
             "MODIFIED_FILE test.me.1\n"
+            "ADDED_FILE test.me.added\n"
             "Refresh done!", res)
 
         res = full_cave_cmd.status_index(show_dates=False)
@@ -1182,11 +1182,11 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
 
         res = await copy_cave_cmd.refresh()
         self.assertEqual(
-            "ADDED_FILE test.me.1\n"
-            "ADDED_FILE test.me.added\n"
             "ADDED_FILE lets_get_it_started/test.me.2-butnew\n"
             "ADDED_FILE lets_get_it_started/test.me.2-butsecond\n"
             "ADDED_FILE lets_get_it_started/test.me.4-renamed\n"
+            "ADDED_FILE test.me.1\n"
+            "ADDED_FILE test.me.added\n"
             "ADDED_FILE wat/test.me.3\n"
             "Refresh done!", res)
 
@@ -1206,11 +1206,11 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
 
         res = await backup_cave_cmd.refresh()
         self.assertEqual(
-            "ADDED_FILE test.me.added\n"
             "ADDED_FILE lets_get_it_started/test.me.2-butnew\n"
             "ADDED_FILE lets_get_it_started/test.me.2-butsecond\n"
             "ADDED_FILE lets_get_it_started/test.me.4-renamed\n"
             "MODIFIED_FILE test.me.1\n"
+            "ADDED_FILE test.me.added\n"
             "Refresh done!", res)
 
         res = await full_cave_cmd.refresh()
@@ -1384,8 +1384,8 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await full_cave_cmd.refresh()
         self.assertEqual(
             "MOVED test.me.4 TO lets_get_it_started/test.me.4-renamed\n"
-            "ADDED_FILE test.me.added\n"
             "MODIFIED_FILE test.me.1\n"
+            "ADDED_FILE test.me.added\n"
             "Refresh done!", res)
 
         res = full_cave_cmd.status_index(show_dates=False)
@@ -1522,3 +1522,142 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             "|repo-full-name           |        47|        47|          |          |\n"
             "|repo-partial-name        |        13|          |         5|         8|\n",
             res)
+
+    async def test_restoring_modified_state_from_hoard(self):
+        hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = \
+            await init_complex_hoard(self.tmpdir.name)
+
+        res = await hoard_cmd.contents.pull(all=True)
+        self.assertEqual([
+            'ADD_NEW_TO_HOARD /test.me.1',
+            'ADD_NEW_TO_HOARD /wat/test.me.2',
+            "Sync'ed repo-partial-name to hoard!",
+            '=/test.me.1',
+            '=/wat/test.me.2',
+            'ADD_NEW_TO_HOARD /test.me.4',
+            'ADD_NEW_TO_HOARD /wat/test.me.3',
+            "Sync'ed repo-full-name to hoard!",
+            '=/test.me.1',
+            '=/wat/test.me.3',
+            "Sync'ed repo-backup-name to hoard!",
+            'CLEANUP_SAME /test.me.4',
+            'INCOMING_TO_HOARD /test.me.5',
+            'INCOMING_TO_HOARD /wat/test.me.6',
+            'CLEANUP_DIFFERENT /wat/test.me.3',
+            "Sync'ed repo-incoming-name to hoard!",
+            'DONE'], res.splitlines())
+
+        res = await hoard_cmd.files.push(full_cave_cmd.current_uuid())
+        self.assertEqual([
+            'repo-full-name:',
+            '+ test.me.5',
+            '+ wat/test.me.6',
+            'repo-full-name:',
+            'DONE'], res.splitlines())
+
+        self.assertDictEqual({
+            'repo-full/test.me.1': 'gsadfs',
+            'repo-full/test.me.4': 'fwadeaewdsa',
+            'repo-full/test.me.5': 'adsfg',
+            'repo-full/wat/test.me.2': 'gsadf3dq',
+            'repo-full/wat/test.me.3': 'afaswewfas',
+            'repo-full/wat/test.me.6': 'f2fwsdf'},
+            dump_file_list(self.tmpdir.name, "repo-full", data=True))
+
+        res = await full_cave_cmd.refresh()
+        self.assertEqual([
+            'ADDED_FILE test.me.5',
+            'ADDED_FILE wat/test.me.6',
+            'Refresh done!'], res.splitlines())
+
+        res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
+        self.assertEqual(["Sync'ed repo-full-name to hoard!", 'DONE'], res.splitlines())
+
+        # modify file contents
+        pfw = pretty_file_writer(self.tmpdir.name)
+        pfw('repo-full/wat/test.me.2', None)  # delete file
+        pfw('repo-full/test.me.4', "alhifqh98;wf")  # modify file
+        shutil.move(
+            join(self.tmpdir.name, 'repo-full/wat/test.me.6'),
+            join(self.tmpdir.name, 'repo-full/test.me.6-moved'))
+
+        res = await full_cave_cmd.refresh()
+        self.assertEqual([
+            'DELETED_NO_COPY wat/test.me.2',
+            'MOVED wat/test.me.6 TO test.me.6-moved',
+            'MODIFIED_FILE test.me.4',
+            'Refresh done!'], res.splitlines())
+
+        res = await hoard_cmd.contents.pending_pull(full_cave_cmd.current_uuid())
+        self.assertEqual([
+            'Status of repo-full-name:',
+            'ADD_NEW_FILE_BEHAVIOR /test.me.6-moved',
+            'RESET_LOCAL_AS_CURRENT_BEHAVIOR /test.me.4',
+            'DELETE_FILE_FROM_HOARD_BEHAVIOR /wat/test.me.2',
+            'MOVE_FILE_BEHAVIOR /wat/test.me.6'], res.splitlines())
+
+        res = await hoard_cmd.files.pending(full_cave_cmd.current_uuid())
+        self.assertEqual(['repo-full-name:', 'DONE'], res.splitlines())
+
+        res = await hoard_cmd.contents.ls(show_remotes=False)
+        self.assertEqual([
+            '/',
+            '/test.me.1 = a:3',
+            '/test.me.4 = a:1 g:1 c:1',
+            '/test.me.5 = a:1 g:1 c:1',
+            '/wat',
+            '/wat/test.me.2 = a:2 g:1',
+            '/wat/test.me.3 = a:2 c:1',
+            '/wat/test.me.6 = a:1 g:1 c:1',
+            'DONE'], res.splitlines())
+
+        res = await hoard_cmd.contents.restore(full_cave_cmd.current_uuid())
+        self.assertEqual([
+            'DELETE /test.me.6-moved',  # fixme should clean up unnecessary files maybe?
+            'g/test.me.4',
+            'g/wat/test.me.2',
+            'g/wat/test.me.6',
+            "Sync'ed repo-full-name to hoard!",
+            'DONE'], res.splitlines())
+
+        res = await hoard_cmd.files.pending(full_cave_cmd.current_uuid())
+        self.assertEqual([
+            'repo-full-name:',
+            'TO_GET (from 1) /wat/test.me.2',
+            'TO_GET (from 0) /test.me.4',
+            'TO_GET (from 0) /wat/test.me.6',
+            'TO_CLEANUP (is in 0) /test.me.6-moved',
+            ' repo-partial-name has 1 files',
+            'DONE'], res.splitlines())
+
+        res = await hoard_cmd.files.push(full_cave_cmd.current_uuid())
+        self.assertEqual([
+            'repo-full-name:',
+            '+ test.me.4',
+            '+ wat/test.me.2',
+            '+ wat/test.me.6',
+            'repo-full-name:',
+            'd test.me.6-moved',
+            'remove dangling /test.me.6-moved',
+            'DONE'], res.splitlines())
+
+        self.assertDictEqual({
+            'repo-full/test.me.1': 'gsadfs',
+            'repo-full/test.me.4': 'fwadeaewdsa',
+            'repo-full/test.me.5': 'adsfg',
+            'repo-full/wat/test.me.2': 'gsadf3dq',
+            'repo-full/wat/test.me.3': 'afaswewfas',
+            'repo-full/wat/test.me.6': 'f2fwsdf'},
+            dump_file_list(self.tmpdir.name, "repo-full", data=True))
+
+        res = await hoard_cmd.contents.ls(show_remotes=False)
+        self.assertEqual([
+            '/',
+            '/test.me.1 = a:3',
+            '/test.me.4 = a:1 g:1 c:1',
+            '/test.me.5 = a:1 g:1 c:1',
+            '/wat',
+            '/wat/test.me.2 = a:2 g:1',
+            '/wat/test.me.3 = a:2 c:1',
+            '/wat/test.me.6 = a:1 g:1 c:1',
+            'DONE'], res.splitlines())

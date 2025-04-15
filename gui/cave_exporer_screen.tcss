@@ -38,7 +38,7 @@ CaveInfoWidget {
 }
 
 #pane-contents-pull, #pane-files-pushed {
-    width: 50%
+    width: 40%
 }
 
 RichLog#cave_explorer_log {

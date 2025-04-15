@@ -61,7 +61,7 @@ class FolderTree[T]:
 R = TypeVar('R')
 
 
-def aggregate_on_nodes(tree: FolderTree[T], file_stats: Callable[[T], R], agg: Callable[[R | None, R], R]) \
+def aggregate_on_nodes[T, R](tree: FolderTree[T], file_stats: Callable[[T], R], agg: Callable[[R | None, R], R]) \
         -> Dict[FolderNode[T] | FileNode[T], R]:
     stats = dict()
     append_stats_on_children(tree.root, file_stats, agg, stats)
