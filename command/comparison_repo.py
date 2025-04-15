@@ -1,3 +1,4 @@
+import enum
 import logging
 import os
 import pathlib
@@ -6,6 +7,7 @@ import traceback
 from asyncio import TaskGroup
 from io import StringIO
 from itertools import batched
+from os import PathLike
 from typing import Iterable, Tuple, Dict, Optional, List, AsyncGenerator
 
 import aiofiles.os
@@ -15,7 +17,7 @@ import command.fast_path
 from command.fast_path import FastPosixPath
 from command.hoard_ignore import HoardIgnore
 from contents.repo import RepoContents
-from contents.repo_props import RepoFileStatus, RepoFileProps
+from contents.repo_props import RepoFileStatus, RepoFileProps, FileDesc
 from hashing import find_hashes, fast_hash_async, fast_hash
 from util import group_to_dict, run_in_separate_loop
 
@@ -89,10 +91,10 @@ class FileModified:
         self.size = size
         self.fasthash = fasthash
 
+
 class FileIsSame:
     def __init__(self, relpath: FastPosixPath):
         self.relpath = relpath
-
 
 
 type RepoChange = FileIsSame | FileDeleted | FileModified | FileMoved | FileAdded
@@ -117,14 +119,14 @@ async def compute_changes_from_diffs(diffs_stream: AsyncGenerator[RepoDiffs], re
     async for diff in diffs_stream:
         if isinstance(diff, FileNotInFilesystem):
             logging.debug(f"File not found, marking for removal: {diff.filepath}")
-            files_maybe_removed.append((diff.filepath, diff.props))
+            files_maybe_removed.append((diff.filepath, diff.repo_props))
         elif isinstance(diff, RepoFileSame):
             logging.debug(f"File {diff.filepath} is same.")
             yield FileIsSame(diff.filepath)
         elif isinstance(diff, RepoFileDifferent):
             logging.debug(f"File {diff.filepath} is different, adding to check.")
             files_to_add_or_update[pathlib.Path(repo_path).joinpath(diff.filepath)] = \
-                (RepoFileStatus.MODIFIED, diff.props)
+                (RepoFileStatus.MODIFIED, diff.repo_props)
         elif isinstance(diff, FileNotInRepo):
             logging.debug(f"File {diff.filepath} not in repo, adding.")
             files_to_add_or_update[pathlib.Path(repo_path).joinpath(diff.filepath)] = \
@@ -196,30 +198,30 @@ async def compute_changes_from_diffs(diffs_stream: AsyncGenerator[RepoDiffs], re
 
 
 class FileNotInFilesystem:
-    def __init__(self, filepath: FastPosixPath, props: RepoFileProps):
+    def __init__(self, filepath: FastPosixPath, repo_props: RepoFileProps):
         assert not filepath.is_absolute()
         self.filepath = filepath
-        self.props = props
+        self.repo_props = repo_props
 
 
 class RepoFileDifferent:
-    def __init__(self, filepath: FastPosixPath, props: RepoFileProps, mtime: float, size: int, fasthash: str):
+    def __init__(self, filepath: FastPosixPath, repo_props: RepoFileProps, filesystem_prop: FileDesc):
         assert not filepath.is_absolute()
 
         self.filepath = filepath
-        self.props = props
+        self.repo_props = repo_props
 
-        self.mtime = mtime
-        self.size = size
-        self.fasthash = fasthash
+        self.filesystem_prop = filesystem_prop
 
 
 class RepoFileSame:
-    def __init__(self, filepath: FastPosixPath, props: RepoFileProps, mtime: float):
+    def __init__(self, filepath: FastPosixPath, repo_props: RepoFileProps, filesystem_prop: FileDesc):
         assert not filepath.is_absolute()
         self.filepath = filepath
-        self.props = props
-        self.mtime = mtime
+        self.repo_props = repo_props
+
+        self.filesystem_prop = filesystem_prop
+
 
 class FileNotInRepo:
     def __init__(self, filepath: FastPosixPath):
@@ -260,16 +262,15 @@ async def compute_difference_between_contents_and_filesystem(
     with alive_bar(len(file_path_matches), title="Checking maybe mod files") as m_bar:
         async def find_size_mtime_of(file_fullpath: pathlib.Path) -> AsyncGenerator[RepoDiffs]:
             try:
-                stats = await aiofiles.os.stat(file_fullpath)
+                filesystem_prop = await read_filesystem_desc(file_fullpath)
 
                 file_path_local = command.fast_path.FastPosixPath(file_fullpath).relative_to(repo_path)
                 props = contents.fsobjects.get_existing(file_path_local)
 
-                fasthash = await fast_hash_async(file_fullpath)
-                if props.fasthash == fasthash:
-                    yield RepoFileSame(file_path_local, props, stats.st_mtime)
+                if props.fasthash == filesystem_prop.fasthash:
+                    yield RepoFileSame(file_path_local, props, filesystem_prop)
                 else:
-                    yield RepoFileDifferent(file_path_local, props, stats.st_mtime, stats.st_size, fasthash)
+                    yield RepoFileDifferent(file_path_local, props, filesystem_prop)
             except OSError as e:
                 logging.error(e)
             finally:
@@ -291,6 +292,13 @@ async def compute_difference_between_contents_and_filesystem(
         for task in tasks:
             for result in await task:
                 yield result
+
+
+async def read_filesystem_desc(file_fullpath: pathlib.Path) -> FileDesc:
+    stats = await aiofiles.os.stat(file_fullpath)
+    fasthash = await fast_hash_async(file_fullpath)
+    filesystem_prop = FileDesc(stats.st_size, stats.st_mtime, fasthash, None)
+    return filesystem_prop
 
 
 async def compute_difference_filtered_by_path(
@@ -317,7 +325,8 @@ async def compute_difference_filtered_by_path(
                 if existing_prop.fasthash == fasthash:
                     yield RepoFileSame(FastPosixPath(local_path), existing_prop, stats.st_mtime)
                 else:
-                    yield RepoFileDifferent(FastPosixPath(local_path), existing_prop, stats.st_mtime, stats.st_size, fasthash)
+                    yield RepoFileDifferent(FastPosixPath(local_path), existing_prop, stats.st_mtime, stats.st_size,
+                                            fasthash)
         else:
             if path_on_device.is_file():
                 yield FileNotInRepo(FastPosixPath(local_path))
