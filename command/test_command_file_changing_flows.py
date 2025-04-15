@@ -810,10 +810,10 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         self.assertEqual(
             "MOVED test.me.4 TO lets_get_it_started/test.me.4-renamed\n"
             "REMOVED_FILE_FALLBACK_TOO_MANY wat/test.me.2\n"
+            "MODIFIED_FILE test.me.1\n"
             "ADDED_FILE test.me.added\n"
             "ADDED_FILE lets_get_it_started/test.me.2-butnew\n"
             "ADDED_FILE lets_get_it_started/test.me.2-butsecond\n"
-            "MODIFIED_FILE test.me.1\n"
             "Refresh done!", res)
 
         res = await hoard_cmd.contents.differences(full_cave_cmd.current_uuid())
@@ -1045,10 +1045,10 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         self.assertEqual(
             "MOVED test.me.4 TO lets_get_it_started/test.me.4-renamed\n"
             "REMOVED_FILE_FALLBACK_TOO_MANY wat/test.me.2\n"
+            "MODIFIED_FILE test.me.1\n"
             "ADDED_FILE test.me.added\n"
             "ADDED_FILE lets_get_it_started/test.me.2-butnew\n"
             "ADDED_FILE lets_get_it_started/test.me.2-butsecond\n"
-            "MODIFIED_FILE test.me.1\n"
             "Refresh done!", res)
 
         res = full_cave_cmd.status_index(show_dates=False)
@@ -1206,11 +1206,11 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
 
         res = await backup_cave_cmd.refresh()
         self.assertEqual(
+            "MODIFIED_FILE test.me.1\n"
             "ADDED_FILE test.me.added\n"
             "ADDED_FILE lets_get_it_started/test.me.2-butnew\n"
             "ADDED_FILE lets_get_it_started/test.me.2-butsecond\n"
             "ADDED_FILE lets_get_it_started/test.me.4-renamed\n"
-            "MODIFIED_FILE test.me.1\n"
             "Refresh done!", res)
 
         res = await full_cave_cmd.refresh()
@@ -1384,8 +1384,8 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await full_cave_cmd.refresh()
         self.assertEqual(
             "MOVED test.me.4 TO lets_get_it_started/test.me.4-renamed\n"
-            "ADDED_FILE test.me.added\n"
             "MODIFIED_FILE test.me.1\n"
+            "ADDED_FILE test.me.added\n"
             "Refresh done!", res)
 
         res = full_cave_cmd.status_index(show_dates=False)

@@ -265,9 +265,8 @@ class FilesystemState:
             "INSERT INTO filesystem_files (fullpath, error) VALUES (?, ?)",
             (fullpath.as_posix(), error))
 
-    def diffs(self) -> Iterable[
-        FileNotInFilesystem | FileNotInRepo | RepoFileSame | RepoFileDifferent | ErrorReadingFilesystem]:
-        def build_diff(_, row):
+    def diffs(self) -> Iterable[RepoDiffs]:
+        def build_diff(_, row) -> RepoDiffs:
             fo_fullpath, fo_size, fo_mtime, fo_fasthash, fo_md5, fo_last_status, fo_last_update_epoch, fo_last_related_fullpath, \
                 ff_fullpath, ff_size, ff_mtime, ff_fasthash, ff_md5, ff_error = row
 
@@ -299,11 +298,14 @@ class FilesystemState:
         curr = self.contents.conn.cursor()
         curr.row_factory = build_diff
 
+        # finds all that are not marked as DELETED or MOVED_FROM, matching against current contents
         yield from curr.execute(
             "SELECT fo.fullpath, "
             "  fo.size, fo.mtime, fo.fasthash, fo.md5, fo.last_status, fo.last_update_epoch, fo.last_related_fullpath, "
             "  ff.fullpath, ff.size, ff.mtime, ff.fasthash, ff.md5, ff.error "
-            "FROM fsobject as fo FULL JOIN filesystem_files as ff on fo.fullpath = ff.fullpath AND fo.isdir = FALSE ")
+            "FROM (SELECT * FROM fsobject WHERE fsobject.isdir = FALSE AND fsobject.last_status NOT IN (?, ?)) AS fo "
+            "  FULL OUTER JOIN filesystem_files as ff ON fo.fullpath = ff.fullpath ",
+            (RepoFileStatus.DELETED.value, RepoFileStatus.MOVED_FROM.value))
 
 
 async def compute_difference_between_contents_and_filesystem(
