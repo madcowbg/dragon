@@ -30,6 +30,7 @@ class HoardExplorerWidget(Widget):
 
     def __init__(self, *children: Widget):
         super().__init__(*children)
+        self.conn = None
 
     def compose(self) -> ComposeResult:
         if self.hoard_contents is not None:
@@ -52,13 +53,16 @@ class HoardExplorerWidget(Widget):
     @work(exclusive=True)
     async def close_and_reopen(self):
         if self.hoard_contents is not None:
-            await self.hoard_contents.__aexit__(None, None, None)
+            await self.conn.__aexit__(None, None, None)
 
         self._hoard = Hoard(self.hoard_path.as_posix())
         try:
             self.notify(f"Loading hoard at {self._hoard.hoardpath}...")
-            self.hoard_contents = self._hoard.open_contents(create_missing=False, is_readonly=not self.can_modify)
-            await self.hoard_contents.__aenter__()
+            self.conn = self._hoard.open_contents(create_missing=False)
+            if self.can_modify:
+                self.conn = self.conn.writeable()
+
+            self.hoard_contents = await self.conn.__aenter__()
 
             await self.recompose()
         except Exception as e:
@@ -68,7 +72,7 @@ class HoardExplorerWidget(Widget):
 
     async def on_unmount(self):
         if self.hoard_contents is not None:
-            await self.hoard_contents.__aexit__(None, None, None)
+            await self.conn.__aexit__(None, None, None)
 
     def on_tree_node_selected(self, event: Tree.NodeSelected):
         self.query_one(NodeDescription).hoard_item = event.node.data

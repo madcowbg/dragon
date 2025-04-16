@@ -1,10 +1,11 @@
 import logging
 import os
+import pathlib
 from typing import List
 
 from command.repo import ConnectedRepo
 from config import HoardConfig, HoardPaths
-from contents.hoard import HoardContents, HOARD_CONTENTS_FILENAME, HoardContentsConn
+from contents.hoard import HoardContents, HOARD_CONTENTS_FILENAME, HoardContentsConn, ReadonlyHoardContentsConn
 from exceptions import RepoOpeningFailed
 from resolve_uuid import load_config, load_paths, CONFIG_FILE
 
@@ -35,7 +36,7 @@ class Hoard:
             logging.debug(of)
             return False
 
-    def open_contents(self, create_missing: bool = False, is_readonly: bool = True) -> HoardContentsConn:
+    def open_contents(self, create_missing: bool = False) -> ReadonlyHoardContentsConn:
         hoard_contents_filename = os.path.join(self.hoardpath, HOARD_CONTENTS_FILENAME)
         if not os.path.isfile(os.path.join(self.hoardpath, CONFIG_FILE)):
             raise ValueError(f"Hoard is not configured in {self.hoardpath}!")
@@ -43,7 +44,7 @@ class Hoard:
             raise ValueError(
                 f"Hoard contents file {hoard_contents_filename} is not available,"
                 f" but --create-missing = False")
-        return HoardContents.load(self.hoardpath, is_readonly)
+        return ReadonlyHoardContentsConn(pathlib.Path(self.hoardpath))
 
     def available_remotes(self) -> List[str]:
         return [

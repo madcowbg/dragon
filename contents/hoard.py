@@ -613,13 +613,6 @@ class HoardContentsConn:
 
 
 class HoardContents:
-    @staticmethod
-    def load(folder: str, is_readonly: bool) -> "HoardContentsConn":
-        res = ReadonlyHoardContentsConn(pathlib.Path(folder))
-        if not is_readonly:
-            res = res.writeable()
-        return res
-
     conn: Connection
     config: HoardContentsConfig
     fsobjects: HoardFSObjects
