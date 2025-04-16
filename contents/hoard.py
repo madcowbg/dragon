@@ -184,7 +184,7 @@ def _filename(filepath: str) -> str:
 STATUSES_TO_FETCH = [HoardFileStatus.COPY.value, HoardFileStatus.GET.value, HoardFileStatus.MOVE.value]
 
 
-class HoardFSObjects:
+class ReadonlyHoardFSObjects:
     def __init__(self, parent: "HoardContents"):
         self.parent = parent
 
@@ -385,6 +385,58 @@ class HoardFSObjects:
             "SELECT count(1) > 0 FROM fsobject WHERE fsobject.fullpath = ? AND isdir = FALSE ",
             (file_path.as_posix(),)).fetchone()
 
+    def _first_value_curr(self):
+        curr = self.parent.conn.cursor()
+        curr.row_factory = FIRST_VALUE
+        return curr
+
+    def used_size(self, repo_uuid: str) -> int:
+        used_size = self.parent.conn.execute(
+            "SELECT SUM(fsobject.size) "
+            "FROM fsobject "
+            "WHERE isdir = FALSE AND EXISTS ("
+            "  SELECT 1 FROM fspresence "
+            "  WHERE fspresence.fsobject_id = fsobject.fsobject_id AND "
+            "    uuid = ? AND "
+            f"    status in ({', '.join(['?'] * len(STATUSES_THAT_USE_SIZE))}))",
+            (repo_uuid, *STATUSES_THAT_USE_SIZE)) \
+            .fetchone()[0]
+        return used_size if used_size is not None else 0
+
+    def stats_in_folder(self, folder_path: FastPosixPath) -> Tuple[int, int]:
+        assert folder_path.is_absolute()
+        subfolder_filter = SubfolderFilter('fullpath', folder_path)
+
+        return self.parent.conn.execute(
+            "SELECT COUNT(1), IFNULL(SUM(fsobject.size), 0) FROM fsobject "
+            f"WHERE isdir = FALSE AND {subfolder_filter.where_clause}",  # fast search using the index
+            subfolder_filter.params).fetchone()
+
+    @cached_property
+    def query(self) -> "Query":
+        return Query(self.parent.conn)
+
+    def get_sub_dirs(self, fullpath: str) -> Iterable[str]:
+        curr = self.parent.conn.cursor()
+        curr.row_factory = FIRST_VALUE
+        yield from curr.execute(
+            "SELECT fullpath FROM folder_structure "
+            "WHERE parent = ? AND isdir = TRUE",
+            (fullpath,))
+
+    def get_sub_files(self, fullpath: str) -> Iterable[str]:
+        curr = self.parent.conn.cursor()
+        curr.row_factory = FIRST_VALUE
+        yield from curr.execute(
+            "SELECT fullpath FROM folder_structure "
+            "WHERE parent = ? AND isdir = FALSE",
+            (fullpath,))
+
+
+class HoardFSObjects(ReadonlyHoardFSObjects):
+    def __init__(self, parent: "HoardContents"):
+        super().__init__(parent)
+
     def add_or_replace_file(self, filepath: FastPosixPath, props: RepoFileProps) -> HoardFileProps:
         assert filepath.is_absolute()
         curr = self.parent.conn.cursor()
@@ -402,11 +454,6 @@ class HoardFSObjects:
             "SELECT fsobject_id FROM fsobject WHERE fullpath = ?", (filepath.as_posix(),)).fetchone()
         curr.execute("DELETE FROM fspresence WHERE fsobject_id = ?", (fsobject_id,))
         return HoardFileProps(self.parent, fsobject_id, props.size, props.fasthash)
-
-    def _first_value_curr(self):
-        curr = self.parent.conn.cursor()
-        curr.row_factory = FIRST_VALUE
-        return curr
 
     def delete(self, curr_path: FastPosixPath):
         assert curr_path.is_absolute()
@@ -475,48 +522,6 @@ class HoardFSObjects:
             "INSERT INTO fspresence(fsobject_id, uuid, status) VALUES (?, ?, ?)",
             [(new_path_id, uuid, HoardFileStatus.COPY.value) for uuid in previously_added_repos])
 
-    def used_size(self, repo_uuid: str) -> int:
-        used_size = self.parent.conn.execute(
-            "SELECT SUM(fsobject.size) "
-            "FROM fsobject "
-            "WHERE isdir = FALSE AND EXISTS ("
-            "  SELECT 1 FROM fspresence "
-            "  WHERE fspresence.fsobject_id = fsobject.fsobject_id AND "
-            "    uuid = ? AND "
-            f"    status in ({', '.join(['?'] * len(STATUSES_THAT_USE_SIZE))}))",
-            (repo_uuid, *STATUSES_THAT_USE_SIZE)) \
-            .fetchone()[0]
-        return used_size if used_size is not None else 0
-
-    def stats_in_folder(self, folder_path: FastPosixPath) -> Tuple[int, int]:
-        assert folder_path.is_absolute()
-        subfolder_filter = SubfolderFilter('fullpath', folder_path)
-
-        return self.parent.conn.execute(
-            "SELECT COUNT(1), IFNULL(SUM(fsobject.size), 0) FROM fsobject "
-            f"WHERE isdir = FALSE AND {subfolder_filter.where_clause}",  # fast search using the index
-            subfolder_filter.params).fetchone()
-
-    @cached_property
-    def query(self) -> "Query":
-        return Query(self.parent.conn)
-
-    def get_sub_dirs(self, fullpath: str) -> Iterable[str]:
-        curr = self.parent.conn.cursor()
-        curr.row_factory = FIRST_VALUE
-        yield from curr.execute(
-            "SELECT fullpath FROM folder_structure "
-            "WHERE parent = ? AND isdir = TRUE",
-            (fullpath,))
-
-    def get_sub_files(self, fullpath: str) -> Iterable[str]:
-        curr = self.parent.conn.cursor()
-        curr.row_factory = FIRST_VALUE
-        yield from curr.execute(
-            "SELECT fullpath FROM folder_structure "
-            "WHERE parent = ? AND isdir = FALSE",
-            (fullpath,))
-
 
 class Query:
     def __init__(self, conn: Connection):
@@ -561,15 +566,26 @@ STATUSES_THAT_USE_SIZE = [
     HoardFileStatus.CLEANUP.value]
 
 
-class HoardContents:
-    @staticmethod
-    def load(folder: str, is_readonly: bool) -> "HoardContents":
+class ReadonlyHoardContentsConn:
+    def __init__(self, folder: pathlib.Path):
+        self.folder = folder
+
+    async def __aenter__(self) -> "HoardContents":
+        self.contents = HoardContents(self.folder, True)
+        return self.contents
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        self.contents.close(False)
+        return None
+
+    def writeable(self):
+        return HoardContentsConn(self.folder)
+
+class HoardContentsConn:
+    def __init__(self, folder: pathlib.Path):
         config_filename = os.path.join(folder, HOARD_CONTENTS_FILENAME)
 
         if not os.path.isfile(config_filename):
-            if is_readonly:
-                raise ValueError("Cannot create a read-only hoard!")
-
             conn = sqlite3_standard(config_filename)
             curr = conn.cursor()
 
@@ -580,54 +596,53 @@ class HoardContents:
 
         toml_filename = os.path.join(folder, HOARD_CONTENTS_TOML)
         if not os.path.isfile(toml_filename):
-            if is_readonly:
-                raise ValueError("Cannot create a read-only hoard!")
-
             with open(toml_filename, "w") as f:
                 rtoml.dump({
                     "updated": datetime.now().isoformat()
                 }, f)
 
-        return HoardContents(folder, is_readonly)
+        self.folder = folder
+
+    async def __aenter__(self) -> "HoardContents":
+        self.contents = HoardContents(self.folder, False)
+        return self.contents
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        self.contents.close(True)
+        return None
+
+
+class HoardContents:
+    @staticmethod
+    def load(folder: str, is_readonly: bool) -> "HoardContentsConn":
+        res = ReadonlyHoardContentsConn(pathlib.Path(folder))
+        if not is_readonly:
+            res = res.writeable()
+        return res
 
     conn: Connection
     config: HoardContentsConfig
     fsobjects: HoardFSObjects
 
-    def __init__(self, folder: str, is_readonly: bool):
-        self.folder = pathlib.Path(folder)
-        self.is_readonly = is_readonly
-
-        self.config = None
-        self.fsobjects = None
-        self.conn = None
-
-    async def __aenter__(self) -> "HoardContents":
+    def __init__(self, folder: pathlib.Path, is_readonly: bool):
         self.conn = sqlite3_standard(
-            f"file:{os.path.join(self.folder, HOARD_CONTENTS_FILENAME)}{'?mode=ro' if self.is_readonly else ''}",
+            f"file:{os.path.join(folder, HOARD_CONTENTS_FILENAME)}{'?mode=ro' if is_readonly else ''}",
             uri=True)
 
-        self.config = HoardContentsConfig(self.folder.joinpath(HOARD_CONTENTS_TOML), self.is_readonly)
-        self.fsobjects = HoardFSObjects(self)
+        self.config = HoardContentsConfig(folder.joinpath(HOARD_CONTENTS_TOML), is_readonly)
+        self.fsobjects = HoardFSObjects(self) if not is_readonly else ReadonlyHoardFSObjects(self)
 
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        if not self.is_readonly:
+    def close(self, writeable: bool):
+        if writeable:
             self.config.bump_hoard_epoch()
             self.config.write()
 
-        self.write()
+        self.conn.commit()
         self.conn.close()
 
         self.config = None
         self.fsobjects = None
-        self.epochs = None
-
-        return False
-
-    def write(self):
-        self.conn.commit()
+        self.conn = None
 
 
 def init_hoard_db_tables(curr):

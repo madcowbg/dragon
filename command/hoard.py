@@ -4,7 +4,7 @@ from typing import List
 
 from command.repo import ConnectedRepo
 from config import HoardConfig, HoardPaths
-from contents.hoard import HoardContents, HOARD_CONTENTS_FILENAME
+from contents.hoard import HoardContents, HOARD_CONTENTS_FILENAME, HoardContentsConn
 from exceptions import RepoOpeningFailed
 from resolve_uuid import load_config, load_paths, CONFIG_FILE
 
@@ -35,7 +35,7 @@ class Hoard:
             logging.debug(of)
             return False
 
-    def open_contents(self, create_missing: bool = False, is_readonly: bool = True) -> HoardContents:
+    def open_contents(self, create_missing: bool = False, is_readonly: bool = True) -> HoardContentsConn:
         hoard_contents_filename = os.path.join(self.hoardpath, HOARD_CONTENTS_FILENAME)
         if not os.path.isfile(os.path.join(self.hoardpath, CONFIG_FILE)):
             raise ValueError(f"Hoard is not configured in {self.hoardpath}!")
