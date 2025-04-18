@@ -3,11 +3,10 @@ import os
 import queue
 import unittest
 from threading import Thread
-from typing import Iterable, AsyncGenerator
+from typing import AsyncGenerator
 from unittest.async_case import IsolatedAsyncioTestCase
 
 import aiofiles.os as aos
-import alive_progress
 from alive_progress import alive_bar
 
 from command.fast_path import FastPosixPath
@@ -111,7 +110,7 @@ def _os_scandir_parallel(root: str, tasks=10):
     return all_files
 
 @unittest.skip("Made to run only locally to benchmark")
-class TestDirWalking(IsolatedAsyncioTestCase):
+class ExperimentDirWalking(IsolatedAsyncioTestCase):
     def test_list_all_files_local_os_walk(self):
         path = r"C:\Users\Bono\Cloud-Drive"
         all_files = _os_walk(path)
