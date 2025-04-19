@@ -56,7 +56,7 @@ class HoardContentsPendingToSyncFile(Tree[FolderNode[FileOp]]):
         self.expanded = set()
 
     async def on_mount(self):
-        async with self.hoard.open_contents(create_missing=False, is_readonly=True) as hoard_contents:
+        async with self.hoard.open_contents(create_missing=False) as hoard_contents:
             self.op_tree = FolderTree(
                 get_pending_operations(hoard_contents, self.remote.uuid),
                 lambda op: op.hoard_file.as_posix())
@@ -181,7 +181,7 @@ class HoardContentsPendingToPull(Tree[Action]):
             pathing = HoardPathing(hoard_config, self.hoard.paths())
             repo = self.hoard.connect_to_repo(self.remote.uuid, True)
             with repo.open_contents(is_readonly=True) as current_contents:
-                async with self.hoard.open_contents(create_missing=False, is_readonly=True) as hoard_contents:
+                async with self.hoard.open_contents(create_missing=False) as hoard_contents:
                     preferences = init_pull_preferences(
                         self.remote, assume_current=False, force_fetch_local_missing=False)
 

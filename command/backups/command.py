@@ -24,7 +24,7 @@ class HoardCommandBackups:
         pathing = HoardPathing(config, self.hoard.paths())
 
         logging.info(f"Loading hoard...")
-        async with self.hoard.open_contents(create_missing=False, is_readonly=True) as hoard:
+        async with self.hoard.open_contents(create_missing=False) as hoard:
             backup_sets = BackupSet.all(config, pathing, hoard, self.hoard.available_remotes())
             backup_media = set(sum((list(b.backups.keys()) for b in backup_sets), []))
             count_backup_media = len(backup_media)
@@ -77,7 +77,7 @@ class HoardCommandBackups:
         pathing = HoardPathing(config, self.hoard.paths())
 
         logging.info(f"Loading hoard...")
-        async with self.hoard.open_contents(create_missing=False, is_readonly=False) as hoard:
+        async with self.hoard.open_contents(create_missing=False).writeable() as hoard:
             backup_sets = BackupSet.all(config, pathing, hoard, self.hoard.available_remotes())
 
             with StringIO() as out:
@@ -113,7 +113,7 @@ class HoardCommandBackups:
         pathing = HoardPathing(config, self.hoard.paths())
 
         logging.info(f"Loading hoard...")
-        async with self.hoard.open_contents(create_missing=False, is_readonly=False) as hoard:
+        async with self.hoard.open_contents(create_missing=False).writeable() as hoard:
             backup_sets = BackupSet.all(config, pathing, hoard, self.hoard.available_remotes())
 
             with StringIO() as out:
@@ -178,7 +178,7 @@ class HoardCommandBackups:
         pathing = HoardPathing(config, self.hoard.paths())
 
         logging.info(f"Loading hoard...")
-        async with self.hoard.open_contents(create_missing=False, is_readonly=False) as hoard:
+        async with self.hoard.open_contents(create_missing=False).writeable() as hoard:
             available_remotes = self.hoard.available_remotes()
             backup_sets = BackupSet.all(config, pathing, hoard, available_remotes)
 
@@ -197,7 +197,7 @@ class HoardCommandBackups:
 
                         out.write(f"Unassigning from {remote.name}:\n")
 
-                        async with self.hoard.open_contents(False, False) as hoard_contents:
+                        async with self.hoard.open_contents(False).writeable() as hoard_contents:
                             for hoard_file, hoard_props in hoard_contents.fsobjects.to_get_in_repo(remote.uuid):
                                 assert hoard_props.get_status(remote.uuid) == HoardFileStatus.GET
 

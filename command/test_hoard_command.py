@@ -84,7 +84,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             "ADD_NEW_TO_HOARD /wat/test.me.twice\n"
             "Sync'ed repo-in-local to hoard!\nDONE", res.strip())
 
-        async with hoard_cmd.hoard.open_contents(False, is_readonly=True) as hoard_contents:
+        async with hoard_cmd.hoard.open_contents(False) as hoard_contents:
             self._assert_hoard_contents(
                 hoard_contents,
                 files_exp=[
@@ -126,7 +126,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
 
         await hoard_cmd.contents.pull("repo-in-local")
 
-        async with hoard_cmd.hoard.open_contents(False, is_readonly=True) as hc:
+        async with hoard_cmd.hoard.open_contents(False) as hc:
             self._assert_hoard_contents(
                 hc,
                 files_exp=[
@@ -142,7 +142,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             "=/wat/test.me.twice\nALREADY_MARKED_GET /wat/test.me.different\nSync'ed repo-in-local-2 to hoard!\nDONE",
             res.strip())
 
-        async with hoard_cmd.hoard.open_contents(False, is_readonly=True) as hc:
+        async with hoard_cmd.hoard.open_contents(False) as hc:
             self._assert_hoard_contents(
                 hc,
                 files_exp=[
@@ -153,7 +153,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.pull("repo-in-local", ignore_epoch=True)
         self.assertEqual("Sync'ed repo-in-local to hoard!\nDONE", res)
 
-        async with hoard_cmd.hoard.open_contents(False, is_readonly=True) as hc:
+        async with hoard_cmd.hoard.open_contents(False) as hc:
             self._assert_hoard_contents(
                 hc,
                 files_exp=[
