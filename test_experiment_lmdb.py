@@ -1,8 +1,10 @@
+import abc
 import dataclasses
 import enum
 import hashlib
 import logging
 import unittest
+from abc import abstractmethod
 from typing import List, Tuple, Dict, Iterable
 
 import lmdb
@@ -35,6 +37,7 @@ type ObjectID = bytes
 
 @dataclasses.dataclass
 class TreeObject:
+    tree_id: bytes
     children: Dict[str, ObjectID]
 
     @cached_property
@@ -42,14 +45,15 @@ class TreeObject:
         return msgpack.packb((ObjectType.TREE.value, self.children))
 
     @staticmethod
-    def load(data: bytes) -> "TreeObject":
+    def load(obj_id: bytes, data: bytes) -> "TreeObject":
         object_type, children = msgpack.unpackb(data)
         assert object_type == ObjectType.TREE.value
-        return TreeObject(children=children)
+        return TreeObject(obj_id, children=children)
 
 
 @dataclasses.dataclass
 class FileObject:
+    file_id: bytes
     fasthash: str
     size: int
 
@@ -58,19 +62,19 @@ class FileObject:
         return msgpack.packb((ObjectType.FILE.value, self.fasthash, self.size))
 
     @staticmethod
-    def load(data: bytes) -> "FileObject":
+    def load(file_id: bytes, data: bytes) -> "FileObject":
         object_type, fasthash, size = msgpack.unpackb(data)
         assert object_type == ObjectType.FILE.value
-        return FileObject(fasthash=fasthash, size=size)
+        return FileObject(file_id, fasthash, size)
 
 
 def load_tree_or_file(obj_id: bytes, txn: Transaction) -> FileObject | TreeObject:
     obj_packed = txn.get(obj_id)  # todo use streaming op
     obj_data = msgpack.loads(obj_packed)  # fixme make this faster by extracting type away
     if obj_data[0] == ObjectType.FILE.value:
-        return FileObject.load(obj_packed)
+        return FileObject.load(obj_id, obj_packed)
     elif obj_data[0] == ObjectType.TREE.value:
-        return TreeObject.load(obj_packed)
+        return TreeObject.load(obj_id, obj_packed)
     else:
         raise ValueError(f"Unrecognized type {obj_data[0]}")
 
@@ -78,7 +82,7 @@ def load_tree_or_file(obj_id: bytes, txn: Transaction) -> FileObject | TreeObjec
 class ExpandableTreeObject:
     def __init__(self, data: TreeObject, txn: Transaction):
         self.txn = txn
-        self._children = data.children
+        self.children: Dict[str, ObjectID] = data.children
 
         self._files: Dict[str, FileObject] | None = None
         self._dirs: Dict[str, ExpandableTreeObject] | None = None
@@ -99,7 +103,7 @@ class ExpandableTreeObject:
         self._files = dict()
         self._dirs = dict()
 
-        for name, obj_id in self._children.items():
+        for name, obj_id in self.children.items():
             obj = load_tree_or_file(obj_id, self.txn)
             if isinstance(obj, FileObject):
                 self._files[name] = obj
@@ -110,13 +114,13 @@ class ExpandableTreeObject:
 
     @staticmethod
     def create(obj_id: bytes, txn: Transaction) -> "ExpandableTreeObject":
-        return ExpandableTreeObject(TreeObject.load(txn.get(obj_id)), txn)
+        return ExpandableTreeObject(TreeObject.load(obj_id, txn.get(obj_id)), txn)
 
 
 # @unittest.skip("Made to run only locally to benchmark")
 class MyTestCase(unittest.TestCase):
 
-    # @unittest.skip("Made to run only locally to benchmark")
+    @unittest.skip("Made to run only locally to benchmark")
     def test_create_lmdb(self):
         env = lmdb.open("test/example.lmdb", map_size=(1 << 30), max_dbs=5)
 
@@ -186,6 +190,125 @@ class MyTestCase(unittest.TestCase):
                 with open("test/dbdump.msgpack", "wb") as f:
                     # msgpack.dump(((k, v) for k, v in alive_it(curr, title="loading from lmdb...")), f)
                     msgpack.dump(list(((k, v) for k, v in curr)), f)
+
+    def test_tree_compare(self):
+        env = lmdb.open("test/example.lmdb", max_dbs=5)
+        # uuid = "f8f42230-2dc7-48f4-b1b7-5298a309e3fd"
+        uuid = "726613d5-2b92-451e-b863-833a579456f5"
+
+        with env.begin(db=env.open_db("repos".encode()), write=False) as txn:
+            hoard_id = txn.get("HEAD".encode())
+            repo_id = txn.get(uuid.encode())
+
+        with env.begin(db=env.open_db("objects".encode()), write=False) as txn:
+            root_diff = Diff.compute("root", hoard_id, repo_id, txn)
+
+            for diff in alive_it(root_diff.expand(txn)):
+                if isinstance(diff, AreSame):
+                    continue
+                print(diff)
+
+
+class Diff:
+    @staticmethod
+    def compute(path: str, left_id: ObjectID, right_id: ObjectID, txn: Transaction) -> "Diff":
+        if left_id == right_id:
+            return AreSame(path, left_id)
+
+        left_obj = load_tree_or_file(left_id, txn)
+        right_obj = load_tree_or_file(right_id, txn)
+        if type(left_obj) != type(right_obj):
+            return DifferentTypes(path, left_id, right_id)
+        else:
+            if type(left_obj) == FileObject:
+                assert type(right_obj) == FileObject
+                return FilesAreDiff(path, left_id, right_id)
+            else:
+                assert type(left_obj) == TreeObject and type(right_obj) == TreeObject
+                return FoldersAreDiff(
+                    path,
+                    left_id, ExpandableTreeObject.create(left_id, txn),
+                    right_id, ExpandableTreeObject.create(right_id, txn))
+
+    @abc.abstractmethod
+    def expand(self, txn: Transaction) -> Iterable["Diff"]:
+        pass
+
+    def __str__(self):
+        return f"{self.__class__.__name__}[{self.path}]"
+
+
+@dataclasses.dataclass
+class AreSame(Diff):
+    path: str
+    id: ObjectID
+
+    def expand(self, txn: Transaction) -> Iterable["Diff"]:
+        yield self
+
+
+@dataclasses.dataclass
+class FilesAreDiff(Diff):
+    path: str
+    left_id: ObjectID
+    right_id: ObjectID
+
+    def expand(self, txn: Transaction) -> Iterable["Diff"]:
+        yield self
+
+
+@dataclasses.dataclass
+class DifferentTypes(Diff):
+    path: str
+    left_id: ObjectID
+    right_id: ObjectID
+
+    def expand(self, txn: Transaction) -> Iterable["Diff"]:
+        yield self
+
+
+@dataclasses.dataclass
+class FoldersAreDiff(Diff):
+    path: str
+    left_id: ObjectID
+    left_folder: ExpandableTreeObject
+    right_id: ObjectID
+    right_folder: ExpandableTreeObject
+
+    def expand(self, txn: Transaction) -> Iterable["Diff"]:
+        yield self
+
+        for left_sub_name, left_file_id in self.left_folder.children.items():
+            if left_sub_name in self.right_folder.children:
+                yield from Diff.compute(
+                    self.path + "/" + left_sub_name, left_file_id, self.right_folder.children[left_sub_name], txn) \
+                    .expand(txn)
+            else:
+                yield LeftMissingInRight(self.path + "/" + left_sub_name, left_file_id)
+
+        for right_sub_name, right_file_id in self.right_folder.children.items():
+            if right_sub_name in self.left_folder.children:
+                pass  # already returned
+            else:
+                yield RightMissingInLeft(self.path + "/" + right_sub_name, right_file_id)
+
+
+@dataclasses.dataclass
+class LeftMissingInRight(Diff):
+    path: str
+    left_obj: ObjectID
+
+    def expand(self, txn: Transaction) -> Iterable["Diff"]:
+        yield self
+
+
+@dataclasses.dataclass
+class RightMissingInLeft(Diff):
+    path: str
+    right_obj: ObjectID
+
+    def expand(self, txn: Transaction) -> Iterable["Diff"]:
+        yield self
 
 
 def add_all(all_data: Tuple[str, str, int], txn: Transaction) -> bytes:
