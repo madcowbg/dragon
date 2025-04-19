@@ -68,8 +68,8 @@ class MyTestCase(unittest.TestCase):
         with env.repos_txn(write=False) as txn:
             root_id = txn.get("HEAD".encode())
 
-        with env.objects_txn(write=False) as txn:
-            root = ExpandableTreeObject.create(root_id, txn)
+        with env.objects(write=False) as objects:
+            root = ExpandableTreeObject.create(root_id, objects)
 
             def all_files(tree: ExpandableTreeObject) -> Iterable[FileObject]:
                 yield from tree.files.values()

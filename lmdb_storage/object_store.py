@@ -3,7 +3,7 @@ import logging
 import lmdb
 from alive_progress import alive_bar
 
-from lmdb_storage.tree_structure import load_tree_or_file, TreeObject, FileObject
+from lmdb_storage.tree_structure import TreeObject, FileObject, Objects
 
 
 class ObjectStorage:
@@ -26,7 +26,7 @@ class ObjectStorage:
                     current_id = q.pop()
 
                     bar()
-                    live_obj = load_tree_or_file(current_id, objects.txn)
+                    live_obj = objects[current_id]
                     if isinstance(live_obj, TreeObject):
                         for child_id in live_obj.children.values():
                             if child_id not in live_ids:
@@ -35,7 +35,7 @@ class ObjectStorage:
                     else:
                         assert isinstance(live_obj, FileObject)
             with alive_bar(title="deleting objects") as bar:
-                for obj_id, _ in txn.cursor():
+                for obj_id, _ in objects.txn.cursor():
                     if obj_id not in live_ids:
                         txn.delete(obj_id)
                         bar()
@@ -43,21 +43,8 @@ class ObjectStorage:
     def objects_txn(self, write: bool):
         return self.env.begin(db=self.env.open_db("objects".encode()), write=write)
 
-    def objects(self, write: bool):
+    def objects(self, write: bool) -> "Objects":
         return Objects(self, write)
 
     def repos_txn(self, write: bool):
         return self.env.begin(db=self.env.open_db("repos".encode()), write=write)
-
-
-class Objects:
-    def __init__(self, storage: ObjectStorage, write: bool):
-        self.txn = storage.objects_txn(write=write)
-
-    def __enter__(self):
-        self.txn.__enter__()
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.txn.__exit__(exc_type, exc_val, exc_tb)
-        return None

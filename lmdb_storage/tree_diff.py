@@ -2,10 +2,7 @@ import abc
 import dataclasses
 from typing import Iterable
 
-from lmdb import Transaction
-
-from lmdb_storage.object_store import Objects
-from lmdb_storage.tree_structure import ObjectID, load_tree_or_file, FileObject
+from lmdb_storage.tree_structure import ObjectID, FileObject, Objects
 
 
 class Diff:
@@ -39,8 +36,8 @@ class HaveDifferences(Diff):
     right_id: ObjectID
 
     def expand(self, objects: Objects) -> Iterable["Diff"]:
-        left_obj = load_tree_or_file(self.left_id, objects.txn)
-        right_obj = load_tree_or_file(self.right_id, objects.txn)
+        left_obj = objects[self.left_id]
+        right_obj = objects[self.right_id]
 
         yield self
 
