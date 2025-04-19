@@ -97,7 +97,7 @@ class MyTestCase(unittest.TestCase):
             hoard_id = txn.get("HEAD".encode())
             repo_id = txn.get(uuid.encode())
 
-        with env.objects_txn(write=False) as objects:
+        with env.objects(write=False) as objects:
             root_diff = Diff.compute("root", hoard_id, repo_id)
 
             for diff in alive_it(root_diff.expand(objects)):

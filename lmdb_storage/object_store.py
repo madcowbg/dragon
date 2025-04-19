@@ -20,13 +20,13 @@ class ObjectStorage:
 
         logging.info(f"found {len(q)} live top-level refs")
 
-        with self.objects_txn(write=True) as txn:
+        with self.objects(write=True) as objects:
             with alive_bar(title="iterating live objects") as bar:
                 while len(q) > 0:
                     current_id = q.pop()
 
                     bar()
-                    live_obj = load_tree_or_file(current_id, txn)
+                    live_obj = load_tree_or_file(current_id, objects.txn)
                     if isinstance(live_obj, TreeObject):
                         for child_id in live_obj.children.values():
                             if child_id not in live_ids:

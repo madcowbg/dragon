@@ -4,6 +4,7 @@ from typing import Iterable
 
 from lmdb import Transaction
 
+from lmdb_storage.object_store import Objects
 from lmdb_storage.tree_structure import ObjectID, load_tree_or_file, FileObject
 
 
@@ -15,7 +16,7 @@ class Diff:
         return AreSame(path, left_id) if left_id == right_id else HaveDifferences(path, left_id, right_id)
 
     @abc.abstractmethod
-    def expand(self, txn: Transaction) -> Iterable["Diff"]:
+    def expand(self, objects: Objects) -> Iterable["Diff"]:
         pass
 
     def __str__(self):
@@ -27,7 +28,7 @@ class AreSame(Diff):
     path: str
     id: ObjectID
 
-    def expand(self, txn: Transaction) -> Iterable["Diff"]:
+    def expand(self, objects: Objects) -> Iterable["Diff"]:
         yield self
 
 
@@ -37,9 +38,9 @@ class HaveDifferences(Diff):
     left_id: ObjectID
     right_id: ObjectID
 
-    def expand(self, txn: Transaction) -> Iterable["Diff"]:
-        left_obj = load_tree_or_file(self.left_id, txn)
-        right_obj = load_tree_or_file(self.right_id, txn)
+    def expand(self, objects: Objects) -> Iterable["Diff"]:
+        left_obj = load_tree_or_file(self.left_id, objects.txn)
+        right_obj = load_tree_or_file(self.right_id, objects.txn)
 
         yield self
 
@@ -51,7 +52,7 @@ class HaveDifferences(Diff):
             if left_sub_name in right_obj.children:
                 yield from Diff.compute(
                     self.path + "/" + left_sub_name,
-                    left_file_id, right_obj.children[left_sub_name]).expand(txn)
+                    left_file_id, right_obj.children[left_sub_name]).expand(objects)
             else:
                 yield RemovedInRight(self.path + "/" + left_sub_name, left_file_id)
 
@@ -67,7 +68,7 @@ class AddedInRight(Diff):
     path: str
     left_obj: ObjectID
 
-    def expand(self, txn: Transaction) -> Iterable["Diff"]:
+    def expand(self, objects: Objects) -> Iterable["Diff"]:
         yield self
 
 
@@ -76,5 +77,5 @@ class RemovedInRight(Diff):
     path: str
     right_obj: ObjectID
 
-    def expand(self, txn: Transaction) -> Iterable["Diff"]:
+    def expand(self, objects: Objects) -> Iterable["Diff"]:
         yield self
