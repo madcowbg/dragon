@@ -202,7 +202,7 @@ class MyTestCase(unittest.TestCase):
             repo_id = txn.get(uuid.encode())
 
         with env.begin(db=env.open_db("objects".encode()), write=False) as txn:
-            root_diff = Diff.compute("root", hoard_id, repo_id, txn)
+            root_diff = Diff.compute("root", hoard_id, repo_id)
 
             for diff in alive_it(root_diff.expand(txn)):
                 if isinstance(diff, AreSame):
@@ -246,25 +246,11 @@ def run_gc(env):
 
 
 class Diff:
-    @staticmethod
-    def compute(path: str, left_id: ObjectID, right_id: ObjectID, txn: Transaction) -> "Diff":
-        if left_id == right_id:
-            return AreSame(path, left_id)
+    path: str
 
-        left_obj = load_tree_or_file(left_id, txn)
-        right_obj = load_tree_or_file(right_id, txn)
-        if type(left_obj) != type(right_obj):
-            return DifferentTypes(path, left_id, right_id)
-        else:
-            if type(left_obj) == FileObject:
-                assert type(right_obj) == FileObject
-                return FilesAreDiff(path, left_id, right_id)
-            else:
-                assert type(left_obj) == TreeObject and type(right_obj) == TreeObject
-                return FoldersAreDiff(
-                    path,
-                    left_id, ExpandableTreeObject.create(left_id, txn),
-                    right_id, ExpandableTreeObject.create(right_id, txn))
+    @staticmethod
+    def compute(path: str, left_id: ObjectID, right_id: ObjectID) -> "Diff":
+        return AreSame(path, left_id) if left_id == right_id else HaveDifferences(path, left_id, right_id)
 
     @abc.abstractmethod
     def expand(self, txn: Transaction) -> Iterable["Diff"]:
@@ -284,53 +270,48 @@ class AreSame(Diff):
 
 
 @dataclasses.dataclass
-class FilesAreDiff(Diff):
+class HaveDifferences(Diff):
     path: str
     left_id: ObjectID
     right_id: ObjectID
 
     def expand(self, txn: Transaction) -> Iterable["Diff"]:
+        left_obj = load_tree_or_file(self.left_id, txn)
+        right_obj = load_tree_or_file(self.right_id, txn)
+
         yield self
 
+        if isinstance(left_obj, FileObject) or isinstance(right_obj, FileObject):
+            return
 
-@dataclasses.dataclass
-class DifferentTypes(Diff):
-    path: str
-    left_id: ObjectID
-    right_id: ObjectID
+        # are both dirs, drilldown...
+        for left_sub_name, left_file_id in left_obj.children.items():
+            if left_sub_name in right_obj.children:
+                yield from Diff.compute(
+                    self.path + "/" + left_sub_name,
+                    left_file_id, right_obj.children[left_sub_name]).expand(txn)
+            else:
+                yield RemovedInRight(self.path + "/" + left_sub_name, left_file_id)
 
-    def expand(self, txn: Transaction) -> Iterable["Diff"]:
-        yield self
+        for right_sub_name, right_file_id in right_obj.children.items():
+            if right_sub_name in left_obj.children:
+                pass  # already returned
+            else:
+                yield AddedInRight(self.path + "/" + right_sub_name, right_file_id)
 
 
 @dataclasses.dataclass
 class FoldersAreDiff(Diff):
     path: str
     left_id: ObjectID
-    left_folder: ExpandableTreeObject
     right_id: ObjectID
-    right_folder: ExpandableTreeObject
 
     def expand(self, txn: Transaction) -> Iterable["Diff"]:
         yield self
 
-        for left_sub_name, left_file_id in self.left_folder.children.items():
-            if left_sub_name in self.right_folder.children:
-                yield from Diff.compute(
-                    self.path + "/" + left_sub_name, left_file_id, self.right_folder.children[left_sub_name], txn) \
-                    .expand(txn)
-            else:
-                yield LeftMissingInRight(self.path + "/" + left_sub_name, left_file_id)
-
-        for right_sub_name, right_file_id in self.right_folder.children.items():
-            if right_sub_name in self.left_folder.children:
-                pass  # already returned
-            else:
-                yield RightMissingInLeft(self.path + "/" + right_sub_name, right_file_id)
-
 
 @dataclasses.dataclass
-class LeftMissingInRight(Diff):
+class AddedInRight(Diff):
     path: str
     left_obj: ObjectID
 
@@ -339,7 +320,7 @@ class LeftMissingInRight(Diff):
 
 
 @dataclasses.dataclass
-class RightMissingInLeft(Diff):
+class RemovedInRight(Diff):
     path: str
     right_obj: ObjectID
 
