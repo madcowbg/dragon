@@ -10,7 +10,7 @@ from lmdb import Transaction
 
 from contents.hoard_props import HoardFileStatus
 from lmdb_storage.tree_diff import Diff, AreSame
-from lmdb_storage.tree_structure import ObjectType, TreeObject, FileObject, ExpandableTreeObject
+from lmdb_storage.tree_structure import ObjectType, TreeObject, FileObject, ExpandableTreeObject, load_tree_or_file
 from sql_util import sqlite3_standard
 from util import FIRST_VALUE
 
@@ -130,7 +130,7 @@ class ObjectStorage:
                     current_id = q.pop()
 
                     bar()
-                    live_obj = self[current_id, txn]
+                    live_obj = load_tree_or_file(current_id, txn)
                     if isinstance(live_obj, TreeObject):
                         for child_id in live_obj.children.values():
                             if child_id not in live_ids:
@@ -165,7 +165,7 @@ def add_all(all_data: Tuple[str, str, int], txn: Transaction) -> bytes:
 
         # add needed subfolders to stack
         current_path = top_obj_path
-        rel_path = fullpath[len(top_obj_path) + 1:-len(file_name)].split("/")
+        rel_path = fullpath[len(current_path) + 1:-len(file_name)].split("/")
         for path_elem in rel_path[:-1]:
             current_path += "/" + path_elem
             stack.append((current_path, TreeObject(dict())))
