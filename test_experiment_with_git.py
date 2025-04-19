@@ -17,7 +17,7 @@ from sql_util import sqlite3_standard
 def smudge(path: str): return path.replace(".git", "__GIT__")
 
 
-@unittest.skip("Made to run only locally to benchmark")
+@unittest.skipUnless(os.getenv('MYPROJECT_DEVELOPMENT_TEST'), reason="Uses total hoard")
 class TestWithGit(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.tmpdir = pathlib.Path("test/exported-git")

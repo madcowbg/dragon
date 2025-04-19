@@ -1,5 +1,6 @@
 import hashlib
 import logging
+import os
 import unittest
 from typing import List, Tuple, Iterable
 
@@ -21,7 +22,7 @@ def _list_uuids(conn) -> List[str]:
     return all_repos
 
 
-@unittest.skip("Made to run only locally to benchmark")
+@unittest.skipUnless(os.getenv('LMDB_DEVELOPMENT_TEST'), reason="Uses total hoard")
 class MyTestCase(unittest.TestCase):
 
     # @unittest.skip("Made to run only locally to benchmark")

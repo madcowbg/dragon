@@ -109,7 +109,8 @@ def _os_scandir_parallel(root: str, tasks=10):
 
     return all_files
 
-@unittest.skip("Made to run only locally to benchmark")
+
+@unittest.skipUnless(os.getenv('MYPROJECT_DEVELOPMENT_TEST'), reason="Lengthy test")
 class ExperimentDirWalking(IsolatedAsyncioTestCase):
     def test_list_all_files_local_os_walk(self):
         path = r"C:\Users\Bono\Cloud-Drive"
