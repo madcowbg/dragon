@@ -1,9 +1,11 @@
 import logging
+import unittest
 from unittest.async_case import IsolatedAsyncioTestCase
 
 from sql_util import sqlite3_standard
 
 
+@unittest.skip("Made to run only locally to benchmark")
 class TestSQLiteOpening(IsolatedAsyncioTestCase):
     def setUp(self):
         logging.basicConfig(

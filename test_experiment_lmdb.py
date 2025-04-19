@@ -14,7 +14,6 @@ from sql_util import sqlite3_standard
 from util import FIRST_VALUE
 
 
-# @unittest.skip("Made to run only locally to benchmark")
 def _list_uuids(conn) -> List[str]:
     curr = conn.cursor()
     curr.row_factory = FIRST_VALUE
@@ -22,6 +21,7 @@ def _list_uuids(conn) -> List[str]:
     return all_repos
 
 
+@unittest.skip("Made to run only locally to benchmark")
 class MyTestCase(unittest.TestCase):
 
     # @unittest.skip("Made to run only locally to benchmark")

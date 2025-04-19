@@ -442,14 +442,14 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.status()
         self.assertEqual(
             "|Num Files                |             updated|     max|total     |available |get       |\n"
-            "|repo-backup-name         |               never|   3.6TB|         2|          |         2|\n"
-            "|repo-full-name           |               never|   3.6TB|         2|          |         2|\n"
-            "|repo-partial-name        |                 now|   3.6TB|         2|         2|          |\n"
+            "|repo-backup-name         |               never|   3.5TB|         2|          |         2|\n"
+            "|repo-full-name           |               never|   3.5TB|         2|          |         2|\n"
+            "|repo-partial-name        |                 now|   3.5TB|         2|         2|          |\n"
             "\n"
             "|Size                     |             updated|     max|total     |available |get       |\n"
-            "|repo-backup-name         |               never|   3.6TB|        14|          |        14|\n"
-            "|repo-full-name           |               never|   3.6TB|        14|          |        14|\n"
-            "|repo-partial-name        |                 now|   3.6TB|        14|        14|          |\n"
+            "|repo-backup-name         |               never|   3.5TB|        14|          |        14|\n"
+            "|repo-full-name           |               never|   3.5TB|        14|          |        14|\n"
+            "|repo-partial-name        |                 now|   3.5TB|        14|        14|          |\n"
             "", res)
 
         # refresh new contents file
@@ -1063,7 +1063,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             "wat/test.me.3: present @ 1\n"
             "--- SUMMARY ---\n"
             "Result for local\n"
-            "Max size: 3.6TB\n"
+            "Max size: 3.5TB\n"
             f"UUID: {full_cave_cmd.current_uuid()}\n"
             "  # files = 6 of size 47\n", res)
 
@@ -1339,7 +1339,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             "wat/test.me.3: present @ 1\n"
             "--- SUMMARY ---\n"
             "Result for local\n"
-            "Max size: 3.6TB\n"
+            "Max size: 3.5TB\n"
             f"UUID: {full_cave_cmd.current_uuid()}\n"
             "  # files = 4 of size 35\n", res)
 
@@ -1398,7 +1398,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             "wat/test.me.3: present @ 1\n"
             "--- SUMMARY ---\n"
             "Result for local\n"
-            "Max size: 3.6TB\n"
+            "Max size: 3.5TB\n"
             f"UUID: {full_cave_cmd.current_uuid()}\n"
             "  # files = 5 of size 39\n", res)
 

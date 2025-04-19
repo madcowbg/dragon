@@ -44,7 +44,7 @@ class TestDaemon(IsolatedAsyncioTestCase):
             'wat/test.me.twice: present',
             '--- SUMMARY ---',
             'Result for local',
-            'Max size: 3.6TB',
+            'Max size: 3.5TB',
             f'UUID: {cave_cmd.current_uuid()}',
             '  # files = 3 of size 19'], res.splitlines())
 
@@ -63,7 +63,7 @@ class TestDaemon(IsolatedAsyncioTestCase):
             'wat/test.me.twice: present',
             '--- SUMMARY ---',
             'Result for local',
-            'Max size: 3.6TB',
+            'Max size: 3.5TB',
             f'UUID: {cave_cmd.current_uuid()}',
             '  # files = 4 of size 34'], res.splitlines())
 
@@ -83,7 +83,7 @@ class TestDaemon(IsolatedAsyncioTestCase):
             'wat/test.me.twice: present',
             '--- SUMMARY ---',
             'Result for local',
-            'Max size: 3.6TB',
+            'Max size: 3.5TB',
             f'UUID: {cave_cmd.current_uuid()}',
             '  # files = 3 of size 26'], res.splitlines())
 

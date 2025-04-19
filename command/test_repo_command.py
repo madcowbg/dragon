@@ -83,7 +83,7 @@ class TestRepoCommand(IsolatedAsyncioTestCase):
             'wat/test.me.twice: present @ 1',
             '--- SUMMARY ---',
             'Result for local',
-            'Max size: 3.6TB',
+            'Max size: 3.5TB',
             f'UUID: {cave_cmd.current_uuid()}',
             '  # files = 3 of size 19',
             ''], res.split("\n"))
@@ -119,7 +119,7 @@ class TestRepoCommand(IsolatedAsyncioTestCase):
             'wat/test.me.twice: present @ 1',
             '--- SUMMARY ---',
             'Result for local',
-            'Max size: 3.6TB',
+            'Max size: 3.5TB',
             f'UUID: {cave_cmd.current_uuid()}',
             '  # files = 3 of size 19',
             ''], res.split("\n"))
@@ -140,7 +140,7 @@ class TestRepoCommand(IsolatedAsyncioTestCase):
             'wat/test.me.twice: deleted @ 2',
             '--- SUMMARY ---',
             'Result for local',
-            'Max size: 3.6TB',
+            'Max size: 3.5TB',
             f'UUID: {cave_cmd.current_uuid()}',
             '  # files = 3 of size 27',
             ''], res.split("\n"))
@@ -183,7 +183,7 @@ class TestRepoCommand(IsolatedAsyncioTestCase):
             'wat/test.me.twice: deleted @ 2',
             '--- SUMMARY ---',
             'Result for local',
-            'Max size: 3.6TB',
+            'Max size: 3.5TB',
             f'UUID: {cave_cmd.current_uuid()}',
             '  # files = 4 of size 32',
             ''], res.split("\n"))
