@@ -1,126 +1,26 @@
-import abc
-import dataclasses
-import enum
 import hashlib
 import logging
-import queue
 import unittest
-from abc import abstractmethod
-from typing import List, Tuple, Dict, Iterable
+from typing import List, Tuple, Iterable
 
 import lmdb
+
+import lmdb_storage
 import msgpack
 from alive_progress import alive_it, alive_bar
 from lmdb import Transaction
-from propcache import cached_property
 
 from contents.hoard_props import HoardFileStatus
+from lmdb_storage.tree_diff import Diff, AreSame
+from lmdb_storage.tree_structure import ObjectType, TreeObject, FileObject, load_tree_or_file, ExpandableTreeObject
 from sql_util import sqlite3_standard
 from util import FIRST_VALUE
-
-
-class ObjectType(enum.Enum):
-    TREE = 1
-    FILE = 2
-
-
-## LMDB format
-#  object_id    blob
-#
-# blob is file:
-#  Type.FILE, (fasthash, size)
-#
-# blob is tree:
-#  Type.TREE, Dict[obj name to object_id]
-
-type ObjectID = bytes
-
-
-@dataclasses.dataclass
-class TreeObject:
-    children: Dict[str, ObjectID]
-
-    @cached_property
-    def serialized(self) -> bytes:
-        return msgpack.packb((ObjectType.TREE.value, self.children))
-
-    @staticmethod
-    def load(data: bytes) -> "TreeObject":
-        object_type, children = msgpack.unpackb(data)
-        assert object_type == ObjectType.TREE.value
-        return TreeObject(children=children)
-
-
-@dataclasses.dataclass
-class FileObject:
-    file_id: bytes
-    fasthash: str
-    size: int
-
-    @cached_property
-    def serialized(self) -> bytes:
-        return msgpack.packb((ObjectType.FILE.value, self.fasthash, self.size))
-
-    @staticmethod
-    def load(file_id: bytes, data: bytes) -> "FileObject":
-        object_type, fasthash, size = msgpack.unpackb(data)
-        assert object_type == ObjectType.FILE.value
-        return FileObject(file_id, fasthash, size)
-
-
-def load_tree_or_file(obj_id: bytes, txn: Transaction) -> FileObject | TreeObject:
-    obj_packed = txn.get(obj_id)  # todo use streaming op
-    obj_data = msgpack.loads(obj_packed)  # fixme make this faster by extracting type away
-    if obj_data[0] == ObjectType.FILE.value:
-        return FileObject(obj_id, obj_data[1], obj_data[2])
-    elif obj_data[0] == ObjectType.TREE.value:
-        return TreeObject(obj_data[1])
-    else:
-        raise ValueError(f"Unrecognized type {obj_data[0]}")
-
-
-class ExpandableTreeObject:
-    def __init__(self, data: TreeObject, txn: Transaction):
-        self.txn = txn
-        self.children: Dict[str, ObjectID] = data.children
-
-        self._files: Dict[str, FileObject] | None = None
-        self._dirs: Dict[str, ExpandableTreeObject] | None = None
-
-    @property
-    def files(self) -> Dict[str, FileObject]:
-        if self._files is None:
-            self._load()
-        return self._files
-
-    @property
-    def dirs(self) -> Dict[str, "ExpandableTreeObject"]:
-        if self._dirs is None:
-            self._load()
-        return self._dirs
-
-    def _load(self):
-        self._files = dict()
-        self._dirs = dict()
-
-        for name, obj_id in self.children.items():
-            obj = load_tree_or_file(obj_id, self.txn)
-            if isinstance(obj, FileObject):
-                self._files[name] = obj
-            elif isinstance(obj, TreeObject):
-                self._dirs[name] = ExpandableTreeObject(obj, self.txn)
-            else:
-                raise TypeError(f"Unexpected type {type(obj)}")
-
-    @staticmethod
-    def create(obj_id: bytes, txn: Transaction) -> "ExpandableTreeObject":
-        return ExpandableTreeObject(TreeObject.load(txn.get(obj_id)), txn)
 
 
 # @unittest.skip("Made to run only locally to benchmark")
 class MyTestCase(unittest.TestCase):
 
-    @unittest.skip("Made to run only locally to benchmark")
+    # @unittest.skip("Made to run only locally to benchmark")
     def test_create_lmdb(self):
         env = lmdb.open("test/example.lmdb", map_size=(1 << 30), max_dbs=5)
 
@@ -165,7 +65,7 @@ class MyTestCase(unittest.TestCase):
         all_repos = list(curr.execute("SELECT uuid FROM fspresence GROUP BY uuid ORDER BY uuid"))
         return all_repos
 
-    @unittest.skip("Made to run only locally to benchmark")
+    # @unittest.skip("Made to run only locally to benchmark")
     def test_fully_load_lmdb(self):
         env = lmdb.open("test/example.lmdb", max_dbs=5)  # , map_size=(1 << 30) // 4)
 
@@ -183,7 +83,7 @@ class MyTestCase(unittest.TestCase):
             all_files = list(alive_it(all_files(root), title="loading from lmdb..."))
             logging.warning(f"# all_files: {len(all_files)}")
 
-    @unittest.skip("Made to run only locally to benchmark")
+    # @unittest.skip("Made to run only locally to benchmark")
     def test_dump_lmdb(self):
         env = lmdb.open("test/example.lmdb", max_dbs=5)  # , map_size=(1 << 30) // 4)
         with env.begin(db=env.open_db("objects".encode()), write=False) as txn:
@@ -243,89 +143,6 @@ def run_gc(env):
                 if obj_id not in live_ids:
                     txn.delete(obj_id)
                     bar()
-
-
-class Diff:
-    path: str
-
-    @staticmethod
-    def compute(path: str, left_id: ObjectID, right_id: ObjectID) -> "Diff":
-        return AreSame(path, left_id) if left_id == right_id else HaveDifferences(path, left_id, right_id)
-
-    @abc.abstractmethod
-    def expand(self, txn: Transaction) -> Iterable["Diff"]:
-        pass
-
-    def __str__(self):
-        return f"{self.__class__.__name__}[{self.path}]"
-
-
-@dataclasses.dataclass
-class AreSame(Diff):
-    path: str
-    id: ObjectID
-
-    def expand(self, txn: Transaction) -> Iterable["Diff"]:
-        yield self
-
-
-@dataclasses.dataclass
-class HaveDifferences(Diff):
-    path: str
-    left_id: ObjectID
-    right_id: ObjectID
-
-    def expand(self, txn: Transaction) -> Iterable["Diff"]:
-        left_obj = load_tree_or_file(self.left_id, txn)
-        right_obj = load_tree_or_file(self.right_id, txn)
-
-        yield self
-
-        if isinstance(left_obj, FileObject) or isinstance(right_obj, FileObject):
-            return
-
-        # are both dirs, drilldown...
-        for left_sub_name, left_file_id in left_obj.children.items():
-            if left_sub_name in right_obj.children:
-                yield from Diff.compute(
-                    self.path + "/" + left_sub_name,
-                    left_file_id, right_obj.children[left_sub_name]).expand(txn)
-            else:
-                yield RemovedInRight(self.path + "/" + left_sub_name, left_file_id)
-
-        for right_sub_name, right_file_id in right_obj.children.items():
-            if right_sub_name in left_obj.children:
-                pass  # already returned
-            else:
-                yield AddedInRight(self.path + "/" + right_sub_name, right_file_id)
-
-
-@dataclasses.dataclass
-class FoldersAreDiff(Diff):
-    path: str
-    left_id: ObjectID
-    right_id: ObjectID
-
-    def expand(self, txn: Transaction) -> Iterable["Diff"]:
-        yield self
-
-
-@dataclasses.dataclass
-class AddedInRight(Diff):
-    path: str
-    left_obj: ObjectID
-
-    def expand(self, txn: Transaction) -> Iterable["Diff"]:
-        yield self
-
-
-@dataclasses.dataclass
-class RemovedInRight(Diff):
-    path: str
-    right_obj: ObjectID
-
-    def expand(self, txn: Transaction) -> Iterable["Diff"]:
-        yield self
 
 
 def add_all(all_data: Tuple[str, str, int], txn: Transaction) -> bytes:
