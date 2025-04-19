@@ -1,5 +1,6 @@
 import dataclasses
 import enum
+import hashlib
 from typing import Dict
 
 import msgpack
@@ -47,6 +48,12 @@ class FileObject:
     @cached_property
     def serialized(self) -> bytes:
         return msgpack.packb((ObjectType.FILE.value, self.fasthash, self.size))
+
+    @staticmethod
+    def create(fasthash: str, size: int) -> "FileObject":
+        file_packed = msgpack.packb((ObjectType.FILE.value, fasthash, size))
+        file_id = hashlib.sha1(file_packed).digest()
+        return FileObject(file_id=file_id, fasthash=fasthash, size=size)
 
     @staticmethod
     def load(file_id: bytes, data: bytes) -> "FileObject":

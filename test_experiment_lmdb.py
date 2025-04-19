@@ -4,29 +4,30 @@ import unittest
 from typing import List, Tuple, Iterable
 
 import lmdb
-
-import lmdb_storage
 import msgpack
 from alive_progress import alive_it, alive_bar
 from lmdb import Transaction
 
 from contents.hoard_props import HoardFileStatus
 from lmdb_storage.tree_diff import Diff, AreSame
-from lmdb_storage.tree_structure import ObjectType, TreeObject, FileObject, load_tree_or_file, ExpandableTreeObject
+from lmdb_storage.tree_structure import ObjectType, TreeObject, FileObject, ExpandableTreeObject
 from sql_util import sqlite3_standard
 from util import FIRST_VALUE
 
 
 # @unittest.skip("Made to run only locally to benchmark")
+def _list_uuids(conn) -> List[str]:
+    curr = conn.cursor()
+    curr.row_factory = FIRST_VALUE
+    all_repos = list(curr.execute("SELECT uuid FROM fspresence GROUP BY uuid ORDER BY uuid"))
+    return all_repos
+
+
 class MyTestCase(unittest.TestCase):
 
     # @unittest.skip("Made to run only locally to benchmark")
     def test_create_lmdb(self):
-        env = lmdb.open("test/example.lmdb", map_size=(1 << 30), max_dbs=5)
-
-        with env.begin(write=True) as txn:
-            txn.put("hi, my name is".encode(), "tikitikitiki".encode())
-
+        env = ObjectStorage("test/example.lmdb", map_size=(1 << 30))
         path = r"C:\Users\Bono\hoard\hoard.contents"
         is_readonly = True
 
@@ -35,13 +36,13 @@ class MyTestCase(unittest.TestCase):
                 conn.execute("SELECT fullpath, fasthash, size FROM fsobject ORDER BY fullpath"),
                 title="loading from sqlite"))
 
-            with env.begin(db=env.open_db("objects".encode()), write=True) as txn:
+            with env.objects_txn(write=True) as txn:
                 root_id = add_all(all_data, txn)
 
-            with env.begin(db=env.open_db("repos".encode()), write=True) as txn:
+            with env.repos_txn(write=True) as txn:
                 txn.put("HEAD".encode(), root_id)
 
-            all_repos = self._list_uuids(conn)
+            all_repos = _list_uuids(conn)
             logging.info("# repos: {}".format(len(all_repos)))
 
             for uuid in all_repos:
@@ -53,26 +54,21 @@ class MyTestCase(unittest.TestCase):
                     "ORDER BY fullpath",
                     (uuid, HoardFileStatus.AVAILABLE.value))
                 uuid_data = list(alive_it(curr, title=f"Loading for uuid {uuid}"))
-                with env.begin(db=env.open_db("objects".encode()), write=True) as txn:
+
+                with env.objects_txn(write=True) as txn:
                     uuid_root_id = add_all(uuid_data, txn)
 
-                with env.begin(db=env.open_db("repos".encode()), write=True) as txn:
+                with env.repos_txn(write=True) as txn:
                     txn.put(uuid.encode(), uuid_root_id)
-
-    def _list_uuids(self, conn) -> List[str]:
-        curr = conn.cursor()
-        curr.row_factory = FIRST_VALUE
-        all_repos = list(curr.execute("SELECT uuid FROM fspresence GROUP BY uuid ORDER BY uuid"))
-        return all_repos
 
     # @unittest.skip("Made to run only locally to benchmark")
     def test_fully_load_lmdb(self):
-        env = lmdb.open("test/example.lmdb", max_dbs=5)  # , map_size=(1 << 30) // 4)
+        env = ObjectStorage("test/example.lmdb")  # , map_size=(1 << 30) // 4)
 
-        with env.begin(db=env.open_db("repos".encode()), write=False) as txn:
+        with env.repos_txn(write=False) as txn:
             root_id = txn.get("HEAD".encode())
 
-        with env.begin(db=env.open_db("objects".encode()), write=False) as txn:
+        with env.objects_txn(write=False) as txn:
             root = ExpandableTreeObject.create(root_id, txn)
 
             def all_files(tree: ExpandableTreeObject) -> Iterable[FileObject]:
@@ -85,23 +81,23 @@ class MyTestCase(unittest.TestCase):
 
     # @unittest.skip("Made to run only locally to benchmark")
     def test_dump_lmdb(self):
-        env = lmdb.open("test/example.lmdb", max_dbs=5)  # , map_size=(1 << 30) // 4)
-        with env.begin(db=env.open_db("objects".encode()), write=False) as txn:
+        env = ObjectStorage("test/example.lmdb")  # , map_size=(1 << 30) // 4)
+        with env.objects_txn(write=False) as txn:
             with txn.cursor() as curr:
                 with open("test/dbdump.msgpack", "wb") as f:
                     # msgpack.dump(((k, v) for k, v in alive_it(curr, title="loading from lmdb...")), f)
                     msgpack.dump(list(((k, v) for k, v in curr)), f)
 
     def test_tree_compare(self):
-        env = lmdb.open("test/example.lmdb", max_dbs=5)
+        env = ObjectStorage("test/example.lmdb")
         # uuid = "f8f42230-2dc7-48f4-b1b7-5298a309e3fd"
         uuid = "726613d5-2b92-451e-b863-833a579456f5"
 
-        with env.begin(db=env.open_db("repos".encode()), write=False) as txn:
+        with env.repos_txn(write=False) as txn:
             hoard_id = txn.get("HEAD".encode())
             repo_id = txn.get(uuid.encode())
 
-        with env.begin(db=env.open_db("objects".encode()), write=False) as txn:
+        with env.objects_txn(write=False) as txn:
             root_diff = Diff.compute("root", hoard_id, repo_id)
 
             for diff in alive_it(root_diff.expand(txn)):
@@ -110,39 +106,49 @@ class MyTestCase(unittest.TestCase):
                 print(diff)
 
     def test_gc(self):
-        env = lmdb.open("test/example.lmdb", max_dbs=5)
-        run_gc(env)
+        objs = ObjectStorage("test/example.lmdb")
+        objs.gc()
 
 
-def run_gc(env):
-    live_ids = set()
-    q = list()
-    with env.begin(db=env.open_db("repos".encode()), write=False) as txn:
-        for k, root_id in txn.cursor():
-            q.append(root_id)
-            live_ids.add(root_id)
+class ObjectStorage:
+    def __init__(self, path: str, *, map_size: int | None = None, max_dbs=5):
+        self.env = lmdb.open(path, max_dbs=max_dbs, map_size=map_size)
 
-    logging.info(f"found {len(q)} live top-level refs")
+    def gc(self):
+        live_ids = set()
+        q = list()
+        with self.repos_txn(write=False) as txn:
+            for k, root_id in txn.cursor():
+                q.append(root_id)
+                live_ids.add(root_id)
 
-    with env.begin(db=env.open_db("objects".encode()), write=True) as txn:
-        with alive_bar(title="iterating live objects") as bar:
-            while len(q) > 0:
-                current_id = q.pop()
+        logging.info(f"found {len(q)} live top-level refs")
 
-                bar()
-                live_obj = load_tree_or_file(current_id, txn)
-                if isinstance(live_obj, TreeObject):
-                    for child_id in live_obj.children.values():
-                        if child_id not in live_ids:
-                            live_ids.add(child_id)
-                            q.append(child_id)
-                else:
-                    assert isinstance(live_obj, FileObject)
-        with alive_bar(title="deleting objects") as bar:
-            for obj_id, _ in txn.cursor():
-                if obj_id not in live_ids:
-                    txn.delete(obj_id)
+        with self.objects_txn(write=True) as txn:
+            with alive_bar(title="iterating live objects") as bar:
+                while len(q) > 0:
+                    current_id = q.pop()
+
                     bar()
+                    live_obj = self[current_id, txn]
+                    if isinstance(live_obj, TreeObject):
+                        for child_id in live_obj.children.values():
+                            if child_id not in live_ids:
+                                live_ids.add(child_id)
+                                q.append(child_id)
+                    else:
+                        assert isinstance(live_obj, FileObject)
+            with alive_bar(title="deleting objects") as bar:
+                for obj_id, _ in txn.cursor():
+                    if obj_id not in live_ids:
+                        txn.delete(obj_id)
+                        bar()
+
+    def objects_txn(self, write: bool):
+        return self.env.begin(db=self.env.open_db("objects".encode()), write=write)
+
+    def repos_txn(self, write: bool):
+        return self.env.begin(db=self.env.open_db("repos".encode()), write=write)
 
 
 def add_all(all_data: Tuple[str, str, int], txn: Transaction) -> bytes:
@@ -165,15 +171,12 @@ def add_all(all_data: Tuple[str, str, int], txn: Transaction) -> bytes:
             stack.append((current_path, TreeObject(dict())))
 
         # add file to current's children
-        file_data = (ObjectType.FILE.value, fasthash, size)
-        file_packed = msgpack.packb(file_data)
-        file_id = hashlib.sha1(file_packed).digest()
-
-        txn.put(file_id, file_packed)
+        file = FileObject.create(fasthash, size)
+        txn.put(file.file_id, file.serialized)
 
         top_obj_path, tree_obj = stack[-1]
         assert is_child_of(fullpath, top_obj_path) and fullpath[len(top_obj_path) + 1:].find("/") == -1
-        tree_obj.children[file_name] = file_id
+        tree_obj.children[file_name] = file.file_id
 
     pop_and_write_nonparents(txn, stack, "/")  # commits the stack
     assert len(stack) == 1
