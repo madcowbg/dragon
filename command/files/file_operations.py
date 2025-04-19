@@ -137,6 +137,9 @@ async def _cleanup_files_in_repo(
                 except FileNotFoundError as e:
                     out.write(f"E {local_path.as_pure_path.as_posix()}\n")
                     logging.error(e)
+                except PermissionError as e:
+                    out.write(f"PermissionError {local_path.as_pure_path.as_posix()}\n")
+                    logging.error(e)
 
             bar(to_mb(hoard_props.size))
 

@@ -5,12 +5,11 @@ from typing import List, Tuple, Iterable
 
 import msgpack
 from alive_progress import alive_it
-from lmdb import Transaction
 
 from contents.hoard_props import HoardFileStatus
 from lmdb_storage.object_store import ObjectStorage
 from lmdb_storage.tree_diff import Diff, AreSame
-from lmdb_storage.tree_structure import TreeObject, FileObject, ExpandableTreeObject
+from lmdb_storage.tree_structure import TreeObject, FileObject, ExpandableTreeObject, Objects
 from sql_util import sqlite3_standard
 from util import FIRST_VALUE
 
@@ -36,8 +35,8 @@ class MyTestCase(unittest.TestCase):
                 conn.execute("SELECT fullpath, fasthash, size FROM fsobject ORDER BY fullpath"),
                 title="loading from sqlite"))
 
-            with env.objects_txn(write=True) as txn:
-                root_id = add_all(all_data, txn)
+            with env.objects(write=True) as objects:
+                root_id = add_all(all_data, objects)
 
             with env.repos_txn(write=True) as txn:
                 txn.put("HEAD".encode(), root_id)
@@ -55,8 +54,8 @@ class MyTestCase(unittest.TestCase):
                     (uuid, HoardFileStatus.AVAILABLE.value))
                 uuid_data = list(alive_it(curr, title=f"Loading for uuid {uuid}"))
 
-                with env.objects_txn(write=True) as txn:
-                    uuid_root_id = add_all(uuid_data, txn)
+                with env.objects(write=True) as objects:
+                    uuid_root_id = add_all(uuid_data, objects)
 
                 with env.repos_txn(write=True) as txn:
                     txn.put(uuid.encode(), uuid_root_id)
@@ -110,12 +109,12 @@ class MyTestCase(unittest.TestCase):
         objs.gc()
 
 
-def add_all(all_data: Tuple[str, str, int], txn: Transaction) -> bytes:
+def add_all(all_data: Tuple[str, str, int], objects: Objects) -> bytes:
     # every element is a partially-constructed object
     # (name, partial TreeObject)
     stack: List[Tuple[str | None, TreeObject]] = [("", TreeObject(dict()))]
     for fullpath, fasthash, size in alive_it(all_data, title="adding all data..."):
-        pop_and_write_nonparents(txn, stack, fullpath)
+        pop_and_write_nonparents(objects, stack, fullpath)
 
         top_obj_path, children = stack[-1]
 
@@ -131,22 +130,22 @@ def add_all(all_data: Tuple[str, str, int], txn: Transaction) -> bytes:
 
         # add file to current's children
         file = FileObject.create(fasthash, size)
-        txn.put(file.file_id, file.serialized)
+        objects[file.file_id] = file
 
         top_obj_path, tree_obj = stack[-1]
         assert is_child_of(fullpath, top_obj_path) and fullpath[len(top_obj_path) + 1:].find("/") == -1
         tree_obj.children[file_name] = file.file_id
 
-    pop_and_write_nonparents(txn, stack, "/")  # commits the stack
+    pop_and_write_nonparents(objects, stack, "/")  # commits the stack
     assert len(stack) == 1
 
-    obj_id, _ = pop_and_write_obj(stack, txn)
+    obj_id, _ = pop_and_write_obj(stack, objects)
     return obj_id
 
 
-def pop_and_write_nonparents(txn, stack: List[Tuple[str | None, TreeObject]], fullpath: str):
+def pop_and_write_nonparents(objects: Objects, stack: List[Tuple[str | None, TreeObject]], fullpath: str):
     while not is_child_of(fullpath, stack[-1][0]):  # this is not a common ancestor
-        child_id, child_path = pop_and_write_obj(stack, txn)
+        child_id, child_path = pop_and_write_obj(stack, objects)
 
         # add to parent
         _, parent_obj = stack[-1]
@@ -158,13 +157,13 @@ def is_child_of(fullpath, parent) -> bool:
     return fullpath.startswith(parent) and fullpath[len(parent)] == "/"
 
 
-def pop_and_write_obj(stack: List[Tuple[str | None, TreeObject]], txn):
+def pop_and_write_obj(stack: List[Tuple[str | None, TreeObject]], objects: Objects):
     top_obj_path, tree_obj = stack.pop()
 
     # store currently constructed object in tree
     obj_packed = tree_obj.serialized
     obj_id = hashlib.sha1(obj_packed).digest()
-    txn.put(obj_id, obj_packed)
+    objects[obj_id] = tree_obj
 
     return obj_id, top_obj_path
 

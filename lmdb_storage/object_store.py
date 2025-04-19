@@ -37,7 +37,7 @@ class ObjectStorage:
             with alive_bar(title="deleting objects") as bar:
                 for obj_id, _ in objects.txn.cursor():
                     if obj_id not in live_ids:
-                        txn.delete(obj_id)
+                        del objects[obj_id]
                         bar()
 
     def objects_txn(self, write: bool):

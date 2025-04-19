@@ -121,3 +121,9 @@ class Objects:
             return TreeObject(obj_data[1])
         else:
             raise ValueError(f"Unrecognized type {obj_data[0]}")
+
+    def __setitem__(self, obj_id: bytes, obj: FileObject | TreeObject):
+        self.txn.put(obj_id, obj.serialized)
+
+    def __delitem__(self, obj_id: bytes) -> None:
+        self.txn.delete(obj_id)
