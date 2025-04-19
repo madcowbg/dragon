@@ -3,6 +3,7 @@ import dataclasses
 import enum
 import hashlib
 import logging
+import queue
 import unittest
 from abc import abstractmethod
 from typing import List, Tuple, Dict, Iterable
@@ -37,7 +38,6 @@ type ObjectID = bytes
 
 @dataclasses.dataclass
 class TreeObject:
-    tree_id: bytes
     children: Dict[str, ObjectID]
 
     @cached_property
@@ -45,10 +45,10 @@ class TreeObject:
         return msgpack.packb((ObjectType.TREE.value, self.children))
 
     @staticmethod
-    def load(obj_id: bytes, data: bytes) -> "TreeObject":
+    def load(data: bytes) -> "TreeObject":
         object_type, children = msgpack.unpackb(data)
         assert object_type == ObjectType.TREE.value
-        return TreeObject(obj_id, children=children)
+        return TreeObject(children=children)
 
 
 @dataclasses.dataclass
@@ -72,9 +72,9 @@ def load_tree_or_file(obj_id: bytes, txn: Transaction) -> FileObject | TreeObjec
     obj_packed = txn.get(obj_id)  # todo use streaming op
     obj_data = msgpack.loads(obj_packed)  # fixme make this faster by extracting type away
     if obj_data[0] == ObjectType.FILE.value:
-        return FileObject.load(obj_id, obj_packed)
+        return FileObject(obj_id, obj_data[1], obj_data[2])
     elif obj_data[0] == ObjectType.TREE.value:
-        return TreeObject.load(obj_id, obj_packed)
+        return TreeObject(obj_data[1])
     else:
         raise ValueError(f"Unrecognized type {obj_data[0]}")
 
@@ -114,7 +114,7 @@ class ExpandableTreeObject:
 
     @staticmethod
     def create(obj_id: bytes, txn: Transaction) -> "ExpandableTreeObject":
-        return ExpandableTreeObject(TreeObject.load(obj_id, txn.get(obj_id)), txn)
+        return ExpandableTreeObject(TreeObject.load(txn.get(obj_id)), txn)
 
 
 # @unittest.skip("Made to run only locally to benchmark")
@@ -165,6 +165,7 @@ class MyTestCase(unittest.TestCase):
         all_repos = list(curr.execute("SELECT uuid FROM fspresence GROUP BY uuid ORDER BY uuid"))
         return all_repos
 
+    @unittest.skip("Made to run only locally to benchmark")
     def test_fully_load_lmdb(self):
         env = lmdb.open("test/example.lmdb", max_dbs=5)  # , map_size=(1 << 30) // 4)
 
@@ -182,7 +183,7 @@ class MyTestCase(unittest.TestCase):
             all_files = list(alive_it(all_files(root), title="loading from lmdb..."))
             logging.warning(f"# all_files: {len(all_files)}")
 
-    # @unittest.skip("Made to run only locally to benchmark")
+    @unittest.skip("Made to run only locally to benchmark")
     def test_dump_lmdb(self):
         env = lmdb.open("test/example.lmdb", max_dbs=5)  # , map_size=(1 << 30) // 4)
         with env.begin(db=env.open_db("objects".encode()), write=False) as txn:
@@ -207,6 +208,41 @@ class MyTestCase(unittest.TestCase):
                 if isinstance(diff, AreSame):
                     continue
                 print(diff)
+
+    def test_gc(self):
+        env = lmdb.open("test/example.lmdb", max_dbs=5)
+        run_gc(env)
+
+
+def run_gc(env):
+    live_ids = set()
+    q = list()
+    with env.begin(db=env.open_db("repos".encode()), write=False) as txn:
+        for k, root_id in txn.cursor():
+            q.append(root_id)
+            live_ids.add(root_id)
+
+    logging.info(f"found {len(q)} live top-level refs")
+
+    with env.begin(db=env.open_db("objects".encode()), write=True) as txn:
+        with alive_bar(title="iterating live objects") as bar:
+            while len(q) > 0:
+                current_id = q.pop()
+
+                bar()
+                live_obj = load_tree_or_file(current_id, txn)
+                if isinstance(live_obj, TreeObject):
+                    for child_id in live_obj.children.values():
+                        if child_id not in live_ids:
+                            live_ids.add(child_id)
+                            q.append(child_id)
+                else:
+                    assert isinstance(live_obj, FileObject)
+        with alive_bar(title="deleting objects") as bar:
+            for obj_id, _ in txn.cursor():
+                if obj_id not in live_ids:
+                    txn.delete(obj_id)
+                    bar()
 
 
 class Diff:
