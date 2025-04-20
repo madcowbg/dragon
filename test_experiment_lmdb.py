@@ -1,15 +1,20 @@
 import hashlib
 import logging
 import os
+import pathlib
 import unittest
 from typing import List, Tuple, Iterable
+from unittest.async_case import IsolatedAsyncioTestCase
 
 import msgpack
 from alive_progress import alive_it
 
+from command.test_command_file_changing_flows import populate
+from command.test_hoard_command import populate_repotypes, init_complex_hoard
 from contents.hoard_props import HoardFileStatus
+from hashing import fast_hash
 from lmdb_storage.object_store import ObjectStorage
-from lmdb_storage.tree_diff import Diff, AreSame
+from lmdb_storage.tree_diff import Diff, AreSame, zip_trees
 from lmdb_storage.tree_structure import TreeObject, FileObject, ExpandableTreeObject, Objects
 from sql_util import sqlite3_standard
 from util import FIRST_VALUE
@@ -23,21 +28,40 @@ def _list_uuids(conn) -> List[str]:
 
 
 @unittest.skipUnless(os.getenv('LMDB_DEVELOPMENT_TEST'), reason="Uses total hoard")
-class MyTestCase(unittest.TestCase):
+class MyTestCase(IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.tmpdir = "./tests"
+        self.obj_storage_path = f"{self.tmpdir}/test/example.lmdb"
+        pathlib.Path(self.obj_storage_path).parent.mkdir(parents=True, exist_ok=True)
+
+        populate(self.tmpdir)
+        populate_repotypes(self.tmpdir)
 
     # @unittest.skip("Made to run only locally to benchmark")
-    def test_create_lmdb(self):
-        env = ObjectStorage("test/example.lmdb", map_size=(1 << 30))
-        path = r"C:\Users\Bono\hoard\hoard.contents"
+    async def test_create_lmdb(self):
+        hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = \
+            await init_complex_hoard(self.tmpdir)
+
+        await hoard_cmd.contents.pull(all=True)
+
+        env = ObjectStorage(self.obj_storage_path, map_size=(1 << 30))
+        path = rf"{hoard_cmd.hoard.hoardpath}\hoard.contents"
         is_readonly = True
 
+
         with sqlite3_standard(f"file:{path}{'?mode=ro' if is_readonly else ''}", uri=True) as conn:
+            def create_file_tuple(cursor, row):
+                fullpath, fasthash, size = row
+                return fullpath, FileObject.create(fasthash, size)
+            curr = conn.cursor()
+            curr.row_factory = create_file_tuple
+
             all_data = list(alive_it(
-                conn.execute("SELECT fullpath, fasthash, size FROM fsobject ORDER BY fullpath"),
+                curr.execute("SELECT fullpath, fasthash, size FROM fsobject ORDER BY fullpath"),
                 title="loading from sqlite"))
 
             with env.objects(write=True) as objects:
-                root_id = add_all(all_data, objects)
+                root_id = objects.mktree_from_tuples(all_data)
 
             with env.repos_txn(write=True) as txn:
                 txn.put("HEAD".encode(), root_id)
@@ -46,24 +70,25 @@ class MyTestCase(unittest.TestCase):
             logging.info("# repos: {}".format(len(all_repos)))
 
             for uuid in all_repos:
-                curr = conn.execute(
+                per_uuid_data = curr.execute(
                     "SELECT fullpath, fasthash, size FROM fsobject "
                     "WHERE EXISTS ("
                     "  SELECT 1 FROM fspresence "
                     "  WHERE fsobject.fsobject_id == fspresence.fsobject_id AND uuid = ? AND status = ?)"
                     "ORDER BY fullpath",
                     (uuid, HoardFileStatus.AVAILABLE.value))
-                uuid_data = list(alive_it(curr, title=f"Loading for uuid {uuid}"))
+
+                uuid_data = list(alive_it(per_uuid_data, title=f"Loading for uuid {uuid}"))
 
                 with env.objects(write=True) as objects:
-                    uuid_root_id = add_all(uuid_data, objects)
+                    uuid_root_id = objects.mktree_from_tuples(uuid_data)
 
                 with env.repos_txn(write=True) as txn:
                     txn.put(uuid.encode(), uuid_root_id)
 
     # @unittest.skip("Made to run only locally to benchmark")
     def test_fully_load_lmdb(self):
-        env = ObjectStorage("test/example.lmdb")  # , map_size=(1 << 30) // 4)
+        env = ObjectStorage(self.obj_storage_path)  # , map_size=(1 << 30) // 4)
 
         with env.repos_txn(write=False) as txn:
             root_id = txn.get("HEAD".encode())
@@ -81,7 +106,7 @@ class MyTestCase(unittest.TestCase):
 
     # @unittest.skip("Made to run only locally to benchmark")
     def test_dump_lmdb(self):
-        env = ObjectStorage("test/example.lmdb")  # , map_size=(1 << 30) // 4)
+        env = ObjectStorage(self.obj_storage_path)  # , map_size=(1 << 30) // 4)
         with env.objects_txn(write=False) as txn:
             with txn.cursor() as curr:
                 with open("test/dbdump.msgpack", "wb") as f:
@@ -89,84 +114,24 @@ class MyTestCase(unittest.TestCase):
                     msgpack.dump(list(((k, v) for k, v in curr)), f)
 
     def test_tree_compare(self):
-        env = ObjectStorage("test/example.lmdb")
+        env = ObjectStorage(self.obj_storage_path)
         # uuid = "f8f42230-2dc7-48f4-b1b7-5298a309e3fd"
-        uuid = "726613d5-2b92-451e-b863-833a579456f5"
+        # uuid = "726613d5-2b92-451e-b863-833a579456f5"
+        uuid = "766c936d-fbe9-4cf0-b2df-e47b40888581"
 
         with env.repos_txn(write=False) as txn:
             hoard_id = txn.get("HEAD".encode())
             repo_id = txn.get(uuid.encode())
 
         with env.objects(write=False) as objects:
-            root_diff = Diff.compute("root", hoard_id, repo_id)
-
-            for diff in alive_it(root_diff.expand(objects)):
+            for diff in alive_it(zip_trees(objects, "root", hoard_id, repo_id)):
                 if isinstance(diff, AreSame):
                     continue
                 print(diff)
 
     def test_gc(self):
-        objs = ObjectStorage("test/example.lmdb")
+        objs = ObjectStorage(self.obj_storage_path)
         objs.gc()
-
-
-def add_all(all_data: Tuple[str, str, int], objects: Objects) -> bytes:
-    # every element is a partially-constructed object
-    # (name, partial TreeObject)
-    stack: List[Tuple[str | None, TreeObject]] = [("", TreeObject(dict()))]
-    for fullpath, fasthash, size in alive_it(all_data, title="adding all data..."):
-        pop_and_write_nonparents(objects, stack, fullpath)
-
-        top_obj_path, children = stack[-1]
-
-        assert is_child_of(fullpath, top_obj_path)
-        file_name = fullpath[fullpath.rfind("/") + 1:]
-
-        # add needed subfolders to stack
-        current_path = top_obj_path
-        rel_path = fullpath[len(current_path) + 1:-len(file_name)].split("/")
-        for path_elem in rel_path[:-1]:
-            current_path += "/" + path_elem
-            stack.append((current_path, TreeObject(dict())))
-
-        # add file to current's children
-        file = FileObject.create(fasthash, size)
-        objects[file.file_id] = file
-
-        top_obj_path, tree_obj = stack[-1]
-        assert is_child_of(fullpath, top_obj_path) and fullpath[len(top_obj_path) + 1:].find("/") == -1
-        tree_obj.children[file_name] = file.file_id
-
-    pop_and_write_nonparents(objects, stack, "/")  # commits the stack
-    assert len(stack) == 1
-
-    obj_id, _ = pop_and_write_obj(stack, objects)
-    return obj_id
-
-
-def pop_and_write_nonparents(objects: Objects, stack: List[Tuple[str | None, TreeObject]], fullpath: str):
-    while not is_child_of(fullpath, stack[-1][0]):  # this is not a common ancestor
-        child_id, child_path = pop_and_write_obj(stack, objects)
-
-        # add to parent
-        _, parent_obj = stack[-1]
-        child_name = child_path[child_path.rfind("/") + 1:]
-        parent_obj.children[child_name] = child_id
-
-
-def is_child_of(fullpath, parent) -> bool:
-    return fullpath.startswith(parent) and fullpath[len(parent)] == "/"
-
-
-def pop_and_write_obj(stack: List[Tuple[str | None, TreeObject]], objects: Objects):
-    top_obj_path, tree_obj = stack.pop()
-
-    # store currently constructed object in tree
-    obj_packed = tree_obj.serialized
-    obj_id = hashlib.sha1(obj_packed).digest()
-    objects[obj_id] = tree_obj
-
-    return obj_id, top_obj_path
 
 
 if __name__ == '__main__':

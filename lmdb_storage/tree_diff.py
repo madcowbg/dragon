@@ -5,6 +5,14 @@ from typing import Iterable
 from lmdb_storage.tree_structure import ObjectID, FileObject, Objects
 
 
+def zip_trees(objects: Objects, root_name: str, left_id: bytes, right_id: bytes):
+    assert left_id is not None
+    assert right_id is not None
+
+    root_diff = Diff.compute(root_name, left_id, right_id)
+    return root_diff.expand(objects)
+
+
 class Diff:
     path: str
 

@@ -12,7 +12,7 @@ from dragon import TotalCommand
 
 
 def populate(tmpdir: str):
-    os.mkdir(join(tmpdir, "hoard"))
+    os.makedirs(join(tmpdir, "hoard"), exist_ok=True)
 
 
 class TestFileChangingFlows(IsolatedAsyncioTestCase):

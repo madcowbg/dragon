@@ -1,7 +1,7 @@
 import dataclasses
 import enum
 import hashlib
-from typing import Dict
+from typing import Dict, Iterable, Tuple, List
 
 import msgpack
 from lmdb import Transaction
@@ -100,6 +100,9 @@ class ExpandableTreeObject:
         return ExpandableTreeObject(objects[obj_id], objects)
 
 
+def do_nothing[T](x: T, *, title) -> T: return x
+
+
 class Objects:
     def __init__(self, storage: "ObjectStorage", write: bool):
         self.txn = storage.objects_txn(write=write)
@@ -127,3 +130,60 @@ class Objects:
 
     def __delitem__(self, obj_id: bytes) -> None:
         self.txn.delete(obj_id)
+
+    def mktree_from_tuples(self, all_data: Iterable[Tuple[str, FileObject]], alive_it=do_nothing) -> bytes:
+        # every element is a partially-constructed object
+        # (name, partial TreeObject)
+        stack: List[Tuple[str | None, TreeObject]] = [("", TreeObject(dict()))]
+        for fullpath, file in alive_it(all_data, title="adding all data..."):
+            pop_and_write_nonparents(self, stack, fullpath)
+
+            top_obj_path, children = stack[-1]
+
+            assert is_child_of(fullpath, top_obj_path)
+            file_name = fullpath[fullpath.rfind("/") + 1:]
+
+            # add needed subfolders to stack
+            current_path = top_obj_path
+            rel_path = fullpath[len(current_path) + 1:-len(file_name)].split("/")
+            for path_elem in rel_path[:-1]:
+                current_path += "/" + path_elem
+                stack.append((current_path, TreeObject(dict())))
+
+            # add file to current's children
+            self[file.file_id] = file
+
+            top_obj_path, tree_obj = stack[-1]
+            assert is_child_of(fullpath, top_obj_path) and fullpath[len(top_obj_path) + 1:].find("/") == -1
+            tree_obj.children[file_name] = file.file_id
+
+        pop_and_write_nonparents(self, stack, "/")  # commits the stack
+        assert len(stack) == 1
+
+        obj_id, _ = pop_and_write_obj(stack, self)
+        return obj_id
+
+
+def pop_and_write_nonparents(objects: Objects, stack: List[Tuple[str | None, TreeObject]], fullpath: str):
+    while not is_child_of(fullpath, stack[-1][0]):  # this is not a common ancestor
+        child_id, child_path = pop_and_write_obj(stack, objects)
+
+        # add to parent
+        _, parent_obj = stack[-1]
+        child_name = child_path[child_path.rfind("/") + 1:]
+        parent_obj.children[child_name] = child_id
+
+
+def is_child_of(fullpath: str, parent: str) -> bool:
+    return fullpath.startswith(parent) and fullpath[len(parent)] == "/"
+
+
+def pop_and_write_obj(stack: List[Tuple[str | None, TreeObject]], objects: Objects):
+    top_obj_path, tree_obj = stack.pop()
+
+    # store currently constructed object in tree
+    obj_packed = tree_obj.serialized
+    obj_id = hashlib.sha1(obj_packed).digest()
+    objects[obj_id] = tree_obj
+
+    return obj_id, top_obj_path
