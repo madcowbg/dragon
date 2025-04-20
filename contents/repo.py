@@ -56,35 +56,6 @@ class RepoFSObjects:
         return FastPosixPath(fullpath), RepoFileProps(
             size, mtime, fasthash, md5, RepoFileStatus(last_status), last_update_epoch, last_related_fullpath)
 
-    def get_existing(self, file_path: FastPosixPath) -> RepoFileProps:
-        assert not file_path.is_absolute()
-        curr = self.parent.conn.cursor()
-        curr.row_factory = RepoFSObjects._create_pair_path_props
-
-        _, props = curr.execute(
-            "SELECT fullpath, isdir, size, mtime, fasthash, md5, last_status, last_update_epoch, last_related_fullpath "
-            "FROM fsobject "
-            "WHERE fsobject.fullpath = ? AND last_status NOT IN (?, ?) and isdir = FALSE",
-            (file_path.as_posix(), RepoFileStatus.DELETED.value, RepoFileStatus.MOVED_FROM.value)).fetchone()
-        return props
-
-    def get_file_with_any_status(self, file_path: FastPosixPath) -> RepoFileProps | None:
-        assert not file_path.is_absolute()
-        curr = self.parent.conn.cursor()
-        curr.row_factory = RepoFSObjects._create_pair_path_props
-
-        all_pairs = curr.execute(
-            "SELECT fullpath, isdir, size, mtime, fasthash, md5, last_status, last_update_epoch, last_related_fullpath "
-            "FROM fsobject "
-            "WHERE fsobject.fullpath = ? and isdir = FALSE ",
-            (file_path.as_posix(),)).fetchall()
-        if len(all_pairs) == 0:
-            return None
-        else:
-            assert len(all_pairs) == 1
-            _, props = all_pairs[0]
-            return props
-
     def all_status(self) -> Iterable[Tuple[FastPosixPath, RepoFileProps]]:
         curr = self.parent.conn.cursor()
         curr.row_factory = RepoFSObjects._create_pair_path_props
@@ -101,12 +72,6 @@ class RepoFSObjects:
             "SELECT fullpath, isdir, size, mtime, fasthash, md5, last_status, last_update_epoch, last_related_fullpath "
             "FROM fsobject WHERE last_status NOT IN (?, ?) and isdir = FALSE",
             (RepoFileStatus.DELETED.value, RepoFileStatus.MOVED_FROM.value))
-
-    def in_existing(self, file_path: FastPosixPath) -> bool:
-        assert not file_path.is_absolute()
-        return self._first_value_cursor().execute(
-            "SELECT count(1) FROM fsobject WHERE fsobject.fullpath = ? AND last_status NOT IN (?, ?) and isdir = FALSE",
-            (file_path.as_posix(), RepoFileStatus.DELETED.value, RepoFileStatus.MOVED_FROM.value)).fetchone() > 0
 
     def add_file(self, filepath: FastPosixPath, size: int, mtime: float, fasthash: str, status: RepoFileStatus) -> None:
         assert not filepath.is_absolute()
