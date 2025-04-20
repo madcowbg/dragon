@@ -1,5 +1,4 @@
 import logging
-import os
 import pathlib
 import unittest
 from typing import List, Iterable
@@ -12,7 +11,7 @@ from command.test_command_file_changing_flows import populate
 from command.test_hoard_command import populate_repotypes, init_complex_hoard
 from contents.hoard_props import HoardFileStatus
 from lmdb_storage.object_store import ObjectStorage
-from lmdb_storage.tree_iteration import zip_trees, dfs
+from lmdb_storage.tree_iteration import dfs, zip_dfs
 from lmdb_storage.tree_structure import ExpandableTreeObject, add_file_object, Objects, remove_file_object
 from lmdb_storage.file_object import FileObject
 from sql_util import sqlite3_standard
@@ -34,6 +33,8 @@ class MyTestCase(IsolatedAsyncioTestCase):
     def setUp(self):
         self.tmpdir = "./tests"
         self.obj_storage_path = f"{self.tmpdir}/test/example.lmdb"
+        # shutil.rmtree(self.obj_storage_path, ignore_errors=True)
+
         pathlib.Path(self.obj_storage_path).parent.mkdir(parents=True, exist_ok=True)
 
         populate(self.tmpdir)
@@ -127,7 +128,7 @@ class MyTestCase(IsolatedAsyncioTestCase):
             diffs = [
                 (path, diff_type.value)
                 for path, diff_type, left_id, right_id, should_skip
-                in alive_it(zip_trees(objects, "root", hoard_id, repo_id))]
+                in alive_it(zip_dfs(objects, "root", hoard_id, repo_id))]
             self.assertEqual([
                 ('root', 'different'),
                 ('root/test.me.1', 'same'),
@@ -139,7 +140,7 @@ class MyTestCase(IsolatedAsyncioTestCase):
                 ('root/wat/test.me.6', 'right_missing')], diffs)
 
             diffs = []
-            for path, diff_type, left_id, right_id, should_skip in zip_trees(objects, "root", hoard_id, repo_id):
+            for path, diff_type, left_id, right_id, should_skip in zip_dfs(objects, "root", hoard_id, repo_id):
                 if path == 'root/wat':
                     should_skip()
                 diffs.append((path, diff_type.value))
@@ -149,6 +150,107 @@ class MyTestCase(IsolatedAsyncioTestCase):
                 ('root/test.me.4', 'same'),
                 ('root/test.me.5', 'right_missing'),
                 ('root/wat', 'different')], diffs)
+
+    def test_tree_compare_with_missing_trees(self):
+        env = ObjectStorage(self.obj_storage_path)
+        left_uuid = "766c936d-fbe9-4cf0-b2df-e47b40888581"
+        right_uuid = "a9d34fae-af49-4a26-82c9-e74488470b09"
+
+        with env.repos_txn(write=False) as txn:
+            left_id = txn.get(left_uuid.encode())
+            right_id = txn.get(right_uuid.encode())
+
+        with env.objects(write=True) as objects:
+            left_id = add_file_object(objects, left_id, "newdir/new.file".split("/"), FileObject.create("dasda", 1))
+            old_left_id = left_id
+            left_id = add_file_object(objects, left_id, "wat/lat/new.file".split("/"), FileObject.create("dasda", 2))
+
+            right_id = add_file_object(
+                objects, right_id, "wat/zat/new.file".split("/"), FileObject.create("dadassda", 3))
+
+        with env.objects(write=False) as objects:
+            diffs = [
+                (path, diff_type.value)
+                for path, diff_type, left_id, right_id, should_skip
+                in alive_it(zip_dfs(objects, "", left_id, None))]
+            self.assertEqual([
+                ('', 'right_missing'),
+                ('/newdir', 'right_missing'),
+                ('/newdir/new.file', 'right_missing'),
+                ('/test.me.1', 'right_missing'),
+                ('/test.me.4', 'right_missing'),
+                ('/wat', 'right_missing'),
+                ('/wat/lat', 'right_missing'),
+                ('/wat/lat/new.file', 'right_missing'),
+                ('/wat/test.me.2', 'right_missing'),
+                ('/wat/test.me.3', 'right_missing')], diffs)
+
+            diffs = [
+                (path, diff_type.value)
+                for path, diff_type, left_id, right_id, should_skip
+                in alive_it(zip_dfs(objects, "", left_id, old_left_id, False))]
+            self.assertEqual([
+                ('', 'different'),
+                ('/newdir', 'same'),
+                ('/test.me.1', 'same'),
+                ('/test.me.4', 'same'),
+                ('/wat', 'different'),
+                ('/wat/lat', 'right_missing'),
+                ('/wat/lat/new.file', 'right_missing'),
+                ('/wat/test.me.2', 'same'),
+                ('/wat/test.me.3', 'same')], diffs)
+
+            diffs = [
+                (path, diff_type.value)
+                for path, diff_type, left_id, right_id, should_skip
+                in alive_it(zip_dfs(objects, "", left_id, old_left_id, True))]
+            self.assertEqual([
+                ('', 'different'),
+                ('/newdir', 'same'),
+                ('/newdir/new.file', 'same'),
+                ('/test.me.1', 'same'),
+                ('/test.me.4', 'same'),
+                ('/wat', 'different'),
+                ('/wat/lat', 'right_missing'),
+                ('/wat/lat/new.file', 'right_missing'),
+                ('/wat/test.me.2', 'same'),
+                ('/wat/test.me.3', 'same')], diffs)
+
+            diffs = [
+                (path, diff_type.value)
+                for path, diff_type, left_id, right_id, should_skip
+                in alive_it(zip_dfs(objects, "", left_id, right_id))]
+            self.assertEqual([
+                ('', 'different'),
+                ('/newdir', 'right_missing'),
+                ('/newdir/new.file', 'right_missing'),
+                ('/test.me.1', 'same'),
+                ('/test.me.4', 'right_missing'),
+                ('/wat', 'different'),
+                ('/wat/lat', 'right_missing'),
+                ('/wat/lat/new.file', 'right_missing'),
+                ('/wat/test.me.2', 'same'),
+                ('/wat/test.me.3', 'right_missing'),
+                ('/wat/zat', 'left_missing'),
+                ('/wat/zat/new.file', 'left_missing')], diffs)
+
+            diffs = [
+                (path, diff_type.value)
+                for path, diff_type, left_id, right_id, should_skip
+                in alive_it(zip_dfs(objects, "", right_id, left_id))]
+            self.assertEqual([
+                ('', 'different'),
+                ('/test.me.1', 'same'),
+                ('/wat', 'different'),
+                ('/wat/test.me.2', 'same'),
+                ('/wat/zat', 'right_missing'),
+                ('/wat/zat/new.file', 'right_missing'),
+                ('/wat/lat', 'left_missing'),
+                ('/wat/lat/new.file', 'left_missing'),
+                ('/wat/test.me.3', 'left_missing'),
+                ('/newdir', 'left_missing'),
+                ('/newdir/new.file', 'left_missing'),
+                ('/test.me.4', 'left_missing')], diffs)
 
     def test_dfs(self):
         env = ObjectStorage(self.obj_storage_path)

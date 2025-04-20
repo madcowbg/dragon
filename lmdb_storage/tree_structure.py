@@ -29,13 +29,13 @@ class TreeObject:
 
     @cached_property
     def serialized(self) -> bytes:
-        return msgpack.packb((ObjectType.TREE.value, self.children))
+        return msgpack.packb((ObjectType.TREE.value, list(sorted(self.children.items()))))
 
     @staticmethod
     def load(data: bytes) -> "TreeObject":
-        object_type, children = msgpack.unpackb(data)
+        object_type, children_list = msgpack.unpackb(data)
         assert object_type == ObjectType.TREE.value
-        return TreeObject(children=children)
+        return TreeObject(children=dict(children_list))
 
     @property
     def id(self) -> bytes:
@@ -98,13 +98,13 @@ class Objects[F]:
         return None
 
     def __getitem__(self, obj_id: bytes) -> Union[F, TreeObject]:
-        assert type(obj_id) is bytes
+        assert type(obj_id) is bytes, type(obj_id)
         obj_packed = self.txn.get(obj_id)  # todo use streaming op
         obj_data = msgpack.loads(obj_packed)  # fixme make this faster by extracting type away
         if obj_data[0] == ObjectType.BLOB.value:
             return self.object_builder(obj_id, obj_data[1])
         elif obj_data[0] == ObjectType.TREE.value:
-            return TreeObject(obj_data[1])
+            return TreeObject(dict(obj_data[1]))
         else:
             raise ValueError(f"Unrecognized type {obj_data[0]}")
 
