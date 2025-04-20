@@ -36,9 +36,11 @@ def read_files(objects: Objects[FileObject], root_id: bytes) -> Iterable[Tuple[F
 
 
 async def compare_local_to_hoard(
-        uuid: str, staging_root_id: bytes, hoard: HoardContents, pathing: HoardPathing,
+        uuid: str, hoard: HoardContents, pathing: HoardPathing,
         progress_tool=alive_it) \
         -> AsyncGenerator[Diff]:
+    staging_root_id = hoard.env.get_root_id(f"staging-{uuid}")
+    assert staging_root_id is not None
 
     logging.info("Load current objects")
     all_local_with_any_status: Dict[FastPosixPath, FileDesc] = \
@@ -94,7 +96,7 @@ async def compare_local_to_hoard(
             raise ValueError(f"Unrecognized state: {local_props.last_status}")
 
 
-def obtain_local_staging_to_hoard(hoard: HoardContents, local: RepoContents):
+def copy_local_staging_to_hoard(hoard: HoardContents, local: RepoContents):
     logging.info("Copying objects from local to hoard")
     staging_root_id = local.fsobjects.root_id
     current_root = hoard.env.get_root_id(local.uuid)

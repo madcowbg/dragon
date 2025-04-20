@@ -7,10 +7,9 @@ import humanize
 from alive_progress import alive_bar, alive_it
 
 from command.content_prefs import ContentPrefs
-from command.contents.comparisons import compare_local_to_hoard, obtain_local_staging_to_hoard
-from command.contents.handle_pull import PullPreferences, pull_repo_contents_to_hoard, \
-    resolution_to_match_repo_and_hoard, PullIntention, _calculate_local_only, ResetLocalAsCurrentBehavior, \
-    calculate_actions
+from command.contents.comparisons import compare_local_to_hoard, copy_local_staging_to_hoard
+from command.contents.handle_pull import PullPreferences, resolution_to_match_repo_and_hoard, PullIntention, \
+    _calculate_local_only, ResetLocalAsCurrentBehavior, calculate_actions
 from command.fast_path import FastPosixPath
 from command.hoard import Hoard
 from command.pathing import HoardPathing
@@ -132,13 +131,16 @@ async def execute_pull(
             logging.info(f"Saving config of remote {remote_uuid}...")
             hoard_contents.config.save_remote_config(current_contents.config)
 
-            staging_root_id, current_root = obtain_local_staging_to_hoard(hoard_contents, current_contents)
+            staging_root_id, current_root = copy_local_staging_to_hoard(hoard_contents, current_contents)
             uuid = current_contents.config.uuid
 
-            await pull_repo_contents_to_hoard(
-                hoard_contents, pathing, config, uuid, staging_root_id, preferences, content_prefs, out, progress_bar)
+            resolutions = await resolution_to_match_repo_and_hoard(
+                uuid, hoard_contents, pathing, preferences, progress_bar)
 
-            hoard_contents.env.set_root_id(uuid, staging_root_id)  # fixme should not blindly be setting it
+            for action in calculate_actions(preferences, resolutions, pathing, config, out):
+                action.execute(preferences.local_uuid, content_prefs, hoard_contents, out)
+
+            hoard_contents.env.set_root_id(uuid, staging_root_id)  # fixme should be using the merged root
 
             logging.info(f"Updating epoch of {remote_uuid} to {current_contents.config.epoch}")
             hoard_contents.config.mark_up_to_date(
@@ -164,10 +166,10 @@ def init_pull_preferences(
 async def execute_print_pending(
         current_contents: RepoContents, hoard: HoardContents, pathing: HoardPathing, ignore_missing: bool,
         out: StringIO):
-    staging_root_id, _ = obtain_local_staging_to_hoard(hoard, current_contents)
+    copy_local_staging_to_hoard(hoard, current_contents)
     uuid = current_contents.config.uuid
 
-    async for diff in compare_local_to_hoard(uuid, staging_root_id, hoard, pathing):
+    async for diff in compare_local_to_hoard(uuid, hoard, pathing):
         if diff.diff_type == DiffType.FileOnlyInLocal:
             if diff.is_added:
                 out.write(f"ADDED {diff.hoard_file.as_posix()}\n")
@@ -259,11 +261,11 @@ class HoardCommandContents:
 
                     pathing = HoardPathing(config, self.hoard.paths())
 
-                    staging_root_id, _ = obtain_local_staging_to_hoard(hoard_contents, current_contents)
+                    staging_root_id, _ = copy_local_staging_to_hoard(hoard_contents, current_contents)
                     uuid = current_contents.config.uuid
 
                     resolutions = await resolution_to_match_repo_and_hoard(
-                        uuid, staging_root_id, hoard_contents, pathing, preferences, alive_it)
+                        uuid, hoard_contents, pathing, preferences, alive_it)
 
                     with StringIO() as other_out:
                         for action in calculate_actions(preferences, resolutions, pathing, config, other_out):

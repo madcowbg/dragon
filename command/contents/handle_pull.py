@@ -8,7 +8,7 @@ from typing import Iterable, Tuple
 from alive_progress import alive_it
 
 from command.content_prefs import ContentPrefs
-from command.contents.comparisons import compare_local_to_hoard, obtain_local_staging_to_hoard
+from command.contents.comparisons import compare_local_to_hoard, copy_local_staging_to_hoard
 from command.fast_path import FastPosixPath
 from command.pathing import HoardPathing
 from config import HoardConfig
@@ -412,17 +412,6 @@ def _move_locally(
     out.write(f"CLEANUP_MOVED {diff.hoard_file.as_posix()}\n")
 
 
-async def pull_repo_contents_to_hoard(
-        hoard_contents: HoardContents, pathing: HoardPathing, config: HoardConfig, uuid: str, staging_root_id: ObjectID,
-        preferences: PullPreferences, content_prefs: ContentPrefs, out: StringIO, progress_tool=alive_it):
-
-    resolutions = await resolution_to_match_repo_and_hoard(
-        uuid, staging_root_id, hoard_contents, pathing, preferences, progress_tool)
-
-    for action in calculate_actions(preferences, resolutions, pathing, config, out):
-        action.execute(preferences.local_uuid, content_prefs, hoard_contents, out)
-
-
 def calculate_actions(
         preferences: PullPreferences, resolutions: Iterable[Tuple[Diff, PullIntention]],
         pathing: HoardPathing, config: HoardConfig,
@@ -445,10 +434,10 @@ def calculate_actions(
 
 
 async def resolution_to_match_repo_and_hoard(
-        uuid: str, staging_root_id: ObjectID, hoard_contents: HoardContents,
+        uuid: str, hoard_contents: HoardContents,
         pathing: HoardPathing, preferences: PullPreferences, progress_tool):
     all_diffs = [
-        diff async for diff in compare_local_to_hoard(uuid, staging_root_id, hoard_contents, pathing, progress_tool)]
+        diff async for diff in compare_local_to_hoard(uuid, hoard_contents, pathing, progress_tool)]
     return compute_resolutions(all_diffs, preferences)
 
 
