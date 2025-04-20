@@ -196,7 +196,7 @@ def remove_file_object[F](objects: Objects[F], tree_id: ObjectID, filepath: List
     sub_name = filepath[0]
     tree_obj = objects[tree_id]
     if len(filepath) == 1:
-        del tree_obj.children[sub_name]
+        tree_obj.children.pop(sub_name, None)
     elif sub_name not in tree_obj.children:  # do nothing for empty folders
         pass
     else:
