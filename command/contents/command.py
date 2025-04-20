@@ -7,7 +7,8 @@ import humanize
 from alive_progress import alive_bar, alive_it
 
 from command.content_prefs import ContentPrefs
-from command.contents.comparisons import compare_local_to_hoard, copy_local_staging_to_hoard
+from command.contents.comparisons import compare_local_to_hoard, copy_local_staging_to_hoard, \
+    sync_fsobject_to_object_storage
 from command.contents.handle_pull import PullPreferences, resolution_to_match_repo_and_hoard, PullIntention, \
     _calculate_local_only, ResetLocalAsCurrentBehavior, calculate_actions
 from command.fast_path import FastPosixPath
@@ -134,6 +135,8 @@ async def execute_pull(
             staging_root_id, current_root = copy_local_staging_to_hoard(hoard_contents, current_contents)
             uuid = current_contents.config.uuid
 
+            await sync_fsobject_to_object_storage(hoard_contents.env, hoard_contents.fsobjects)
+
             resolutions = await resolution_to_match_repo_and_hoard(
                 uuid, hoard_contents, pathing, preferences, progress_bar)
 
@@ -168,6 +171,7 @@ async def execute_print_pending(
         out: StringIO):
     copy_local_staging_to_hoard(hoard, current_contents)
     uuid = current_contents.config.uuid
+    await sync_fsobject_to_object_storage(hoard.env, hoard.fsobjects)
 
     async for diff in compare_local_to_hoard(uuid, hoard, pathing):
         if diff.diff_type == DiffType.FileOnlyInLocal:
@@ -263,6 +267,7 @@ class HoardCommandContents:
 
                     staging_root_id, _ = copy_local_staging_to_hoard(hoard_contents, current_contents)
                     uuid = current_contents.config.uuid
+                    await sync_fsobject_to_object_storage(hoard_contents.env, hoard_contents.fsobjects)
 
                     resolutions = await resolution_to_match_repo_and_hoard(
                         uuid, hoard_contents, pathing, preferences, alive_it)

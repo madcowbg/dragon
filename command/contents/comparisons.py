@@ -1,17 +1,19 @@
 import binascii
 import logging
+import uuid
 from typing import Dict, AsyncGenerator, Iterable, Tuple
 
 from alive_progress import alive_it
 
 from command.fast_path import FastPosixPath
 from command.pathing import HoardPathing
-from contents.hoard import HoardContents
+from contents.hoard import HoardContents, HoardFSObjects
 from contents.hoard_props import HoardFileProps
 from contents.repo import RepoContents
 from contents.repo_props import FileDesc, RepoFileStatus
 from contents_diff import Diff, DiffType
 from lmdb_storage.file_object import FileObject
+from lmdb_storage.object_store import ObjectStorage
 from lmdb_storage.tree_iteration import dfs
 from lmdb_storage.tree_structure import Objects, ObjectType
 
@@ -47,8 +49,19 @@ async def compare_local_to_hoard(
         dict(read_files(hoard.objects, staging_root_id))
 
     logging.info("Load hoard objects in folder")
-    all_hoard_in_folder: Dict[FastPosixPath, HoardFileProps] = dict([
+    # fixme remove
+    _all_hoard_in_folder: Dict[FastPosixPath, HoardFileProps] = dict([
         s async for s in hoard.fsobjects.in_folder(pathing.mounted_at(uuid))])
+
+    current_root_id = hoard.env.get_root_id("HEAD")
+
+    mounted_at = pathing.mounted_at(uuid).relative_to("/")
+    all_hoard_objs_in_folder = dict(
+        (FastPosixPath("/" + p.as_posix()), f) for p, f in read_files(hoard.objects, current_root_id)
+        if p.is_relative_to(mounted_at))
+    assert len(_all_hoard_in_folder) == len(all_hoard_objs_in_folder), \
+        f"{len(_all_hoard_in_folder)} != {len(all_hoard_objs_in_folder)}"
+
     logging.info("Loaded all objects.")
 
     for current_path, props in progress_tool(all_local_with_any_status.items(), title="Current files vs. Hoard"):
@@ -56,7 +69,8 @@ async def compare_local_to_hoard(
 
         current_file = current_path
         curr_file_hoard_path = pathing.in_local(current_file, uuid).at_hoard()
-        hoard_props = all_hoard_in_folder.get(curr_file_hoard_path.as_pure_path, None)
+        hoard_props = hoard.fsobjects[curr_file_hoard_path.as_pure_path] \
+            if curr_file_hoard_path.as_pure_path in hoard.fsobjects else None
         if hoard_props is None:
             logging.info(f"local file not in hoard: {curr_file_hoard_path}")
             added = props.last_status == RepoFileStatus.ADDED
@@ -70,9 +84,10 @@ async def compare_local_to_hoard(
                 DiffType.FileContentsDiffer, current_file, curr_file_hoard_path.as_pure_path, props, hoard_props, None)
 
     hoard_file: FastPosixPath
-    for hoard_file, props in progress_tool(
-            all_hoard_in_folder.items(),
+    for hoard_file, desc in progress_tool(
+            all_hoard_objs_in_folder.items(),
             title="Hoard vs. Current files"):
+        props = hoard.fsobjects[hoard_file]
         curr_path_in_local = pathing.in_hoard(hoard_file).at_local(uuid)
         assert curr_path_in_local is not None  # hoard file is not in the mounted location
         local_props: FileDesc | None = all_local_with_any_status.get(curr_path_in_local.as_pure_path, None)
@@ -94,6 +109,22 @@ async def compare_local_to_hoard(
             pass  # file is there, which is handled above
         else:
             raise ValueError(f"Unrecognized state: {local_props.last_status}")
+
+
+async def sync_fsobject_to_object_storage(env: ObjectStorage, fsobjects: HoardFSObjects):
+    old_root_id = env.get_root_id("HEAD")
+    all_nondeleted = list(sorted([
+        (path.as_posix(), FileObject.create(hfo.fasthash, hfo.size))
+        async for path, hfo in fsobjects.in_folder_non_deleted(FastPosixPath("/"))]))
+
+    with env.objects(write=True) as objects:
+        current_root_id = objects.mktree_from_tuples(all_nondeleted)
+
+    env.set_root_id("HEAD", current_root_id)
+    print(
+        f"Old HEAD: {binascii.hexlify(old_root_id) if old_root_id is not None else 'None'}"
+        f" vs new head {binascii.hexlify(current_root_id)}.")
+    return current_root_id
 
 
 def copy_local_staging_to_hoard(hoard: HoardContents, local: RepoContents):
