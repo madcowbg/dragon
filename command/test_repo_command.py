@@ -57,8 +57,12 @@ class TestRepoCommand(IsolatedAsyncioTestCase):
         self.assertEqual(['current.uuid'], os.listdir(join(self.tmpdir.name, "repo", ".hoard")))
 
         cave_cmd = TotalCommand(path=join(self.tmpdir.name, "repo")).cave
-        res = await cave_cmd.refresh(show_details=False)
-        self.assertEqual(f"Refresh done!", res)
+        res = await cave_cmd.refresh()
+        self.assertEqual([
+            'PRESENT_FILE wat/test.me.different',
+            'PRESENT_FILE wat/test.me.once',
+            'PRESENT_FILE wat/test.me.twice',
+            'Refresh done!'], res.splitlines())
 
         current_uuid = cave_cmd.current_uuid()
         self.assertEqual(
@@ -74,7 +78,7 @@ class TestRepoCommand(IsolatedAsyncioTestCase):
         res = await cave_cmd.status()
         self.assertEqual(f"Repo {cave_cmd.current_uuid()} contents have not been refreshed yet!", res)
 
-        await cave_cmd.refresh(show_details=False)
+        await cave_cmd.refresh()
 
         res = cave_cmd.status_index(show_dates=False)
         self.assertEqual([
@@ -109,8 +113,12 @@ class TestRepoCommand(IsolatedAsyncioTestCase):
         res = await cave_cmd.status()
         self.assertEqual(f"Repo {cave_cmd.current_uuid()} contents have not been refreshed yet!", res)
 
-        res = await cave_cmd.refresh(show_details=False)
-        self.assertEqual(f"Refresh done!", res)
+        res = await cave_cmd.refresh()
+        self.assertEqual([
+            'PRESENT_FILE wat/test.me.different',
+            'PRESENT_FILE wat/test.me.once',
+            'PRESENT_FILE wat/test.me.twice',
+            'Refresh done!'], res.splitlines())
 
         res = cave_cmd.status_index(show_dates=False)
         self.assertEqual([
@@ -129,8 +137,12 @@ class TestRepoCommand(IsolatedAsyncioTestCase):
         pfw('repo/wat/test.me.anew', "pkosadu")
         pfw('repo/wat/test.me.twice', None)
 
-        res = await cave_cmd.refresh(show_details=False)
-        self.assertEqual(f"Refresh done!", res)
+        res = await cave_cmd.refresh()
+        self.assertEqual([
+            'DELETED_NO_COPY wat/test.me.twice',
+            'ADDED_FILE wat/test.me.anew',
+            'MODIFIED_FILE wat/test.me.once',
+            'Refresh done!'], res.splitlines())
 
         res = cave_cmd.status_index(show_dates=False)
         self.assertEqual([
@@ -171,8 +183,8 @@ class TestRepoCommand(IsolatedAsyncioTestCase):
             f" in repo: 3\n"
             f" deleted: 0 (0.0%)\n", res)
 
-        res = await cave_cmd.refresh(show_details=False)
-        self.assertEqual(f"Refresh done!", res)
+        res = await cave_cmd.refresh()
+        self.assertEqual(['ADDED_FILE test.me.anew2', 'Refresh done!'], res.splitlines())
 
         res = cave_cmd.status_index(show_dates=False)
         self.assertEqual([
