@@ -1,6 +1,7 @@
 import logging
 import os
 import pathlib
+from datetime import datetime
 from io import StringIO
 from pathlib import Path
 from typing import Iterable, Tuple, Dict, Optional, List, AsyncGenerator
@@ -14,6 +15,9 @@ from command.hoard_ignore import HoardIgnore
 from contents.repo import RepoContents
 from contents.repo_props import RepoFileStatus, RepoFileProps, FileDesc
 from hashing import fast_hash_async
+from lmdb_storage.file_object import FileObject
+from lmdb_storage.tree_iteration import zip_dfs
+from lmdb_storage.tree_structure import add_file_object, TreeObject
 from util import group_to_dict, process_async
 
 type RepoDiffs = (FileNotInFilesystem | FileNotInRepo | RepoFileSame | RepoFileDifferent | ErrorReadingFilesystem)
@@ -224,68 +228,95 @@ class ErrorReadingFilesystem:
 class FilesystemState:
     def __init__(self, contents: RepoContents):
         self.contents = contents
+        self.state_root_id = None
 
-    async def __aenter__(self):
-        self.contents.conn.execute(
-            "CREATE TABLE IF NOT EXISTS temp.filesystem_files ( "
-            "  fullpath TEXT NOT NULL UNIQUE, "
-            "  size INTEGER, "
-            "  mtime REAL, "
-            "  fasthash TEXT, "
-            "  md5 TEXT, "
-            "  error TEXT) ")
-
-        # finds all that are not marked as DELETED or MOVED_FROM, matching against current contents
-        self.contents.conn.execute(
-            f"CREATE VIEW IF NOT EXISTS temp.filesystem_repo_matched AS "
-            f"SELECT IFNULL(fo.fullpath, ff.fullpath) AS fullpath, "
-            f"  fo.size as fo_size, fo.mtime, fo.fasthash, fo.md5, fo.last_status, fo.last_update_epoch, fo.last_related_fullpath, "
-            f"  ff.size as ff_size, ff.mtime, ff.fasthash, ff.md5, ff.error as ff_error "
-            f"FROM ("
-            f"  SELECT * FROM fsobject "
-            f"  WHERE fsobject.isdir = FALSE "
-            f"    AND fsobject.last_status NOT IN ('{RepoFileStatus.DELETED.value}', '{RepoFileStatus.MOVED_FROM.value}')) AS fo "
-            f"  FULL OUTER JOIN filesystem_files as ff ON fo.fullpath = ff.fullpath ")
-
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        self.contents.conn.execute("DELETE FROM temp.filesystem_files")
-        return None
+        self.all_files = dict()
 
     def mark_file(self, fullpath: FastPosixPath, file_desc: FileDesc) -> None:
-        self.contents.conn.execute(
-            "INSERT INTO temp.filesystem_files (fullpath, size, mtime, fasthash, md5) VALUES (?, ?, ?, ?, ?)",
-            (fullpath.as_posix(), file_desc.size, file_desc.mtime, file_desc.fasthash, file_desc.md5))
+        assert not fullpath.is_absolute()
+        self.all_files[fullpath] = FileObject.create(file_desc.fasthash, file_desc.size)
 
     def files_not_found(self) -> Iterable[FastPosixPath]:
-        curr = self.contents.conn.cursor()
-        curr.row_factory = lambda _, row: FastPosixPath(row[0])
-
-        yield from curr.execute(
-            "SELECT fullpath FROM temp.filesystem_repo_matched WHERE ff_size IS NULL AND ff_error IS NULL")
+        return []  # do nothing ...
 
     def mark_error(self, fullpath: FastPosixPath, error: str):
-        self.contents.conn.execute(
-            "INSERT INTO temp.filesystem_files (fullpath, error) VALUES (?, ?)",
-            (fullpath.as_posix(), error))
+        assert not fullpath.is_absolute()
+        self.all_files[fullpath] = FileObject.create("", -1)
 
-    def diffs(self) -> Iterable[RepoDiffs]:
-        curr = self.contents.conn.cursor()
-        curr.row_factory = build_diff
+        assert not fullpath.is_absolute()
 
-        yield from curr.execute("SELECT * FROM filesystem_repo_matched ORDER BY fullpath")
+    async def diffs(self) -> AsyncGenerator[RepoDiffs]:  # fixme no need for async
+
+        with self.contents.objects as objects:
+            for fullpath, diff_type, fo_id, ff_id, skip_children in \
+                    zip_dfs(objects, "", self.contents.fsobjects.root_id, self.state_root_id, True):
+                ff_obj = objects[ff_id] if ff_id is not None else None
+                fo_obj = objects[fo_id] if fo_id is not None else None
+
+                if isinstance(fo_obj, TreeObject) or isinstance(ff_obj, TreeObject):
+                    # fixme that is bad logic, filenames can be the same as folder names
+                    continue
+
+                fo_props = RepoFileProps(
+                    fo_obj.size, 0, fo_obj.fasthash, None, RepoFileStatus.ADDED,
+                    -1, None) if fo_obj is not None else None
+                ff_props = FileDesc(ff_obj.size, 0, ff_obj.fasthash, None) if ff_obj is not None else None
+
+                fullpath_posix = FastPosixPath(fullpath).relative_to("/")
+                if ff_obj is None:
+                    yield FileNotInFilesystem(fullpath_posix, fo_props)
+                elif fo_obj is None:
+                    yield FileNotInRepo(fullpath_posix, ff_props)
+                else:  # both are not none
+                    if ff_obj.fasthash == "":  # is error
+                        yield ErrorReadingFilesystem(fullpath_posix, fo_props)
+
+                    if fo_props.fasthash == ff_props.fasthash:
+                        yield RepoFileSame(fullpath_posix, fo_props, ff_props)
+                    else:
+                        yield RepoFileDifferent(fullpath_posix, fo_props, ff_props)
 
     def diffs_at(self, allowed_paths: List[FastPosixPath]) -> Iterable[RepoDiffs]:
-        curr = self.contents.conn.cursor()
-        curr.row_factory = build_diff
+        raise NotImplementedError()
+        # curr = self.contents.conn.cursor()
+        # curr.row_factory = build_diff
+        #
+        # yield from curr.execute(
+        #     f"SELECT * FROM filesystem_repo_matched WHERE fullpath in ({','.join('?' * len(allowed_paths))})",
+        #     [p.as_posix() for p in allowed_paths])
 
-        yield from curr.execute(
-            f"SELECT * FROM filesystem_repo_matched WHERE fullpath in ({','.join('?' * len(allowed_paths))})",
-            [p.as_posix() for p in allowed_paths])
+    async def read_state_from_filesystem(
+            self, contents: RepoContents, hoard_ignore: HoardIgnore, repo_path: str, njobs: int = 32):
+        async def add_discovered_files(file_path_full: pathlib.Path):
+            file_path_local = FastPosixPath(file_path_full.relative_to(repo_path))
+            try:
+                filesystem_prop = await read_filesystem_desc(file_path_full)
+                self.mark_file(file_path_local, filesystem_prop)
+            except OSError as e:
+                logging.error(e)
+                self.mark_error(file_path_local, str(e))
+
+        await process_async(walk_filesystem(contents, hoard_ignore, repo_path), add_discovered_files, njobs=njobs)
+        for repo_file in alive_it(self.files_not_found(), title="Verifying unmatched files"):
+            try:
+                file_on_device = pathlib.Path(repo_path).joinpath(repo_file)
+                logging.debug(f"Checking {repo_file} for existence at {file_on_device}...")
+                if hoard_ignore.matches(pathlib.PurePosixPath(repo_file)) or not file_on_device.is_file():
+                    pass  # will yield as missing
+                else:
+                    filesystem_prop = await read_filesystem_desc(file_on_device)  # todo how likely are we to get here?
+                    self.mark_file(repo_file, filesystem_prop)
+            except OSError as e:
+                logging.error(e)
+                self.mark_error(repo_file, str(e))
+
+        all_files_sorted = list(
+            sorted(("/" + filepath.as_posix(), fileobj) for filepath, fileobj in self.all_files.items()))
+        with self.contents.objects as objects:
+            self.state_root_id = objects.mktree_from_tuples(all_files_sorted, alive_it)
 
 
-def build_diff(_, row) -> RepoDiffs:
+def build_diff(_, row) -> RepoDiffs:  # fixme remove obsolete
     fullpath_s, fo_size, fo_mtime, fo_fasthash, fo_md5, fo_last_status, fo_last_update_epoch, fo_last_related_fullpath, \
         ff_size, ff_mtime, ff_fasthash, ff_md5, ff_error = row
 
@@ -318,33 +349,11 @@ def build_diff(_, row) -> RepoDiffs:
 async def compute_difference_between_contents_and_filesystem(
         contents: RepoContents, repo_path: str, hoard_ignore: HoardIgnore,
         njobs: int = 32) -> AsyncGenerator[RepoDiffs]:
-    async with FilesystemState(contents) as state:
-        async def add_discovered_files(file_path_full: pathlib.Path):
-            file_path_local = FastPosixPath(file_path_full.relative_to(repo_path))
-            try:
-                filesystem_prop = await read_filesystem_desc(file_path_full)
-                state.mark_file(file_path_local, filesystem_prop)
-            except OSError as e:
-                logging.error(e)
-                state.mark_error(file_path_local, str(e))
+    state = FilesystemState(contents)
+    await state.read_state_from_filesystem(contents, hoard_ignore, repo_path, njobs)
 
-        await process_async(walk_filesystem(contents, hoard_ignore, repo_path), add_discovered_files, njobs=njobs)
-
-        for repo_file in alive_it(state.files_not_found(), title="Verifying unmatched files"):
-            try:
-                file_on_device = pathlib.Path(repo_path).joinpath(repo_file)
-                logging.debug(f"Checking {repo_file} for existence at {file_on_device}...")
-                if hoard_ignore.matches(pathlib.PurePosixPath(repo_file)) or not file_on_device.is_file():
-                    pass  # will yield as missing
-                else:
-                    filesystem_prop = await read_filesystem_desc(file_on_device)  # todo how likely are we to get here?
-                    state.mark_file(repo_file, filesystem_prop)
-            except OSError as e:
-                logging.error(e)
-                state.mark_error(repo_file, str(e))
-
-        for diff in state.diffs():
-            yield diff
+    async for diff in state.diffs():
+        yield diff
 
 
 def walk_filesystem(contents, hoard_ignore, repo_path) -> Iterable[pathlib.Path]:
@@ -366,28 +375,29 @@ async def read_filesystem_desc(file_fullpath: pathlib.Path) -> FileDesc:
 async def compute_difference_filtered_by_path(
         contents: RepoContents, repo_path: str, hoard_ignore: HoardIgnore,
         allowed_paths: List[pathlib.PurePosixPath]) -> AsyncGenerator[RepoDiffs]:
-    async with FilesystemState(contents) as state:
-        local_paths: List[Tuple[pathlib.Path, pathlib.Path]] = []
-        for allowed_path in alive_it(allowed_paths, title="Checking updates"):
-            path_on_device = pathlib.Path(allowed_path).absolute()
-            local_path = path_on_device.relative_to(repo_path)
+    state = FilesystemState(contents)
 
-            local_paths.append((path_on_device, local_path))
+    local_paths: List[Tuple[pathlib.Path, pathlib.Path]] = []
+    for allowed_path in alive_it(allowed_paths, title="Checking updates"):
+        path_on_device = pathlib.Path(allowed_path).absolute()
+        local_path = path_on_device.relative_to(repo_path)
 
-        for path_on_device, local_path in local_paths:
-            file_path_local = FastPosixPath(local_path)
-            try:
-                if not hoard_ignore.matches(local_path) and path_on_device.is_file():
-                    filesystem_prop = await read_filesystem_desc(path_on_device)
-                    state.mark_file(file_path_local, filesystem_prop)
-                else:
-                    pass  # file is not here, and is not a permission error
-            except OSError as e:
-                logging.error(e)
-                state.mark_error(file_path_local, str(e))
+        local_paths.append((path_on_device, local_path))
 
-        for diff in state.diffs_at([FastPosixPath(file) for _, file in local_paths]):
-            yield diff
+    for path_on_device, local_path in local_paths:
+        file_path_local = FastPosixPath(local_path)
+        try:
+            if not hoard_ignore.matches(local_path) and path_on_device.is_file():
+                filesystem_prop = await read_filesystem_desc(path_on_device)
+                state.mark_file(file_path_local, filesystem_prop)
+            else:
+                pass  # file is not here, and is not a permission error
+        except OSError as e:
+            logging.error(e)
+            state.mark_error(file_path_local, str(e))
+
+    for diff in state.diffs_at([FastPosixPath(file) for _, file in local_paths]):
+        yield diff
 
 
 def _apply_repo_change_to_contents(

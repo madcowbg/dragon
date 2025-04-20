@@ -19,7 +19,7 @@ class FileDesc:
 
 class RepoFileProps(FileDesc):
     def __init__(self, size: int, mtime: float, fasthash: str, md5: str | None, last_status: RepoFileStatus,
-                 last_update_epoch: datetime, last_related_fullpath: str | None):
+                 last_update_epoch: int, last_related_fullpath: str | None):
         super().__init__(size, mtime, fasthash, md5)
         assert last_status != RepoFileStatus.MOVED_FROM or last_related_fullpath is not None
 

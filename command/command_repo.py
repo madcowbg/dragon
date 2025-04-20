@@ -5,7 +5,7 @@ from command.fast_path import FastPosixPath
 from typing import List, Optional
 
 from command.comparison_repo import FileDeleted, FileMoved, FileAdded, FileModified, FileIsSame, find_repo_changes, \
-    _apply_repo_change_to_contents
+    _apply_repo_change_to_contents, FilesystemState, compute_changes_from_diffs
 from command.hoard_ignore import HoardIgnore, DEFAULT_IGNORE_GLOBS
 from command.repo import ProspectiveRepo
 from contents.repo_props import RepoFileStatus
@@ -69,9 +69,28 @@ class RepoCommand(object):
 
             logging.info(f"Bumped epoch to {contents.config.epoch}")
 
+            logging.info("Reading filesystem state...")
+            state = FilesystemState(contents)
+            await state.read_state_from_filesystem(contents, hoard_ignore, self.repo.path)
+
             with StringIO() as out:
-                async for change in find_repo_changes(self.repo.path, contents, hoard_ignore, add_new_with_status):
-                    _apply_repo_change_to_contents(change, contents, show_details, out)
+                async for change in compute_changes_from_diffs(state.diffs(), self.repo.path, add_new_with_status):
+                    if isinstance(change, FileIsSame):
+                        pass
+                    elif isinstance(change, FileDeleted):
+                        out.write(f"{change.details} {change.missing_relpath}\n")
+                    elif isinstance(change, FileMoved):
+                        out.write(f"MOVED {change.missing_relpath.as_posix()} TO {change.moved_to_relpath.as_posix()}\n")
+                    elif isinstance(change, FileAdded):
+                        out.write(f"{change.requested_status.value.upper()}_FILE {change.relpath.as_posix()}\n")
+                    elif isinstance(change, FileModified):
+                        out.write(f"MODIFIED_FILE {change.relpath.as_posix()}\n")
+                    else:
+                        raise TypeError(f"Unexpected change type {type(change)}")
+
+                # save modified as root
+                contents.fsobjects.root_id = state.state_root_id
+                contents.write()
 
                 logging.info("Ends updating, setting is_dirty to FALSE")
                 contents.config.end_updating()

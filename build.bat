@@ -1,1 +1,1 @@
-pyinstaller --add-data=gui:gui --onefile dragon.py -i .\doc\dragon.ico
+pyinstaller --add-data=gui:gui --onefile dragon.py -i .\doc\dragon.ico -n dragon-wip

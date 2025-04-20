@@ -246,11 +246,11 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             (await hoard_cmd.contents.differences("repo-in-local")).strip())
 
         await cave_cmd.refresh(show_details=False)
-        self.assertEqual(
-            f"Status of repo-in-local:\n"
-            f"ADDED /newdir/newfile.is\n"
-            f"DELETED /wat/test.me.different\n"
-            f"DONE",
+        self.assertEqual((
+            'Status of repo-in-local:\n'
+            'PRESENT /newdir/newfile.is\n'
+            'MISSING /wat/test.me.different\n'
+            'DONE'),
             (await hoard_cmd.contents.differences("repo-in-local")).strip())
 
         res = await hoard_cmd.contents.pull("repo-in-local")

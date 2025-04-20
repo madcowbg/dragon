@@ -66,7 +66,7 @@ class TestRepoCommand(IsolatedAsyncioTestCase):
 
         current_uuid = cave_cmd.current_uuid()
         self.assertEqual(
-            sorted([f"{current_uuid}.contents", f"{current_uuid}.toml", 'current.uuid']),
+            sorted([f"{current_uuid}.contents.lmdb", f"{current_uuid}.toml", 'current.uuid']),
             sorted(os.listdir(join(self.tmpdir.name, "repo", ".hoard"))))
 
     async def test_show_repo(self):
@@ -82,9 +82,9 @@ class TestRepoCommand(IsolatedAsyncioTestCase):
 
         res = cave_cmd.status_index(show_dates=False)
         self.assertEqual([
-            'wat/test.me.different: present @ 1',
-            'wat/test.me.once: present @ 1',
-            'wat/test.me.twice: present @ 1',
+            'wat/test.me.different: present @ -1',
+            'wat/test.me.once: present @ -1',
+            'wat/test.me.twice: present @ -1',
             '--- SUMMARY ---',
             'Result for local',
             'Max size: 3.5TB',
@@ -122,9 +122,9 @@ class TestRepoCommand(IsolatedAsyncioTestCase):
 
         res = cave_cmd.status_index(show_dates=False)
         self.assertEqual([
-            'wat/test.me.different: present @ 1',
-            'wat/test.me.once: present @ 1',
-            'wat/test.me.twice: present @ 1',
+            'wat/test.me.different: present @ -1',
+            'wat/test.me.once: present @ -1',
+            'wat/test.me.twice: present @ -1',
             '--- SUMMARY ---',
             'Result for local',
             'Max size: 3.5TB',
@@ -140,16 +140,15 @@ class TestRepoCommand(IsolatedAsyncioTestCase):
         res = await cave_cmd.refresh()
         self.assertEqual([
             'DELETED_NO_COPY wat/test.me.twice',
-            'ADDED_FILE wat/test.me.anew',
             'MODIFIED_FILE wat/test.me.once',
+            'ADDED_FILE wat/test.me.anew',
             'Refresh done!'], res.splitlines())
 
         res = cave_cmd.status_index(show_dates=False)
         self.assertEqual([
-            'wat/test.me.anew: added @ 2',
-            'wat/test.me.different: present @ 1',
-            'wat/test.me.once: modified @ 2',
-            'wat/test.me.twice: deleted @ 2',
+            'wat/test.me.anew: present @ -1',
+            'wat/test.me.different: present @ -1',
+            'wat/test.me.once: present @ -1',
             '--- SUMMARY ---',
             'Result for local',
             'Max size: 3.5TB',
@@ -188,11 +187,10 @@ class TestRepoCommand(IsolatedAsyncioTestCase):
 
         res = cave_cmd.status_index(show_dates=False)
         self.assertEqual([
-            'test.me.anew2: added @ 3',
-            'wat/test.me.anew: added @ 2',
-            'wat/test.me.different: present @ 1',
-            'wat/test.me.once: modified @ 2',
-            'wat/test.me.twice: deleted @ 2',
+            'test.me.anew2: present @ -1',
+            'wat/test.me.anew: present @ -1',
+            'wat/test.me.different: present @ -1',
+            'wat/test.me.once: present @ -1',
             '--- SUMMARY ---',
             'Result for local',
             'Max size: 3.5TB',

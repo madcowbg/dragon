@@ -1,8 +1,6 @@
-import logging
 import os
 import shutil
 from datetime import datetime
-from sqlite3 import Connection, Cursor, Row
 from typing import Tuple, Iterable
 
 import rtoml
@@ -10,34 +8,43 @@ import rtoml
 from command.fast_path import FastPosixPath
 from contents.repo_props import RepoFileProps, RepoFileStatus
 from exceptions import MissingRepoContents
-from sql_util import sqlite3_standard
+from lmdb_storage.file_object import FileObject
+from lmdb_storage.object_store import ObjectStorage
+from lmdb_storage.tree_iteration import dfs
+from lmdb_storage.tree_structure import Objects, ObjectID, ObjectType, add_file_object, remove_file_object
 from util import FIRST_VALUE
 
 
 class RepoFSObjects:
     class Stats:
-        def __init__(self, parent: "RepoFSObjects"):
-            self.parent = parent
+        def __init__(self, objects: Objects[FileObject], root_id: ObjectID):
+            self.objects = objects
+            self.root_id = root_id
 
         @property
         def num_files(self) -> int:
-            return self.parent._first_value_cursor().execute(
-                "SELECT count(1) FROM fsobject WHERE isdir=FALSE AND last_status NOT IN (?, ?)",
-                (RepoFileStatus.DELETED.value, RepoFileStatus.MOVED_FROM.value)).fetchone()
-
+            with self.objects as objects:
+                return sum(
+                    1 for _, obj_type, _, _, _ in dfs(objects, "", self.root_id)
+                    if obj_type == ObjectType.BLOB)
 
         @property
         def total_size(self) -> int:
-            return self.parent._first_value_cursor().execute(
-                "SELECT sum(size) FROM fsobject WHERE isdir=FALSE AND last_status NOT IN (?, ?)",
-                (RepoFileStatus.DELETED.value, RepoFileStatus.MOVED_FROM.value)).fetchone()
+            with self.objects as objects:
+                return sum(
+                    obj.size for _, obj_type, _, obj, _ in dfs(objects, "", self.root_id)
+                    if obj_type == ObjectType.BLOB)
 
-    def __init__(self, parent: "RepoContents"):
-        self.parent = parent
+    def __init__(self, objects: Objects[FileObject], root_id: ObjectID, config: "RepoContentsConfig"):
+        self.objects = objects
+        self.root_id = root_id
+        self.config = config
+
+        assert self.root_id is None or len(self.root_id) == 20
 
     @property
     def stats_existing(self):
-        return RepoFSObjects.Stats(self)
+        return RepoFSObjects.Stats(self.objects, self.root_id)
 
     def _first_value_cursor(self):
         curr = self.parent.conn.cursor()
@@ -45,59 +52,53 @@ class RepoFSObjects:
         return curr
 
     def len_existing(self) -> int:
-        return self._first_value_cursor().execute(
-            "SELECT count(1) FROM fsobject WHERE last_status NOT IN (?, ?) and isdir = FALSE",
-            (RepoFileStatus.DELETED.value, RepoFileStatus.MOVED_FROM.value)).fetchone()
+        return self.stats_existing.num_files
 
-    @staticmethod
-    def _create_pair_path_props(cursor: Cursor, row: Row) -> Tuple[FastPosixPath, RepoFileProps]:
-        fullpath, isdir, size, mtime, fasthash, md5, last_status, last_update_epoch, last_related_fullpath = row
-        assert isdir == False
-        return FastPosixPath(fullpath), RepoFileProps(
-            size, mtime, fasthash, md5, RepoFileStatus(last_status), last_update_epoch, last_related_fullpath)
+    #  FIXME delete
+    # @staticmethod
+    # def _create_pair_path_props(cursor: Cursor, row: Row) -> Tuple[FastPosixPath, RepoFileProps]:
+    #     fullpath, isdir, size, mtime, fasthash, md5, last_status, last_update_epoch, last_related_fullpath = row
+    #     assert isdir == False
+    #     return FastPosixPath(fullpath), RepoFileProps(
+    #         size, mtime, fasthash, md5, RepoFileStatus(last_status), last_update_epoch, last_related_fullpath)
 
     def all_status(self) -> Iterable[Tuple[FastPosixPath, RepoFileProps]]:
-        curr = self.parent.conn.cursor()
-        curr.row_factory = RepoFSObjects._create_pair_path_props
-
-        yield from curr.execute(
-            "SELECT fullpath, isdir, size, mtime, fasthash, md5, last_status, last_update_epoch, last_related_fullpath "
-            "FROM fsobject WHERE isdir = FALSE ORDER BY fullpath")
+        yield from self.existing()
 
     def existing(self) -> Iterable[Tuple[FastPosixPath, RepoFileProps]]:
-        curr = self.parent.conn.cursor()
-        curr.row_factory = RepoFSObjects._create_pair_path_props
-
-        yield from curr.execute(
-            "SELECT fullpath, isdir, size, mtime, fasthash, md5, last_status, last_update_epoch, last_related_fullpath "
-            "FROM fsobject WHERE last_status NOT IN (?, ?) and isdir = FALSE",
-            (RepoFileStatus.DELETED.value, RepoFileStatus.MOVED_FROM.value))
+        assert self.root_id is None or len(self.root_id) == 20
+        with self.objects as objects:
+            for fullpath, obj_type, obj_id, obj, _ in dfs(objects, "", self.root_id):
+                if obj_type == ObjectType.BLOB:
+                    yield (
+                        FastPosixPath(fullpath).relative_to("/"),
+                        RepoFileProps(
+                            obj.size, 0, obj.fasthash, None, RepoFileStatus.PRESENT,
+                            -1, None))
 
     def add_file(self, filepath: FastPosixPath, size: int, mtime: float, fasthash: str, status: RepoFileStatus) -> None:
-        assert not filepath.is_absolute()
-        self.parent.conn.execute(
-            "INSERT OR REPLACE INTO fsobject(fullpath, isdir, size, mtime, fasthash, md5, last_status, last_update_epoch, last_related_fullpath) "
-            "VALUES (?, FALSE, ?, ?, ?, NULL, ?, ?, NULL)",
-            (filepath.as_posix(), size, mtime, fasthash, status.value, self.parent.config.epoch))
+        with self.objects as objects:
+            self.root_id = add_file_object(
+                objects, self.root_id, filepath.as_posix().split("/"), FileObject.create(fasthash, size))
 
     def mark_moved(self, from_file: FastPosixPath, to_file: FastPosixPath, size: int, mtime: float, fasthash: str):
         assert not from_file.is_absolute()
         assert not to_file.is_absolute()
-        # mark old file to refer to the new file
-        self.parent.conn.execute(
-            "UPDATE fsobject SET last_status = ?, last_update_epoch = ?, last_related_fullpath = ? "
-            "WHERE fsobject.fullpath = ?",
-            (RepoFileStatus.MOVED_FROM.value, self.parent.config.epoch, to_file.as_posix(), from_file.as_posix()))
+
+        self.mark_removed(from_file)
 
         # add the new file
         self.add_file(to_file, size, mtime, fasthash, RepoFileStatus.ADDED)
 
     def mark_removed(self, path: FastPosixPath):
         assert not path.is_absolute()
-        self.parent.conn.execute(
-            "UPDATE fsobject SET last_status = ?, last_update_epoch = ?, last_related_fullpath = NULL "
-            "WHERE fsobject.fullpath = ?",
-            (RepoFileStatus.DELETED.value, self.parent.config.epoch, path.as_posix()))
+
+        with self.objects as objects:
+            self.root_id = remove_file_object(
+                objects, self.root_id, path.as_posix().split("/"))
+
+            self.root_id = remove_file_object(
+                objects, self.root_id, path.as_posix().split("/"))
 
 
 class RepoContentsConfig:
@@ -161,24 +162,7 @@ class RepoContents:
                 "max_size": shutil.disk_usage(folder).total
             }, f)
 
-        conn = sqlite3_standard(contents_filepath)
-        curr = conn.cursor()
-
-        curr.execute(
-            "CREATE TABLE fsobject("
-            " fsobject_id INTEGER PRIMARY KEY AUTOINCREMENT,"
-            " fullpath TEXT NOT NULL UNIQUE,"
-            " isdir BOOL NOT NULL,"
-            " size INTEGER,"
-            " mtime REAL,"
-            " fasthash TEXT,"
-            " md5 TEXT,"
-            " last_status TEXT NOT NULL,"
-            " last_update_epoch INTEGER NOT NULL,"
-            " last_related_fullpath TEXT)")
-
-        conn.commit()
-        conn.close()
+        ObjectStorage(f"{contents_filepath}.lmdb")
 
         return RepoContents.load_existing(folder, uuid, is_readonly=False)
 
@@ -186,35 +170,51 @@ class RepoContents:
     def load_existing(folder: str, uuid: str, is_readonly: bool):
         return RepoContents(folder, uuid, is_readonly)
 
-    conn: Connection | None
+    env: ObjectStorage
+    objects: Objects[FileObject]
 
     def __init__(self, folder: str, uuid: str, is_readonly: bool):
         self.folder = folder
         self.uuid = uuid
         self.is_readonly = is_readonly
 
-        if not os.path.isfile(self.filepath):
-            raise MissingRepoContents(f"File {self.filepath} does not exist.")
-
-        self.conn = None
+        if not os.path.exists(f"{self.filepath}.lmdb"):
+            raise MissingRepoContents(f"File {self.filepath}.lmdb does not exist.")
 
     @property
-    def filepath(self): return os.path.join(self.folder, f"{self.uuid}.contents")
+    def filepath(self):
+        return os.path.join(self.folder, f"{self.uuid}.contents")
 
     @property
-    def config_filepath(self): return os.path.join(self.folder, f"{self.uuid}.toml")
+    def config_filepath(self):
+        return os.path.join(self.folder, f"{self.uuid}.toml")
 
     def __enter__(self) -> "RepoContents":
-        assert self.conn is None
-        self.conn = sqlite3_standard(f"file:{self.filepath}{'?mode=ro' if self.is_readonly else ''}", uri=True)
-        self.fsobjects = RepoFSObjects(self)
         self.config = RepoContentsConfig(self.config_filepath)
+
+        self.env = ObjectStorage(f"{self.filepath}.lmdb", map_size=1 << 30)  # 1GB
+
+        with self.env.repos_txn(write=False) as txn:
+            root_id = txn.get("ROOT".encode(), None)
+
+        self.objects = self.env.objects(write=True)
+
+        self.fsobjects = RepoFSObjects(self.objects, root_id, self.config)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
-        assert self.conn is not None
-        self.conn.commit()
-        self.conn.close()
+        assert self.objects is not None
+        self.write()
+        self.env.gc()
+
+        self.objects = None
+        self.env = None
+
         self.config.write()
 
         return False
+
+    def write(self):
+        if self.fsobjects.root_id is not None:
+            with self.env.repos_txn(write=True) as txn:
+                txn.put("ROOT".encode(), self.fsobjects.root_id)  # fixme dangerous, need to check if we can
