@@ -37,6 +37,10 @@ class TreeObject:
         assert object_type == ObjectType.TREE.value
         return TreeObject(children=children)
 
+    @property
+    def id(self) -> bytes:
+        return hashlib.sha1(self.serialized).digest()
+
 
 class ExpandableTreeObject[F]:
     def __init__(self, data: TreeObject, objects: "Objects[F]"):
@@ -157,8 +161,44 @@ def pop_and_write_obj(stack: List[Tuple[str | None, TreeObject]], objects: Objec
     top_obj_path, tree_obj = stack.pop()
 
     # store currently constructed object in tree
-    obj_packed = tree_obj.serialized
-    obj_id = hashlib.sha1(obj_packed).digest()
+    obj_id = tree_obj.id
     objects[obj_id] = tree_obj
 
     return obj_id, top_obj_path
+
+
+def add_file_object[F](objects: Objects[F], tree_id: ObjectID | None, filepath: List[str], file: F) -> ObjectID:
+    if len(filepath) == 0:  # is here
+        objects[file.file_id] = file
+        return file.file_id
+
+    tree_obj = objects[tree_id] if tree_id is not None else TreeObject(dict())
+    assert isinstance(tree_obj, TreeObject)
+
+    sub_name = filepath[0]
+    assert sub_name != ''
+    tree_obj.children[sub_name] = add_file_object(objects, tree_obj.children.get(sub_name, None), filepath[1:], file)
+
+    new_tree_id = tree_obj.id
+    if new_tree_id != tree_id:
+        objects[new_tree_id] = tree_obj
+
+    return new_tree_id
+
+
+def remove_file_object[F](objects: Objects[F], tree_id: ObjectID, filepath: List[str]) -> ObjectID:
+    assert len(filepath) > 0
+
+    sub_name = filepath[0]
+    tree_obj = objects[tree_id]
+    if len(filepath) == 1:
+        del tree_obj.children[sub_name]
+    elif sub_name not in tree_obj.children:  # do nothing for empty folders
+        pass
+    else:
+        tree_obj.children[sub_name] = remove_file_object(objects, tree_obj.children.get(sub_name, None), filepath[1:])
+
+    new_tree_id = tree_obj.id
+    if new_tree_id != tree_id:
+        objects[new_tree_id] = tree_obj
+    return new_tree_id

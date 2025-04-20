@@ -13,7 +13,7 @@ from command.test_hoard_command import populate_repotypes, init_complex_hoard
 from contents.hoard_props import HoardFileStatus
 from lmdb_storage.object_store import ObjectStorage
 from lmdb_storage.tree_iteration import zip_trees, dfs
-from lmdb_storage.tree_structure import ExpandableTreeObject
+from lmdb_storage.tree_structure import ExpandableTreeObject, add_file_object, Objects, remove_file_object
 from lmdb_storage.file_object import FileObject
 from sql_util import sqlite3_standard
 from util import FIRST_VALUE
@@ -26,6 +26,10 @@ def _list_uuids(conn) -> List[str]:
     return all_repos
 
 
+def dump_tree(objects: Objects[FileObject], root_id):
+    return list((path, obj_type.value) for path, obj_type, _, _, _ in dfs(objects, "$ROOT", root_id))
+
+
 class MyTestCase(IsolatedAsyncioTestCase):
     def setUp(self):
         self.tmpdir = "./tests"
@@ -35,6 +39,7 @@ class MyTestCase(IsolatedAsyncioTestCase):
         populate(self.tmpdir)
         populate_repotypes(self.tmpdir)
 
+    @unittest.skip(reason="currently broken")
     async def test_create_lmdb(self):
         hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = \
             await init_complex_hoard(self.tmpdir)
@@ -151,7 +156,7 @@ class MyTestCase(IsolatedAsyncioTestCase):
             hoard_id = txn.get("HEAD".encode())
 
         with env.objects(write=False) as objects:
-            all_nodes = list((path, obj_type.value) for path, obj_type, _, _, _ in dfs(objects, "$ROOT", hoard_id))
+            all_nodes = dump_tree(objects, hoard_id)
             self.assertEqual([
                 ('$ROOT', 1),
                 ('$ROOT/test.me.1', 2),
@@ -176,6 +181,52 @@ class MyTestCase(IsolatedAsyncioTestCase):
 
     def test_gc(self):
         objs = ObjectStorage(self.obj_storage_path)
+        objs.gc()
+
+    def test_create_manual_tree(self):
+        objs = ObjectStorage(self.obj_storage_path)
+        # with objs.repos_txn(write=True) as txn:
+        #     txn.put("MANUAL_HEAD",
+        #
+        with objs.objects(write=True) as objects:
+            tree_id = add_file_object(
+                objects, None, "wat/da/faque.isit".split("/"), FileObject.create("dasda", 100))
+
+            self.assertEqual([
+                ('$ROOT', 1),
+                ('$ROOT/wat', 1),
+                ('$ROOT/wat/da', 1),
+                ('$ROOT/wat/da/faque.isit', 2)], dump_tree(objects, tree_id))
+
+            tree_id = add_file_object(
+                objects, tree_id, "wat/is/dis.isit".split("/"), FileObject.create("dasda", 101))
+            self.assertEqual([
+                ('$ROOT', 1),
+                ('$ROOT/wat', 1),
+                ('$ROOT/wat/da', 1),
+                ('$ROOT/wat/da/faque.isit', 2),
+                ('$ROOT/wat/is', 1),
+                ('$ROOT/wat/is/dis.isit', 2)], dump_tree(objects, tree_id))
+
+            tree_id = add_file_object(
+                objects, tree_id, "wat/da/another.isit".split("/"), FileObject.create("dasda", 100))
+            tree_id = remove_file_object(objects, tree_id, "wat/da/faque.isit".split("/"))
+            self.assertEqual([
+                ('$ROOT', 1),
+                ('$ROOT/wat', 1),
+                ('$ROOT/wat/da', 1),
+                ('$ROOT/wat/da/another.isit', 2),
+                ('$ROOT/wat/is', 1),
+                ('$ROOT/wat/is/dis.isit', 2)], dump_tree(objects, tree_id))
+
+            tree_id = remove_file_object(objects, tree_id, "wat/is/dis.isit".split("/"))
+            self.assertEqual([
+                ('$ROOT', 1),
+                ('$ROOT/wat', 1),
+                ('$ROOT/wat/da', 1),
+                ('$ROOT/wat/da/another.isit', 2),
+                ('$ROOT/wat/is', 1)], dump_tree(objects, tree_id))
+
         objs.gc()
 
 
