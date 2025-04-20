@@ -1,5 +1,7 @@
+import binascii
 import logging
 import pathlib
+import shutil
 import unittest
 from typing import List, Iterable
 from unittest.async_case import IsolatedAsyncioTestCase
@@ -330,6 +332,54 @@ class MyTestCase(IsolatedAsyncioTestCase):
                 ('$ROOT/wat/is', 1)], dump_tree(objects, tree_id))
 
         objs.gc()
+
+    def test_copy_trees(self):
+        env = ObjectStorage(self.obj_storage_path)
+
+        root_ids = sorted(env.all_roots)
+        self.assertEqual([
+            b'89527b0fa576e127d04089d9cb5aab0e5619696d',
+            b'9fbdcfe094f258f954ba6f65c4a3641d25b32e06',
+            b'a80f91bc48850a1fb3459bb76b9f6308d4d35710',
+            b'd995800c80add686a027bac8628ca610418c64b6',
+            b'f6a74030fa0a826b18e424d44f8aca9be8c657f3'], [binascii.hexlify(r) for r in root_ids])
+
+        with env.objects(write=False) as objects:
+            self.assertEqual([
+                ('$ROOT', 1),
+                ('$ROOT/test.me.1', 2),
+                ('$ROOT/wat', 1),
+                ('$ROOT/wat/test.me.3', 2)],
+                dump_tree(objects, binascii.unhexlify(b'9fbdcfe094f258f954ba6f65c4a3641d25b32e06')))
+
+        another_storage_path = f"{self.tmpdir}/test/other.lmdb"
+        shutil.rmtree(another_storage_path, ignore_errors=True)
+        pathlib.Path(another_storage_path).parent.mkdir(parents=True, exist_ok=True)
+
+        other_env = ObjectStorage(another_storage_path)
+
+        roots_to_copy = [binascii.unhexlify(hex_id) for hex_id in (
+            b'89527b0fa576e127d04089d9cb5aab0e5619696d',
+            b'9fbdcfe094f258f954ba6f65c4a3641d25b32e06',
+            b'a80f91bc48850a1fb3459bb76b9f6308d4d35710',)]
+
+        other_env.copy_trees_from(env, roots_to_copy)
+
+        with other_env.objects(write=False) as objects:
+            self.assertEqual([
+                ('$ROOT', 1),
+                ('$ROOT/test.me.1', 2),
+                ('$ROOT/wat', 1),
+                ('$ROOT/wat/test.me.3', 2)],
+                dump_tree(objects, binascii.unhexlify(b'9fbdcfe094f258f954ba6f65c4a3641d25b32e06')))
+
+        other_env.gc()  # note - we have not saved the roots, so this will clean it up
+        with other_env.objects(write=False) as objects:
+            try:
+                dump_tree(objects, binascii.unhexlify(b'9fbdcfe094f258f954ba6f65c4a3641d25b32e06'))
+                raise "should have thrown exception"
+            except ValueError:
+                pass
 
 
 if __name__ == '__main__':

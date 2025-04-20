@@ -14,6 +14,9 @@ def dfs[F](
     assert type(obj_id) is bytes
 
     obj = objects[obj_id]
+    if obj is None:
+        raise ValueError(f"{obj_id} is missing!")
+
     if not isinstance(obj, TreeObject):
         yield path, ObjectType.BLOB, obj_id, obj, CANT_SKIP
         return
