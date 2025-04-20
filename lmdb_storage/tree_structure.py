@@ -97,9 +97,12 @@ class Objects[F]:
         self.txn = None
         return None
 
-    def __getitem__(self, obj_id: bytes) -> Union[F, TreeObject]:
+    def __getitem__(self, obj_id: bytes) -> Union[F, TreeObject, None]:
         assert type(obj_id) is bytes, type(obj_id)
         obj_packed = self.txn.get(obj_id)  # todo use streaming op
+        if obj_packed is None:
+            return None
+
         obj_data = msgpack.loads(obj_packed)  # fixme make this faster by extracting type away
         if obj_data[0] == ObjectType.BLOB.value:
             return self.object_builder(obj_id, obj_data[1])
@@ -119,6 +122,7 @@ class Objects[F]:
         # (name, partial TreeObject)
         stack: List[Tuple[str | None, TreeObject]] = [("", TreeObject(dict()))]
         for fullpath, file in alive_it(all_data, title="adding all data..."):
+            assert fullpath == "" or fullpath[0] == "/", f"[{fullpath}] is not absolute path!"
             pop_and_write_nonparents(self, stack, fullpath)
 
             top_obj_path, children = stack[-1]
@@ -173,7 +177,8 @@ def pop_and_write_obj(stack: List[Tuple[str | None, TreeObject]], objects: Objec
 
 def add_file_object[F](objects: Objects[F], tree_id: ObjectID | None, filepath: List[str], file: F) -> ObjectID:
     if len(filepath) == 0:  # is here
-        objects[file.file_id] = file
+        if objects[file.file_id] is None:
+            objects[file.file_id] = file
         return file.file_id
 
     tree_obj = objects[tree_id] if tree_id is not None else TreeObject(dict())
