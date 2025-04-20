@@ -1,5 +1,4 @@
 import logging
-import logging
 import os
 import pathlib
 import unittest
@@ -47,11 +46,11 @@ class MyTestCase(IsolatedAsyncioTestCase):
         path = rf"{hoard_cmd.hoard.hoardpath}\hoard.contents"
         is_readonly = True
 
-
         with sqlite3_standard(f"file:{path}{'?mode=ro' if is_readonly else ''}", uri=True) as conn:
             def create_file_tuple(cursor, row):
                 fullpath, fasthash, size = row
                 return fullpath, FileObject.create(fasthash, size)
+
             curr = conn.cursor()
             curr.row_factory = create_file_tuple
 
@@ -123,13 +122,36 @@ class MyTestCase(IsolatedAsyncioTestCase):
             repo_id = txn.get(uuid.encode())
 
         with env.objects(write=False) as objects:
-            for path, diff_type, left_id, right_id, should_skip in\
-                    alive_it(zip_trees(objects, "root", hoard_id, repo_id)):
-                print(path, diff_type, left_id, right_id, should_skip)
+            diffs = [
+                (path, diff_type.value)
+                for path, diff_type, left_id, right_id, should_skip
+                in alive_it(zip_trees(objects, "root", hoard_id, repo_id))]
+            self.assertEqual([
+                ('root', 'different'),
+                ('root/test.me.1', 'same'),
+                ('root/test.me.4', 'same'),
+                ('root/test.me.5', 'right_missing'),
+                ('root/wat', 'different'),
+                ('root/wat/test.me.2', 'same'),
+                ('root/wat/test.me.3', 'same'),
+                ('root/wat/test.me.6', 'right_missing')], diffs)
 
-    def test_gc(self):
-        objs = ObjectStorage(self.obj_storage_path)
-        objs.gc()
+            diffs = []
+            for path, diff_type, left_id, right_id, should_skip in zip_trees(objects, "root", hoard_id, repo_id):
+                if path == 'root/wat':
+                    should_skip()
+                diffs.append((path, diff_type.value))
+            self.assertEqual([
+                ('root', 'different'),
+                ('root/test.me.1', 'same'),
+                ('root/test.me.4', 'same'),
+                ('root/test.me.5', 'right_missing'),
+                ('root/wat', 'different')], diffs)
+
+
+def test_gc(self):
+    objs = ObjectStorage(self.obj_storage_path)
+    objs.gc()
 
 
 if __name__ == '__main__':

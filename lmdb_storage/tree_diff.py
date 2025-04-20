@@ -5,7 +5,7 @@ from typing import Iterable, Callable, Tuple
 
 from lmdb_storage.tree_structure import ObjectID, FileObject, Objects
 
-type SkipFun = Callable[[], bool]
+type SkipFun = Callable[[], None]
 
 
 class DiffType(enum.Enum):
@@ -23,83 +23,47 @@ def zip_trees(
 
     yield from zip_dfs(objects, root_name, left_id, right_id)
 
+
+CANT_SKIP = lambda: None
+
+
 def zip_dfs(
-        objects: Objects, root_name: str,
+        objects: Objects, path: str,
         left_id: bytes, right_id: bytes) -> Iterable[Tuple[str, DiffType, ObjectID | None, ObjectID | None, SkipFun]]:
+    if left_id == right_id:
+        yield path, DiffType.SAME, left_id, right_id, CANT_SKIP
+        return
 
-    root_diff = Diff.compute(root_name, left_id, right_id)
-    for diff in root_diff.expand(objects):
-        yield diff.path, type(diff), None, None, (lambda: True)
+    left_obj = objects[left_id]
+    right_obj = objects[right_id]
 
+    if isinstance(left_obj, FileObject) or isinstance(right_obj, FileObject):
+        yield path, DiffType.DIFFERENT, left_id, right_id, CANT_SKIP
+        return
 
-class Diff:
-    path: str
+    should_skip = False
 
-    @staticmethod
-    def compute(path: str, left_id: ObjectID, right_id: ObjectID) -> "Diff":
-        return AreSame(path, left_id) if left_id == right_id else HaveDifferences(path, left_id, right_id)
+    def skip_children() -> None:
+        nonlocal should_skip
+        should_skip = True
 
-    @abc.abstractmethod
-    def expand(self, objects: Objects) -> Iterable["Diff"]:
-        pass
+    yield path, DiffType.DIFFERENT, left_id, right_id, skip_children
 
-    def __str__(self):
-        return f"{self.__class__.__name__}[{self.path}]"
+    if should_skip:
+        return
 
+    # are both dirs, drilldown...
+    for left_sub_name, left_file_id in left_obj.children.items():
+        if left_sub_name in right_obj.children:
+            yield from zip_dfs(
+                objects,
+                path=path + "/" + left_sub_name,
+                left_id=left_file_id, right_id=right_obj.children[left_sub_name])
+        else:
+            yield path + "/" + left_sub_name, DiffType.RIGHT_MISSING, left_file_id, None, CANT_SKIP
 
-@dataclasses.dataclass
-class AreSame(Diff):
-    path: str
-    id: ObjectID
-
-    def expand(self, objects: Objects) -> Iterable["Diff"]:
-        yield self
-
-
-@dataclasses.dataclass
-class HaveDifferences(Diff):
-    path: str
-    left_id: ObjectID
-    right_id: ObjectID
-
-    def expand(self, objects: Objects) -> Iterable["Diff"]:
-        left_obj = objects[self.left_id]
-        right_obj = objects[self.right_id]
-
-        yield self
-
-        if isinstance(left_obj, FileObject) or isinstance(right_obj, FileObject):
-            return
-
-        # are both dirs, drilldown...
-        for left_sub_name, left_file_id in left_obj.children.items():
-            if left_sub_name in right_obj.children:
-                yield from Diff.compute(
-                    self.path + "/" + left_sub_name,
-                    left_file_id, right_obj.children[left_sub_name]).expand(objects)
-            else:
-                yield RemovedInRight(self.path + "/" + left_sub_name, left_file_id)
-
-        for right_sub_name, right_file_id in right_obj.children.items():
-            if right_sub_name in left_obj.children:
-                pass  # already returned
-            else:
-                yield AddedInRight(self.path + "/" + right_sub_name, right_file_id)
-
-
-@dataclasses.dataclass
-class AddedInRight(Diff):
-    path: str
-    left_obj: ObjectID
-
-    def expand(self, objects: Objects) -> Iterable["Diff"]:
-        yield self
-
-
-@dataclasses.dataclass
-class RemovedInRight(Diff):
-    path: str
-    right_obj: ObjectID
-
-    def expand(self, objects: Objects) -> Iterable["Diff"]:
-        yield self
+    for right_sub_name, right_file_id in right_obj.children.items():
+        if right_sub_name in left_obj.children:
+            pass  # already returned
+        else:
+            yield path + "/" + right_sub_name, DiffType.RIGHT_MISSING, None, right_file_id, CANT_SKIP
