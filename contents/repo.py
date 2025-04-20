@@ -143,7 +143,7 @@ class RepoContents:
         contents_filepath = os.path.join(folder, f"{uuid}.contents")
         config_filepath = os.path.join(folder, f"{uuid}.toml")
 
-        assert not os.path.isfile(contents_filepath) and not os.path.isdir(config_filepath)
+        assert not os.path.isdir(f"{contents_filepath}.lmdb") and not os.path.isdir(config_filepath)
 
         with open(config_filepath, "w") as f:
             rtoml.dump({

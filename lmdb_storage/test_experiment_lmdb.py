@@ -35,15 +35,15 @@ class MyTestCase(IsolatedAsyncioTestCase):
     def setUp(self):
         self.tmpdir = "./tests"
         self.obj_storage_path = f"{self.tmpdir}/test/example.lmdb"
-        # shutil.rmtree(self.obj_storage_path, ignore_errors=True)
 
         pathlib.Path(self.obj_storage_path).parent.mkdir(parents=True, exist_ok=True)
 
         populate(self.tmpdir)
         populate_repotypes(self.tmpdir)
 
-    @unittest.skip(reason="currently broken")
     async def test_create_lmdb(self):
+        shutil.rmtree(self.obj_storage_path, ignore_errors=True)
+
         hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = \
             await init_complex_hoard(self.tmpdir)
 
