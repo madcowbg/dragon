@@ -132,8 +132,13 @@ async def execute_pull(
             logging.info(f"Saving config of remote {remote_uuid}...")
             hoard_contents.config.save_remote_config(current_contents.config)
 
+            staging_root_id, current_root = obtain_local_staging_to_hoard(hoard_contents, current_contents)
+            uuid = current_contents.config.uuid
+
             await pull_repo_contents_to_hoard(
-                hoard_contents, pathing, config, current_contents, preferences, content_prefs, out, progress_bar)
+                hoard_contents, pathing, config, uuid, staging_root_id, preferences, content_prefs, out, progress_bar)
+
+            hoard_contents.env.set_root_id(uuid, staging_root_id)  # fixme should not blindly be setting it
 
             logging.info(f"Updating epoch of {remote_uuid} to {current_contents.config.epoch}")
             hoard_contents.config.mark_up_to_date(
@@ -159,7 +164,7 @@ def init_pull_preferences(
 async def execute_print_pending(
         current_contents: RepoContents, hoard: HoardContents, pathing: HoardPathing, ignore_missing: bool,
         out: StringIO):
-    staging_root_id = obtain_local_staging_to_hoard(hoard, current_contents)
+    staging_root_id, _ = obtain_local_staging_to_hoard(hoard, current_contents)
     uuid = current_contents.config.uuid
 
     async for diff in compare_local_to_hoard(uuid, staging_root_id, hoard, pathing):
@@ -254,7 +259,7 @@ class HoardCommandContents:
 
                     pathing = HoardPathing(config, self.hoard.paths())
 
-                    staging_root_id = obtain_local_staging_to_hoard(hoard_contents, current_contents)
+                    staging_root_id, _ = obtain_local_staging_to_hoard(hoard_contents, current_contents)
                     uuid = current_contents.config.uuid
 
                     resolutions = await resolution_to_match_repo_and_hoard(

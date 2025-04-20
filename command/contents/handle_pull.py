@@ -413,10 +413,8 @@ def _move_locally(
 
 
 async def pull_repo_contents_to_hoard(
-        hoard_contents: HoardContents, pathing: HoardPathing, config: HoardConfig, current_contents: RepoContents,
+        hoard_contents: HoardContents, pathing: HoardPathing, config: HoardConfig, uuid: str, staging_root_id: ObjectID,
         preferences: PullPreferences, content_prefs: ContentPrefs, out: StringIO, progress_tool=alive_it):
-    staging_root_id = obtain_local_staging_to_hoard(hoard_contents, current_contents)
-    uuid = current_contents.config.uuid
 
     resolutions = await resolution_to_match_repo_and_hoard(
         uuid, staging_root_id, hoard_contents, pathing, preferences, progress_tool)

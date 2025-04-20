@@ -105,4 +105,6 @@ def obtain_local_staging_to_hoard(hoard: HoardContents, local: RepoContents):
 
     # ensures we have the same tree
     hoard.env.copy_trees_from(local.env, [staging_root_id])
-    return staging_root_id
+    hoard.env.set_root_id(f"staging-{local.uuid}", staging_root_id)
+
+    return staging_root_id, current_root
