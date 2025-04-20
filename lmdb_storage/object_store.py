@@ -56,6 +56,11 @@ class ObjectStorage:
         with self.repos_txn(write=False) as txn:
             return txn.get(name.encode())
 
+    def set_root_id(self, name: str, root_id: ObjectID | None):
+        if root_id is not None:
+            with self.repos_txn(write=True) as txn:
+                txn.put(name.encode(), root_id)
+
 
 def find_all_live[F](objects: Objects[F], root_ids: Collection[ObjectID]) -> Collection[ObjectID]:
     live_ids = set(root_ids)
