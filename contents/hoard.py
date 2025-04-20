@@ -13,6 +13,7 @@ from command.fast_path import FastPosixPath
 from contents.hoard_props import HoardFileStatus, HoardFileProps
 from contents.repo import RepoContentsConfig
 from contents.repo_props import FileDesc
+from lmdb_storage.object_store import ObjectStorage
 from sql_util import SubfolderFilter, NoFilter, sqlite3_standard
 from util import FIRST_VALUE, custom_isabs
 
@@ -618,14 +619,21 @@ class HoardContents:
     fsobjects: HoardFSObjects
 
     def __init__(self, folder: pathlib.Path, is_readonly: bool):
+        sqlite_db_path = os.path.join(folder, HOARD_CONTENTS_FILENAME)
         self.conn = sqlite3_standard(
-            f"file:{os.path.join(folder, HOARD_CONTENTS_FILENAME)}{'?mode=ro' if is_readonly else ''}",
+            f"file:{sqlite_db_path}{'?mode=ro' if is_readonly else ''}",
             uri=True)
 
         self.config = HoardContentsConfig(folder.joinpath(HOARD_CONTENTS_TOML), is_readonly)
         self.fsobjects = HoardFSObjects(self) if not is_readonly else ReadonlyHoardFSObjects(self)
 
+        self.env = ObjectStorage(f"{sqlite_db_path}.lmdb")
+        self.objects = self.env.objects(write=True)
+
     def close(self, writeable: bool):
+        self.objects = None
+        self.env = None
+
         if writeable:
             self.config.bump_hoard_epoch()
             self.config.write()

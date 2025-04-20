@@ -7,7 +7,7 @@ import humanize
 from alive_progress import alive_bar, alive_it
 
 from command.content_prefs import ContentPrefs
-from command.contents.comparisons import compare_local_to_hoard
+from command.contents.comparisons import compare_local_to_hoard, obtain_local_staging_to_hoard
 from command.contents.handle_pull import PullPreferences, pull_repo_contents_to_hoard, \
     resolution_to_match_repo_and_hoard, PullIntention, _calculate_local_only, ResetLocalAsCurrentBehavior, \
     calculate_actions
@@ -156,11 +156,13 @@ def init_pull_preferences(
         return _init_pull_preferences_partial(remote_obj.uuid, assume_current, force_fetch_local_missing)
 
 
-async def execute_pring_pending(
+async def execute_print_pending(
         current_contents: RepoContents, hoard: HoardContents, pathing: HoardPathing, ignore_missing: bool,
         out: StringIO):
-    async for diff in compare_local_to_hoard(
-            current_contents, hoard, pathing):
+    staging_root_id = obtain_local_staging_to_hoard(hoard, current_contents)
+    uuid = current_contents.config.uuid
+
+    async for diff in compare_local_to_hoard(uuid, staging_root_id, hoard, pathing):
         if diff.diff_type == DiffType.FileOnlyInLocal:
             if diff.is_added:
                 out.write(f"ADDED {diff.hoard_file.as_posix()}\n")
@@ -252,8 +254,11 @@ class HoardCommandContents:
 
                     pathing = HoardPathing(config, self.hoard.paths())
 
+                    staging_root_id = obtain_local_staging_to_hoard(hoard_contents, current_contents)
+                    uuid = current_contents.config.uuid
+
                     resolutions = await resolution_to_match_repo_and_hoard(
-                        current_contents, hoard_contents, pathing, preferences, alive_it)
+                        uuid, staging_root_id, hoard_contents, pathing, preferences, alive_it)
 
                     with StringIO() as other_out:
                         for action in calculate_actions(preferences, resolutions, pathing, config, other_out):
@@ -262,7 +267,7 @@ class HoardCommandContents:
 
                     return out.getvalue()
 
-    async def differences(self, remote: str, ignore_missing: bool = False):
+    async def differences(self, remote: str, ignore_missing: bool = False) -> str:
         remote_uuid = resolve_remote_uuid(self.hoard.config(), remote)
 
         logging.info(f"Reading current contents of {remote_uuid}...")
@@ -276,7 +281,7 @@ class HoardCommandContents:
                 with StringIO() as out:
                     out.write(f"Status of {self.hoard.config().remotes[remote_uuid].name}:\n")
 
-                    await execute_pring_pending(
+                    await execute_print_pending(
                         current_contents, hoard, HoardPathing(self.hoard.config(), self.hoard.paths()), ignore_missing,
                         out)
                     return out.getvalue()

@@ -8,7 +8,7 @@ from typing import Iterable, Tuple
 from alive_progress import alive_it
 
 from command.content_prefs import ContentPrefs
-from command.contents.comparisons import compare_local_to_hoard
+from command.contents.comparisons import compare_local_to_hoard, obtain_local_staging_to_hoard
 from command.fast_path import FastPosixPath
 from command.pathing import HoardPathing
 from config import HoardConfig
@@ -17,6 +17,7 @@ from contents.hoard_props import HoardFileStatus, HoardFileProps
 from contents.repo import RepoContents
 from contents.repo_props import RepoFileStatus
 from contents_diff import DiffType, Diff
+from lmdb_storage.tree_structure import ObjectID
 from util import group_to_dict
 
 
@@ -414,8 +415,11 @@ def _move_locally(
 async def pull_repo_contents_to_hoard(
         hoard_contents: HoardContents, pathing: HoardPathing, config: HoardConfig, current_contents: RepoContents,
         preferences: PullPreferences, content_prefs: ContentPrefs, out: StringIO, progress_tool=alive_it):
+    staging_root_id = obtain_local_staging_to_hoard(hoard_contents, current_contents)
+    uuid = current_contents.config.uuid
+
     resolutions = await resolution_to_match_repo_and_hoard(
-        current_contents, hoard_contents, pathing, preferences, progress_tool)
+        uuid, staging_root_id, hoard_contents, pathing, preferences, progress_tool)
 
     for action in calculate_actions(preferences, resolutions, pathing, config, out):
         action.execute(preferences.local_uuid, content_prefs, hoard_contents, out)
@@ -442,9 +446,11 @@ def calculate_actions(
             raise ValueError(f"Invalid diff type {diff.diff_type}")
 
 
-async def resolution_to_match_repo_and_hoard(current_contents, hoard_contents, pathing, preferences, progress_tool):
+async def resolution_to_match_repo_and_hoard(
+        uuid: str, staging_root_id: ObjectID, hoard_contents: HoardContents,
+        pathing: HoardPathing, preferences: PullPreferences, progress_tool):
     all_diffs = [
-        diff async for diff in compare_local_to_hoard(current_contents, hoard_contents, pathing, progress_tool)]
+        diff async for diff in compare_local_to_hoard(uuid, staging_root_id, hoard_contents, pathing, progress_tool)]
     return compute_resolutions(all_diffs, preferences)
 
 

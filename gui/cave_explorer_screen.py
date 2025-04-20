@@ -18,6 +18,7 @@ from textual.widgets._tree import TreeNode
 
 from command.contents.command import execute_pull, init_pull_preferences, pull_prefs_to_restore_from_hoard, \
     clear_pending_file_ops
+from command.contents.comparisons import obtain_local_staging_to_hoard
 from command.contents.handle_pull import resolution_to_match_repo_and_hoard, calculate_actions, Action, \
     MarkIsAvailableBehavior, AddToHoardAndCleanupSameBehavior, AddToHoardAndCleanupNewBehavior, AddNewFileBehavior, \
     MarkToGetBehavior, MarkForCleanupBehavior, ResetLocalAsCurrentBehavior, RemoveLocalStatusBehavior, \
@@ -184,9 +185,11 @@ class HoardContentsPendingToPull(Tree[Action]):
                 async with self.hoard.open_contents(create_missing=False) as hoard_contents:
                     preferences = init_pull_preferences(
                         self.remote, assume_current=False, force_fetch_local_missing=False)
+                    staging_root_id = obtain_local_staging_to_hoard(hoard_contents, current_contents)
+                    uuid = current_contents.config.uuid
 
                     resolutions = await resolution_to_match_repo_and_hoard(
-                        current_contents, hoard_contents, pathing, preferences,
+                        uuid, staging_root_id, hoard_contents, pathing, preferences,
                         progress_reporting_it(self, id="hoard-contents-to-pull", max_frequency=10))
 
                     with StringIO() as other_out:
