@@ -9,7 +9,7 @@ from lmdb_storage.file_object import FileObject
 
 class ObjectStorage:
     def __init__(self, path: str, *, map_size: int | None = None, max_dbs=5):
-        self.env = lmdb.open(path, max_dbs=max_dbs, map_size=map_size)
+        self.env = lmdb.open(path, max_dbs=max_dbs, map_size=map_size, readonly=False)
 
     def gc(self):
         live_ids = set()

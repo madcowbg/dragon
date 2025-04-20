@@ -22,7 +22,7 @@ class FileObject:
 
     @staticmethod
     def create(fasthash: str, size: int) -> "FileObject":
-        file_packed = msgpack.packb((ObjectType.BLOB.value, fasthash, size))
+        file_packed = msgpack.packb((ObjectType.BLOB.value, (fasthash, size)))
         file_id = hashlib.sha1(file_packed).digest()
         return FileObject(file_id=file_id, data=(fasthash, size))
 

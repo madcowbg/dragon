@@ -6,6 +6,10 @@ from lmdb_storage.tree_structure import ObjectID, Objects, TreeObject, ObjectTyp
 type SkipFun = Callable[[], None]
 
 def dfs[F](objects: Objects[F], path: str, obj_id: bytes) -> Iterable[Tuple[str, ObjectType, ObjectID, F, SkipFun]]:
+    if obj_id is None:
+        return
+    assert type(obj_id) is bytes
+
     obj = objects[obj_id]
     if not isinstance(obj, TreeObject):
         yield path, ObjectType.BLOB, obj_id, obj, CANT_SKIP
@@ -35,6 +39,13 @@ class DiffType(enum.Enum):
 def zip_trees(
         objects: Objects, root_name: str,
         left_id: bytes, right_id: bytes) -> Iterable[Tuple[str, DiffType, ObjectID | None, ObjectID | None, SkipFun]]:
+    if left_id is None:
+        yield root_name, DiffType.LEFT_MISSING, left_id, right_id, CANT_SKIP
+        return
+    if right_id is None:
+        yield root_name, DiffType.RIGHT_MISSING, left_id, right_id, CANT_SKIP
+        return
+
     assert left_id is not None
     assert right_id is not None
 
@@ -83,4 +94,4 @@ def zip_dfs(
         if right_sub_name in left_obj.children:
             pass  # already returned
         else:
-            yield path + "/" + right_sub_name, DiffType.RIGHT_MISSING, None, right_file_id, CANT_SKIP
+            yield path + "/" + right_sub_name, DiffType.LEFT_MISSING, None, right_file_id, CANT_SKIP

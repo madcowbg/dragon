@@ -83,18 +83,22 @@ def do_nothing[T](x: T, *, title) -> T: return x
 
 class Objects[F]:
     def __init__(self, storage: "ObjectStorage", write: bool, object_builder: Callable[[ObjectID, any], F]):
-        self.txn = storage.objects_txn(write=write)
+        self.storage = storage
+        self.write = write
         self.object_builder = object_builder
 
     def __enter__(self):
+        self.txn = self.storage.objects_txn(write=self.write)
         self.txn.__enter__()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.txn.__exit__(exc_type, exc_val, exc_tb)
+        self.txn = None
         return None
 
     def __getitem__(self, obj_id: bytes) -> Union[F, TreeObject]:
+        assert type(obj_id) is bytes
         obj_packed = self.txn.get(obj_id)  # todo use streaming op
         obj_data = msgpack.loads(obj_packed)  # fixme make this faster by extracting type away
         if obj_data[0] == ObjectType.BLOB.value:
