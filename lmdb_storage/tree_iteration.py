@@ -1,9 +1,28 @@
 import enum
 from typing import Iterable, Callable, Tuple
 
-from lmdb_storage.tree_structure import ObjectID, Objects, TreeObject
+from lmdb_storage.tree_structure import ObjectID, Objects, TreeObject, ObjectType
 
 type SkipFun = Callable[[], None]
+
+def dfs[F](objects: Objects[F], path: str, obj_id: bytes) -> Iterable[Tuple[str, ObjectType, ObjectID, F, SkipFun]]:
+    obj = objects[obj_id]
+    if not isinstance(obj, TreeObject):
+        yield path, ObjectType.BLOB, obj_id, obj, CANT_SKIP
+        return
+
+    should_skip = False
+
+    def skip_children() -> None:
+        nonlocal should_skip
+        should_skip = True
+
+    yield path, ObjectType.TREE, obj_id, obj, skip_children
+    if should_skip:
+        return
+
+    for child_name, child_id in obj.children.items():
+        yield from dfs(objects, path + "/" + child_name, child_id)
 
 
 class DiffType(enum.Enum):

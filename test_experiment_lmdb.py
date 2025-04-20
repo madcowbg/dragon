@@ -12,7 +12,7 @@ from command.test_command_file_changing_flows import populate
 from command.test_hoard_command import populate_repotypes, init_complex_hoard
 from contents.hoard_props import HoardFileStatus
 from lmdb_storage.object_store import ObjectStorage
-from lmdb_storage.tree_diff import zip_trees
+from lmdb_storage.tree_iteration import zip_trees, dfs
 from lmdb_storage.tree_structure import ExpandableTreeObject
 from lmdb_storage.file_object import FileObject
 from sql_util import sqlite3_standard
@@ -26,7 +26,6 @@ def _list_uuids(conn) -> List[str]:
     return all_repos
 
 
-@unittest.skipUnless(os.getenv('LMDB_DEVELOPMENT_TEST'), reason="Uses total hoard")
 class MyTestCase(IsolatedAsyncioTestCase):
     def setUp(self):
         self.tmpdir = "./tests"
@@ -36,7 +35,6 @@ class MyTestCase(IsolatedAsyncioTestCase):
         populate(self.tmpdir)
         populate_repotypes(self.tmpdir)
 
-    # @unittest.skip("Made to run only locally to benchmark")
     async def test_create_lmdb(self):
         hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = \
             await init_complex_hoard(self.tmpdir)
@@ -85,7 +83,6 @@ class MyTestCase(IsolatedAsyncioTestCase):
                 with env.repos_txn(write=True) as txn:
                     txn.put(uuid.encode(), uuid_root_id)
 
-    # @unittest.skip("Made to run only locally to benchmark")
     def test_fully_load_lmdb(self):
         env = ObjectStorage(self.obj_storage_path)  # , map_size=(1 << 30) // 4)
 
@@ -103,7 +100,6 @@ class MyTestCase(IsolatedAsyncioTestCase):
             all_files = list(alive_it(all_files(root), title="loading from lmdb..."))
             logging.warning(f"# all_files: {len(all_files)}")
 
-    # @unittest.skip("Made to run only locally to benchmark")
     def test_dump_lmdb(self):
         env = ObjectStorage(self.obj_storage_path)  # , map_size=(1 << 30) // 4)
         with env.objects_txn(write=False) as txn:
@@ -149,10 +145,38 @@ class MyTestCase(IsolatedAsyncioTestCase):
                 ('root/test.me.5', 'right_missing'),
                 ('root/wat', 'different')], diffs)
 
+    def test_dfs(self):
+        env = ObjectStorage(self.obj_storage_path)
+        with env.repos_txn(write=False) as txn:
+            hoard_id = txn.get("HEAD".encode())
 
-def test_gc(self):
-    objs = ObjectStorage(self.obj_storage_path)
-    objs.gc()
+        with env.objects(write=False) as objects:
+            all_nodes = list((path, obj_type.value) for path, obj_type, _, _, _ in dfs(objects, "$ROOT", hoard_id))
+            self.assertEqual([
+                ('$ROOT', 1),
+                ('$ROOT/test.me.1', 2),
+                ('$ROOT/test.me.4', 2),
+                ('$ROOT/test.me.5', 2),
+                ('$ROOT/wat', 1),
+                ('$ROOT/wat/test.me.2', 2),
+                ('$ROOT/wat/test.me.3', 2),
+                ('$ROOT/wat/test.me.6', 2)], all_nodes)
+
+            nodes = list()
+            for path, obj_type, obj_id, obj, skip_children in dfs(objects, "$ROOT", hoard_id):
+                if path == '$ROOT/wat':
+                    skip_children()
+                nodes.append((path, obj_type.value))
+            self.assertEqual([
+                ('$ROOT', 1),
+                ('$ROOT/test.me.1', 2),
+                ('$ROOT/test.me.4', 2),
+                ('$ROOT/test.me.5', 2),
+                ('$ROOT/wat', 1)], nodes)
+
+    def test_gc(self):
+        objs = ObjectStorage(self.obj_storage_path)
+        objs.gc()
 
 
 if __name__ == '__main__':
