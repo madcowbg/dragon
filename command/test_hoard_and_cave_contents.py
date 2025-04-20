@@ -6,8 +6,6 @@ from unittest import IsolatedAsyncioTestCase
 from command.hoard import Hoard
 from command.repo import ProspectiveRepo
 from command.test_hoard_command import populate_hoard
-from contents.hoard_props import HoardFileProps
-from contents.repo_props import RepoFileProps
 from dragon import TotalCommand
 
 

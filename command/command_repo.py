@@ -74,19 +74,20 @@ class RepoCommand(object):
             await state.read_state_from_filesystem(contents, hoard_ignore, self.repo.path)
 
             with StringIO() as out:
-                async for change in compute_changes_from_diffs(state.diffs(), self.repo.path, add_new_with_status):
-                    if isinstance(change, FileIsSame):
-                        pass
-                    elif isinstance(change, FileDeleted):
-                        out.write(f"{change.details} {change.missing_relpath}\n")
-                    elif isinstance(change, FileMoved):
-                        out.write(f"MOVED {change.missing_relpath.as_posix()} TO {change.moved_to_relpath.as_posix()}\n")
-                    elif isinstance(change, FileAdded):
-                        out.write(f"{change.requested_status.value.upper()}_FILE {change.relpath.as_posix()}\n")
-                    elif isinstance(change, FileModified):
-                        out.write(f"MODIFIED_FILE {change.relpath.as_posix()}\n")
-                    else:
-                        raise TypeError(f"Unexpected change type {type(change)}")
+                if show_details:
+                    async for change in compute_changes_from_diffs(state.diffs(), self.repo.path, add_new_with_status):
+                        if isinstance(change, FileIsSame):
+                            pass
+                        elif isinstance(change, FileDeleted):
+                            out.write(f"{change.details} {change.missing_relpath}\n")
+                        elif isinstance(change, FileMoved):
+                            out.write(f"MOVED {change.missing_relpath.as_posix()} TO {change.moved_to_relpath.as_posix()}\n")
+                        elif isinstance(change, FileAdded):
+                            out.write(f"{change.requested_status.value.upper()}_FILE {change.relpath.as_posix()}\n")
+                        elif isinstance(change, FileModified):
+                            out.write(f"MODIFIED_FILE {change.relpath.as_posix()}\n")
+                        else:
+                            raise TypeError(f"Unexpected change type {type(change)}")
 
                 # save modified as root
                 contents.fsobjects.root_id = state.state_root_id
@@ -112,7 +113,7 @@ class RepoCommand(object):
             with StringIO() as out:
                 if show_files:
                     for file_or_dir, props in contents.fsobjects.all_status():
-                        out.write(f"{file_or_dir.as_posix()}: {props.last_status.value}{'' if not show_epoch else f' @ {props.last_update_epoch}'}\n")
+                        out.write(f"{file_or_dir.as_posix()}: {props.last_status.value}{'' if not show_epoch else f' @ -1'}\n")
                     out.write("--- SUMMARY ---\n")
 
                 stats = contents.fsobjects.stats_existing

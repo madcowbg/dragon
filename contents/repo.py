@@ -6,7 +6,7 @@ from typing import Tuple, Iterable
 import rtoml
 
 from command.fast_path import FastPosixPath
-from contents.repo_props import RepoFileProps, RepoFileStatus
+from contents.repo_props import FileDesc, RepoFileStatus
 from exceptions import MissingRepoContents
 from lmdb_storage.file_object import FileObject
 from lmdb_storage.object_store import ObjectStorage
@@ -54,29 +54,19 @@ class RepoFSObjects:
     def len_existing(self) -> int:
         return self.stats_existing.num_files
 
-    #  FIXME delete
-    # @staticmethod
-    # def _create_pair_path_props(cursor: Cursor, row: Row) -> Tuple[FastPosixPath, RepoFileProps]:
-    #     fullpath, isdir, size, mtime, fasthash, md5, last_status, last_update_epoch, last_related_fullpath = row
-    #     assert isdir == False
-    #     return FastPosixPath(fullpath), RepoFileProps(
-    #         size, mtime, fasthash, md5, RepoFileStatus(last_status), last_update_epoch, last_related_fullpath)
-
-    def all_status(self) -> Iterable[Tuple[FastPosixPath, RepoFileProps]]:
+    def all_status(self) -> Iterable[Tuple[FastPosixPath, FileDesc]]:
         yield from self.existing()
 
-    def existing(self) -> Iterable[Tuple[FastPosixPath, RepoFileProps]]:
+    def existing(self) -> Iterable[Tuple[FastPosixPath, FileDesc]]:
         assert self.root_id is None or len(self.root_id) == 20
         with self.objects as objects:
             for fullpath, obj_type, obj_id, obj, _ in dfs(objects, "", self.root_id):
                 if obj_type == ObjectType.BLOB:
                     yield (
                         FastPosixPath(fullpath).relative_to("/"),
-                        RepoFileProps(
-                            obj.size, 0, obj.fasthash, None, RepoFileStatus.PRESENT,
-                            -1, None))
+                        FileDesc(obj.size, obj.fasthash, None))
 
-    def add_file(self, filepath: FastPosixPath, size: int, mtime: float, fasthash: str, status: RepoFileStatus) -> None:
+    def add_file(self, filepath: FastPosixPath, size: int, fasthash: str) -> None:
         with self.objects as objects:
             self.root_id = add_file_object(
                 objects, self.root_id, filepath.as_posix().split("/"), FileObject.create(fasthash, size))
@@ -88,7 +78,7 @@ class RepoFSObjects:
         self.mark_removed(from_file)
 
         # add the new file
-        self.add_file(to_file, size, mtime, fasthash, RepoFileStatus.ADDED)
+        self.add_file(to_file, size, fasthash)
 
     def mark_removed(self, path: FastPosixPath):
         assert not path.is_absolute()

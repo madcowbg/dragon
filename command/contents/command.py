@@ -19,7 +19,7 @@ from config import CaveType, HoardRemote
 from contents.hoard import HoardContents, HoardFile, HoardDir
 from contents.hoard_props import HoardFileStatus, HoardFileProps
 from contents.repo import RepoContents
-from contents.repo_props import RepoFileProps, RepoFileStatus
+from contents.repo_props import FileDesc, RepoFileStatus
 from contents_diff import DiffType, Diff
 from exceptions import MissingRepoContents
 from resolve_uuid import resolve_remote_uuid
@@ -504,7 +504,7 @@ class HoardCommandContents:
                 connected_repo = self.hoard.connect_to_repo(repo_uuid, True)
                 with connected_repo.open_contents(is_readonly=True) as current_contents:
                     for local_file, local_props in alive_it(current_contents.fsobjects.existing()):
-                        assert isinstance(local_props, RepoFileProps)
+                        assert isinstance(local_props, FileDesc)
 
                         hoard_file = pathing.in_local(local_file, repo_uuid).at_hoard().as_pure_path
                         if hoard_file not in hoard.fsobjects:

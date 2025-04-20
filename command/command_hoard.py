@@ -280,9 +280,7 @@ class HoardCommand(object):
                         current_contents.fsobjects.add_file(
                             local_path_obj.as_pure_path,
                             size=hoard_props.size,
-                            mtime=datetime.datetime.now(),
-                            fasthash=hoard_props.fasthash,
-                            status=RepoFileStatus.PRESENT)
+                            fasthash=hoard_props.fasthash)
                         out.write(f"PRESENT {local_path_obj}\n")
 
                     current_contents.config.end_updating()

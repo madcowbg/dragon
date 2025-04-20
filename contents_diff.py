@@ -2,7 +2,7 @@ import enum
 
 from command.fast_path import FastPosixPath
 
-from contents.repo_props import RepoFileProps
+from contents.repo_props import FileDesc
 from contents.hoard_props import HoardFileProps
 
 
@@ -18,7 +18,7 @@ class DiffType(enum.Enum):
 class Diff:
     def __init__(
             self, diff_type: DiffType, local_file: FastPosixPath,
-            curr_file_hoard_path: FastPosixPath, local_props: RepoFileProps | None, hoard_props: HoardFileProps | None,
+            curr_file_hoard_path: FastPosixPath, local_props: FileDesc | None, hoard_props: HoardFileProps | None,
             is_added: bool | None):
         self.diff_type = diff_type
 

@@ -9,7 +9,7 @@ from typing import List, Optional, Generator, Dict
 from command.pathing import HoardPathing, is_path_available
 from config import HoardRemote, HoardConfig, CaveType
 from contents.hoard import HoardContents
-from contents.repo_props import RepoFileProps
+from contents.repo_props import FileDesc
 from contents.hoard_props import HoardFileStatus, HoardFileProps
 from util import format_percent, format_size
 
@@ -192,7 +192,7 @@ class ContentPrefs:
         self.hoard = hoard
 
     def repos_to_add(
-            self, hoard_file: FastPosixPath, local_props: RepoFileProps,
+            self, hoard_file: FastPosixPath, local_props: FileDesc,
             hoard_props: Optional[HoardFileProps] = None) -> Generator[str, None, None]:
         for r in self._partials_with_fetch_new:
             if is_path_available(self.pathing, hoard_file, r.uuid):

@@ -12,7 +12,7 @@ import rtoml
 from command.fast_path import FastPosixPath
 from contents.hoard_props import HoardFileStatus, HoardFileProps
 from contents.repo import RepoContentsConfig
-from contents.repo_props import RepoFileProps
+from contents.repo_props import FileDesc
 from sql_util import SubfolderFilter, NoFilter, sqlite3_standard
 from util import FIRST_VALUE, custom_isabs
 
@@ -437,7 +437,7 @@ class HoardFSObjects(ReadonlyHoardFSObjects):
     def __init__(self, parent: "HoardContents"):
         super().__init__(parent)
 
-    def add_or_replace_file(self, filepath: FastPosixPath, props: RepoFileProps) -> HoardFileProps:
+    def add_or_replace_file(self, filepath: FastPosixPath, props: FileDesc) -> HoardFileProps:
         assert filepath.is_absolute()
         curr = self.parent.conn.cursor()
         curr.row_factory = FIRST_VALUE

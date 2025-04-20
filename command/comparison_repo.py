@@ -13,7 +13,7 @@ import command.fast_path
 from command.fast_path import FastPosixPath
 from command.hoard_ignore import HoardIgnore
 from contents.repo import RepoContents
-from contents.repo_props import RepoFileStatus, RepoFileProps, FileDesc
+from contents.repo_props import RepoFileStatus, FileDesc
 from hashing import fast_hash_async
 from lmdb_storage.file_object import FileObject
 from lmdb_storage.tree_iteration import zip_dfs
@@ -54,10 +54,9 @@ class FileDeleted:
 
 class FileMoved:
     def __init__(
-            self, missing_relpath: FastPosixPath, moved_to_relpath: FastPosixPath, size: int, mtime: float,
-            moved_file_hash: str):
+            self, missing_relpath: FastPosixPath, moved_to_relpath: FastPosixPath, size: int, moved_file_hash: str):
         self.moved_file_hash = moved_file_hash
-        self.mtime = mtime
+        self.mtime = datetime.now()
         self.size = size
 
         self.missing_relpath = missing_relpath
@@ -66,12 +65,12 @@ class FileMoved:
 
 class FileAdded:
     def __init__(
-            self, relpath: FastPosixPath, size: int, mtime: float, fasthash: str, requested_status: RepoFileStatus):
+            self, relpath: FastPosixPath, size: int, fasthash: str, requested_status: RepoFileStatus):
         assert not relpath.is_absolute()
         assert requested_status in (RepoFileStatus.ADDED, RepoFileStatus.PRESENT)
         self.relpath = relpath
 
-        self.mtime = mtime
+        self.mtime = datetime.now()
         self.size = size
         self.fasthash = fasthash
 
@@ -80,11 +79,11 @@ class FileAdded:
 
 class FileModified:
     def __init__(
-            self, relpath: FastPosixPath, size: int, mtime: float, fasthash: str):
+            self, relpath: FastPosixPath, size: int, fasthash: str):
         assert not relpath.is_absolute()
         self.relpath = relpath
 
-        self.mtime = mtime
+        self.mtime = datetime.now()
         self.size = size
         self.fasthash = fasthash
 
@@ -110,8 +109,8 @@ async def find_repo_changes(
 
 async def compute_changes_from_diffs(diffs_stream: AsyncGenerator[RepoDiffs], repo_path: str,
                                      add_new_with_status: RepoFileStatus):
-    files_to_add_or_update: Dict[pathlib.Path, Tuple[RepoFileStatus, Optional[RepoFileProps], FileDesc]] = {}
-    files_maybe_removed: List[Tuple[FastPosixPath, RepoFileProps]] = []
+    files_to_add_or_update: Dict[pathlib.Path, Tuple[RepoFileStatus, Optional[FileDesc], FileDesc]] = {}
+    files_maybe_removed: List[Tuple[FastPosixPath, FileDesc]] = []
 
     async for diff in diffs_stream:
         if isinstance(diff, FileNotInFilesystem):
@@ -159,7 +158,7 @@ async def compute_changes_from_diffs(diffs_stream: AsyncGenerator[RepoDiffs], re
                 # fixme maybe reuse the data from the old file?
                 size = os.path.getsize(moved_to_file)
                 mtime = os.path.getmtime(moved_to_file)
-                yield FileMoved(missing_relpath, moved_to_relpath, size, mtime, moved_file_hash)
+                yield FileMoved(missing_relpath, moved_to_relpath, size, moved_file_hash)
 
                 del files_to_add_or_update[moved_to_file]  # was fixed above
             except FileNotFoundError as e:
@@ -178,23 +177,23 @@ async def compute_changes_from_diffs(diffs_stream: AsyncGenerator[RepoDiffs], re
             if old_props.fasthash == file_desc.fasthash:
                 yield FileIsSame(relpath)
             else:
-                yield FileModified(relpath, file_desc.size, file_desc.mtime, file_desc.fasthash)
+                yield FileModified(relpath, file_desc.size, file_desc.fasthash)
         else:
             assert old_props is None
-            yield FileAdded(relpath, file_desc.size, file_desc.mtime, file_desc.fasthash, requested_status)
+            yield FileAdded(relpath, file_desc.size, file_desc.fasthash, requested_status)
 
     logging.info(f"Files read!")
 
 
 class FileNotInFilesystem:
-    def __init__(self, filepath: FastPosixPath, repo_props: RepoFileProps):
+    def __init__(self, filepath: FastPosixPath, repo_props: FileDesc):
         assert not filepath.is_absolute()
         self.filepath = filepath
         self.repo_props = repo_props
 
 
 class RepoFileDifferent:
-    def __init__(self, filepath: FastPosixPath, repo_props: RepoFileProps, filesystem_prop: FileDesc):
+    def __init__(self, filepath: FastPosixPath, repo_props: FileDesc, filesystem_prop: FileDesc):
         assert not filepath.is_absolute()
 
         self.filepath = filepath
@@ -204,7 +203,7 @@ class RepoFileDifferent:
 
 
 class RepoFileSame:
-    def __init__(self, filepath: FastPosixPath, repo_props: RepoFileProps, filesystem_prop: FileDesc):
+    def __init__(self, filepath: FastPosixPath, repo_props: FileDesc, filesystem_prop: FileDesc):
         assert not filepath.is_absolute()
         self.filepath = filepath
         self.repo_props = repo_props
@@ -220,7 +219,7 @@ class FileNotInRepo:
 
 
 class ErrorReadingFilesystem:
-    def __init__(self, filepath: FastPosixPath, repo_props: RepoFileProps):
+    def __init__(self, filepath: FastPosixPath, repo_props: FileDesc):
         self.filepath = filepath
         self.repo_props = repo_props
 
@@ -257,10 +256,8 @@ class FilesystemState:
                     # fixme that is bad logic, filenames can be the same as folder names
                     continue
 
-                fo_props = RepoFileProps(
-                    fo_obj.size, 0, fo_obj.fasthash, None, RepoFileStatus.ADDED,
-                    -1, None) if fo_obj is not None else None
-                ff_props = FileDesc(ff_obj.size, 0, ff_obj.fasthash, None) if ff_obj is not None else None
+                fo_props = FileDesc(fo_obj.size, fo_obj.fasthash, None) if fo_obj is not None else None
+                ff_props = FileDesc(ff_obj.size, ff_obj.fasthash, None) if ff_obj is not None else None
 
                 fullpath_posix = FastPosixPath(fullpath).relative_to("/")
                 if ff_obj is None:
@@ -323,22 +320,15 @@ def build_diff(_, row) -> RepoDiffs:  # fixme remove obsolete
     assert fullpath_s is not None
     fullpath = FastPosixPath(fullpath_s)
     if ff_error is not None:
-        return ErrorReadingFilesystem(
-            fullpath, RepoFileProps(
-                fo_size, fo_mtime, fo_fasthash, fo_md5, fo_last_status,
-                fo_last_update_epoch, fo_last_related_fullpath))
+        return ErrorReadingFilesystem(fullpath, FileDesc(fo_size, fo_fasthash, fo_md5))
     elif fo_size is None:
         assert ff_size is not None
-        return FileNotInRepo(fullpath, FileDesc(ff_size, ff_mtime, ff_fasthash, ff_md5))
+        return FileNotInRepo(fullpath, FileDesc(ff_size, ff_fasthash, ff_md5))
     elif ff_size is None:
-        return FileNotInFilesystem(fullpath, RepoFileProps(
-            fo_size, fo_mtime, fo_fasthash, fo_md5, fo_last_status,
-            fo_last_update_epoch, fo_last_related_fullpath))
+        return FileNotInFilesystem(fullpath, FileDesc(fo_size, fo_fasthash, fo_md5))
     else:
-        props = RepoFileProps(
-            fo_size, fo_mtime, fo_fasthash, fo_md5, fo_last_status,
-            fo_last_update_epoch, fo_last_related_fullpath)
-        filesystem_prop = FileDesc(ff_size, ff_mtime, ff_fasthash, ff_md5)
+        props = FileDesc(fo_size, fo_fasthash, fo_md5)
+        filesystem_prop = FileDesc(ff_size, ff_fasthash, ff_md5)
 
         if fo_fasthash == ff_fasthash:
             return RepoFileSame(fullpath, props, filesystem_prop)
@@ -368,7 +358,7 @@ def walk_filesystem(contents, hoard_ignore, repo_path) -> Iterable[pathlib.Path]
 async def read_filesystem_desc(file_fullpath: pathlib.Path) -> FileDesc:
     stats = await aiofiles.os.stat(file_fullpath)
     fasthash = await fast_hash_async(file_fullpath)
-    filesystem_prop = FileDesc(stats.st_size, stats.st_mtime, fasthash, None)
+    filesystem_prop = FileDesc(stats.st_size, fasthash, None)
     return filesystem_prop
 
 
@@ -416,15 +406,11 @@ def _apply_repo_change_to_contents(
 
         print_maybe(f"MOVED {change.missing_relpath.as_posix()} TO {change.moved_to_relpath.as_posix()}")
     elif isinstance(change, FileAdded):
-        contents.fsobjects.add_file(
-            change.relpath, size=change.size, mtime=change.mtime, fasthash=change.fasthash,
-            status=change.requested_status)
+        contents.fsobjects.add_file(change.relpath, size=change.size, fasthash=change.fasthash)
 
         print_maybe(f"{change.requested_status.value.upper()}_FILE {change.relpath.as_posix()}")
     elif isinstance(change, FileModified):
-        contents.fsobjects.add_file(
-            change.relpath, size=change.size, mtime=change.mtime, fasthash=change.fasthash,
-            status=RepoFileStatus.MODIFIED)
+        contents.fsobjects.add_file(change.relpath, size=change.size, fasthash=change.fasthash)
 
         print_maybe(f"MODIFIED_FILE {change.relpath.as_posix()}")
     else:

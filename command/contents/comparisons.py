@@ -8,11 +8,11 @@ from command.pathing import HoardPathing
 from contents.hoard import HoardContents
 from contents.hoard_props import HoardFileProps
 from contents.repo import RepoContents
-from contents.repo_props import RepoFileProps, RepoFileStatus
+from contents.repo_props import FileDesc, RepoFileStatus
 from contents_diff import Diff, DiffType
 
 
-def is_same_file(current: RepoFileProps, hoard: HoardFileProps):
+def is_same_file(current: FileDesc, hoard: HoardFileProps):
     if current.size != hoard.size:
         return False  # files differ by size
 
@@ -27,7 +27,7 @@ async def compare_local_to_hoard(
         progress_tool=alive_it) \
         -> AsyncGenerator[Diff]:
     logging.info("Load current objects")
-    all_local_with_any_status: Dict[FastPosixPath, RepoFileProps] = \
+    all_local_with_any_status: Dict[FastPosixPath, FileDesc] = \
         dict(s for s in progress_tool(local.fsobjects.all_status(), title="Load current objects",
                                       total=local.fsobjects.len_existing()))
 
@@ -37,9 +37,7 @@ async def compare_local_to_hoard(
     logging.info("Loaded all objects.")
 
     for current_path, props in progress_tool(all_local_with_any_status.items(), title="Current files vs. Hoard"):
-        if props.last_status == RepoFileStatus.DELETED or props.last_status == RepoFileStatus.MOVED_FROM:
-            continue
-        assert isinstance(props, RepoFileProps)
+        assert isinstance(props, FileDesc)
 
         current_file = current_path
         curr_file_hoard_path = pathing.in_local(current_file, local.config.uuid).at_hoard()
@@ -62,7 +60,7 @@ async def compare_local_to_hoard(
             title="Hoard vs. Current files"):
         curr_path_in_local = pathing.in_hoard(hoard_file).at_local(local.config.uuid)
         assert curr_path_in_local is not None  # hoard file is not in the mounted location
-        local_props: RepoFileProps | None = all_local_with_any_status.get(curr_path_in_local.as_pure_path, None)
+        local_props: FileDesc | None = all_local_with_any_status.get(curr_path_in_local.as_pure_path, None)
 
         assert isinstance(props, HoardFileProps)
 
