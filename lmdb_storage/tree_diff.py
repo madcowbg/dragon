@@ -1,16 +1,35 @@
 import abc
 import dataclasses
-from typing import Iterable
+import enum
+from typing import Iterable, Callable, Tuple
 
 from lmdb_storage.tree_structure import ObjectID, FileObject, Objects
 
+type SkipFun = Callable[[], bool]
 
-def zip_trees(objects: Objects, root_name: str, left_id: bytes, right_id: bytes):
+
+class DiffType(enum.Enum):
+    SAME = "same"
+    DIFFERENT = "different"
+    LEFT_MISSING = "left_missing"
+    RIGHT_MISSING = "right_missing"
+
+
+def zip_trees(
+        objects: Objects, root_name: str,
+        left_id: bytes, right_id: bytes) -> Iterable[Tuple[str, DiffType, ObjectID | None, ObjectID | None, SkipFun]]:
     assert left_id is not None
     assert right_id is not None
 
+    yield from zip_dfs(objects, root_name, left_id, right_id)
+
+def zip_dfs(
+        objects: Objects, root_name: str,
+        left_id: bytes, right_id: bytes) -> Iterable[Tuple[str, DiffType, ObjectID | None, ObjectID | None, SkipFun]]:
+
     root_diff = Diff.compute(root_name, left_id, right_id)
-    return root_diff.expand(objects)
+    for diff in root_diff.expand(objects):
+        yield diff.path, type(diff), None, None, (lambda: True)
 
 
 class Diff:

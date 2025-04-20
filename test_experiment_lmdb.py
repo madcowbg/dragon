@@ -1,9 +1,9 @@
-import hashlib
+import logging
 import logging
 import os
 import pathlib
 import unittest
-from typing import List, Tuple, Iterable
+from typing import List, Iterable
 from unittest.async_case import IsolatedAsyncioTestCase
 
 import msgpack
@@ -12,10 +12,9 @@ from alive_progress import alive_it
 from command.test_command_file_changing_flows import populate
 from command.test_hoard_command import populate_repotypes, init_complex_hoard
 from contents.hoard_props import HoardFileStatus
-from hashing import fast_hash
 from lmdb_storage.object_store import ObjectStorage
-from lmdb_storage.tree_diff import Diff, AreSame, zip_trees
-from lmdb_storage.tree_structure import TreeObject, FileObject, ExpandableTreeObject, Objects
+from lmdb_storage.tree_diff import zip_trees
+from lmdb_storage.tree_structure import FileObject, ExpandableTreeObject
 from sql_util import sqlite3_standard
 from util import FIRST_VALUE
 
@@ -44,7 +43,7 @@ class MyTestCase(IsolatedAsyncioTestCase):
 
         await hoard_cmd.contents.pull(all=True)
 
-        env = ObjectStorage(self.obj_storage_path, map_size=(1 << 30))
+        env = ObjectStorage(self.obj_storage_path)
         path = rf"{hoard_cmd.hoard.hoardpath}\hoard.contents"
         is_readonly = True
 
@@ -124,10 +123,9 @@ class MyTestCase(IsolatedAsyncioTestCase):
             repo_id = txn.get(uuid.encode())
 
         with env.objects(write=False) as objects:
-            for diff in alive_it(zip_trees(objects, "root", hoard_id, repo_id)):
-                if isinstance(diff, AreSame):
-                    continue
-                print(diff)
+            for path, diff_type, left_id, right_id, should_skip in\
+                    alive_it(zip_trees(objects, "root", hoard_id, repo_id)):
+                print(path, diff_type, left_id, right_id, should_skip)
 
     def test_gc(self):
         objs = ObjectStorage(self.obj_storage_path)
