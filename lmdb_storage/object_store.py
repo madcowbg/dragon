@@ -34,6 +34,7 @@ class ObjectStorage:
         return root_ids
 
     def copy_trees_from(self, other: "ObjectStorage", root_ids: Collection[ObjectID]):
+        assert isinstance(root_ids, Collection)
         with other.objects(write=False) as other_objects:
             other_live_ids = find_all_live(other_objects, root_ids)
 
@@ -50,6 +51,10 @@ class ObjectStorage:
 
     def repos_txn(self, write: bool):
         return self.env.begin(db=self.env.open_db("repos".encode()), write=write)
+
+    def get_root_id(self, name: str) -> ObjectID:
+        with self.repos_txn(write=False) as txn:
+            return txn.get(name.encode())
 
 
 def find_all_live[F](objects: Objects[F], root_ids: Collection[ObjectID]) -> Collection[ObjectID]:

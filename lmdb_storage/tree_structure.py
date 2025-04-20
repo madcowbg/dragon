@@ -102,7 +102,7 @@ class Objects[F]:
         return self.txn.get(obj_id) is not None
 
     def __getitem__(self, obj_id: bytes) -> Union[F, TreeObject, None]:
-        assert type(obj_id) is bytes, type(obj_id)
+        assert type(obj_id) is bytes, f"{obj_id} -> {type(obj_id)}"
         obj_packed = self.txn.get(obj_id)  # todo use streaming op
         if obj_packed is None:
             return None
