@@ -3,7 +3,8 @@ import logging
 import lmdb
 from alive_progress import alive_bar
 
-from lmdb_storage.tree_structure import TreeObject, FileObject, Objects
+from lmdb_storage.tree_structure import TreeObject, Objects
+from lmdb_storage.file_object import FileObject
 
 
 class ObjectStorage:
@@ -44,7 +45,7 @@ class ObjectStorage:
         return self.env.begin(db=self.env.open_db("objects".encode()), write=write)
 
     def objects(self, write: bool) -> "Objects":
-        return Objects(self, write)
+        return Objects(self, write, FileObject)
 
     def repos_txn(self, write: bool):
         return self.env.begin(db=self.env.open_db("repos".encode()), write=write)

@@ -1,9 +1,7 @@
-import abc
-import dataclasses
 import enum
 from typing import Iterable, Callable, Tuple
 
-from lmdb_storage.tree_structure import ObjectID, FileObject, Objects
+from lmdb_storage.tree_structure import ObjectID, Objects, TreeObject
 
 type SkipFun = Callable[[], None]
 
@@ -37,7 +35,7 @@ def zip_dfs(
     left_obj = objects[left_id]
     right_obj = objects[right_id]
 
-    if isinstance(left_obj, FileObject) or isinstance(right_obj, FileObject):
+    if not (isinstance(left_obj, TreeObject) and isinstance(right_obj, TreeObject)):
         yield path, DiffType.DIFFERENT, left_id, right_id, CANT_SKIP
         return
 

@@ -1,10 +1,9 @@
 import dataclasses
 import enum
 import hashlib
-from typing import Dict, Iterable, Tuple, List
+from typing import Dict, Iterable, Tuple, List, Callable, Union
 
 import msgpack
-from lmdb import Transaction
 from propcache import cached_property
 
 ## LMDB object format
@@ -21,7 +20,7 @@ type ObjectID = bytes
 
 class ObjectType(enum.Enum):
     TREE = 1
-    FILE = 2
+    BLOB = 2
 
 
 @dataclasses.dataclass
@@ -39,39 +38,16 @@ class TreeObject:
         return TreeObject(children=children)
 
 
-@dataclasses.dataclass
-class FileObject:
-    file_id: bytes
-    fasthash: str
-    size: int
-
-    @cached_property
-    def serialized(self) -> bytes:
-        return msgpack.packb((ObjectType.FILE.value, self.fasthash, self.size))
-
-    @staticmethod
-    def create(fasthash: str, size: int) -> "FileObject":
-        file_packed = msgpack.packb((ObjectType.FILE.value, fasthash, size))
-        file_id = hashlib.sha1(file_packed).digest()
-        return FileObject(file_id=file_id, fasthash=fasthash, size=size)
-
-    @staticmethod
-    def load(file_id: bytes, data: bytes) -> "FileObject":
-        object_type, fasthash, size = msgpack.unpackb(data)
-        assert object_type == ObjectType.FILE.value
-        return FileObject(file_id, fasthash, size)
-
-
-class ExpandableTreeObject:
-    def __init__(self, data: TreeObject, objects: "Objects"):
+class ExpandableTreeObject[F]:
+    def __init__(self, data: TreeObject, objects: "Objects[F]"):
         self.objects = objects
         self.children: Dict[str, ObjectID] = data.children
 
-        self._files: Dict[str, FileObject] | None = None
+        self._files: Dict[str, F] | None = None
         self._dirs: Dict[str, ExpandableTreeObject] | None = None
 
     @property
-    def files(self) -> Dict[str, FileObject]:
+    def files(self) -> Dict[str, F]:
         if self._files is None:
             self._load()
         return self._files
@@ -88,24 +64,23 @@ class ExpandableTreeObject:
 
         for name, obj_id in self.children.items():
             obj = self.objects[obj_id]
-            if isinstance(obj, FileObject):
-                self._files[name] = obj
-            elif isinstance(obj, TreeObject):
+            if isinstance(obj, TreeObject):
                 self._dirs[name] = ExpandableTreeObject(obj, self.objects)
             else:
-                raise TypeError(f"Unexpected type {type(obj)}")
+                self._files[name] = obj
 
     @staticmethod
-    def create(obj_id: bytes, objects: "Objects") -> "ExpandableTreeObject":
-        return ExpandableTreeObject(objects[obj_id], objects)
+    def create(obj_id: bytes, objects: "Objects[F]") -> "ExpandableTreeObject[F]":
+        return ExpandableTreeObject[F](objects[obj_id], objects)
 
 
 def do_nothing[T](x: T, *, title) -> T: return x
 
 
-class Objects:
-    def __init__(self, storage: "ObjectStorage", write: bool):
+class Objects[F]:
+    def __init__(self, storage: "ObjectStorage", write: bool, object_builder: Callable[[ObjectID, any], F]):
         self.txn = storage.objects_txn(write=write)
+        self.object_builder = object_builder
 
     def __enter__(self):
         self.txn.__enter__()
@@ -115,23 +90,23 @@ class Objects:
         self.txn.__exit__(exc_type, exc_val, exc_tb)
         return None
 
-    def __getitem__(self, obj_id: bytes) -> FileObject | TreeObject:
+    def __getitem__(self, obj_id: bytes) -> Union[F, TreeObject]:
         obj_packed = self.txn.get(obj_id)  # todo use streaming op
         obj_data = msgpack.loads(obj_packed)  # fixme make this faster by extracting type away
-        if obj_data[0] == ObjectType.FILE.value:
-            return FileObject(obj_id, obj_data[1], obj_data[2])
+        if obj_data[0] == ObjectType.BLOB.value:
+            return self.object_builder(obj_id, obj_data[1])
         elif obj_data[0] == ObjectType.TREE.value:
             return TreeObject(obj_data[1])
         else:
             raise ValueError(f"Unrecognized type {obj_data[0]}")
 
-    def __setitem__(self, obj_id: bytes, obj: FileObject | TreeObject):
+    def __setitem__(self, obj_id: bytes, obj: Union[F, TreeObject]):
         self.txn.put(obj_id, obj.serialized)
 
     def __delitem__(self, obj_id: bytes) -> None:
         self.txn.delete(obj_id)
 
-    def mktree_from_tuples(self, all_data: Iterable[Tuple[str, FileObject]], alive_it=do_nothing) -> bytes:
+    def mktree_from_tuples(self, all_data: Iterable[Tuple[str, F]], alive_it=do_nothing) -> bytes:
         # every element is a partially-constructed object
         # (name, partial TreeObject)
         stack: List[Tuple[str | None, TreeObject]] = [("", TreeObject(dict()))]

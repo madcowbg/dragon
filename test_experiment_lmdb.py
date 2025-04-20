@@ -13,7 +13,8 @@ from command.test_hoard_command import populate_repotypes, init_complex_hoard
 from contents.hoard_props import HoardFileStatus
 from lmdb_storage.object_store import ObjectStorage
 from lmdb_storage.tree_diff import zip_trees
-from lmdb_storage.tree_structure import FileObject, ExpandableTreeObject
+from lmdb_storage.tree_structure import ExpandableTreeObject
+from lmdb_storage.file_object import FileObject
 from sql_util import sqlite3_standard
 from util import FIRST_VALUE
 
@@ -107,7 +108,7 @@ class MyTestCase(IsolatedAsyncioTestCase):
         env = ObjectStorage(self.obj_storage_path)  # , map_size=(1 << 30) // 4)
         with env.objects_txn(write=False) as txn:
             with txn.cursor() as curr:
-                with open("test/dbdump.msgpack", "wb") as f:
+                with open(self.tmpdir + "/test/dbdump.msgpack", "wb") as f:
                     # msgpack.dump(((k, v) for k, v in alive_it(curr, title="loading from lmdb...")), f)
                     msgpack.dump(list(((k, v) for k, v in curr)), f)
 
