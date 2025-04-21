@@ -31,7 +31,7 @@ def dump_tree(objects: Objects[FileObject], root_id):
     return list((path, obj_type.value) for path, obj_type, _, _, _ in dfs(objects, "$ROOT", root_id))
 
 
-class MyTestCase(IsolatedAsyncioTestCase):
+class VariousLMDBFunctions(IsolatedAsyncioTestCase):
     def setUp(self):
         self.tmpdir = "./tests"
         self.obj_storage_path = f"{self.tmpdir}/test/example.lmdb"
