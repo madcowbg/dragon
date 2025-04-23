@@ -184,8 +184,7 @@ class RepoContents:
 
         self.env = ObjectStorage(f"{self.filepath}.lmdb", map_size=1 << 30)  # 1GB
 
-        with self.env.repos_txn(write=False) as txn:
-            root_id = txn.get("ROOT".encode(), None)
+        root_id = self.env.roots(write=False).get_root_id("ROOT")
 
         self.objects = self.env.objects(write=True)
 
@@ -205,6 +204,4 @@ class RepoContents:
         return False
 
     def write(self):
-        if self.fsobjects.root_id is not None:
-            with self.env.repos_txn(write=True) as txn:
-                txn.put("ROOT".encode(), self.fsobjects.root_id)  # fixme dangerous, need to check if we can
+        self.env.roots(write=True).set_root_id("ROOT", self.fsobjects.root_id)  # fixme dangerous, need to check if we can

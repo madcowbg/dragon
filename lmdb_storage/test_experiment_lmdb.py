@@ -68,8 +68,7 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
             with env.objects(write=True) as objects:
                 root_id = objects.mktree_from_tuples(all_data)
 
-            with env.repos_txn(write=True) as txn:
-                txn.put("HEAD".encode(), root_id)
+            env.roots(write=True).set_root_id("HEAD", root_id)
 
             all_repos = _list_uuids(conn)
             logging.info("# repos: {}".format(len(all_repos)))
@@ -88,14 +87,12 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
                 with env.objects(write=True) as objects:
                     uuid_root_id = objects.mktree_from_tuples(uuid_data)
 
-                with env.repos_txn(write=True) as txn:
-                    txn.put(uuid.encode(), uuid_root_id)
+                env.roots(write=True).set_root_id(uuid, uuid_root_id)
 
     def test_fully_load_lmdb(self):
         env = ObjectStorage(self.obj_storage_path)  # , map_size=(1 << 30) // 4)
 
-        with env.repos_txn(write=False) as txn:
-            root_id = txn.get("HEAD".encode())
+        root_id = env.roots(write=True).get_root_id("HEAD")
 
         with env.objects(write=False) as objects:
             root = ExpandableTreeObject.create(root_id, objects)
@@ -110,7 +107,7 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
 
     def test_dump_lmdb(self):
         env = ObjectStorage(self.obj_storage_path)  # , map_size=(1 << 30) // 4)
-        with env.objects_txn(write=False) as txn:
+        with env.begin(db_name="objects", write=False) as txn:
             with txn.cursor() as curr:
                 with open(self.tmpdir + "/test/dbdump.msgpack", "wb") as f:
                     # msgpack.dump(((k, v) for k, v in alive_it(curr, title="loading from lmdb...")), f)
@@ -122,9 +119,8 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
         # uuid = "726613d5-2b92-451e-b863-833a579456f5"
         uuid = "766c936d-fbe9-4cf0-b2df-e47b40888581"
 
-        with env.repos_txn(write=False) as txn:
-            hoard_id = txn.get("HEAD".encode())
-            repo_id = txn.get(uuid.encode())
+        hoard_id = env.roots(write=False).get_root_id("HEAD")
+        repo_id = env.roots(write=False).get_root_id(uuid)
 
         with env.objects(write=False) as objects:
             diffs = [
@@ -158,9 +154,8 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
         left_uuid = "766c936d-fbe9-4cf0-b2df-e47b40888581"
         right_uuid = "a9d34fae-af49-4a26-82c9-e74488470b09"
 
-        with env.repos_txn(write=False) as txn:
-            left_id = txn.get(left_uuid.encode())
-            right_id = txn.get(right_uuid.encode())
+        left_id = env.roots(write=False).get_root_id(left_uuid)
+        right_id = env.roots(write=False).get_root_id(right_uuid)
 
         with env.objects(write=True) as objects:
             left_id = add_file_object(objects, left_id, "newdir/new.file".split("/"), FileObject.create("dasda", 1))
@@ -256,8 +251,7 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
 
     def test_dfs(self):
         env = ObjectStorage(self.obj_storage_path)
-        with env.repos_txn(write=False) as txn:
-            hoard_id = txn.get("HEAD".encode())
+        hoard_id = env.roots(write=False).get_root_id("HEAD")
 
         with env.objects(write=False) as objects:
             all_nodes = dump_tree(objects, hoard_id)
@@ -289,9 +283,7 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
 
     def test_create_manual_tree(self):
         objs = ObjectStorage(self.obj_storage_path)
-        # with objs.repos_txn(write=True) as txn:
-        #     txn.put("MANUAL_HEAD",
-        #
+
         with objs.objects(write=True) as objects:
             tree_id = add_file_object(
                 objects, None, "wat/da/faque.isit".split("/"), FileObject.create("dasda", 100))
@@ -336,7 +328,7 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
     def test_copy_trees(self):
         env = ObjectStorage(self.obj_storage_path)
 
-        root_ids = sorted(env.all_roots)
+        root_ids = sorted(env.roots(write=False).all)
         self.assertEqual([
             b'89527b0fa576e127d04089d9cb5aab0e5619696d',
             b'9fbdcfe094f258f954ba6f65c4a3641d25b32e06',

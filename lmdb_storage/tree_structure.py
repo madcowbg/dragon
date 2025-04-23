@@ -88,7 +88,7 @@ class Objects[F]:
         self.object_builder = object_builder
 
     def __enter__(self):
-        self.txn = self.storage.objects_txn(write=self.write)
+        self.txn = self.storage.begin(db_name="objects", write=self.write)
         self.txn.__enter__()
         return self
 

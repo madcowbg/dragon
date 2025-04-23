@@ -3,7 +3,9 @@ from typing import Collection
 
 import lmdb
 from alive_progress import alive_bar
+from lmdb import Transaction
 
+from lmdb_storage.roots import Roots
 from lmdb_storage.tree_structure import TreeObject, Objects, ObjectID
 from lmdb_storage.file_object import FileObject
 
@@ -13,7 +15,7 @@ class ObjectStorage:
         self.env = lmdb.open(path, max_dbs=max_dbs, map_size=map_size, readonly=False)
 
     def gc(self):
-        root_ids = self.all_roots
+        root_ids = self.roots(write=False).all
         logging.info(f"found {len(root_ids)} live top-level refs.")
 
         with self.objects(write=False) as objects:
@@ -27,12 +29,6 @@ class ObjectStorage:
                         del objects[obj_id]
                         bar()
 
-    @property
-    def all_roots(self) -> Collection[ObjectID]:
-        with self.repos_txn(write=False) as txn:
-            root_ids = [root_id for k, root_id in txn.cursor()]
-        return root_ids
-
     def copy_trees_from(self, other: "ObjectStorage", root_ids: Collection[ObjectID]):
         assert isinstance(root_ids, Collection)
         with other.objects(write=False) as other_objects:
@@ -43,23 +39,14 @@ class ObjectStorage:
                     if live_id not in self_objects:
                         self_objects[live_id] = other_objects[live_id]
 
-    def objects_txn(self, write: bool):
-        return self.env.begin(db=self.env.open_db("objects".encode()), write=write)
+    def begin(self, db_name: str, write: bool) -> Transaction:
+        return self.env.begin(db=self.env.open_db(db_name.encode()), write=write)
 
     def objects(self, write: bool) -> "Objects":
         return Objects(self, write, FileObject)
 
-    def repos_txn(self, write: bool):
-        return self.env.begin(db=self.env.open_db("repos".encode()), write=write)
-
-    def get_root_id(self, name: str) -> ObjectID:
-        with self.repos_txn(write=False) as txn:
-            return txn.get(name.encode())
-
-    def set_root_id(self, name: str, root_id: ObjectID | None):
-        if root_id is not None:
-            with self.repos_txn(write=True) as txn:
-                txn.put(name.encode(), root_id)
+    def roots(self, write: bool) -> "Roots":
+        return Roots(self, write)
 
 
 def find_all_live[F](objects: Objects[F], root_ids: Collection[ObjectID]) -> Collection[ObjectID]:

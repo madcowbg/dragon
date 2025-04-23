@@ -97,7 +97,7 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
     def test_merge_combining(self):
         env = ObjectStorage(self.obj_storage_path)
 
-        root_ids = sorted(env.all_roots)
+        root_ids = sorted(env.roots(write=False).all)
         self.assertEqual([
             b'89527b0fa576e127d04089d9cb5aab0e5619696d',
             b'9fbdcfe094f258f954ba6f65c4a3641d25b32e06',

@@ -126,7 +126,7 @@ class TestPerformance(TestCase):
                  second_index])
             logging.info("Done creating trees...")
 
-        env.set_root_id("HEAD", first_id)
+        env.roots(write=True).set_root_id("HEAD", first_id)
         logging.info("Run GC...")
         env.gc()
         logging.info("Done GC.")
