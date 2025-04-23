@@ -2,12 +2,12 @@ import hashlib
 import logging
 import os
 import pathlib
+import random
 import string
 import tempfile
-import random
 import unittest
 from typing import Tuple, List
-from unittest import TestCase, skipIf
+from unittest import TestCase
 
 import msgpack
 
@@ -21,22 +21,23 @@ vocabulary = [
 
 
 def random_append(paths: List[List[str | None]]):
-    for _ in range(10):
-        for idx in range(len(paths)):
-            if random.randint(0, 9) == 0 and (len(paths[idx]) == 0 or paths[idx][-1] is not None):
-                paths[idx].append(None)
-
-        cut_points = sorted(random.choices(range(len(paths)), k=random.randint(1, 10)))
-        vocab_choice = random.choices(vocabulary, k=len(cut_points))
+    existing = set()
+    for _ in range(25):
+        cut_points = sorted(random.choices(range(len(paths)), k=random.randint(5, 20)))
+        vocab_choice = random.choices(vocabulary, k=len(cut_points) + 1)
         cut_point_idx = 0
         for idx in range(len(paths)):
             while cut_point_idx < len(cut_points) and idx > cut_points[cut_point_idx]:
                 cut_point_idx += 1
-            if cut_point_idx == len(cut_points):
-                break
 
             if (len(paths[idx]) == 0 or paths[idx][-1] is not None) and random.randint(0, 3) > 0:
                 paths[idx].append(vocab_choice[cut_point_idx])
+
+        for idx in range(len(paths)):
+            if random.randint(0, 9) == 0 and len(paths[idx]) > 0 and paths[idx][-1] is not None and "|".join(
+                    paths[idx]) not in existing:
+                existing.add("|".join(paths[idx]))
+                paths[idx].append(None)
 
 
 def populate_index(seed_value, n_files) -> List[Tuple[str, str, int]]:
@@ -50,19 +51,19 @@ def populate_index(seed_value, n_files) -> List[Tuple[str, str, int]]:
         size = random.randint(1, 5) * 10
         fasthash = hashlib.sha1("".join(random.choice(vocabulary)).encode()).hexdigest()
         result.append(("/".join(path[:-1]), fasthash, size))
-    return result
+    return list(sorted(result))
 
 
 _random_data = pathlib.Path("tests/random_data.txt")
 if not _random_data.is_file():
 
-    first_index = populate_index(42, 200000)
-    second_index = populate_index(41, 200000)
+    first_index = populate_index(42, 100000)
+    second_index = populate_index(41, 100000)
     with _random_data.open("wb") as f:
         msgpack.dump([first_index, second_index], f)
 else:
     with _random_data.open("rb") as f:
-        [first_index, second_index] = msgpack.load(f)
+        [first_index, second_index] = msgpack.load(f, use_list=True)
 
 
 @unittest.skipUnless(os.getenv('RUN_LENGTHY_TESTS'), reason="Lengthy test")
@@ -92,20 +93,23 @@ class TestPerformance(TestCase):
             '4SHNF877VREN93'], vocabulary[:10])
 
         self.assertEqual([
-            ['LN23Y30/9K8YQK94DNMKZA3O/WSQT26Q', '1c685715c99a3a80027b99510544ebbfadc7b2c0', 30],
-            ['', 'f68dd39045704e391c39c75a338a2030675761c7', 30],
-            ['LN23Y30/9K8YQK94DNMKZA3O/A0L7253J2D54I3QK2I/3D8W3ZP08J3TRP0J43/XPNNGH8/D6357OONNCILDZMFB7/F840982/IOYKL1CQ99CHJ75',
-             '57f9658d75c77769af52a4d712e0c5bffb2b5632', 10],
-            ['LN23Y30/9K8YQK94DNMKZA3O', 'f4f509e7f8bdb898a342e90a5dae9b4c164e4e91', 30],
-            ['LN23Y30/9K8YQK94DNMKZA3O/WSQT26Q/3D8W3ZP08J3TRP0J43', 'c0d4d8e423a4e08fba1dde92d670061c34cf85c1', 10],
-            ['LN23Y30/WSQT26Q', 'f8f44bab581a0a658f44a8a46effb9bd1a634f7c', 50],
-            ['LN23Y30', '408c02004350088bb9f0015a4b6bfdf65cba8318', 20],
-            ['LN23Y30/WSQT26Q/A0L7253J2D54I3QK2I/D6357OONNCILDZMFB7/F840982/IOYKL1CQ99CHJ75',
-             'f8f44bab581a0a658f44a8a46effb9bd1a634f7c', 10],
-            ['LN23Y30/9K8YQK94DNMKZA3O/WSQT26Q/XPNNGH8/D6357OONNCILDZMFB7/F840982',
-             '11c3880297912213e85821d96f96c6a0021936dc', 20],
-            ['LN23Y30/A0L7253J2D54I3QK2I/XPNNGH8/D6357OONNCILDZMFB7/IOYKL1CQ99CHJ75',
-             '3e88659f07ee8eefd6ce9424936654bd5d713b65', 50]],
+            ['0GET8T63J3R30ME', 'e5fb9288a26f70113cdfa2892fccbe89f21f8ee0', 10],
+            ['0GET8T63J3R30ME/3D8W3ZP08J3TRP0J43', '761f7af831fcfe758507ebdebacb5aa2a0919990', 50],
+            ['0GET8T63J3R30ME/3D8W3ZP08J3TRP0J43/3KKV9RFTMTTQL/96QE3RZSJ49I',
+             '815cbb15215a75af818813caac199e68332ad4a7', 30],
+            ['0GET8T63J3R30ME/3D8W3ZP08J3TRP0J43/3KKV9RFTMTTQL/GNZS43C5BA75UUZPEA/96QE3RZSJ49I/HR09SKDGIGA/8OS9XTOG/S0R2SDS8B25SQ8CROY/8DALY8OZCY/ZP6LFEWVZNVKSP2EX5T5/XO9T7E8G8JDP0LVS/8OS9XTOG/A0L7253J2D54I3QK2I/J99T2/XPNNGH8',
+             'd87b621583b5d5f4bf22c0942727a8787ad63d31', 50],
+            ['0GET8T63J3R30ME/3D8W3ZP08J3TRP0J43/3KKV9RFTMTTQL/GNZS43C5BA75UUZPEA/96QE3RZSJ49I/HR09SKDGIGA/OHP6VZ41NAM148P0TVH/8OS9XTOG/ZP6LFEWVZNVKSP2EX5T5/XO9T7E8G8JDP0LVS/PQKOJTPV60VAIY/DIVUZ/8OS9XTOG',
+             '663adba34d0e1ac8c1c6af1486a0f42447f65978', 20],
+            ['0GET8T63J3R30ME/3D8W3ZP08J3TRP0J43/3KKV9RFTMTTQL/GNZS43C5BA75UUZPEA/96QE3RZSJ49I/XA11DPG8S/HR09SKDGIGA/8OS9XTOG',
+             'a42172401f29761a0a880aefc0adac10b4c4dfaf', 10],
+            ['0GET8T63J3R30ME/3D8W3ZP08J3TRP0J43/3KKV9RFTMTTQL/GNZS43C5BA75UUZPEA/96QE3RZSJ49I/XA11DPG8S/HR09SKDGIGA/OHP6VZ41NAM148P0TVH/8OS9XTOG/PQKOJTPV60VAIY/ZP6LFEWVZNVKSP2EX5T5/XO9T7E8G8JDP0LVS/PQKOJTPV60VAIY/DIVUZ/8OS9XTOG/A0L7253J2D54I3QK2I/DP5GJ/J99T2/XPNNGH8',
+             '46eca2d71a64b0d0c1e9349d39657713499700c2', 50],
+            ['0GET8T63J3R30ME/3D8W3ZP08J3TRP0J43/3KKV9RFTMTTQL/GNZS43C5BA75UUZPEA/96QE3RZSJ49I/XA11DPG8S/OHP6VZ41NAM148P0TVH/8OS9XTOG',
+             '148f18cf9507d715a7a3a8f5e9d877fcbddc60fc', 10],
+            ['0GET8T63J3R30ME/3D8W3ZP08J3TRP0J43/3KKV9RFTMTTQL/GNZS43C5BA75UUZPEA/S0R2SDS8B25SQ8CROY',
+             '03acfc10f8d881bb3c366e0dd726cf4a98111f68', 10],
+            ['0GET8T63J3R30ME/3D8W3ZP08J3TRP0J43/8DALY8OZCY', '7c8f0c48649b38522a1894c3c331b88d19278f5d', 40]],
             first_index[:10])
 
     def test_populate_with_fake_data(self):
@@ -121,3 +125,8 @@ class TestPerformance(TestCase):
                 [("/" + path + ".txt", FileObject.create(fasthash, size)) for path, fasthash, size in
                  second_index])
             logging.info("Done creating trees...")
+
+        env.set_root_id("HEAD", first_id)
+        logging.info("Run GC...")
+        env.gc()
+        logging.info("Done GC.")
