@@ -15,7 +15,7 @@ class ObjectStorage:
         self.env = lmdb.open(path, max_dbs=max_dbs, map_size=map_size, readonly=False)
 
     def gc(self):
-        root_ids = self.roots(write=False).all
+        root_ids = self.roots(write=False).all_live
         logging.info(f"found {len(root_ids)} live top-level refs.")
 
         with self.objects(write=False) as objects:

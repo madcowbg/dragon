@@ -184,7 +184,7 @@ class RepoContents:
 
         self.env = ObjectStorage(f"{self.filepath}.lmdb", map_size=1 << 30)  # 1GB
 
-        root_id = self.env.roots(write=False).get_root_id("ROOT")
+        root_id = self.env.roots(write=False)["ROOT"].get_current()
 
         self.objects = self.env.objects(write=True)
 
@@ -204,4 +204,4 @@ class RepoContents:
         return False
 
     def write(self):
-        self.env.roots(write=True).set_root_id("ROOT", self.fsobjects.root_id)  # fixme dangerous, need to check if we can
+        self.env.roots(write=True)["ROOT"].set_current(self.fsobjects.root_id)

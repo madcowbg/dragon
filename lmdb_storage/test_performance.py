@@ -56,6 +56,7 @@ def populate_index(seed_value, n_files) -> List[Tuple[str, str, int]]:
 
 _random_data = pathlib.Path("tests/random_data.txt")
 if not _random_data.is_file():
+    _random_data.parent.mkdir(parents=True, exist_ok=True)
 
     first_index = populate_index(42, 100000)
     second_index = populate_index(41, 100000)
@@ -126,7 +127,7 @@ class TestPerformance(TestCase):
                  second_index])
             logging.info("Done creating trees...")
 
-        env.roots(write=True).set_root_id("HEAD", first_id)
+        env.roots(write=True)["HEAD"].set_current(first_id)
         logging.info("Run GC...")
         env.gc()
         logging.info("Done GC.")
