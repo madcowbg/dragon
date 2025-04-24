@@ -99,8 +99,16 @@ def remap[A, B, C](dictionary: Dict[A, B], key: Callable[[B], C]) -> Dict[A, C]:
     return dict((k, key(v)) for k, v in dictionary.items())
 
 
-def merge_trees_recursively[F](
-        merge: Merge[F], path: List[str], trees: ObjectsByRoot, files: ObjectsByRoot) -> ObjectsByRoot:
+def merge_trees_recursively[F](merge: Merge[F], path: List[str], obj_ids: ObjectsByRoot) -> ObjectsByRoot:
+    trees, files = split_by_object_type(merge.objects, obj_ids)
+
+    should_drill_down = merge.should_drill_down(path, trees, files)
+    merged_children = merge_children(merge, path, trees, should_drill_down)
+    return merge.combine(path, merged_children, files)
+
+
+def merge_children[F](
+        merge: Merge[F], path: List[str], trees: ObjectsByRoot, should_drill_down) -> Dict[str, ObjectsByRoot]:
     trees_objects = remap(trees.assigned(), lambda obj_id: merge.objects[obj_id])
 
     # merging child folders first
@@ -113,20 +121,14 @@ def merge_trees_recursively[F](
     merged_children: Dict[str, ObjectsByRoot] = dict()
     child_name_to_tree_root_and_obj = group_to_dict(all_children, lambda cto: cto[0], map_to=lambda cto: cto[1:])
     for child_name, tree_root_to_obj_id in child_name_to_tree_root_and_obj.items():
-        all_objects_in_name: ObjectsByRoot = ObjectsByRoot(files.allowed_roots, tree_root_to_obj_id)
+        all_objects_in_name: ObjectsByRoot = ObjectsByRoot(trees.allowed_roots, tree_root_to_obj_id)
 
-        if merge.should_drill_down(path, trees, files):
-            sub_trees, sub_files = split_by_object_type(merge.objects, all_objects_in_name)
-            merged_children[child_name] = merge_trees_recursively(merge, path + [child_name], sub_trees, sub_files)
-        else:
-            merged_children[child_name] = all_objects_in_name
-
-    return merge.combine(path, merged_children, files)
+        merged_children[child_name] = merge_trees_recursively(merge, path + [child_name], all_objects_in_name) \
+            if should_drill_down else all_objects_in_name
+    return merged_children
 
 
 def merge_trees[F](obj_ids: ObjectsByRoot, merge: Merge[F]) -> ObjectsByRoot:
     assert isinstance(obj_ids, ObjectsByRoot)
 
-    trees, files = split_by_object_type(merge.objects, obj_ids)
-
-    return merge_trees_recursively(merge, [], trees, files)
+    return merge_trees_recursively(merge, [], obj_ids)

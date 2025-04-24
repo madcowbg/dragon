@@ -119,8 +119,8 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
         env, partial_id, full_id, backup_id, incoming_id = populate_trees(tmpdir.name + "/test-objects.lmdb")
 
         with env.objects(write=True) as objects:
-            merged_ids = merge_trees(ObjectsByRoot.from_map({'one': backup_id, 'another': incoming_id}),
-                                     TakeOneFile(objects))
+            merged_ids = merge_trees(
+                ObjectsByRoot.from_map({'one': backup_id, 'another': incoming_id}), TakeOneFile(objects))
             self.assertEqual([
                 ('$ROOT', 1),
                 ('$ROOT/test.me.1', 2, 'e10d2982020fc21760e4e5245b57f664'),
@@ -267,7 +267,7 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
                 ('$ROOT/wat/test.me.2', 2, '663c6e6ae648bb1a1a893b5134dbdd7b'),
                 ('$ROOT/wat/test.me.3', 2, '2cbc8608c915e94723752d4f0c54302f'),
                 ('$ROOT/wat/test.me.7', 2, '46e7da788d1c605a2293d580eeceeefd')],
-                dump_tree(objects,merged_ids.get_if_present('hoard'), show_fasthash=True))
+                dump_tree(objects, merged_ids.get_if_present('hoard'), show_fasthash=True))
             hoard_id = merged_ids.get_if_present('hoard')
 
             merged_ids = merge_trees(
