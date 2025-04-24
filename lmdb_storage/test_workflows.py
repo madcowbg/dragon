@@ -5,6 +5,7 @@ from typing import Set
 
 from lmdb_storage.merge_trees import ObjectsByRoot
 from lmdb_storage.object_store import ObjectStorage
+from lmdb_storage.test_experiment_lmdb import dump_tree
 from lmdb_storage.test_merge_trees import populate_trees
 from lmdb_storage.three_way_merge import ThreewayMerge
 from lmdb_storage.tree_structure import ObjectID
@@ -25,7 +26,7 @@ def pull_contents(env: ObjectStorage, repo_uuid: str, staging_id: ObjectID, fetc
     other_roots = [r for r in roots.all if r.name != repo_current_id and r.name != "HOARD"]
     other_root_names = [r.name for r in other_roots]
     current_ids = ObjectsByRoot(
-        [r.name for r in roots.all] + ["current", "staging", "HOARD"],
+        list(set([r.name for r in roots.all] + ["current", "staging", "HOARD"])),
         [(r.name, r.get_current()) for r in other_roots])
     current_ids["current"] = repo_current_id
     current_ids["staging"] = repo_staging_id
@@ -45,10 +46,10 @@ def pull_contents(env: ObjectStorage, repo_uuid: str, staging_id: ObjectID, fetc
     # accept the changed IDs todo implement dry-run
     roots = env.roots(write=True)
     for other_name in other_root_names:
-        roots[other_name].set_current(merged_ids[other_name])
+        roots[other_name].set_current(merged_ids.get_if_present(other_name))
 
-    roots["HOARD"].set_current(merged_ids["HOARD"])
-    roots[repo_uuid].set_current(merged_ids["current"])
+    roots["HOARD"].set_current(merged_ids.get_if_present("HOARD"))
+    roots[repo_uuid].set_current(merged_ids.get_if_present("current"))
 
 
 class TestWorkflows(unittest.TestCase):
@@ -69,3 +70,65 @@ class TestWorkflows(unittest.TestCase):
         roots["incoming-uuid"].set_current(empty_tree_id)
 
         pull_contents(env, repo_uuid="partial-uuid", staging_id=partial_id, fetch_new={"full-uuid"})
+
+        roots = env.roots(write=False)
+        current_full_id = roots["full-uuid"].get_current()
+        current_hoard_id = roots["HOARD"].get_current()
+
+        with env.objects(write=True) as objects:
+            self.assertEqual([
+                ('$ROOT', 1),
+                ('$ROOT/test.me.1', 2, 'e10d2982020fc21760e4e5245b57f664'),
+                ('$ROOT/wat', 1),
+                ('$ROOT/wat/test.me.2', 2, '663c6e6ae648bb1a1a893b5134dbdd7b'),
+                ('$ROOT/wat/test.me.7', 2, '46e7da788d1c605a2293d580eeceeefd')],
+                dump_tree(objects, current_full_id, show_fasthash=True))
+
+            self.assertEqual([
+                ('$ROOT', 1),
+                ('$ROOT/test.me.1', 2, 'e10d2982020fc21760e4e5245b57f664'),
+                ('$ROOT/wat', 1),
+                ('$ROOT/wat/test.me.2', 2, '663c6e6ae648bb1a1a893b5134dbdd7b'),
+                ('$ROOT/wat/test.me.7', 2, '46e7da788d1c605a2293d580eeceeefd')],
+                dump_tree(objects, current_hoard_id, show_fasthash=True))
+
+        pull_contents(env, repo_uuid="incoming-uuid", staging_id=incoming_id, fetch_new={"full-uuid"})
+
+        roots = env.roots(write=False)
+        current_full_id = roots["full-uuid"].get_current()
+        current_hoard_id = roots["HOARD"].get_current()
+        current_incoming_id = roots["incoming-uuid"].get_current()
+
+        with env.objects(write=True) as objects:
+            self.assertEqual([
+                ('$ROOT', 1),
+                ('$ROOT/test.me.1', 2, 'e10d2982020fc21760e4e5245b57f664'),
+                ('$ROOT/test.me.4', 2, '5c8ffab0d25ab7692378bf41d495e046'),
+                ('$ROOT/test.me.5', 2, '79e651dd08483b1483fb6e992c928e21'),
+                ('$ROOT/wat', 1),
+                ('$ROOT/wat/test.me.2', 2, '663c6e6ae648bb1a1a893b5134dbdd7b'),
+                ('$ROOT/wat/test.me.3', 2, 'ad78b7d31e769862e45f8efc7d39618d'),
+                ('$ROOT/wat/test.me.6', 2, 'd6a296dae0ca6991df926b8d18f43cc5'),
+                ('$ROOT/wat/test.me.7', 2, '46e7da788d1c605a2293d580eeceeefd')],
+                dump_tree(objects, current_full_id, show_fasthash=True))
+
+            self.assertEqual([
+                ('$ROOT', 1),
+                ('$ROOT/test.me.4', 2, '5c8ffab0d25ab7692378bf41d495e046'),
+                ('$ROOT/test.me.5', 2, '79e651dd08483b1483fb6e992c928e21'),
+                ('$ROOT/wat', 1),
+                ('$ROOT/wat/test.me.3', 2, 'ad78b7d31e769862e45f8efc7d39618d'),
+                ('$ROOT/wat/test.me.6', 2, 'd6a296dae0ca6991df926b8d18f43cc5')],
+                dump_tree(objects, current_incoming_id, show_fasthash=True))
+
+            self.assertEqual([
+                ('$ROOT', 1),
+                ('$ROOT/test.me.1', 2, 'e10d2982020fc21760e4e5245b57f664'),
+                ('$ROOT/test.me.4', 2, '5c8ffab0d25ab7692378bf41d495e046'),
+                ('$ROOT/test.me.5', 2, '79e651dd08483b1483fb6e992c928e21'),
+                ('$ROOT/wat', 1),
+                ('$ROOT/wat/test.me.2', 2, '663c6e6ae648bb1a1a893b5134dbdd7b'),
+                ('$ROOT/wat/test.me.3', 2, 'ad78b7d31e769862e45f8efc7d39618d'),
+                ('$ROOT/wat/test.me.6', 2, 'd6a296dae0ca6991df926b8d18f43cc5'),
+                ('$ROOT/wat/test.me.7', 2, '46e7da788d1c605a2293d580eeceeefd')],
+                dump_tree(objects, current_hoard_id, show_fasthash=True))

@@ -22,6 +22,7 @@ class Root:
         self.roots = roots
 
     def set_current(self, root_id: bytes):
+        assert type(root_id) is bytes
         with self.roots as roots:
             root_data = self.load_from_storage
             root_data.current = root_id
@@ -41,6 +42,7 @@ class Root:
             return self.load_from_storage.current
 
     def set_staging(self, root_id: bytes):
+        assert type(root_id) is bytes
         with self.roots:
             root_data = self.load_from_storage
             root_data.staging = root_id
