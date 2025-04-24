@@ -17,14 +17,14 @@ class ThreewayMerge(Merge[FileObject]):
 
     def should_drill_down(self, path: List[str], trees: ObjectsByRoot, files: ObjectsByRoot) -> bool:
         # we have trees and the current and staging trees are different
-        return len(trees) > 0 and trees.get(self.current, None) != trees.get(self.staging, None)
+        return len(trees) > 0 and trees.get_if_present(self.current) != trees.get_if_present(self.staging)
 
     def combine(self, path: List[str], children: Dict[str, ObjectsByRoot], files: ObjectsByRoot) -> ObjectsByRoot:
         if self.current in files and self.staging in files:
             # left and right are both files, apply difference to the other roots
-            result: ObjectsByRoot = dict()
+            result: ObjectsByRoot = ObjectsByRoot([])
             for merge_name in [self.current, self.staging] + self.others:
-                result[merge_name] = files[self.staging]
+                result[merge_name] = files.get_if_present(self.staging)
             return result
 
         elif self.current in files:
@@ -32,24 +32,24 @@ class ThreewayMerge(Merge[FileObject]):
             return {}
         elif self.staging in files:
             # file is added in staging
-            result: ObjectsByRoot = dict()
+            result: ObjectsByRoot = ObjectsByRoot([])
             for merge_name in [self.current, self.staging] + self.others:
                 if merge_name == self.current or merge_name in self.fetch_new:
-                    result[merge_name] = files[self.staging]
+                    result[merge_name] = files.get_if_present(self.staging)
                 elif merge_name in files:
-                    result[merge_name] = files[merge_name]
+                    result[merge_name] = files.get_if_present(merge_name)
             return result
         else:
             # current and staging are not in files. this means that we have a partially-merged folders in children
-            result: ObjectsByRoot = dict()
+            result: ObjectsByRoot = ObjectsByRoot([])
             for merge_name in [self.current, self.staging] + self.others:
                 if merge_name in files:
-                    result[merge_name] = files[merge_name]  # and we know it is already in objects
+                    result[merge_name] = files.get_if_present(merge_name)  # and we know it is already in objects
                 else:
                     merge_result = TreeObject({})
                     for child_name, child_objects in children.items():
                         if merge_name in child_objects:
-                            merge_result.children[child_name] = child_objects[merge_name]
+                            merge_result.children[child_name] = child_objects.get_if_present(merge_name)
 
                     if len(merge_result.children) > 0:
                         # add to objects

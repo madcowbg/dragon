@@ -8,7 +8,7 @@ from unittest import IsolatedAsyncioTestCase
 from command.test_command_file_changing_flows import populate
 from command.test_hoard_command import populate_repotypes
 from lmdb_storage.file_object import FileObject
-from lmdb_storage.merge_trees import TakeOneFile, merge_trees
+from lmdb_storage.merge_trees import TakeOneFile, merge_trees, ObjectsByRoot
 from lmdb_storage.object_store import ObjectStorage
 from lmdb_storage.test_experiment_lmdb import dump_tree, dump_diffs
 from lmdb_storage.three_way_merge import ThreewayMerge
@@ -88,18 +88,21 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
                 ('/wat/test.me.2', 'right_missing'),
                 ('/wat/test.me.3', 'left_missing')], diffs)
 
-            merged = merge_trees(
-                dict((binascii.hexlify(it).decode(), it) for it in [root_left_id, root_right_id]),
-                TakeOneFile(objects))
+            objects_by_root = ObjectsByRoot([], [
+                (binascii.hexlify(root_left_id).decode(), root_left_id),
+                (binascii.hexlify(root_right_id).decode(), root_right_id)])
+
+            merged = merge_trees(objects_by_root, TakeOneFile(objects))
             self.assertEqual([
                 ('$ROOT', 1),
                 ('$ROOT/test.me.1', 2, '1881f6f9784fb08bf6690e9763b76ac3'),
                 ('$ROOT/wat', 1),
                 ('$ROOT/wat/test.me.2', 2, 'd6dcdb1bc4677aab619798004537c4e3'),
                 ('$ROOT/wat/test.me.3', 2, '7c589c09e2754a164ba2e8f06feac897')],
-                dump_tree(objects, merged["MERGED"], show_fasthash=True))
+                dump_tree(objects, merged.get_if_present("MERGED"), show_fasthash=True))
 
-            merged = merge_trees(dict((binascii.hexlify(it).decode(), it) for it in root_ids), TakeOneFile(objects))
+            objects_by_root = ObjectsByRoot([], [(binascii.hexlify(it).decode(), it) for it in root_ids])
+            merged = merge_trees(objects_by_root, TakeOneFile(objects))
             self.assertEqual([
                 ('$ROOT', 1),
                 ('$ROOT/test.me.1', 2, '1881f6f9784fb08bf6690e9763b76ac3'),
@@ -109,14 +112,15 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
                 ('$ROOT/wat/test.me.2', 2, 'd6dcdb1bc4677aab619798004537c4e3'),
                 ('$ROOT/wat/test.me.3', 2, '7c589c09e2754a164ba2e8f06feac897'),
                 ('$ROOT/wat/test.me.6', 2, 'c907b68b6a1f18c6135c112be53c978b')],
-                dump_tree(objects, merged["MERGED"], show_fasthash=True))
+                dump_tree(objects, merged.get_if_present("MERGED"), show_fasthash=True))
 
     def test_merge_raw(self):
         tmpdir = TemporaryDirectory(delete=True)
         env, partial_id, full_id, backup_id, incoming_id = populate_trees(tmpdir.name + "/test-objects.lmdb")
 
         with env.objects(write=True) as objects:
-            merged_ids = merge_trees({'one': backup_id, 'another': incoming_id}, TakeOneFile(objects))
+            merged_ids = merge_trees(ObjectsByRoot.from_map({'one': backup_id, 'another': incoming_id}),
+                                     TakeOneFile(objects))
             self.assertEqual([
                 ('$ROOT', 1),
                 ('$ROOT/test.me.1', 2, 'e10d2982020fc21760e4e5245b57f664'),
@@ -125,7 +129,7 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
                 ('$ROOT/wat', 1),
                 ('$ROOT/wat/test.me.3', 2, '2cbc8608c915e94723752d4f0c54302f'),
                 ('$ROOT/wat/test.me.6', 2, 'd6a296dae0ca6991df926b8d18f43cc5')],
-                dump_tree(objects, merged_ids["MERGED"], show_fasthash=True))
+                dump_tree(objects, merged_ids.get_if_present("MERGED"), show_fasthash=True))
 
     def test_merge_threeway(self):
         tmpdir = TemporaryDirectory(delete=True)
@@ -160,14 +164,14 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
                 ('$ROOT/wat/test.me.6', 2, 'd6a296dae0ca6991df926b8d18f43cc5')],
                 dump_tree(objects, incoming_id, show_fasthash=True))
 
-            merged_ids = merge_trees({
+            merged_ids = merge_trees(ObjectsByRoot.from_map({
                 'current': backup_id, 'staging': incoming_id,
-                'full': full_id, 'partial': partial_id, 'hoard': hoard_id},
+                'full': full_id, 'partial': partial_id, 'hoard': hoard_id}),
                 ThreewayMerge(
                     objects, current='current', staging='staging', others=['full', 'partial', 'hoard'],
                     fetch_new={'full', 'hoard'}))
 
-            self.assertEqual(['current', 'staging', 'full', 'partial', 'hoard'], list(merged_ids.keys()))
+            self.assertEqual(['current', 'staging', 'full', 'partial', 'hoard'], list(merged_ids.assigned().keys()))
 
             self.assertEqual([
                 ('$ROOT', 1),
@@ -176,14 +180,14 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
                 ('$ROOT/wat', 1),
                 ('$ROOT/wat/test.me.2', 2, '663c6e6ae648bb1a1a893b5134dbdd7b'),
                 ('$ROOT/wat/test.me.6', 2, 'd6a296dae0ca6991df926b8d18f43cc5')],
-                dump_tree(objects, merged_ids['full'], show_fasthash=True))
+                dump_tree(objects, merged_ids.get_if_present('full'), show_fasthash=True))
 
             self.assertEqual([
                 ('$ROOT', 1),
                 ('$ROOT/wat', 1),
                 ('$ROOT/wat/test.me.2', 2, '663c6e6ae648bb1a1a893b5134dbdd7b'),
                 ('$ROOT/wat/test.me.7', 2, '46e7da788d1c605a2293d580eeceeefd')],
-                dump_tree(objects, merged_ids['partial'], show_fasthash=True))
+                dump_tree(objects, merged_ids.get_if_present('partial'), show_fasthash=True))
 
             self.assertEqual([
                 ('$ROOT', 1),
@@ -191,7 +195,7 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
                 ('$ROOT/test.me.5', 2, '79e651dd08483b1483fb6e992c928e21'),
                 ('$ROOT/wat', 1),
                 ('$ROOT/wat/test.me.6', 2, 'd6a296dae0ca6991df926b8d18f43cc5')],
-                dump_tree(objects, merged_ids['current'], show_fasthash=True))
+                dump_tree(objects, merged_ids.get_if_present('current'), show_fasthash=True))
 
             self.assertEqual([
                 ('$ROOT', 1),
@@ -199,7 +203,7 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
                 ('$ROOT/test.me.5', 2, '79e651dd08483b1483fb6e992c928e21'),
                 ('$ROOT/wat', 1),
                 ('$ROOT/wat/test.me.6', 2, 'd6a296dae0ca6991df926b8d18f43cc5')],
-                dump_tree(objects, merged_ids['staging'], show_fasthash=True))
+                dump_tree(objects, merged_ids.get_if_present('staging'), show_fasthash=True))
 
             self.assertEqual([
                 ('$ROOT', 1),
@@ -207,7 +211,7 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
                 ('$ROOT/test.me.5', 2, '79e651dd08483b1483fb6e992c928e21'),
                 ('$ROOT/wat', 1),
                 ('$ROOT/wat/test.me.6', 2, 'd6a296dae0ca6991df926b8d18f43cc5')],
-                dump_tree(objects, merged_ids['hoard'], show_fasthash=True))
+                dump_tree(objects, merged_ids.get_if_present('hoard'), show_fasthash=True))
 
             self.assertEqual([
                 ('', 'different'),
@@ -216,7 +220,7 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
                 ('/wat', 'different'),
                 ('/wat/test.me.2', 'right_missing'),
                 ('/wat/test.me.6', 'same')],
-                dump_diffs(objects, merged_ids['full'], merged_ids['hoard']))
+                dump_diffs(objects, merged_ids.get_if_present('full'), merged_ids.get_if_present('hoard')))
 
             self.assertEqual([
                 ('', 'different'),
@@ -226,7 +230,7 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
                 ('/wat/test.me.6', 'left_missing'),
                 ('/test.me.4', 'left_missing'),
                 ('/test.me.5', 'left_missing')],
-                dump_diffs(objects, merged_ids['partial'], merged_ids['hoard']))
+                dump_diffs(objects, merged_ids.get_if_present('partial'), merged_ids.get_if_present('hoard')))
 
     def test_merge_threeway_incrementally(self):
         tmpdir = TemporaryDirectory(delete=True)
@@ -237,7 +241,8 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
             self.assertEqual(b'a80f91bc48850a1fb3459bb76b9f6308d4d35710', binascii.hexlify(hoard_id))
 
             merged_ids = merge_trees(
-                {'empty': objects.mktree_from_tuples([]), "staging": partial_id, 'hoard': hoard_id},
+                ObjectsByRoot.from_map(
+                    {'empty': objects.mktree_from_tuples([]), "staging": partial_id, 'hoard': hoard_id}),
                 ThreewayMerge(objects, current='empty', staging='staging', others=['hoard'], fetch_new={'hoard'}))
 
             self.assertEqual([
@@ -246,11 +251,12 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
                 ('$ROOT/wat', 1),
                 ('$ROOT/wat/test.me.2', 2, '663c6e6ae648bb1a1a893b5134dbdd7b'),
                 ('$ROOT/wat/test.me.7', 2, '46e7da788d1c605a2293d580eeceeefd')],
-                dump_tree(objects, merged_ids['hoard'], show_fasthash=True))
-            hoard_id = merged_ids['hoard']
+                dump_tree(objects, merged_ids.get_if_present('hoard'), show_fasthash=True))
+            hoard_id = merged_ids.get_if_present('hoard')
 
             merged_ids = merge_trees(
-                {'empty': objects.mktree_from_tuples([]), "staging": full_id, 'hoard': hoard_id},
+                ObjectsByRoot.from_map(
+                    {'empty': objects.mktree_from_tuples([]), "staging": full_id, 'hoard': hoard_id}),
                 ThreewayMerge(objects, current='empty', staging='staging', others=['hoard'], fetch_new={'hoard'}))
 
             self.assertEqual([
@@ -261,11 +267,12 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
                 ('$ROOT/wat/test.me.2', 2, '663c6e6ae648bb1a1a893b5134dbdd7b'),
                 ('$ROOT/wat/test.me.3', 2, '2cbc8608c915e94723752d4f0c54302f'),
                 ('$ROOT/wat/test.me.7', 2, '46e7da788d1c605a2293d580eeceeefd')],
-                dump_tree(objects, merged_ids['hoard'], show_fasthash=True))
-            hoard_id = merged_ids['hoard']
+                dump_tree(objects,merged_ids.get_if_present('hoard'), show_fasthash=True))
+            hoard_id = merged_ids.get_if_present('hoard')
 
             merged_ids = merge_trees(
-                {'empty': objects.mktree_from_tuples([]), "staging": backup_id, 'hoard': hoard_id},
+                ObjectsByRoot.from_map(
+                    {'empty': objects.mktree_from_tuples([]), "staging": backup_id, 'hoard': hoard_id}),
                 ThreewayMerge(objects, current='empty', staging='staging', others=['hoard'], fetch_new={'hoard'}))
 
             self.assertEqual([
@@ -276,8 +283,8 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
                 ('$ROOT/wat/test.me.2', 2, '663c6e6ae648bb1a1a893b5134dbdd7b'),
                 ('$ROOT/wat/test.me.3', 2, '2cbc8608c915e94723752d4f0c54302f'),
                 ('$ROOT/wat/test.me.7', 2, '46e7da788d1c605a2293d580eeceeefd')],
-                dump_tree(objects, merged_ids['hoard'], show_fasthash=True))
-            hoard_id = merged_ids['hoard']
+                dump_tree(objects, merged_ids.get_if_present('hoard'), show_fasthash=True))
+            hoard_id = merged_ids.get_if_present('hoard')
 
         with InMemoryObjectsExtension(env) as objects:
             self._run_threeway_merge_after_hoard_created(objects, partial_id, full_id, backup_id, incoming_id, hoard_id)
@@ -312,14 +319,14 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
             ('$ROOT/wat/test.me.6', 2, 'd6a296dae0ca6991df926b8d18f43cc5')],
             dump_tree(objects, incoming_id, show_fasthash=True))
 
-        merged_ids = merge_trees({
+        merged_ids = merge_trees(ObjectsByRoot.from_map({
             'current': backup_id, 'staging': incoming_id,
-            'full': full_id, 'partial': partial_id, 'hoard': hoard_id},
+            'full': full_id, 'partial': partial_id, 'hoard': hoard_id}),
             ThreewayMerge(
                 objects, current='current', staging='staging', others=['full', 'partial', 'hoard'],
                 fetch_new={'full', 'hoard'}))
 
-        self.assertEqual(['current', 'staging', 'full', 'partial', 'hoard'], list(merged_ids.keys()))
+        self.assertEqual(['current', 'staging', 'full', 'partial', 'hoard'], list(merged_ids.assigned().keys()))
 
         self.assertEqual([
             ('$ROOT', 1),
@@ -328,14 +335,14 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
             ('$ROOT/wat', 1),
             ('$ROOT/wat/test.me.2', 2, '663c6e6ae648bb1a1a893b5134dbdd7b'),
             ('$ROOT/wat/test.me.6', 2, 'd6a296dae0ca6991df926b8d18f43cc5')],
-            dump_tree(objects, merged_ids['full'], show_fasthash=True))
+            dump_tree(objects, merged_ids.get_if_present('full'), show_fasthash=True))
 
         self.assertEqual([
             ('$ROOT', 1),
             ('$ROOT/wat', 1),
             ('$ROOT/wat/test.me.2', 2, '663c6e6ae648bb1a1a893b5134dbdd7b'),
             ('$ROOT/wat/test.me.7', 2, '46e7da788d1c605a2293d580eeceeefd')],
-            dump_tree(objects, merged_ids['partial'], show_fasthash=True))
+            dump_tree(objects, merged_ids.get_if_present('partial'), show_fasthash=True))
 
         self.assertEqual([
             ('$ROOT', 1),
@@ -343,7 +350,7 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
             ('$ROOT/test.me.5', 2, '79e651dd08483b1483fb6e992c928e21'),
             ('$ROOT/wat', 1),
             ('$ROOT/wat/test.me.6', 2, 'd6a296dae0ca6991df926b8d18f43cc5')],
-            dump_tree(objects, merged_ids['current'], show_fasthash=True))
+            dump_tree(objects, merged_ids.get_if_present('current'), show_fasthash=True))
 
         self.assertEqual([
             ('$ROOT', 1),
@@ -351,7 +358,7 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
             ('$ROOT/test.me.5', 2, '79e651dd08483b1483fb6e992c928e21'),
             ('$ROOT/wat', 1),
             ('$ROOT/wat/test.me.6', 2, 'd6a296dae0ca6991df926b8d18f43cc5')],
-            dump_tree(objects, merged_ids['staging'], show_fasthash=True))
+            dump_tree(objects, merged_ids.get_if_present('staging'), show_fasthash=True))
 
         self.assertEqual([
             ('$ROOT', 1),
@@ -361,7 +368,7 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
             ('$ROOT/wat/test.me.2', 2, '663c6e6ae648bb1a1a893b5134dbdd7b'),
             ('$ROOT/wat/test.me.6', 2, 'd6a296dae0ca6991df926b8d18f43cc5'),
             ('$ROOT/wat/test.me.7', 2, '46e7da788d1c605a2293d580eeceeefd')],
-            dump_tree(objects, merged_ids['hoard'], show_fasthash=True))
+            dump_tree(objects, merged_ids.get_if_present('hoard'), show_fasthash=True))
 
         self.assertEqual([
             ('', 'different'),
@@ -371,7 +378,7 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
             ('/wat/test.me.2', 'same'),
             ('/wat/test.me.6', 'same'),
             ('/wat/test.me.7', 'left_missing')],
-            dump_diffs(objects, merged_ids['full'], merged_ids['hoard']))
+            dump_diffs(objects, merged_ids.get_if_present('full'), merged_ids.get_if_present('hoard')))
 
         self.assertEqual([
             ('', 'different'),
@@ -381,7 +388,7 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
             ('/wat/test.me.6', 'left_missing'),
             ('/test.me.4', 'left_missing'),
             ('/test.me.5', 'left_missing')],
-            dump_diffs(objects, merged_ids['partial'], merged_ids['hoard']))
+            dump_diffs(objects, merged_ids.get_if_present('partial'), merged_ids.get_if_present('hoard')))
 
 
 def make_file(data: str) -> FileObject:
