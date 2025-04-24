@@ -128,7 +128,7 @@ class Objects[F]:
 
         stack: List[Tuple[ObjPath, TreeObject]] = [([], TreeObject(dict()))]
         for fullpath, file in alive_it(all_data, title="adding all data..."):
-            assert ASSERTS_DISABLED or fullpath == "" or fullpath[0] == "/", f"[{fullpath}] is not absolute path!"
+            assert fullpath == "" or fullpath[0] == "/", f"[{fullpath}] is not absolute path!"
             fullpath = fullpath.split("/")[1:]
 
             pop_and_write_nonparents(self, stack, fullpath)
