@@ -136,22 +136,22 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
             merged = merge_trees(
                 dict((binascii.hexlify(it).decode(), it) for it in [root_left_id, root_right_id]),
                 TakeOneFile(objects))
-            merged_id = merged["MERGED"]
             self.assertEqual([
                 ('$ROOT', 1),
-                ('$ROOT/test.me.1', 2),
+                ('$ROOT/test.me.1', 2, '1881f6f9784fb08bf6690e9763b76ac3'),
                 ('$ROOT/wat', 1),
-                ('$ROOT/wat/test.me.2', 2),
-                ('$ROOT/wat/test.me.3', 2)], dump_tree(objects, merged_id))
+                ('$ROOT/wat/test.me.2', 2, 'd6dcdb1bc4677aab619798004537c4e3'),
+                ('$ROOT/wat/test.me.3', 2, '7c589c09e2754a164ba2e8f06feac897')],
+                dump_tree(objects, merged["MERGED"], show_fasthash=True))
 
             merged = merge_trees(dict((binascii.hexlify(it).decode(), it) for it in root_ids), TakeOneFile(objects))
-            merged_id = merged["MERGED"]
             self.assertEqual([
                 ('$ROOT', 1),
-                ('$ROOT/test.me.1', 2),
-                ('$ROOT/test.me.4', 2),
-                ('$ROOT/test.me.5', 2),
+                ('$ROOT/test.me.1', 2, '1881f6f9784fb08bf6690e9763b76ac3'),
+                ('$ROOT/test.me.4', 2, '6228a39ea262e9797f8efef82cd0eeba'),
+                ('$ROOT/test.me.5', 2, 'ac8419ee7f30e5ba4da89914da71b299'),
                 ('$ROOT/wat', 1),
-                ('$ROOT/wat/test.me.2', 2),
-                ('$ROOT/wat/test.me.3', 2),
-                ('$ROOT/wat/test.me.6', 2)], dump_tree(objects, merged_id))
+                ('$ROOT/wat/test.me.2', 2, 'd6dcdb1bc4677aab619798004537c4e3'),
+                ('$ROOT/wat/test.me.3', 2, '7c589c09e2754a164ba2e8f06feac897'),
+                ('$ROOT/wat/test.me.6', 2, 'c907b68b6a1f18c6135c112be53c978b')],
+                dump_tree(objects, merged["MERGED"], show_fasthash=True))

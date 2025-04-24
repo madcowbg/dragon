@@ -14,7 +14,7 @@ from command.test_hoard_command import populate_repotypes, init_complex_hoard
 from contents.hoard_props import HoardFileStatus
 from lmdb_storage.object_store import ObjectStorage
 from lmdb_storage.tree_iteration import dfs, zip_dfs
-from lmdb_storage.tree_structure import ExpandableTreeObject, add_file_object, Objects, remove_file_object
+from lmdb_storage.tree_structure import ExpandableTreeObject, add_file_object, Objects, remove_file_object, ObjectType
 from lmdb_storage.file_object import FileObject
 from sql_util import sqlite3_standard
 from util import FIRST_VALUE
@@ -27,8 +27,11 @@ def _list_uuids(conn) -> List[str]:
     return all_repos
 
 
-def dump_tree(objects: Objects[FileObject], root_id):
-    return list((path, obj_type.value) for path, obj_type, _, _, _ in dfs(objects, "$ROOT", root_id))
+def dump_tree(objects: Objects[FileObject], root_id, show_fasthash: bool = False):
+    return list(
+        (path, obj_type.value) if not show_fasthash or obj_type == ObjectType.TREE
+        else (path, obj_type.value, obj.fasthash)
+        for path, obj_type, _, obj, _ in dfs(objects, "$ROOT", root_id))
 
 
 class VariousLMDBFunctions(IsolatedAsyncioTestCase):
