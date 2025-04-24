@@ -1,87 +1,98 @@
 import abc
 import binascii
 import pathlib
-from typing import Set, List, Dict
+from typing import List, Dict, Callable
 from unittest import IsolatedAsyncioTestCase
 
 from command.test_command_file_changing_flows import populate
 from command.test_hoard_command import populate_repotypes
-from lmdb_storage.file_object import FileObject
 from lmdb_storage.object_store import ObjectStorage
 from lmdb_storage.test_experiment_lmdb import dump_tree
 from lmdb_storage.tree_iteration import zip_dfs
 from lmdb_storage.tree_structure import Objects, ObjectID, TreeObject
+from util import group_to_dict
 
-type ObjectNodes = Dict[str, ObjectID]
+type ObjectsByRoot = Dict[str, ObjectID]
 
 
 class Merge[F]:
     objects: Objects[F]
 
     @abc.abstractmethod
-    def combine(self, obj_ids: ObjectNodes) -> ObjectNodes:  pass
+    def combine(self, path: List[str], children: Dict[str, ObjectsByRoot], files: ObjectsByRoot) -> ObjectsByRoot:
+        """Calculates values for the combined path by working on trees and files that are attached to this path."""
+        pass
 
     @abc.abstractmethod
-    def should_drill_down(self, obj_ids: ObjectNodes) -> bool: pass
+    def should_drill_down(self, path: List[str], trees: ObjectsByRoot, files: ObjectsByRoot) -> bool:
+        pass
 
 
-class Sum[F](Merge[F]):
+class TakeOneFile[F](Merge[F]):
     def __init__(self, objects: Objects[F]):
         self.objects = objects
 
-    def combine(self, obj_ids: ObjectNodes) -> ObjectNodes:
+    def combine(self, path: List[str], children: Dict[str, ObjectsByRoot], files: ObjectsByRoot) -> ObjectsByRoot:
         """Take the first value that is a file object as the resolved combined value."""
-        for obj_id in obj_ids.values():
-            assert not isinstance(obj_id, TreeObject), f"{obj_id} should not be a TreeObject"
+        if len(files) > 0:  # prioritize taking the first file
+            file_iter = files.values().__iter__()  # fixme take with priority
+            return {"MERGED": file_iter.__next__()}
+        else:  # we are merging a tree
+            assert len(children) > 0, f"Should not have drilled down as we already have files: {files}"
 
-            if isinstance(self.objects[obj_id], FileObject):
-                return {"RESULT": obj_id}
-        raise ValueError("Can't combine, all seem to be null?!")
+            result = TreeObject(dict())
+            for child_name, merged_child in children.items():
+                result.children[child_name] = merged_child["MERGED"]
 
-    def should_drill_down(self, obj_ids: ObjectNodes) -> bool:
-        return any(isinstance(self.objects[obj_id], TreeObject) for obj_id in obj_ids.values())
+            result_id = result.id
+            self.objects[result_id] = result
+            return {"MERGED": result_id}
+
+    def should_drill_down(self, path: List[str], trees: ObjectsByRoot, files: ObjectsByRoot) -> bool:
+        return len(files) == 0  # as we prioritize taking the first file
 
 
-def merge_trees[F](obj_ids: ObjectNodes, merge: Merge[F]) -> ObjectNodes:
+def split_by_object_type[F](objects: Objects[F], obj_ids: ObjectsByRoot) -> (ObjectsByRoot, ObjectsByRoot):
+    files = dict((name, obj_id) for name, obj_id in obj_ids.items() if type(objects[obj_id]) is not TreeObject)
+    trees = dict((name, obj_id) for name, obj_id in obj_ids.items() if type(objects[obj_id]) is TreeObject)
+    return trees, files
+
+
+def remap[A, B, C](dictionary: Dict[A, B], key: Callable[[B], C]) -> Dict[A, C]:
+    return dict((k, key(v)) for k, v in dictionary.items())
+
+
+def merge_trees_recursively[F](
+        merge: Merge[F], path: List[str], trees: ObjectsByRoot, files: ObjectsByRoot) -> ObjectsByRoot:
+    trees_objects = remap(trees, lambda obj_id: merge.objects[obj_id])
+
+    # merging child folders first
+    all_children = [
+        (child_name, tree_root, child_obj_id)
+        for tree_root, tree_obj in trees_objects.items()
+        for child_name, child_obj_id in tree_obj.children.items()]
+
+    # group by child name first
+    merged_children: Dict[str, ObjectsByRoot] = dict()
+    child_name_to_tree_root_and_obj = group_to_dict(all_children, lambda cto: cto[0], map_to=lambda cto: cto[1:])
+    for child_name, tree_root_to_obj_id in child_name_to_tree_root_and_obj.items():
+        all_objects_in_name: ObjectsByRoot = dict(tree_root_to_obj_id)
+
+        if merge.should_drill_down(path, trees, files):
+            sub_trees, sub_files = split_by_object_type(merge.objects, all_objects_in_name)
+            merged_children[child_name] = merge_trees_recursively(merge, path + [child_name], sub_trees, sub_files)
+        else:
+            merged_children[child_name] = all_objects_in_name
+
+    return merge.combine(path, merged_children, files)
+
+
+def merge_trees[F](obj_ids: ObjectsByRoot, merge: Merge[F]) -> ObjectsByRoot:
     assert isinstance(obj_ids, Dict)
 
-    if merge.should_drill_down(obj_ids):
-        all_objects = dict((obj_name, merge.objects[obj_id]) for obj_name, obj_id in obj_ids.items())
-        all_children_names = set(
-            sum((list(obj.children.keys()) for obj in all_objects.values() if isinstance(obj, TreeObject)), []))
+    trees, files = split_by_object_type(merge.objects, obj_ids)
 
-        if len(all_children_names) == 0:  # none of the folders have any children
-            file_values = dict()
-            for obj_name, obj in all_objects.items():
-                if isinstance(obj, FileObject):
-                    file_values[obj_name] = obj.file_id
-            return merge.combine(file_values)
-
-        result_trees: Dict[str, TreeObject] = dict()
-
-        # merging folders only, ignoring files
-        for child_name in all_children_names:
-            child_obj_ids: ObjectNodes = dict()
-            for obj_name, obj in all_objects.items():
-                if isinstance(obj, TreeObject):
-                    if child_name in obj.children:  # skip non-matched
-                        child_obj_ids[obj_name] = obj.children[child_name]
-
-            merged_name_to_obj_id = merge_trees(child_obj_ids, merge)
-            for merged_name, merged_obj_id in merged_name_to_obj_id.items():
-                if merged_name not in result_trees:
-                    result_trees[merged_name] = TreeObject(dict())
-                result_trees[merged_name].children[child_name] = merged_obj_id
-
-        result: ObjectNodes = dict()
-        for tree_name, tree_obj in result_trees.items():
-            new_tree_id = tree_obj.id
-            merge.objects[new_tree_id] = tree_obj
-            result[tree_name] = new_tree_id
-
-        return result
-    else:  # should combine on this level
-        return merge.combine(obj_ids)
+    return merge_trees_recursively(merge, [], trees, files)
 
 
 class TestingMergingOfTrees(IsolatedAsyncioTestCase):
@@ -122,8 +133,10 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
                 ('/wat/test.me.2', 'right_missing'),
                 ('/wat/test.me.3', 'left_missing')], diffs)
 
-            merged = merge_trees(dict((binascii.hexlify(it).decode(), it) for it in [root_left_id, root_right_id]), Sum(objects))
-            merged_id = merged["RESULT"]
+            merged = merge_trees(
+                dict((binascii.hexlify(it).decode(), it) for it in [root_left_id, root_right_id]),
+                TakeOneFile(objects))
+            merged_id = merged["MERGED"]
             self.assertEqual([
                 ('$ROOT', 1),
                 ('$ROOT/test.me.1', 2),
@@ -131,8 +144,8 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
                 ('$ROOT/wat/test.me.2', 2),
                 ('$ROOT/wat/test.me.3', 2)], dump_tree(objects, merged_id))
 
-            merged = merge_trees(dict((binascii.hexlify(it).decode(), it) for it in root_ids), Sum(objects))
-            merged_id = merged["RESULT"]
+            merged = merge_trees(dict((binascii.hexlify(it).decode(), it) for it in root_ids), TakeOneFile(objects))
+            merged_id = merged["MERGED"]
             self.assertEqual([
                 ('$ROOT', 1),
                 ('$ROOT/test.me.1', 2),
