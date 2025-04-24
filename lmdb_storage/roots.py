@@ -36,7 +36,7 @@ class Root:
     def write_to_storage(self, root_data: RootData):
         self.roots.txn.put(self.name.encode(), msgspec.msgpack.encode(root_data))
 
-    def get_current(self):
+    def get_current(self) -> bytes | None:
         with self.roots:
             return self.load_from_storage.current
 
@@ -46,7 +46,7 @@ class Root:
             root_data.staging = root_id
             self.write_to_storage(root_data)
 
-    def get_staging(self):
+    def get_staging(self) -> bytes | None:
         with self.roots:
             return self.load_from_storage.staging
 
@@ -74,6 +74,11 @@ class Roots:
     def __getitem__(self, name: str) -> Root:
         assert type(name) is str
         return Root(name, self)
+
+    @property
+    def all(self) -> List[Root]:
+        with self:
+            return [self[name.decode()] for name, _ in self.txn.cursor()]
 
     @property
     def all_live(self) -> Collection[ObjectID]:
