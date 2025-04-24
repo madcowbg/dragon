@@ -2,6 +2,7 @@ import binascii
 import hashlib
 import pathlib
 from tempfile import TemporaryDirectory
+from typing import Iterable, Tuple, Union, Dict
 from unittest import IsolatedAsyncioTestCase
 
 from command.test_command_file_changing_flows import populate
@@ -12,7 +13,41 @@ from lmdb_storage.object_store import ObjectStorage
 from lmdb_storage.test_experiment_lmdb import dump_tree, dump_diffs
 from lmdb_storage.three_way_merge import ThreewayMerge
 from lmdb_storage.tree_iteration import zip_dfs
-from lmdb_storage.tree_structure import ObjectID
+from lmdb_storage.tree_structure import ObjectID, Objects, do_nothing, TreeObject
+
+
+class InMemoryObjectsExtension(Objects[FileObject]):
+    def __init__(self, env: ObjectStorage) -> None:
+        self.stored_objects = env.objects(write=False)
+        self.in_mem: Dict[ObjectID, FileObject | TreeObject] = dict()
+
+    def __enter__(self) -> Objects[FileObject]:
+        self.stored_objects.__enter__()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.stored_objects.__exit__(exc_type, exc_val, exc_tb)
+        return None
+
+    def __contains__(self, obj_id: bytes) -> bool:
+        return obj_id in self.in_mem or obj_id in self.stored_objects
+
+    def __getitem__(self, obj_id: bytes) -> Union[FileObject, TreeObject, None]:
+        in_mem = self.in_mem.get(obj_id, None)
+        return in_mem if in_mem else self.stored_objects[obj_id]
+
+    def __setitem__(self, obj_id: bytes, obj: Union[FileObject, TreeObject]):
+        stored = self.stored_objects[obj_id]
+        if stored is None:
+            self.in_mem[obj_id] = obj
+        elif obj != stored:
+            raise ValueError("Cannot change a stored object!")
+
+    def __delitem__(self, obj_id: bytes) -> None:
+        raise ValueError("Cannot delete InMemory objects")
+
+    def mktree_from_tuples(self, all_data: Iterable[Tuple[str, FileObject]], alive_it=do_nothing) -> bytes:
+        pass
 
 
 class TestingMergingOfTrees(IsolatedAsyncioTestCase):
@@ -244,101 +279,109 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
                 dump_tree(objects, merged_ids['hoard'], show_fasthash=True))
             hoard_id = merged_ids['hoard']
 
+        with InMemoryObjectsExtension(env) as objects:
+            self._run_threeway_merge_after_hoard_created(objects, partial_id, full_id, backup_id, incoming_id, hoard_id)
+
         with env.objects(write=True) as objects:
-            self.assertEqual([
-                ('$ROOT', 1),
-                ('$ROOT/test.me.1', 2, 'e10d2982020fc21760e4e5245b57f664'),
-                ('$ROOT/test.me.4', 2, '5c8ffab0d25ab7692378bf41d495e046'),
-                ('$ROOT/wat', 1),
-                ('$ROOT/wat/test.me.2', 2, '663c6e6ae648bb1a1a893b5134dbdd7b'),
-                ('$ROOT/wat/test.me.3', 2, '2cbc8608c915e94723752d4f0c54302f')],
-                dump_tree(objects, full_id, show_fasthash=True))
+            self._run_threeway_merge_after_hoard_created(objects, partial_id, full_id, backup_id, incoming_id, hoard_id)
 
-            self.assertEqual([
-                ('$ROOT', 1),
-                ('$ROOT/test.me.1', 2, 'e10d2982020fc21760e4e5245b57f664'),
-                ('$ROOT/wat', 1),
-                ('$ROOT/wat/test.me.3', 2, '2cbc8608c915e94723752d4f0c54302f')],
-                dump_tree(objects, backup_id, show_fasthash=True))
+    def _run_threeway_merge_after_hoard_created(
+            self, objects: Objects[FileObject],
+            partial_id: ObjectID, full_id: ObjectID, backup_id: ObjectID, incoming_id: ObjectID, hoard_id: ObjectID):
+        self.assertEqual([
+            ('$ROOT', 1),
+            ('$ROOT/test.me.1', 2, 'e10d2982020fc21760e4e5245b57f664'),
+            ('$ROOT/test.me.4', 2, '5c8ffab0d25ab7692378bf41d495e046'),
+            ('$ROOT/wat', 1),
+            ('$ROOT/wat/test.me.2', 2, '663c6e6ae648bb1a1a893b5134dbdd7b'),
+            ('$ROOT/wat/test.me.3', 2, '2cbc8608c915e94723752d4f0c54302f')],
+            dump_tree(objects, full_id, show_fasthash=True))
 
-            self.assertEqual([
-                ('$ROOT', 1),
-                ('$ROOT/test.me.4', 2, '5c8ffab0d25ab7692378bf41d495e046'),
-                ('$ROOT/test.me.5', 2, '79e651dd08483b1483fb6e992c928e21'),
-                ('$ROOT/wat', 1),
-                ('$ROOT/wat/test.me.6', 2, 'd6a296dae0ca6991df926b8d18f43cc5')],
-                dump_tree(objects, incoming_id, show_fasthash=True))
+        self.assertEqual([
+            ('$ROOT', 1),
+            ('$ROOT/test.me.1', 2, 'e10d2982020fc21760e4e5245b57f664'),
+            ('$ROOT/wat', 1),
+            ('$ROOT/wat/test.me.3', 2, '2cbc8608c915e94723752d4f0c54302f')],
+            dump_tree(objects, backup_id, show_fasthash=True))
 
-            merged_ids = merge_trees({
-                'current': backup_id, 'staging': incoming_id,
-                'full': full_id, 'partial': partial_id, 'hoard': hoard_id},
-                ThreewayMerge(
-                    objects, current='current', staging='staging', others=['full', 'partial', 'hoard'],
-                    fetch_new={'full', 'hoard'}))
+        self.assertEqual([
+            ('$ROOT', 1),
+            ('$ROOT/test.me.4', 2, '5c8ffab0d25ab7692378bf41d495e046'),
+            ('$ROOT/test.me.5', 2, '79e651dd08483b1483fb6e992c928e21'),
+            ('$ROOT/wat', 1),
+            ('$ROOT/wat/test.me.6', 2, 'd6a296dae0ca6991df926b8d18f43cc5')],
+            dump_tree(objects, incoming_id, show_fasthash=True))
 
-            self.assertEqual(['current', 'staging', 'full', 'partial', 'hoard'], list(merged_ids.keys()))
+        merged_ids = merge_trees({
+            'current': backup_id, 'staging': incoming_id,
+            'full': full_id, 'partial': partial_id, 'hoard': hoard_id},
+            ThreewayMerge(
+                objects, current='current', staging='staging', others=['full', 'partial', 'hoard'],
+                fetch_new={'full', 'hoard'}))
 
-            self.assertEqual([
-                ('$ROOT', 1),
-                ('$ROOT/test.me.4', 2, '5c8ffab0d25ab7692378bf41d495e046'),
-                ('$ROOT/test.me.5', 2, '79e651dd08483b1483fb6e992c928e21'),
-                ('$ROOT/wat', 1),
-                ('$ROOT/wat/test.me.2', 2, '663c6e6ae648bb1a1a893b5134dbdd7b'),
-                ('$ROOT/wat/test.me.6', 2, 'd6a296dae0ca6991df926b8d18f43cc5')],
-                dump_tree(objects, merged_ids['full'], show_fasthash=True))
+        self.assertEqual(['current', 'staging', 'full', 'partial', 'hoard'], list(merged_ids.keys()))
 
-            self.assertEqual([
-                ('$ROOT', 1),
-                ('$ROOT/wat', 1),
-                ('$ROOT/wat/test.me.2', 2, '663c6e6ae648bb1a1a893b5134dbdd7b'),
-                ('$ROOT/wat/test.me.7', 2, '46e7da788d1c605a2293d580eeceeefd')],
-                dump_tree(objects, merged_ids['partial'], show_fasthash=True))
+        self.assertEqual([
+            ('$ROOT', 1),
+            ('$ROOT/test.me.4', 2, '5c8ffab0d25ab7692378bf41d495e046'),
+            ('$ROOT/test.me.5', 2, '79e651dd08483b1483fb6e992c928e21'),
+            ('$ROOT/wat', 1),
+            ('$ROOT/wat/test.me.2', 2, '663c6e6ae648bb1a1a893b5134dbdd7b'),
+            ('$ROOT/wat/test.me.6', 2, 'd6a296dae0ca6991df926b8d18f43cc5')],
+            dump_tree(objects, merged_ids['full'], show_fasthash=True))
 
-            self.assertEqual([
-                ('$ROOT', 1),
-                ('$ROOT/test.me.4', 2, '5c8ffab0d25ab7692378bf41d495e046'),
-                ('$ROOT/test.me.5', 2, '79e651dd08483b1483fb6e992c928e21'),
-                ('$ROOT/wat', 1),
-                ('$ROOT/wat/test.me.6', 2, 'd6a296dae0ca6991df926b8d18f43cc5')],
-                dump_tree(objects, merged_ids['current'], show_fasthash=True))
+        self.assertEqual([
+            ('$ROOT', 1),
+            ('$ROOT/wat', 1),
+            ('$ROOT/wat/test.me.2', 2, '663c6e6ae648bb1a1a893b5134dbdd7b'),
+            ('$ROOT/wat/test.me.7', 2, '46e7da788d1c605a2293d580eeceeefd')],
+            dump_tree(objects, merged_ids['partial'], show_fasthash=True))
 
-            self.assertEqual([
-                ('$ROOT', 1),
-                ('$ROOT/test.me.4', 2, '5c8ffab0d25ab7692378bf41d495e046'),
-                ('$ROOT/test.me.5', 2, '79e651dd08483b1483fb6e992c928e21'),
-                ('$ROOT/wat', 1),
-                ('$ROOT/wat/test.me.6', 2, 'd6a296dae0ca6991df926b8d18f43cc5')],
-                dump_tree(objects, merged_ids['staging'], show_fasthash=True))
+        self.assertEqual([
+            ('$ROOT', 1),
+            ('$ROOT/test.me.4', 2, '5c8ffab0d25ab7692378bf41d495e046'),
+            ('$ROOT/test.me.5', 2, '79e651dd08483b1483fb6e992c928e21'),
+            ('$ROOT/wat', 1),
+            ('$ROOT/wat/test.me.6', 2, 'd6a296dae0ca6991df926b8d18f43cc5')],
+            dump_tree(objects, merged_ids['current'], show_fasthash=True))
 
-            self.assertEqual([
-                ('$ROOT', 1),
-                ('$ROOT/test.me.4', 2, '5c8ffab0d25ab7692378bf41d495e046'),
-                ('$ROOT/test.me.5', 2, '79e651dd08483b1483fb6e992c928e21'),
-                ('$ROOT/wat', 1),
-                ('$ROOT/wat/test.me.2', 2, '663c6e6ae648bb1a1a893b5134dbdd7b'),
-                ('$ROOT/wat/test.me.6', 2, 'd6a296dae0ca6991df926b8d18f43cc5'),
-                ('$ROOT/wat/test.me.7', 2, '46e7da788d1c605a2293d580eeceeefd')],
-                dump_tree(objects, merged_ids['hoard'], show_fasthash=True))
+        self.assertEqual([
+            ('$ROOT', 1),
+            ('$ROOT/test.me.4', 2, '5c8ffab0d25ab7692378bf41d495e046'),
+            ('$ROOT/test.me.5', 2, '79e651dd08483b1483fb6e992c928e21'),
+            ('$ROOT/wat', 1),
+            ('$ROOT/wat/test.me.6', 2, 'd6a296dae0ca6991df926b8d18f43cc5')],
+            dump_tree(objects, merged_ids['staging'], show_fasthash=True))
 
-            self.assertEqual([
-                ('', 'different'),
-                ('/test.me.4', 'same'),
-                ('/test.me.5', 'same'),
-                ('/wat', 'different'),
-                ('/wat/test.me.2', 'same'),
-                ('/wat/test.me.6', 'same'),
-                ('/wat/test.me.7', 'left_missing')],
-                dump_diffs(objects, merged_ids['full'], merged_ids['hoard']))
+        self.assertEqual([
+            ('$ROOT', 1),
+            ('$ROOT/test.me.4', 2, '5c8ffab0d25ab7692378bf41d495e046'),
+            ('$ROOT/test.me.5', 2, '79e651dd08483b1483fb6e992c928e21'),
+            ('$ROOT/wat', 1),
+            ('$ROOT/wat/test.me.2', 2, '663c6e6ae648bb1a1a893b5134dbdd7b'),
+            ('$ROOT/wat/test.me.6', 2, 'd6a296dae0ca6991df926b8d18f43cc5'),
+            ('$ROOT/wat/test.me.7', 2, '46e7da788d1c605a2293d580eeceeefd')],
+            dump_tree(objects, merged_ids['hoard'], show_fasthash=True))
 
-            self.assertEqual([
-                ('', 'different'),
-                ('/wat', 'different'),
-                ('/wat/test.me.2', 'same'),
-                ('/wat/test.me.7', 'same'),
-                ('/wat/test.me.6', 'left_missing'),
-                ('/test.me.4', 'left_missing'),
-                ('/test.me.5', 'left_missing')],
-                dump_diffs(objects, merged_ids['partial'], merged_ids['hoard']))
+        self.assertEqual([
+            ('', 'different'),
+            ('/test.me.4', 'same'),
+            ('/test.me.5', 'same'),
+            ('/wat', 'different'),
+            ('/wat/test.me.2', 'same'),
+            ('/wat/test.me.6', 'same'),
+            ('/wat/test.me.7', 'left_missing')],
+            dump_diffs(objects, merged_ids['full'], merged_ids['hoard']))
+
+        self.assertEqual([
+            ('', 'different'),
+            ('/wat', 'different'),
+            ('/wat/test.me.2', 'same'),
+            ('/wat/test.me.7', 'same'),
+            ('/wat/test.me.6', 'left_missing'),
+            ('/test.me.4', 'left_missing'),
+            ('/test.me.5', 'left_missing')],
+            dump_diffs(objects, merged_ids['partial'], merged_ids['hoard']))
 
 
 def make_file(data: str) -> FileObject:

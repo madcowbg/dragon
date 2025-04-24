@@ -1,3 +1,4 @@
+import abc
 import dataclasses
 import enum
 import hashlib
@@ -82,6 +83,68 @@ def do_nothing[T](x: T, *, title) -> T: return x
 
 
 class Objects[F]:
+    @abc.abstractmethod
+    def __enter__(self) -> "Objects[F]":
+        pass
+
+    @abc.abstractmethod
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        pass
+
+    @abc.abstractmethod
+    def __contains__(self, obj_id: bytes) -> bool:
+        pass
+
+    @abc.abstractmethod
+    def __getitem__(self, obj_id: bytes) -> Union[F, TreeObject, None]:
+        pass
+
+    @abc.abstractmethod
+    def __setitem__(self, obj_id: bytes, obj: Union[F, TreeObject]):
+        pass
+
+    @abc.abstractmethod
+    def __delitem__(self, obj_id: bytes) -> None:
+        pass
+
+    def mktree_from_tuples(self, all_data: Iterable[Tuple[str, F]], alive_it=do_nothing) -> bytes:
+        # every element is a partially-constructed object
+        # (name, partial TreeObject)
+
+        stack: List[Tuple[ObjPath, TreeObject]] = [([], TreeObject(dict()))]
+        for fullpath, file in alive_it(all_data, title="adding all data..."):
+            assert fullpath == "" or fullpath[0] == "/", f"[{fullpath}] is not absolute path!"
+            fullpath = fullpath.split("/")[1:]
+
+            pop_and_write_nonparents(self, stack, fullpath)
+
+            top_obj_path, children = stack[-1]
+
+            assert ASSERTS_DISABLED or is_child_of(fullpath, top_obj_path)
+            file_name = fullpath[-1]
+
+            # add needed subfolders to stack
+            current_path = top_obj_path
+            rel_path = fullpath[len(current_path):-1]
+            for path_elem in rel_path:
+                current_path = current_path + [path_elem]
+                stack.append((current_path, TreeObject(dict())))
+
+            # add file to current's children
+            self[file.file_id] = file
+
+            top_obj_path, tree_obj = stack[-1]
+            assert ASSERTS_DISABLED or is_child_of(fullpath, top_obj_path) and len(top_obj_path) + 1 == len(fullpath)
+            tree_obj.children[file_name] = file.file_id
+
+        pop_and_write_nonparents(self, stack, [])  # commits the stack
+        assert len(stack) == 1
+
+        obj_id, _ = pop_and_write_obj(stack, self)
+        return obj_id
+
+
+class StoredObjects[F](Objects[F]):
     def __init__(self, storage: "ObjectStorage", write: bool, object_builder: Callable[[ObjectID, any], F]):
         self.storage = storage
         self.write = write
@@ -122,44 +185,10 @@ class Objects[F]:
     def __delitem__(self, obj_id: bytes) -> None:
         self.txn.delete(obj_id)
 
-    def mktree_from_tuples(self, all_data: Iterable[Tuple[str, F]], alive_it=do_nothing) -> bytes:
-        # every element is a partially-constructed object
-        # (name, partial TreeObject)
-
-        stack: List[Tuple[ObjPath, TreeObject]] = [([], TreeObject(dict()))]
-        for fullpath, file in alive_it(all_data, title="adding all data..."):
-            assert fullpath == "" or fullpath[0] == "/", f"[{fullpath}] is not absolute path!"
-            fullpath = fullpath.split("/")[1:]
-
-            pop_and_write_nonparents(self, stack, fullpath)
-
-            top_obj_path, children = stack[-1]
-
-            assert ASSERTS_DISABLED or is_child_of(fullpath, top_obj_path)
-            file_name = fullpath[-1]
-
-            # add needed subfolders to stack
-            current_path = top_obj_path
-            rel_path = fullpath[len(current_path):-1]
-            for path_elem in rel_path:
-                current_path = current_path + [path_elem]
-                stack.append((current_path, TreeObject(dict())))
-
-            # add file to current's children
-            self[file.file_id] = file
-
-            top_obj_path, tree_obj = stack[-1]
-            assert ASSERTS_DISABLED or is_child_of(fullpath, top_obj_path) and len(top_obj_path) + 1 == len(fullpath)
-            tree_obj.children[file_name] = file.file_id
-
-        pop_and_write_nonparents(self, stack, [])  # commits the stack
-        assert len(stack) == 1
-
-        obj_id, _ = pop_and_write_obj(stack, self)
-        return obj_id
 
 type ObjPath = List[str]
-ASSERTS_DISABLED=True
+ASSERTS_DISABLED = True
+
 
 def pop_and_write_nonparents(objects: Objects, stack: List[Tuple[ObjPath, TreeObject]], fullpath: ObjPath):
     while not is_child_of(fullpath, stack[-1][0]):  # this is not a common ancestor

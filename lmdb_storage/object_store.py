@@ -6,8 +6,12 @@ from alive_progress import alive_bar
 from lmdb import Transaction
 
 from lmdb_storage.roots import Roots
-from lmdb_storage.tree_structure import TreeObject, Objects, ObjectID
+from lmdb_storage.tree_structure import TreeObject, Objects, ObjectID, StoredObjects
 from lmdb_storage.file_object import FileObject
+
+
+class InconsistentObjectStorage(BaseException):
+    pass
 
 
 class ObjectStorage:
@@ -19,6 +23,8 @@ class ObjectStorage:
         logging.info(f"found {len(root_ids)} live top-level refs.")
 
         with self.objects(write=False) as objects:
+            self.validate_storage(objects, root_ids)
+
             live_ids = find_all_live(objects, root_ids)
 
         logging.info(f"retaining {len(live_ids)} live objects.")
@@ -28,6 +34,13 @@ class ObjectStorage:
                     if obj_id not in live_ids:
                         del objects[obj_id]
                         bar()
+
+            self.validate_storage(objects, root_ids)
+
+    def validate_storage(self, objects, root_ids):
+        for root_id in root_ids:
+            if objects[root_id] is None:
+                raise InconsistentObjectStorage(f"Missing root ID {root_id}: not in stored objects!")
 
     def copy_trees_from(self, other: "ObjectStorage", root_ids: Collection[ObjectID]):
         assert isinstance(root_ids, Collection)
@@ -42,8 +55,8 @@ class ObjectStorage:
     def begin(self, db_name: str, write: bool) -> Transaction:
         return self.env.begin(db=self.env.open_db(db_name.encode()), write=write)
 
-    def objects(self, write: bool) -> "Objects":
-        return Objects(self, write, FileObject)
+    def objects(self, write: bool) -> "StoredObjects":
+        return StoredObjects(self, write, FileObject)
 
     def roots(self, write: bool) -> "Roots":
         return Roots(self, write)
