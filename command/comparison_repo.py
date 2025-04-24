@@ -307,8 +307,7 @@ class FilesystemState:
                 logging.error(e)
                 self.mark_error(repo_file, str(e))
 
-        all_files_sorted = list(
-            sorted(("/" + filepath.as_posix(), fileobj) for filepath, fileobj in self.all_files.items()))
+        all_files_sorted = [("/" + filepath.as_posix(), fileobj) for filepath, fileobj in self.all_files.items()]
         with self.contents.objects as objects:
             self.state_root_id = objects.mktree_from_tuples(all_files_sorted, alive_it)
 

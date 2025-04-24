@@ -113,9 +113,9 @@ async def compare_local_to_hoard(
 
 async def sync_fsobject_to_object_storage(env: ObjectStorage, fsobjects: HoardFSObjects):
     old_root_id = env.roots(False)["HEAD"].get_current()
-    all_nondeleted = list(sorted([
+    all_nondeleted = [
         (path.as_posix(), FileObject.create(hfo.fasthash, hfo.size))
-        async for path, hfo in fsobjects.in_folder_non_deleted(FastPosixPath("/"))]))
+        async for path, hfo in fsobjects.in_folder_non_deleted(FastPosixPath("/"))]
 
     with env.objects(write=True) as objects:
         current_root_id = objects.mktree_from_tuples(all_nondeleted)
