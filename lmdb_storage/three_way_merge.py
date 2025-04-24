@@ -22,17 +22,17 @@ class ThreewayMerge(Merge[FileObject]):
     def combine(self, path: List[str], children: Dict[str, ObjectsByRoot], files: ObjectsByRoot) -> ObjectsByRoot:
         if self.current in files and self.staging in files:
             # left and right are both files, apply difference to the other roots
-            result: ObjectsByRoot = ObjectsByRoot([])
+            result: ObjectsByRoot = files.new()
             for merge_name in [self.current, self.staging] + self.others:
                 result[merge_name] = files.get_if_present(self.staging)
             return result
 
         elif self.current in files:
             # file is deleted in staging
-            return {}
+            return files.new()
         elif self.staging in files:
             # file is added in staging
-            result: ObjectsByRoot = ObjectsByRoot([])
+            result: ObjectsByRoot = files.new()
             for merge_name in [self.current, self.staging] + self.others:
                 if merge_name == self.current or merge_name in self.fetch_new:
                     result[merge_name] = files.get_if_present(self.staging)
@@ -41,7 +41,7 @@ class ThreewayMerge(Merge[FileObject]):
             return result
         else:
             # current and staging are not in files. this means that we have a partially-merged folders in children
-            result: ObjectsByRoot = ObjectsByRoot([])
+            result: ObjectsByRoot = files.new()
             for merge_name in [self.current, self.staging] + self.others:
                 if merge_name in files:
                     result[merge_name] = files.get_if_present(merge_name)  # and we know it is already in objects

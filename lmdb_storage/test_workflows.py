@@ -3,7 +3,7 @@ import unittest
 from tempfile import TemporaryDirectory
 from typing import Set
 
-from lmdb_storage.merge_trees import merge_trees
+from lmdb_storage.merge_trees import merge_trees, ObjectsByRoot
 from lmdb_storage.object_store import ObjectStorage
 from lmdb_storage.test_merge_trees import populate_trees
 from lmdb_storage.three_way_merge import ThreewayMerge
@@ -24,12 +24,14 @@ def pull_contents(env: ObjectStorage, repo_uuid: str, staging_id: ObjectID, fetc
 
     other_roots = [r for r in roots.all if r.name != repo_current_id and r.name != "HOARD"]
     other_root_names = [r.name for r in other_roots]
-    current_ids = dict((r.name, r.get_current()) for r in other_roots)
+    current_ids = ObjectsByRoot(
+        [r.name for r in roots.all] + ["current", "staging", "HOARD"],
+        [(r.name, r.get_current()) for r in other_roots])
     current_ids["current"] = repo_current_id
     current_ids["staging"] = repo_staging_id
     current_ids["HOARD"] = hoard_head_id
 
-    assert all(v is not None for v in current_ids.values())
+    assert all(v is not None for v in current_ids.assigned_values())
 
     # execute merge
     with env.objects(write=True) as objects:
@@ -39,8 +41,8 @@ def pull_contents(env: ObjectStorage, repo_uuid: str, staging_id: ObjectID, fetc
                 objects, current="current", staging='staging', others=other_root_names,
                 fetch_new=fetch_new))
 
-        assert set(merged_ids.keys()) == set(current_ids.keys()), \
-            f"{set(merged_ids.keys())} != {set(current_ids.keys())}"
+        assert set(merged_ids.assigned().keys()) == set(current_ids.assigned().keys()), \
+            f"{set(merged_ids.assigned().keys())} != {set(current_ids.assigned().keys())}"
 
     # accept the changed IDs todo implement dry-run
     roots = env.roots(write=True)

@@ -6,30 +6,38 @@ from util import group_to_dict
 
 
 class ObjectsByRoot:
-    def __init__(self, roots: List[str], children: Collection[Tuple[str, ObjectID]] = ()):
-        self.roots = roots
-        self.children = dict(children)
+    def __init__(self, allowed_roots: List[str], roots_to_object: Collection[Tuple[str, ObjectID]] = ()):
+        self.allowed_roots = allowed_roots
+        self._roots_to_object = dict(roots_to_object)
+        for child_name in self._roots_to_object:
+            assert child_name in self.allowed_roots, f"Child name '{child_name}' not found in allowed roots list"
 
     def new(self) -> "ObjectsByRoot":
-        return ObjectsByRoot(self.roots)
+        return ObjectsByRoot(self.allowed_roots)
 
     def __len__(self) -> int:  # fixme why do we need to get length? there is no unambiguous answer
-        return len(self.children.values())
+        return len(self._roots_to_object.values())
 
     def assigned_values(self) -> Iterable[ObjectID]:
-        return self.children.values()
+        return self._roots_to_object.values()
 
     def assigned(self) -> Dict[str, ObjectID]:  # fixme deprecate, too powerful
-        return self.children
+        return self._roots_to_object
 
     def get_if_present(self, child_name: str) -> ObjectID | None:
-        return self.children.get(child_name, None)  # fixme filter by allowed roots
+        assert child_name in self.allowed_roots, f"Can't get child '{child_name}'!"
+        return self._roots_to_object.get(child_name, None)
 
-    def __setitem__(self, key: str, value: ObjectID):
-        self.children[key] = value  # fixme do not add nulls and filter by allowed
+    def __setitem__(self, child_name: str, value: ObjectID | None):
+        assert child_name in self.allowed_roots, f"Can't set child '{child_name}'!"
+        if value is None:
+            del self._roots_to_object[child_name]  # setting to None deletes the value if set
+        else:
+            self._roots_to_object[child_name] = value
 
-    def __contains__(self, key: str) -> bool:
-        return key in self.children  # fixme filter by allowed roots
+    def __contains__(self, child_name: str) -> bool:
+        assert child_name in self.allowed_roots, f"Can't check if contains a child '{child_name}'!"
+        return child_name in self._roots_to_object
 
     @classmethod
     def singleton(cls, name, file):
@@ -78,10 +86,12 @@ class TakeOneFile[F](Merge[F]):
 
 
 def split_by_object_type[F](objects: Objects[F], obj_ids: ObjectsByRoot) -> (ObjectsByRoot, ObjectsByRoot):
-    files = ObjectsByRoot.from_map(
-        dict((name, obj_id) for name, obj_id in obj_ids.assigned().items() if type(objects[obj_id]) is not TreeObject))
-    trees = ObjectsByRoot.from_map(
-        dict((name, obj_id) for name, obj_id in obj_ids.assigned().items() if type(objects[obj_id]) is TreeObject))
+    files = ObjectsByRoot(
+        obj_ids.allowed_roots,
+        [(name, obj_id) for name, obj_id in obj_ids.assigned().items() if type(objects[obj_id]) is not TreeObject])
+    trees = ObjectsByRoot(
+        obj_ids.allowed_roots,
+        [(name, obj_id) for name, obj_id in obj_ids.assigned().items() if type(objects[obj_id]) is TreeObject])
     return trees, files
 
 
@@ -103,8 +113,7 @@ def merge_trees_recursively[F](
     merged_children: Dict[str, ObjectsByRoot] = dict()
     child_name_to_tree_root_and_obj = group_to_dict(all_children, lambda cto: cto[0], map_to=lambda cto: cto[1:])
     for child_name, tree_root_to_obj_id in child_name_to_tree_root_and_obj.items():
-        root_names: List[str] = list(map((lambda t: t[0]), tree_root_to_obj_id))
-        all_objects_in_name: ObjectsByRoot = ObjectsByRoot(root_names, tree_root_to_obj_id)
+        all_objects_in_name: ObjectsByRoot = ObjectsByRoot(files.allowed_roots, tree_root_to_obj_id)
 
         if merge.should_drill_down(path, trees, files):
             sub_trees, sub_files = split_by_object_type(merge.objects, all_objects_in_name)

@@ -88,9 +88,9 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
                 ('/wat/test.me.2', 'right_missing'),
                 ('/wat/test.me.3', 'left_missing')], diffs)
 
-            objects_by_root = ObjectsByRoot([], [
+            objects_by_root = ObjectsByRoot.from_map(dict([
                 (binascii.hexlify(root_left_id).decode(), root_left_id),
-                (binascii.hexlify(root_right_id).decode(), root_right_id)])
+                (binascii.hexlify(root_right_id).decode(), root_right_id)]))
 
             merged = merge_trees(objects_by_root, TakeOneFile(objects))
             self.assertEqual([
@@ -101,7 +101,7 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
                 ('$ROOT/wat/test.me.3', 2, '7c589c09e2754a164ba2e8f06feac897')],
                 dump_tree(objects, merged.get_if_present("MERGED"), show_fasthash=True))
 
-            objects_by_root = ObjectsByRoot([], [(binascii.hexlify(it).decode(), it) for it in root_ids])
+            objects_by_root = ObjectsByRoot.from_map(dict((binascii.hexlify(it).decode(), it) for it in root_ids))
             merged = merge_trees(objects_by_root, TakeOneFile(objects))
             self.assertEqual([
                 ('$ROOT', 1),
