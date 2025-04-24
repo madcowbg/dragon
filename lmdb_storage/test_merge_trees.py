@@ -2,71 +2,17 @@ import binascii
 import hashlib
 import pathlib
 from tempfile import TemporaryDirectory
-from typing import List, Dict, Set
 from unittest import IsolatedAsyncioTestCase
 
 from command.test_command_file_changing_flows import populate
 from command.test_hoard_command import populate_repotypes
 from lmdb_storage.file_object import FileObject
-from lmdb_storage.merge_trees import TakeOneFile, merge_trees, Merge, ObjectsByRoot
+from lmdb_storage.merge_trees import TakeOneFile, merge_trees
 from lmdb_storage.object_store import ObjectStorage
 from lmdb_storage.test_experiment_lmdb import dump_tree, dump_diffs
+from lmdb_storage.three_way_merge import ThreewayMerge
 from lmdb_storage.tree_iteration import zip_dfs
-from lmdb_storage.tree_structure import ObjectID, Objects, TreeObject
-
-
-class ThreewayMerge(Merge[FileObject]):
-    def __init__(
-            self, objects: Objects[FileObject], current: str, staging: str, others: List[str],
-            fetch_new: Set[str]):
-        self.objects = objects
-        self.current = current
-        self.staging = staging
-        self.others = others
-        self.fetch_new = fetch_new
-
-    def should_drill_down(self, path: List[str], trees: ObjectsByRoot, files: ObjectsByRoot) -> bool:
-        # we have trees and the current and staging trees are different
-        return len(trees) > 0 and trees.get(self.current, None) != trees.get(self.staging, None)
-
-    def combine(self, path: List[str], children: Dict[str, ObjectsByRoot], files: ObjectsByRoot) -> ObjectsByRoot:
-        if self.current in files and self.staging in files:
-            # left and right are both files, apply difference to the other roots
-            result: ObjectsByRoot = dict()
-            for merge_name in [self.current, self.staging] + self.others:
-                result[merge_name] = files[self.staging]
-            return result
-
-        elif self.current in files:
-            # file is deleted in staging
-            return {}
-        elif self.staging in files:
-            # file is added in staging
-            result: ObjectsByRoot = dict()
-            for merge_name in [self.current, self.staging] + self.others:
-                if merge_name == self.current or merge_name in self.fetch_new:
-                    result[merge_name] = files[self.staging]
-                elif merge_name in files:
-                    result[merge_name] = files[merge_name]
-            return result
-        else:
-            # current and staging are not in files. this means that we have a partially-merged folders in children
-            result: ObjectsByRoot = dict()
-            for merge_name in [self.current, self.staging] + self.others:
-                if merge_name in files:
-                    result[merge_name] = files[merge_name]  # and we know it is already in objects
-                else:
-                    merge_result = TreeObject({})
-                    for child_name, child_objects in children.items():
-                        if merge_name in child_objects:
-                            merge_result.children[child_name] = child_objects[merge_name]
-
-                    if len(merge_result.children) > 0:
-                        # add to objects
-                        self.objects[merge_result.id] = merge_result
-                        result[merge_name] = merge_result.id
-
-            return result
+from lmdb_storage.tree_structure import ObjectID
 
 
 class TestingMergingOfTrees(IsolatedAsyncioTestCase):
