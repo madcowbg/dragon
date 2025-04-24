@@ -10,7 +10,7 @@ from command.test_hoard_command import populate_repotypes
 from lmdb_storage.file_object import FileObject
 from lmdb_storage.merge_trees import TakeOneFile, merge_trees, Merge, ObjectsByRoot
 from lmdb_storage.object_store import ObjectStorage
-from lmdb_storage.test_experiment_lmdb import dump_tree
+from lmdb_storage.test_experiment_lmdb import dump_tree, dump_diffs
 from lmdb_storage.tree_iteration import zip_dfs
 from lmdb_storage.tree_structure import ObjectID, Objects, TreeObject
 
@@ -228,6 +228,25 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
                 ('$ROOT/wat/test.me.6', 2, 'd6a296dae0ca6991df926b8d18f43cc5')],
                 dump_tree(objects, merged_ids['hoard'], show_fasthash=True))
 
+            self.assertEqual([
+                ('', 'different'),
+                ('/test.me.4', 'same'),
+                ('/test.me.5', 'same'),
+                ('/wat', 'different'),
+                ('/wat/test.me.2', 'right_missing'),
+                ('/wat/test.me.6', 'same')],
+                dump_diffs(objects, merged_ids['full'], merged_ids['hoard']))
+
+            self.assertEqual([
+                ('', 'different'),
+                ('/wat', 'different'),
+                ('/wat/test.me.2', 'right_missing'),
+                ('/wat/test.me.7', 'right_missing'),
+                ('/wat/test.me.6', 'left_missing'),
+                ('/test.me.4', 'left_missing'),
+                ('/test.me.5', 'left_missing')],
+                dump_diffs(objects, merged_ids['partial'], merged_ids['hoard']))
+
     def test_merge_threeway_incrementally(self):
         tmpdir = TemporaryDirectory(delete=True)
         env, partial_id, full_id, backup_id, incoming_id = populate_trees(tmpdir.name + "/test-objects.lmdb")
@@ -354,6 +373,26 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
                 ('$ROOT/wat/test.me.6', 2, 'd6a296dae0ca6991df926b8d18f43cc5'),
                 ('$ROOT/wat/test.me.7', 2, '46e7da788d1c605a2293d580eeceeefd')],
                 dump_tree(objects, merged_ids['hoard'], show_fasthash=True))
+
+            self.assertEqual([
+                ('', 'different'),
+                ('/test.me.4', 'same'),
+                ('/test.me.5', 'same'),
+                ('/wat', 'different'),
+                ('/wat/test.me.2', 'same'),
+                ('/wat/test.me.6', 'same'),
+                ('/wat/test.me.7', 'left_missing')],
+                dump_diffs(objects, merged_ids['full'], merged_ids['hoard']))
+
+            self.assertEqual([
+                ('', 'different'),
+                ('/wat', 'different'),
+                ('/wat/test.me.2', 'same'),
+                ('/wat/test.me.7', 'same'),
+                ('/wat/test.me.6', 'left_missing'),
+                ('/test.me.4', 'left_missing'),
+                ('/test.me.5', 'left_missing')],
+                dump_diffs(objects, merged_ids['partial'], merged_ids['hoard']))
 
 
 def make_file(data: str) -> FileObject:

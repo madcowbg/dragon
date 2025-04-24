@@ -14,7 +14,8 @@ from command.test_hoard_command import populate_repotypes, init_complex_hoard
 from contents.hoard_props import HoardFileStatus
 from lmdb_storage.object_store import ObjectStorage
 from lmdb_storage.tree_iteration import dfs, zip_dfs
-from lmdb_storage.tree_structure import ExpandableTreeObject, add_file_object, Objects, remove_file_object, ObjectType
+from lmdb_storage.tree_structure import ExpandableTreeObject, add_file_object, Objects, remove_file_object, ObjectType, \
+    ObjectID
 from lmdb_storage.file_object import FileObject
 from sql_util import sqlite3_standard
 from util import FIRST_VALUE
@@ -32,6 +33,13 @@ def dump_tree(objects: Objects[FileObject], root_id, show_fasthash: bool = False
         (path, obj_type.value) if not show_fasthash or obj_type == ObjectType.TREE
         else (path, obj_type.value, obj.fasthash)
         for path, obj_type, _, obj, _ in dfs(objects, "$ROOT", root_id))
+
+
+def dump_diffs(objects: Objects[FileObject], left_id: ObjectID, right_id: ObjectID):
+    return [
+        (path, diff_type.value)
+        for path, diff_type, left_id, right_id, should_skip
+        in zip_dfs(objects, "", left_id, right_id)]
 
 
 class VariousLMDBFunctions(IsolatedAsyncioTestCase):
@@ -220,10 +228,7 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
                 ('/wat/test.me.2', 'same'),
                 ('/wat/test.me.3', 'same')], diffs)
 
-            diffs = [
-                (path, diff_type.value)
-                for path, diff_type, left_id, right_id, should_skip
-                in alive_it(zip_dfs(objects, "", left_id, right_id))]
+            diffs = dump_diffs(objects, left_id, right_id)
             self.assertEqual([
                 ('', 'different'),
                 ('/newdir', 'right_missing'),
