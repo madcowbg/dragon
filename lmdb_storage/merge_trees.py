@@ -1,6 +1,7 @@
 import abc
 from typing import List, Dict, Callable, Collection, Tuple, Iterable
 
+from lmdb_storage.file_object import FileObject
 from lmdb_storage.tree_structure import Objects, TreeObject, ObjectID
 from util import group_to_dict
 
@@ -24,9 +25,9 @@ class ObjectsByRoot:
     def assigned(self) -> Dict[str, ObjectID]:  # fixme deprecate, too powerful
         return self._roots_to_object
 
-    def get_if_present(self, child_name: str) -> ObjectID | None:
+    def get_if_present(self, child_name: str, default: ObjectID | None = None) -> ObjectID | None:
         assert child_name in self.allowed_roots, f"Can't get child '{child_name}'!"
-        return self._roots_to_object.get(child_name, None)
+        return self._roots_to_object.get(child_name, default)
 
     def __setitem__(self, child_name: str, value: ObjectID | None):
         assert child_name in self.allowed_roots, f"Can't set child '{child_name}'!"
@@ -52,7 +53,7 @@ class Merge[F]:
     objects: Objects[F]
 
     @abc.abstractmethod
-    def combine(self, path: List[str], children: Dict[str, ObjectsByRoot], files: ObjectsByRoot) -> ObjectsByRoot:
+    def combine(self, path: List[str], merged: ObjectsByRoot, original: ObjectsByRoot) -> ObjectsByRoot:
         """Calculates values for the combined path by working on trees and files that are attached to this path."""
         pass
 
@@ -60,29 +61,38 @@ class Merge[F]:
     def should_drill_down(self, path: List[str], trees: ObjectsByRoot, files: ObjectsByRoot) -> bool:
         pass
 
+    @abc.abstractmethod
+    def allowed_roots(self, objects_by_root: ObjectsByRoot) -> List[str]:
+        pass
+
+    def merge_trees[F](self, obj_ids: ObjectsByRoot) -> ObjectsByRoot:
+        assert isinstance(obj_ids, ObjectsByRoot)
+
+        obj_ids = ObjectsByRoot(self.allowed_roots(obj_ids), obj_ids.assigned().items())
+        return merge_trees_recursively(self, [], obj_ids)
+
 
 class TakeOneFile[F](Merge[F]):
+    def allowed_roots(self, objects_by_root: ObjectsByRoot) -> List[str]:
+        return objects_by_root.allowed_roots + ["MERGED"]
+
     def __init__(self, objects: Objects[F]):
         self.objects = objects
 
-    def combine(self, path: List[str], children: Dict[str, ObjectsByRoot], files: ObjectsByRoot) -> ObjectsByRoot:
+    def combine(self, path: List[str], merged: ObjectsByRoot, original: ObjectsByRoot) -> ObjectsByRoot:
         """Take the first value that is a file object as the resolved combined value."""
-        if len(files) > 0:  # prioritize taking the first file
-            file = next(iter(files.assigned_values()))  # fixme take with priority
-            return ObjectsByRoot.singleton("MERGED", file)
-        else:  # we are merging a tree
-            assert len(children) > 0, f"Should not have drilled down as we already have files: {files}"
+        if len(merged.assigned()) > 0:
+            return ObjectsByRoot.singleton("MERGED", merged.assigned()["MERGED"])
 
-            result = TreeObject(dict())
-            for child_name, merged_child in children.items():
-                result.children[child_name] = merged_child.get_if_present("MERGED")
-
-            result_id = result.id
-            self.objects[result_id] = result
-            return ObjectsByRoot.singleton("MERGED", result_id)
+        files = [f_id for f_id in original.assigned_values() if isinstance(self.objects[f_id], FileObject)]
+        assert len(files) > 0  # prioritize taking the first file
+        file = next(iter(files))  # fixme take with priority
+        return ObjectsByRoot.singleton("MERGED", file)
 
     def should_drill_down(self, path: List[str], trees: ObjectsByRoot, files: ObjectsByRoot) -> bool:
         return len(files) == 0  # as we prioritize taking the first file
+
+
 
 
 def split_by_object_type[F](objects: Objects[F], obj_ids: ObjectsByRoot) -> (ObjectsByRoot, ObjectsByRoot):
@@ -103,12 +113,12 @@ def merge_trees_recursively[F](merge: Merge[F], path: List[str], obj_ids: Object
     trees, files = split_by_object_type(merge.objects, obj_ids)
 
     should_drill_down = merge.should_drill_down(path, trees, files)
-    merged_children = merge_children(merge, path, trees, should_drill_down)
-    return merge.combine(path, merged_children, files)
+    merged_objects = merge_children(merge, path, trees, should_drill_down)
+    return merge.combine(path, merged_objects, obj_ids)
 
 
 def merge_children[F](
-        merge: Merge[F], path: List[str], trees: ObjectsByRoot, should_drill_down) -> Dict[str, ObjectsByRoot]:
+        merge: Merge[F], path: List[str], trees: ObjectsByRoot, should_drill_down) -> ObjectsByRoot:
     trees_objects = remap(trees.assigned(), lambda obj_id: merge.objects[obj_id])
 
     # merging child folders first
@@ -118,17 +128,25 @@ def merge_children[F](
         for child_name, child_obj_id in tree_obj.children.items()]
 
     # group by child name first
-    merged_children: Dict[str, ObjectsByRoot] = dict()
+    merged_children: Dict[str, TreeObject] = dict()
+
     child_name_to_tree_root_and_obj = group_to_dict(all_children, lambda cto: cto[0], map_to=lambda cto: cto[1:])
     for child_name, tree_root_to_obj_id in child_name_to_tree_root_and_obj.items():
         all_objects_in_name: ObjectsByRoot = ObjectsByRoot(trees.allowed_roots, tree_root_to_obj_id)
 
-        merged_children[child_name] = merge_trees_recursively(merge, path + [child_name], all_objects_in_name) \
+        merged_child_by_roots: ObjectsByRoot = merge_trees_recursively(merge, path + [child_name], all_objects_in_name) \
             if should_drill_down else all_objects_in_name
-    return merged_children
 
+        for root_name, obj_id in merged_child_by_roots.assigned().items():
+            if root_name not in merged_children:
+                merged_children[root_name] = TreeObject({})
 
-def merge_trees[F](obj_ids: ObjectsByRoot, merge: Merge[F]) -> ObjectsByRoot:
-    assert isinstance(obj_ids, ObjectsByRoot)
+            merged_children[root_name].children[child_name] = obj_id
 
-    return merge_trees_recursively(merge, [], obj_ids)
+    result = ObjectsByRoot(trees.allowed_roots)
+    for root_name, child_tree in merged_children.items():
+        new_child_id = child_tree.id
+        merge.objects[new_child_id] = child_tree
+        result[root_name] = new_child_id
+
+    return result

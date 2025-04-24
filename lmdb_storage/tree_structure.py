@@ -108,6 +108,8 @@ class Objects[F]:
         pass
 
     def mktree_from_tuples(self, all_data: Iterable[Tuple[str, F]], alive_it=do_nothing) -> bytes:
+        all_data = sorted(all_data, key=lambda t: t[0])
+
         # every element is a partially-constructed object
         # (name, partial TreeObject)
 

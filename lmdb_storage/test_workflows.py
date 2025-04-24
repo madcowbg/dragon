@@ -3,7 +3,7 @@ import unittest
 from tempfile import TemporaryDirectory
 from typing import Set
 
-from lmdb_storage.merge_trees import merge_trees, ObjectsByRoot
+from lmdb_storage.merge_trees import ObjectsByRoot
 from lmdb_storage.object_store import ObjectStorage
 from lmdb_storage.test_merge_trees import populate_trees
 from lmdb_storage.three_way_merge import ThreewayMerge
@@ -35,11 +35,9 @@ def pull_contents(env: ObjectStorage, repo_uuid: str, staging_id: ObjectID, fetc
 
     # execute merge
     with env.objects(write=True) as objects:
-        merged_ids = merge_trees(
-            current_ids,
-            ThreewayMerge(
-                objects, current="current", staging='staging', others=other_root_names,
-                fetch_new=fetch_new))
+        merged_ids = ThreewayMerge(
+            objects, current="current", staging='staging', others=other_root_names,
+            fetch_new=fetch_new).merge_trees(current_ids)
 
         assert set(merged_ids.assigned().keys()) == set(current_ids.assigned().keys()), \
             f"{set(merged_ids.assigned().keys())} != {set(current_ids.assigned().keys())}"
