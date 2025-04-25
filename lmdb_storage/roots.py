@@ -57,16 +57,18 @@ class Root:
             root_data.desired = root_id
             self.write_to_storage(root_data)
 
-    def set_staging(self, root_id: bytes):
+    @property
+    def staging(self) -> bytes | None:
+        with self.roots:
+            return self.load_from_storage.staging
+
+    @staging.setter
+    def staging(self, root_id: bytes):
         assert type(root_id) is bytes
         with self.roots:
             root_data = self.load_from_storage
             root_data.staging = root_id
             self.write_to_storage(root_data)
-
-    def get_staging(self) -> bytes | None:
-        with self.roots:
-            return self.load_from_storage.staging
 
 
 class Roots:

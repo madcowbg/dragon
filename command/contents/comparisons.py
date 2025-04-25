@@ -41,7 +41,7 @@ async def compare_local_to_hoard(
         uuid: str, hoard: HoardContents, pathing: HoardPathing,
         progress_tool=alive_it) \
         -> AsyncGenerator[Diff]:
-    staging_root_id = hoard.env.roots(False)[uuid].get_staging()
+    staging_root_id = hoard.env.roots(False)[uuid].staging
     assert staging_root_id is not None
 
     logging.info("Load current objects")
@@ -138,6 +138,6 @@ def copy_local_staging_to_hoard(hoard: HoardContents, local: RepoContents):
 
     # ensures we have the same tree
     hoard.env.copy_trees_from(local.env, [staging_root_id])
-    hoard.env.roots(write=True)[local.uuid].set_staging(staging_root_id)
+    hoard.env.roots(write=True)[local.uuid].staging = staging_root_id
 
     return staging_root_id, current_root
