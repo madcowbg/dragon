@@ -53,7 +53,7 @@ async def compare_local_to_hoard(
     _all_hoard_in_folder: Dict[FastPosixPath, HoardFileProps] = dict([
         s async for s in hoard.fsobjects.in_folder(pathing.mounted_at(uuid))])
 
-    current_root_id = hoard.env.roots(False)["HEAD"].get_current()
+    current_root_id = hoard.env.roots(False)["HEAD"].current
 
     mounted_at = pathing.mounted_at(uuid).relative_to("/")
     all_hoard_objs_in_folder = dict(
@@ -112,7 +112,7 @@ async def compare_local_to_hoard(
 
 
 async def sync_fsobject_to_object_storage(env: ObjectStorage, fsobjects: HoardFSObjects):
-    old_root_id = env.roots(False)["HEAD"].get_current()
+    old_root_id = env.roots(False)["HEAD"].current
     all_nondeleted = [
         (path.as_posix(), FileObject.create(hfo.fasthash, hfo.size))
         async for path, hfo in fsobjects.in_folder_non_deleted(FastPosixPath("/"))]
@@ -120,7 +120,7 @@ async def sync_fsobject_to_object_storage(env: ObjectStorage, fsobjects: HoardFS
     with env.objects(write=True) as objects:
         current_root_id = objects.mktree_from_tuples(all_nondeleted)
 
-    env.roots(write=True)["HEAD"].set_current(current_root_id)
+    env.roots(write=True)["HEAD"].current = current_root_id
     print(
         f"Old HEAD: {binascii.hexlify(old_root_id) if old_root_id is not None else 'None'}"
         f" vs new head {binascii.hexlify(current_root_id)}.")
@@ -130,7 +130,7 @@ async def sync_fsobject_to_object_storage(env: ObjectStorage, fsobjects: HoardFS
 def copy_local_staging_to_hoard(hoard: HoardContents, local: RepoContents):
     logging.info("Copying objects from local to hoard")
     staging_root_id = local.fsobjects.root_id
-    current_root = hoard.env.roots(False)[local.uuid].get_current()
+    current_root = hoard.env.roots(False)[local.uuid].current
     print(
         f"Current local contents "
         f"in hoard: {binascii.hexlify(current_root).decode() if current_root is not None else 'None'} "

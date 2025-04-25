@@ -10,10 +10,11 @@ from lmdb_storage.tree_structure import ObjectID
 class RootData(msgspec.Struct):
     current: bytes | None
     staging: bytes | None
+    desired: bytes | None
 
     @property
     def all(self) -> List[bytes]:
-        return [self.current, self.staging]
+        return [self.current, self.staging, self.desired]
 
 
 class Root:
@@ -21,7 +22,13 @@ class Root:
         self.name = name
         self.roots = roots
 
-    def set_current(self, root_id: bytes):
+    @property
+    def current(self) -> bytes | None:
+        with self.roots:
+            return self.load_from_storage.current
+
+    @current.setter
+    def current(self, root_id: bytes):
         assert type(root_id) is bytes
         with self.roots as roots:
             root_data = self.load_from_storage
@@ -32,14 +39,23 @@ class Root:
     @property
     def load_from_storage(self) -> RootData:
         data = self.roots.txn.get(self.name.encode())
-        return msgspec.msgpack.decode(data, type=RootData) if data else RootData(None, None)
+        return msgspec.msgpack.decode(data, type=RootData) if data else RootData(None, None, None)
 
     def write_to_storage(self, root_data: RootData):
         self.roots.txn.put(self.name.encode(), msgspec.msgpack.encode(root_data))
 
-    def get_current(self) -> bytes | None:
+    @property
+    def desired(self) -> bytes | None:
         with self.roots:
-            return self.load_from_storage.current
+            return self.load_from_storage.desired
+
+    @desired.setter
+    def desired(self, root_id: bytes | None):
+        assert type(root_id) is bytes or root_id is None
+        with self.roots:
+            root_data = self.load_from_storage
+            root_data.desired = root_id
+            self.write_to_storage(root_data)
 
     def set_staging(self, root_id: bytes):
         assert type(root_id) is bytes

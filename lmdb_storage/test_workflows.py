@@ -18,19 +18,19 @@ def pull_contents(env: ObjectStorage, repo_uuid: str, staging_id: ObjectID, fetc
 
     # assign roots
     roots = env.roots(write=False)
-    repo_current_id = roots[repo_uuid].get_current()
-    hoard_head_id = roots["HOARD"].get_current()
+    repo_current_id = roots[repo_uuid].current
+    hoard_head_id = roots["HOARD"].desired
 
     repo_staging_id = staging_id
 
-    other_roots = [r for r in roots.all if r.name != repo_current_id and r.name != "HOARD"]
+    other_roots = [r for r in roots.all if r.name != "HOARD"]
     other_root_names = [r.name for r in other_roots]
     current_ids = ObjectsByRoot(
         list(set([r.name for r in roots.all] + ["current", "staging", "HOARD"])),
-        [(r.name, r.get_current()) for r in other_roots])
-    current_ids["current"] = repo_current_id
-    current_ids["staging"] = repo_staging_id
-    current_ids["HOARD"] = hoard_head_id
+        [(r.name, r.desired) for r in other_roots] + [
+            ("current", repo_current_id),
+            ("staging", repo_staging_id),
+            ("HOARD", hoard_head_id)])
 
     assert all(v is not None for v in current_ids.assigned_values())
 
@@ -38,18 +38,18 @@ def pull_contents(env: ObjectStorage, repo_uuid: str, staging_id: ObjectID, fetc
     with env.objects(write=True) as objects:
         merged_ids = ThreewayMerge(
             objects, current="current", staging='staging', others=other_root_names,
-            fetch_new=fetch_new).merge_trees(current_ids)
+            fetch_new=set([repo_uuid] + list(fetch_new))).merge_trees(current_ids) # fixme hack to fetch_new maybe not proper?
 
-        assert set(merged_ids.assigned().keys()) == set(current_ids.assigned().keys()), \
-            f"{set(merged_ids.assigned().keys())} != {set(current_ids.assigned().keys())}"
+        assert len(set(current_ids.assigned().keys()) - set(merged_ids.assigned().keys())) == 0, \
+            f"{set(merged_ids.assigned().keys())} not contains all of {set(current_ids.assigned().keys())}"
 
     # accept the changed IDs todo implement dry-run
     roots = env.roots(write=True)
     for other_name in other_root_names:
-        roots[other_name].set_current(merged_ids.get_if_present(other_name))
+        roots[other_name].desired = merged_ids.get_if_present(other_name)
 
-    roots["HOARD"].set_current(merged_ids.get_if_present("HOARD"))
-    roots[repo_uuid].set_current(merged_ids.get_if_present("current"))
+    roots["HOARD"].desired = merged_ids.get_if_present("HOARD")
+    roots[repo_uuid].current = merged_ids.get_if_present("current")
 
 
 class TestWorkflows(unittest.TestCase):
@@ -63,17 +63,21 @@ class TestWorkflows(unittest.TestCase):
 
         # init it as empty staging
         roots = env.roots(write=True)
-        roots["HOARD"].set_current(empty_tree_id)
-        roots["partial-uuid"].set_current(empty_tree_id)
-        roots["full-uuid"].set_current(empty_tree_id)
-        roots["backup-uuid"].set_current(empty_tree_id)
-        roots["incoming-uuid"].set_current(empty_tree_id)
+        roots["HOARD"].current = empty_tree_id
+        roots["partial-uuid"].desired = empty_tree_id
+        roots["partial-uuid"].current = empty_tree_id
+        roots["full-uuid"].desired = empty_tree_id
+        roots["full-uuid"].current = empty_tree_id
+        roots["backup-uuid"].desired = empty_tree_id
+        roots["backup-uuid"].current = empty_tree_id
+        roots["incoming-uuid"].desired = empty_tree_id
+        roots["incoming-uuid"].current = empty_tree_id
 
         pull_contents(env, repo_uuid="partial-uuid", staging_id=partial_id, fetch_new={"full-uuid"})
 
         roots = env.roots(write=False)
-        current_full_id = roots["full-uuid"].get_current()
-        current_hoard_id = roots["HOARD"].get_current()
+        current_full_id = roots["full-uuid"].desired
+        current_hoard_id = roots["HOARD"].desired
 
         with env.objects(write=True) as objects:
             self.assertEqual([
@@ -94,9 +98,9 @@ class TestWorkflows(unittest.TestCase):
 
         pull_contents(env, repo_uuid="incoming-uuid", staging_id=incoming_id, fetch_new={"full-uuid"})
 
-        current_full_id = roots["full-uuid"].get_current()
-        current_hoard_id = roots["HOARD"].get_current()
-        current_incoming_id = roots["incoming-uuid"].get_current()
+        current_full_id = roots["full-uuid"].desired
+        current_hoard_id = roots["HOARD"].desired
+        current_incoming_id = roots["incoming-uuid"].desired
 
         with env.objects(write=False) as objects:
             self.assertEqual([
@@ -139,10 +143,10 @@ class TestWorkflows(unittest.TestCase):
 
         pull_contents(env, repo_uuid="incoming-uuid", staging_id=staging_incoming_id, fetch_new={"full-uuid"})
 
-        current_full_id = roots["full-uuid"].get_current()
-        current_hoard_id = roots["HOARD"].get_current()
-        current_incoming_id = roots["incoming-uuid"].get_current()
-        current_backup_id = roots["backup-uuid"].get_current()
+        current_full_id = roots["full-uuid"].desired
+        current_hoard_id = roots["HOARD"].desired
+        current_incoming_id = roots["incoming-uuid"].desired
+        current_backup_id = roots["backup-uuid"].desired
 
         self.assertEqual(current_incoming_id, staging_incoming_id)
 
@@ -184,10 +188,10 @@ class TestWorkflows(unittest.TestCase):
         # adding the backup too
         pull_contents(env, repo_uuid="backup-uuid", staging_id=backup_id, fetch_new={"full-uuid"})
 
-        current_full_id = roots["full-uuid"].get_current()
-        current_hoard_id = roots["HOARD"].get_current()
-        current_incoming_id = roots["incoming-uuid"].get_current()
-        current_backup_id = roots["backup-uuid"].get_current()
+        current_full_id = roots["full-uuid"].desired
+        current_hoard_id = roots["HOARD"].desired
+        current_incoming_id = roots["incoming-uuid"].desired
+        current_backup_id = roots["backup-uuid"].desired
 
         with env.objects(write=False) as objects:
             self.assertEqual(current_backup_id, backup_id)
@@ -237,5 +241,5 @@ class TestWorkflows(unittest.TestCase):
                 ('$ROOT', 1),
                 ('$ROOT/test.me.1', 2, 'e10d2982020fc21760e4e5245b57f664'),
                 ('$ROOT/wat', 1),
-                ('$ROOT/wat/test.me.3', 2, '2cbc8608c915e94723752d4f0c54302f')], # fixme should not have changed!
+                ('$ROOT/wat/test.me.3', 2, '2cbc8608c915e94723752d4f0c54302f')],  # fixme should not have changed!
                 dump_tree(objects, current_backup_id, show_fasthash=True))

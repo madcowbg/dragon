@@ -143,7 +143,7 @@ async def execute_pull(
             for action in calculate_actions(preferences, resolutions, pathing, config, out):
                 action.execute(preferences.local_uuid, content_prefs, hoard_contents, out)
 
-            hoard_contents.env.roots(write=True)[uuid].set_current(staging_root_id)
+            hoard_contents.env.roots(write=True)[uuid].current = staging_root_id
 
             logging.info(f"Updating epoch of {remote_uuid} to {current_contents.config.epoch}")
             hoard_contents.config.mark_up_to_date(

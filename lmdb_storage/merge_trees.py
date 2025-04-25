@@ -9,7 +9,7 @@ from util import group_to_dict
 class ObjectsByRoot:
     def __init__(self, allowed_roots: List[str], roots_to_object: Collection[Tuple[str, ObjectID]] = ()):
         self.allowed_roots = allowed_roots
-        self._roots_to_object = dict(roots_to_object)
+        self._roots_to_object = dict((k, v) for k, v in roots_to_object if v is not None)
         for child_name in self._roots_to_object:
             assert child_name in self.allowed_roots, f"Child name '{child_name}' not found in allowed roots list"
 
