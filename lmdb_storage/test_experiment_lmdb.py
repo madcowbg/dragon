@@ -79,7 +79,7 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
             with env.objects(write=True) as objects:
                 root_id = objects.mktree_from_tuples(all_data)
 
-            env.roots(write=True)["HEAD"].current = root_id
+            env.roots(write=True)["HOARD"].current = root_id
 
             all_repos = _list_uuids(conn)
             logging.info("# repos: {}".format(len(all_repos)))
@@ -103,7 +103,7 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
     def test_fully_load_lmdb(self):
         env = ObjectStorage(self.obj_storage_path)  # , map_size=(1 << 30) // 4)
 
-        root_id = env.roots(write=True)["HEAD"].current
+        root_id = env.roots(write=True)["HOARD"].current
 
         with env.objects(write=False) as objects:
             root = ExpandableTreeObject.create(root_id, objects)
@@ -131,7 +131,7 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
         env = ObjectStorage(self.obj_storage_path)
         uuid = full_cave_cmd.current_uuid()
 
-        hoard_id = env.roots(write=False)["HEAD"].current
+        hoard_id = env.roots(write=False)["HOARD"].current
         repo_id = env.roots(write=False)[uuid].current
 
         with env.objects(write=False) as objects:
@@ -263,7 +263,7 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
 
     def test_dfs(self):
         env = ObjectStorage(self.obj_storage_path)
-        hoard_id = env.roots(write=False)["HEAD"].current
+        hoard_id = env.roots(write=False)["HOARD"].current
 
         with env.objects(write=False) as objects:
             all_nodes = dump_tree(objects, hoard_id)

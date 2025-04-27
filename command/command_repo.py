@@ -90,8 +90,7 @@ class RepoCommand(object):
                             raise TypeError(f"Unexpected change type {type(change)}")
 
                 # save modified as root
-                contents.fsobjects.root_id = state.state_root_id
-                contents.write()
+                contents.fsobjects.roots["REPO"].current = state.state_root_id
 
                 logging.info("Ends updating, setting is_dirty to FALSE")
                 contents.config.end_updating()

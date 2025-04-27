@@ -61,7 +61,7 @@ async def compare_local_to_hoard(
 
     logging.info("Load hoard objects in folder")
 
-    hoard_current_id = hoard.env.roots(False)["HEAD"].current
+    hoard_current_id = hoard.env.roots(False)["HOARD"].current
 
     mounted_at = pathing.mounted_at(uuid).relative_to("/")
     all_hoard_objs_in_folder: Dict[FastPosixPath, Tuple[RepoFileStatus, FileDesc]] = dict(
@@ -121,7 +121,8 @@ async def compare_local_to_hoard(
 
 
 async def sync_fsobject_to_object_storage(env: ObjectStorage, fsobjects: HoardFSObjects):
-    old_root_id = env.roots(False)["HEAD"].current
+    old_root_id = env.roots(False)["HOARD"].current
+
     all_nondeleted = [
         (path.as_posix(), FileObject.create(hfo.fasthash, hfo.size))
         async for path, hfo in fsobjects.in_folder_non_deleted(FastPosixPath("/"))]
@@ -129,16 +130,17 @@ async def sync_fsobject_to_object_storage(env: ObjectStorage, fsobjects: HoardFS
     with env.objects(write=True) as objects:
         current_root_id = objects.mktree_from_tuples(all_nondeleted)
 
-    env.roots(write=True)["HEAD"].current = current_root_id
+    env.roots(write=True)["HOARD"].current = current_root_id
     print(
         f"Old HEAD: {binascii.hexlify(old_root_id) if old_root_id is not None else 'None'}"
         f" vs new head {binascii.hexlify(current_root_id)}.")
     return current_root_id
 
 
-def copy_local_staging_to_hoard(hoard: HoardContents, local: RepoContents):
+def copy_local_staging_to_hoard(hoard: HoardContents, local: RepoContents) -> None:
     logging.info("Copying objects from local to hoard")
     staging_root_id = local.fsobjects.root_id
+
     current_root = hoard.env.roots(False)[local.uuid].current
     print(
         f"Current local contents "
@@ -148,5 +150,3 @@ def copy_local_staging_to_hoard(hoard: HoardContents, local: RepoContents):
     # ensures we have the same tree
     hoard.env.copy_trees_from(local.env, [staging_root_id])
     hoard.env.roots(write=True)[local.uuid].staging = staging_root_id
-
-    return staging_root_id, current_root

@@ -127,7 +127,7 @@ class TestPerformance(TestCase):
                  second_index])
             logging.info("Done creating trees...")
 
-        env.roots(write=True)["HEAD"].current = first_id
+        env.roots(write=True)["HOARD"].current = first_id
         logging.info("Run GC...")
         env.gc()
         logging.info("Done GC.")

@@ -10,6 +10,7 @@ from contents.repo_props import FileDesc, RepoFileStatus
 from exceptions import MissingRepoContents
 from lmdb_storage.file_object import FileObject
 from lmdb_storage.object_store import ObjectStorage
+from lmdb_storage.roots import Roots
 from lmdb_storage.tree_iteration import dfs
 from lmdb_storage.tree_structure import Objects, ObjectID, ObjectType, add_file_object, remove_file_object
 from util import FIRST_VALUE
@@ -17,9 +18,9 @@ from util import FIRST_VALUE
 
 class RepoFSObjects:
     class Stats:
-        def __init__(self, objects: Objects[FileObject], root_id: ObjectID):
+        def __init__(self, objects: Objects[FileObject], roots: Roots):
             self.objects = objects
-            self.root_id = root_id
+            self.root_id = roots["REPO"].current
 
         @property
         def num_files(self) -> int:
@@ -35,16 +36,18 @@ class RepoFSObjects:
                     obj.size for _, obj_type, _, obj, _ in dfs(objects, "", self.root_id)
                     if obj_type == ObjectType.BLOB)
 
-    def __init__(self, objects: Objects[FileObject], root_id: ObjectID, config: "RepoContentsConfig"):
+    def __init__(self, objects: Objects[FileObject], roots: Roots, config: "RepoContentsConfig"):
         self.objects = objects
-        self.root_id = root_id
+        self.roots = roots
         self.config = config
 
-        assert self.root_id is None or len(self.root_id) == 20
+    @property
+    def root_id(self) -> ObjectID | None:
+        return self.roots["REPO"].current
 
     @property
     def stats_existing(self):
-        return RepoFSObjects.Stats(self.objects, self.root_id)
+        return RepoFSObjects.Stats(self.objects, self.roots)
 
     def _first_value_cursor(self):
         curr = self.parent.conn.cursor()
@@ -58,18 +61,22 @@ class RepoFSObjects:
         yield from self.existing()
 
     def existing(self) -> Iterable[Tuple[FastPosixPath, FileDesc]]:
-        assert self.root_id is None or len(self.root_id) == 20
+        root_id = self.root_id
+        assert root_id is None or len(root_id) == 20
         with self.objects as objects:
-            for fullpath, obj_type, obj_id, obj, _ in dfs(objects, "", self.root_id):
+            for fullpath, obj_type, obj_id, obj, _ in dfs(objects, "", root_id):
                 if obj_type == ObjectType.BLOB:
                     yield (
                         FastPosixPath(fullpath).relative_to("/"),
                         FileDesc(obj.size, obj.fasthash, None))
 
     def add_file(self, filepath: FastPosixPath, size: int, fasthash: str) -> None:
+        root_id = self.root_id
         with self.objects as objects:
-            self.root_id = add_file_object(
-                objects, self.root_id, filepath.as_posix().split("/"), FileObject.create(fasthash, size))
+            root_id = add_file_object(
+                objects, root_id, filepath.as_posix().split("/"), FileObject.create(fasthash, size))
+
+        self.roots["REPO"].current = root_id
 
     def mark_moved(self, from_file: FastPosixPath, to_file: FastPosixPath, size: int, mtime: float, fasthash: str):
         assert not from_file.is_absolute()
@@ -83,12 +90,11 @@ class RepoFSObjects:
     def mark_removed(self, path: FastPosixPath):
         assert not path.is_absolute()
 
+        root_id = self.roots["REPO"].current
         with self.objects as objects:
-            self.root_id = remove_file_object(
-                objects, self.root_id, path.as_posix().split("/"))
-
-            self.root_id = remove_file_object(
-                objects, self.root_id, path.as_posix().split("/"))
+            new_root_id = remove_file_object(
+                objects, root_id, path.as_posix().split("/"))
+        self.roots["REPO"].current = new_root_id
 
 
 class RepoContentsConfig:
@@ -184,16 +190,13 @@ class RepoContents:
 
         self.env = ObjectStorage(f"{self.filepath}.lmdb", map_size=1 << 30)  # 1GB
 
-        root_id = self.env.roots(write=False)["ROOT"].current
-
         self.objects = self.env.objects(write=True)
 
-        self.fsobjects = RepoFSObjects(self.objects, root_id, self.config)
+        self.fsobjects = RepoFSObjects(self.objects, self.env.roots(write=True), self.config)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
         assert self.objects is not None
-        self.write()
         self.env.gc()
 
         self.objects = None
@@ -203,5 +206,3 @@ class RepoContents:
 
         return False
 
-    def write(self):
-        self.env.roots(write=True)["ROOT"].current = self.fsobjects.root_id

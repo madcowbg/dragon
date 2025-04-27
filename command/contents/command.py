@@ -132,7 +132,7 @@ async def execute_pull(
             logging.info(f"Saving config of remote {remote_uuid}...")
             hoard_contents.config.save_remote_config(current_contents.config)
 
-            staging_root_id, current_root = copy_local_staging_to_hoard(hoard_contents, current_contents)
+            copy_local_staging_to_hoard(hoard_contents, current_contents)
             uuid = current_contents.config.uuid
 
             await sync_fsobject_to_object_storage(hoard_contents.env, hoard_contents.fsobjects)
@@ -144,7 +144,8 @@ async def execute_pull(
                 action.execute(preferences.local_uuid, content_prefs, hoard_contents, out)
 
             # fixme this should happen via merge, but is hacked now
-            hoard_contents.env.roots(write=True)[uuid].current = staging_root_id
+            hoard_contents.env.roots(write=True)[uuid].current = \
+                hoard_contents.env.roots(write=True)[uuid].staging
 
             logging.info(f"Updating epoch of {remote_uuid} to {current_contents.config.epoch}")
             hoard_contents.config.mark_up_to_date(
@@ -168,13 +169,11 @@ def init_pull_preferences(
 
 
 async def execute_print_pending(
-        current_contents: RepoContents, hoard: HoardContents, pathing: HoardPathing, ignore_missing: bool,
+        hoard: HoardContents, repo_uuid: str, pathing: HoardPathing, ignore_missing: bool,
         out: StringIO):
-    copy_local_staging_to_hoard(hoard, current_contents)
-    uuid = current_contents.config.uuid
-    await sync_fsobject_to_object_storage(hoard.env, hoard.fsobjects)
 
-    async for diff in compare_local_to_hoard(uuid, hoard, pathing):
+    hoard.env.roots(write=False)
+    async for diff in compare_local_to_hoard(repo_uuid, hoard, pathing):
         if diff.diff_type == DiffType.FileOnlyInLocal:
             if diff.is_added:
                 out.write(f"ADDED {diff.hoard_file.as_posix()}\n")
@@ -266,12 +265,11 @@ class HoardCommandContents:
 
                     pathing = HoardPathing(config, self.hoard.paths())
 
-                    staging_root_id, _ = copy_local_staging_to_hoard(hoard_contents, current_contents)
-                    uuid = current_contents.config.uuid
+                    copy_local_staging_to_hoard(hoard_contents, current_contents)
                     await sync_fsobject_to_object_storage(hoard_contents.env, hoard_contents.fsobjects)
 
                     resolutions = await resolution_to_match_repo_and_hoard(
-                        uuid, hoard_contents, pathing, preferences, alive_it)
+                        current_contents.config.uuid, hoard_contents, pathing, preferences, alive_it)
 
                     with StringIO() as other_out:
                         for action in calculate_actions(preferences, resolutions, pathing, config, other_out):
@@ -294,8 +292,11 @@ class HoardCommandContents:
                 with StringIO() as out:
                     out.write(f"Status of {self.hoard.config().remotes[remote_uuid].name}:\n")
 
+                    copy_local_staging_to_hoard(hoard, current_contents)
+                    await sync_fsobject_to_object_storage(hoard.env, hoard.fsobjects)
+
                     await execute_print_pending(
-                        current_contents, hoard, HoardPathing(self.hoard.config(), self.hoard.paths()), ignore_missing,
+                        hoard, current_contents.uuid, HoardPathing(self.hoard.config(), self.hoard.paths()), ignore_missing,
                         out)
                     return out.getvalue()
 

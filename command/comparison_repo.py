@@ -245,10 +245,10 @@ class FilesystemState:
         assert not fullpath.is_absolute()
 
     async def diffs(self) -> AsyncGenerator[RepoDiffs]:  # fixme no need for async
-
+        root_id = self.contents.fsobjects.root_id
         with self.contents.objects as objects:
             for fullpath, diff_type, fo_id, ff_id, skip_children in \
-                    zip_dfs(objects, "", self.contents.fsobjects.root_id, self.state_root_id, True):
+                    zip_dfs(objects, "", root_id, self.state_root_id, True):
                 ff_obj = objects[ff_id] if ff_id is not None else None
                 fo_obj = objects[fo_id] if fo_id is not None else None
 
