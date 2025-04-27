@@ -51,32 +51,31 @@ async def compare_local_to_hoard(
         uuid: str, hoard: HoardContents, pathing: HoardPathing,
         progress_tool=alive_it) \
         -> AsyncGenerator[Diff]:
-    staging_root_id = hoard.env.roots(False)[uuid].staging
-    current_root_id = hoard.env.roots(False)[uuid].current
-    assert staging_root_id is not None
+    repo_staging_id = hoard.env.roots(False)[uuid].staging
+    repo_current_id = hoard.env.roots(False)[uuid].current
+    assert repo_staging_id is not None
 
     logging.info("Load current objects")
     all_local_with_any_status: Dict[FastPosixPath, Tuple[RepoFileStatus, FileDesc]] = \
-        dict(read_files(hoard.objects, staging_root_id, current_root_id))
+        dict(read_files(hoard.objects, repo_staging_id, repo_current_id))
 
     logging.info("Load hoard objects in folder")
 
-    current_root_id = hoard.env.roots(False)["HEAD"].current
+    hoard_current_id = hoard.env.roots(False)["HEAD"].current
 
     mounted_at = pathing.mounted_at(uuid).relative_to("/")
     all_hoard_objs_in_folder: Dict[FastPosixPath, Tuple[RepoFileStatus, FileDesc]] = dict(
-        (FastPosixPath("/" + p.as_posix()), f) for p, f in read_files(hoard.objects, current_root_id, None)
+        (FastPosixPath("/" + p.as_posix()), f) for p, f in read_files(hoard.objects, hoard_current_id, None)
         if p.is_relative_to(mounted_at))
 
     logging.info("Loaded all objects.")
 
-    for current_path, (status, props) in progress_tool(all_local_with_any_status.items(), title="Current files vs. Hoard"):
+    for current_file, (status, props) in progress_tool(all_local_with_any_status.items(), title="Current files vs. Hoard"):
         if status == RepoFileStatus.DELETED or status == RepoFileStatus.MOVED_FROM:
             pass
 
         assert isinstance(props, FileDesc)
 
-        current_file = current_path
         curr_file_hoard_path = pathing.in_local(current_file, uuid).at_hoard()
         hoard_props = hoard.fsobjects[curr_file_hoard_path.as_pure_path] \
             if curr_file_hoard_path.as_pure_path in hoard.fsobjects else None
