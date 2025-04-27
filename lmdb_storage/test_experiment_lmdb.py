@@ -249,17 +249,17 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
                 in alive_it(zip_dfs(objects, "", right_id, left_id))]
             self.assertEqual([
                 ('', 'different'),
-                ('/test.me.1', 'same'),
-                ('/wat', 'different'),
-                ('/wat/test.me.2', 'same'),
-                ('/wat/zat', 'right_missing'),
-                ('/wat/zat/new.file', 'right_missing'),
-                ('/wat/lat', 'left_missing'),
-                ('/wat/lat/new.file', 'left_missing'),
-                ('/wat/test.me.3', 'left_missing'),
                 ('/newdir', 'left_missing'),
                 ('/newdir/new.file', 'left_missing'),
-                ('/test.me.4', 'left_missing')], diffs)
+                ('/test.me.1', 'same'),
+                ('/test.me.4', 'left_missing'),
+                ('/wat', 'different'),
+                ('/wat/lat', 'left_missing'),
+                ('/wat/lat/new.file', 'left_missing'),
+                ('/wat/test.me.2', 'same'),
+                ('/wat/test.me.3', 'left_missing'),
+                ('/wat/zat', 'right_missing'),
+                ('/wat/zat/new.file', 'right_missing')], diffs)
 
     def test_dfs(self):
         env = ObjectStorage(self.obj_storage_path)

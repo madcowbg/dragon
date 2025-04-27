@@ -1,5 +1,5 @@
 import enum
-from typing import Iterable, Callable, Tuple
+from typing import Iterable, Callable, Tuple, List
 
 from lmdb_storage.tree_structure import ObjectID, Objects, TreeObject, ObjectType
 
@@ -49,62 +49,51 @@ def zip_dfs(
         objects: Objects, path: str,
         left_id: bytes | None, right_id: bytes | None,
         drilldown_same: bool = False) -> Iterable[Tuple[str, DiffType, ObjectID | None, ObjectID | None, SkipFun]]:
-    if left_id is None:
-        if right_id is None:
+    for sub_path, sub_obj_ids, skip_children in zip_trees_dfs(objects, path, [left_id, right_id], drilldown_same):
+        sub_left_id, sub_right_id = sub_obj_ids
+        if sub_left_id is None:
+            yield sub_path, DiffType.LEFT_MISSING, None, sub_right_id, skip_children
+        elif sub_right_id is None:
+            yield sub_path, DiffType.RIGHT_MISSING, sub_left_id, None, skip_children
+        elif sub_left_id == sub_right_id:
+            yield sub_path, DiffType.SAME, sub_left_id, sub_right_id, skip_children
+        else:
+            yield sub_path, DiffType.DIFFERENT, sub_left_id, sub_right_id, skip_children
+
+type ObjectIDs = List[ObjectID | None]
+
+def zip_trees_dfs(
+        objects: Objects, path: str, obj_ids: ObjectIDs,
+        drilldown_same: bool = True) -> Iterable[Tuple[str, ObjectIDs, SkipFun]]:
+
+    if not any(obj_id is not None for obj_id in obj_ids):
+        return  # nothing more to yield
+
+    if len(set(obj_ids)) <= 1 and not drilldown_same:  # we got same value for all
+        yield path, obj_ids, CANT_SKIP
+        return
+
+    all_objs = [objects[obj_id] if obj_id else None for obj_id in obj_ids]
+    if any(isinstance(obj, TreeObject) for obj in all_objs):
+        # has tree
+        should_skip = False
+
+        def skip_children() -> None:
+            nonlocal should_skip
+            should_skip = True
+
+        yield path, obj_ids, skip_children
+
+        if should_skip:
             return
-        for sub_path, _, obj_id, obj, skip_children in dfs(objects, path, right_id):
-            yield sub_path, DiffType.LEFT_MISSING, None, obj_id, skip_children
 
-        return
-    if right_id is None:
-        for sub_path, _, obj_id, obj, skip_children in dfs(objects, path, left_id):
-            yield sub_path, DiffType.RIGHT_MISSING, obj_id, None, skip_children
+        child_names = set(sum([list(obj.children.keys()) for obj in all_objs if isinstance(obj, TreeObject)], []))
 
-        return
-
-    assert left_id is not None
-    assert right_id is not None
-
-
-    left_obj = objects[left_id]
-    right_obj = objects[right_id]
-
-    if left_id == right_id:
-        if drilldown_same and isinstance(left_obj, TreeObject):
-            for sub_path, _, obj_id, obj, skip_children in dfs(objects, path, left_id):
-                yield sub_path, DiffType.SAME, obj_id, obj_id, skip_children
-        else:
-            yield path, DiffType.SAME, left_id, right_id, CANT_SKIP
-        return
-
-    if not (isinstance(left_obj, TreeObject) and isinstance(right_obj, TreeObject)):
-        yield path, DiffType.DIFFERENT, left_id, right_id, CANT_SKIP
-        return
-
-    should_skip = False
-
-    def skip_children() -> None:
-        nonlocal should_skip
-        should_skip = True
-
-    yield path, DiffType.DIFFERENT, left_id, right_id, skip_children
-
-    if should_skip:
-        return
-
-    # are both dirs, drilldown...
-    for left_sub_name, left_sub_id in left_obj.children.items():
-        if left_sub_name in right_obj.children:
-            yield from zip_dfs(
-                objects,
-                path=path + "/" + left_sub_name,
-                left_id=left_sub_id, right_id=right_obj.children[left_sub_name],
-                drilldown_same=drilldown_same)
-        else:
-            yield from zip_dfs(objects, path + "/" + left_sub_name, left_sub_id, None, drilldown_same)
-
-    for right_sub_name, right_sub_id in right_obj.children.items():
-        if right_sub_name in left_obj.children:
-            pass  # already returned
-        else:
-            yield from zip_dfs(objects, path + "/" + right_sub_name, None, right_sub_id, drilldown_same)
+        for child_name in sorted(child_names):
+            yield from zip_trees_dfs(
+                objects, path + "/" + child_name,
+                [obj.children.get(child_name, None) if isinstance(obj, TreeObject) else None for obj in all_objs],
+                drilldown_same)
+    else:
+        # only one or more filesfiles
+        yield path, obj_ids, CANT_SKIP

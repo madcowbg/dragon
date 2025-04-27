@@ -140,8 +140,8 @@ class TestRepoCommand(IsolatedAsyncioTestCase):
         res = await cave_cmd.refresh()
         self.assertEqual([
             'DELETED_NO_COPY wat/test.me.twice',
-            'MODIFIED_FILE wat/test.me.once',
             'PRESENT_FILE wat/test.me.anew',
+            'MODIFIED_FILE wat/test.me.once',
             'Refresh done!'], res.splitlines())
 
         res = cave_cmd.status_index(show_dates=False)

@@ -229,13 +229,13 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
 
             self.assertEqual([
                 ('', 'different'),
+                ('/test.me.4', 'left_missing'),
+                ('/test.me.5', 'left_missing'),
                 ('/wat', 'different'),
                 ('/wat/test.me.2', 'right_missing'),
-                ('/wat/test.me.7', 'right_missing'),
                 ('/wat/test.me.3', 'left_missing'),
                 ('/wat/test.me.6', 'left_missing'),
-                ('/test.me.4', 'left_missing'),
-                ('/test.me.5', 'left_missing')],
+                ('/wat/test.me.7', 'right_missing')],
                 dump_diffs(objects, merged_ids.get_if_present('partial'), merged_ids.get_if_present('hoard')))
 
     def test_merge_threeway_incrementally(self):
@@ -393,13 +393,13 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
 
         self.assertEqual([
             ('', 'different'),
+            ('/test.me.4', 'left_missing'),
+            ('/test.me.5', 'left_missing'),
             ('/wat', 'different'),
             ('/wat/test.me.2', 'same'),
-            ('/wat/test.me.7', 'same'),
             ('/wat/test.me.3', 'left_missing'),
             ('/wat/test.me.6', 'left_missing'),
-            ('/test.me.4', 'left_missing'),
-            ('/test.me.5', 'left_missing')],
+            ('/wat/test.me.7', 'same')],
             dump_diffs(objects, merged_ids.get_if_present('partial'), merged_ids.get_if_present('hoard')))
 
 
