@@ -59,7 +59,7 @@ class RepoCommand(object):
             contents = connected_repo.create_contents(current_uuid)
 
         logging.info(f"Refreshing uuid {current_uuid}{', is first refresh' if first_refresh else ''}")
-        add_new_with_status = RepoFileStatus.ADDED if not first_refresh else RepoFileStatus.PRESENT
+        add_new_with_status = RepoFileStatus.PRESENT
 
         hoard_ignore = HoardIgnore(DEFAULT_IGNORE_GLOBS)
 
@@ -147,7 +147,7 @@ class RepoCommand(object):
 
         with contents:
             print("Calculating diffs between repo and filesystem...")
-            async for change in find_repo_changes(self.repo.path, contents, hoard_ignore, RepoFileStatus.ADDED):
+            async for change in find_repo_changes(self.repo.path, contents, hoard_ignore, RepoFileStatus.PRESENT):
                 if isinstance(change, FileIsSame):
                     files_same.append(change.relpath)
                 elif isinstance(change, FileDeleted):

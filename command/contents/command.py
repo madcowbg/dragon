@@ -538,7 +538,7 @@ class HoardCommandContents:
                                 on_hoard_only_local_unknown=PullIntention.FAIL,
                                 on_hoard_only_local_deleted=PullIntention.FAIL,
                             )
-                            added = local_props.last_status == RepoFileStatus.ADDED
+                            added = False
                             diff = Diff(DiffType.FileOnlyInLocal, local_file, hoard_file, local_props, None, added)
                             for b in _calculate_local_only(preferences.on_file_added_or_present, diff, out):
                                 b.execute(preferences.local_uuid, content_prefs, hoard, out)

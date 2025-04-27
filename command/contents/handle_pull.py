@@ -5,19 +5,15 @@ import re
 from io import StringIO
 from typing import Iterable, Tuple
 
-from alive_progress import alive_it
-
 from command.content_prefs import ContentPrefs
-from command.contents.comparisons import compare_local_to_hoard, copy_local_staging_to_hoard
+from command.contents.comparisons import compare_local_to_hoard
 from command.fast_path import FastPosixPath
 from command.pathing import HoardPathing
 from config import HoardConfig
 from contents.hoard import HoardContents
 from contents.hoard_props import HoardFileStatus, HoardFileProps
-from contents.repo import RepoContents
 from contents.repo_props import RepoFileStatus
 from contents_diff import DiffType, Diff
-from lmdb_storage.tree_structure import ObjectID
 from util import group_to_dict
 
 
@@ -50,7 +46,6 @@ class PullPreferences:
         self.on_file_added_or_present = on_file_added_or_present
 
         self.on_file_is_different_and_modified = on_file_is_different_and_modified
-        self.on_file_is_different_and_added = on_file_is_different_and_added
         self.on_file_is_different_but_present = on_file_is_different_but_present
 
         self.on_hoard_only_local_deleted = on_hoard_only_local_deleted
@@ -459,8 +454,6 @@ def compute_resolutions(all_diffs: Iterable[Diff], preferences: PullPreferences)
         assert diff.diff_type == DiffType.FileContentsDiffer
         if diff.local_props.last_status == RepoFileStatus.PRESENT:
             behavior = preferences.on_file_is_different_but_present
-        elif diff.local_props.last_status == RepoFileStatus.ADDED:
-            behavior = preferences.on_file_is_different_and_added
         elif diff.local_props.last_status == RepoFileStatus.MODIFIED:
             behavior = preferences.on_file_is_different_and_modified
         else:

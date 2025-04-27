@@ -38,7 +38,7 @@ def read_files(objects: Objects[FileObject], root_id: bytes, current_root_id: by
             if isinstance(right_obj, FileObject):
                 yield (
                     FastPosixPath(fullpath).relative_to("/"),
-                    (RepoFileStatus.ADDED, FileDesc(right_obj.size, right_obj.fasthash, None)))
+                    (RepoFileStatus.PRESENT, FileDesc(right_obj.size, right_obj.fasthash, None)))
             else:
                 left_obj = objects[left_id] if left_id is not None else None
                 if isinstance(left_obj, FileObject) and right_obj is None:
@@ -60,9 +60,6 @@ async def compare_local_to_hoard(
         dict(read_files(hoard.objects, staging_root_id, current_root_id))
 
     logging.info("Load hoard objects in folder")
-    # fixme remove
-    _all_hoard_in_folder: Dict[FastPosixPath, HoardFileProps] = dict([
-        s async for s in hoard.fsobjects.in_folder(pathing.mounted_at(uuid))])
 
     current_root_id = hoard.env.roots(False)["HEAD"].current
 
@@ -70,8 +67,6 @@ async def compare_local_to_hoard(
     all_hoard_objs_in_folder: Dict[FastPosixPath, Tuple[RepoFileStatus, FileDesc]] = dict(
         (FastPosixPath("/" + p.as_posix()), f) for p, f in read_files(hoard.objects, current_root_id, None)
         if p.is_relative_to(mounted_at))
-    assert len(_all_hoard_in_folder) == len(all_hoard_objs_in_folder), \
-        f"{len(_all_hoard_in_folder)} != {len(all_hoard_objs_in_folder)}"
 
     logging.info("Loaded all objects.")
 
@@ -87,7 +82,7 @@ async def compare_local_to_hoard(
             if curr_file_hoard_path.as_pure_path in hoard.fsobjects else None
         if hoard_props is None:
             logging.info(f"local file not in hoard: {curr_file_hoard_path}")
-            added = status == RepoFileStatus.ADDED
+            added = False
             yield Diff(DiffType.FileOnlyInLocal, current_file, curr_file_hoard_path.as_pure_path, props, None, added)
         elif is_same_file(props, hoard_props):
             logging.info(f"same in hoard {current_file}!")
@@ -120,7 +115,7 @@ async def compare_local_to_hoard(
             yield Diff(
                 DiffType.FileOnlyInHoardLocalMoved, curr_path_in_local.as_pure_path, hoard_file, local_props, props,
                 None)
-        elif status in (RepoFileStatus.ADDED, RepoFileStatus.PRESENT, RepoFileStatus.MODIFIED):
+        elif status in (RepoFileStatus.PRESENT, RepoFileStatus.MODIFIED):
             pass  # file is there, which is handled above
         else:
             raise ValueError(f"Unrecognized state: {status}")

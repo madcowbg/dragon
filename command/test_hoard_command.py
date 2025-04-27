@@ -249,7 +249,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         self.assertEqual((
             'Status of repo-in-local:\n'
             'PRESENT /newdir/newfile.is\n'
-            'MISSING /wat/test.me.different\n'
+            'DELETED /wat/test.me.different\n'
             'DONE'),
             (await hoard_cmd.contents.differences("repo-in-local")).strip())
 

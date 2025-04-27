@@ -67,7 +67,7 @@ class FileAdded:
     def __init__(
             self, relpath: FastPosixPath, size: int, fasthash: str, requested_status: RepoFileStatus):
         assert not relpath.is_absolute()
-        assert requested_status in (RepoFileStatus.ADDED, RepoFileStatus.PRESENT)
+        assert requested_status in (RepoFileStatus.PRESENT, )
         self.relpath = relpath
 
         self.mtime = datetime.now()
@@ -141,7 +141,7 @@ async def compute_changes_from_diffs(diffs_stream: AsyncGenerator[RepoDiffs], re
     for missing_relpath, missing_file_props in alive_it(files_maybe_removed, title="Detecting moves"):
         candidates_file_to_hash = [
             (file, fasthash) for (file, fasthash) in inverse_hashes.get(missing_file_props.fasthash, [])
-            if files_to_add_or_update.get(file, (None, None, None))[0] == RepoFileStatus.ADDED]
+            if files_to_add_or_update.get(file, (None, None, None))[0] == RepoFileStatus.PRESENT]
 
         if len(candidates_file_to_hash) == 0:
             logging.info(f"File {missing_relpath} has no suitable copy, marking as deleted.")
@@ -149,7 +149,7 @@ async def compute_changes_from_diffs(diffs_stream: AsyncGenerator[RepoDiffs], re
         elif len(candidates_file_to_hash) == 1:
             moved_to_file, moved_file_hash = candidates_file_to_hash[0]
             assert missing_file_props.fasthash == moved_file_hash
-            assert files_to_add_or_update[moved_to_file][0] == RepoFileStatus.ADDED
+            assert files_to_add_or_update[moved_to_file][0] == RepoFileStatus.PRESENT
 
             moved_to_relpath = FastPosixPath(moved_to_file.relative_to(repo_path))
             logging.info(f"{missing_relpath} is moved to {moved_to_relpath} ")
