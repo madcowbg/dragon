@@ -1,3 +1,4 @@
+import binascii
 import logging
 import pathlib
 from io import StringIO
@@ -5,14 +6,14 @@ from command.fast_path import FastPosixPath
 from typing import List, Optional
 
 from command.comparison_repo import FileDeleted, FileMoved, FileAdded, FileModified, FileIsSame, find_repo_changes, \
-    _apply_repo_change_to_contents, FilesystemState, compute_changes_from_diffs
+    FilesystemState, compute_changes_from_diffs
 from command.hoard_ignore import HoardIgnore, DEFAULT_IGNORE_GLOBS
 from command.repo import ProspectiveRepo
 from contents.repo_props import RepoFileStatus
 from daemon.daemon import run_daemon
 from exceptions import MissingRepo, MissingRepoContents
 from resolve_uuid import load_config, resolve_remote_uuid, load_paths
-from util import format_size, format_percent
+from util import format_size, format_percent, safe_hex
 
 
 class RepoCommand(object):
@@ -89,15 +90,17 @@ class RepoCommand(object):
                         else:
                             raise TypeError(f"Unexpected change type {type(change)}")
 
+                if len(out.getvalue()) == 0 and show_details:
+                    out.write("NO CHANGES\n")
+
+                out.write(f"old: {safe_hex(contents.fsobjects.root_id)}\n")
                 # save modified as root
                 contents.fsobjects.roots["REPO"].current = state.state_root_id
+                out.write(f"current: {safe_hex(contents.fsobjects.root_id)}\n")
 
                 logging.info("Ends updating, setting is_dirty to FALSE")
                 contents.config.end_updating()
                 assert not contents.config.is_dirty
-
-                if len(out.getvalue()) == 0 and show_details:
-                    out.write("NO CHANGES\n")
 
                 out.write(f"Refresh done!")
                 return out.getvalue()
@@ -117,7 +120,7 @@ class RepoCommand(object):
 
                 stats = contents.fsobjects.stats_existing
                 out.writelines([
-                    f"Result for local\n",
+                    f"Result for local [{safe_hex(contents.fsobjects.root_id)}]:\n",
                     f"Max size: {format_size(contents.config.max_size)}\n"
                     f"UUID: {remote_uuid}\n",
                     f"Last updated on {contents.config.updated}\n" if show_dates else "",
@@ -167,7 +170,7 @@ class RepoCommand(object):
             with StringIO() as out:
                 stats = contents.fsobjects.stats_existing
                 out.write(
-                    f"{current_uuid}:\n"
+                    f"{current_uuid} [{safe_hex(contents.fsobjects.root_id)}]:\n"
                     f"files:\n"
                     f"    same: {len(files_same)} ({format_percent(len(files_same) / files_current)})\n"
                     f"     mod: {len(files_mod)} ({format_percent(len(files_mod) / files_current)})\n"

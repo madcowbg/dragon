@@ -25,12 +25,15 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             self.tmpdir.name)
 
         res = await hoard_cmd.contents.pull("repo-full-name")
-        self.assertEqual(
-            "ADD_NEW_TO_HOARD /test.me.1\n"
-            "ADD_NEW_TO_HOARD /test.me.4\n"
-            "ADD_NEW_TO_HOARD /wat/test.me.2\n"
-            "ADD_NEW_TO_HOARD /wat/test.me.3\n"
-            "Sync'ed repo-full-name to hoard!\nDONE", res)
+        self.assertEqual((
+            'Before: Hoard [a80f91] <- repo [curr: None, stg: d99580, des: None]\n'
+            'ADD_NEW_TO_HOARD /test.me.1\n'
+            'ADD_NEW_TO_HOARD /test.me.4\n'
+            'ADD_NEW_TO_HOARD /wat/test.me.2\n'
+            'ADD_NEW_TO_HOARD /wat/test.me.3\n'
+            'After: Hoard [d99580], repo [curr: d99580, stg: d99580, des: None]\n'
+            "Sync'ed repo-full-name to hoard!\n"
+            'DONE'), res)
 
         all_files = dump_file_list(self.tmpdir.name, 'repo-full', data=True)
         self.assertDictEqual({

@@ -632,6 +632,8 @@ class HoardContents:
 
     def close(self, writeable: bool):
         self.objects = None
+
+        self.env.gc()
         self.env = None
 
         if writeable:

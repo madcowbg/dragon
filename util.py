@@ -1,10 +1,13 @@
 import asyncio
+import binascii
 import os
 import threading
 from asyncio import TaskGroup, QueueShutDown
 from itertools import groupby
 from sqlite3 import Cursor, Row
 from typing import List, Any, Callable, Coroutine, Dict, TypeVar, Iterable
+
+from lmdb_storage.tree_structure import ObjectID
 
 COUNT_KILO, COUNT_MEGA, COUNT_GIGA, COUNT_TERA = 10 ** 3, 10 ** 6, 10 ** 9, 10 ** 12
 
@@ -111,3 +114,7 @@ async def process_async(data: Iterable[T], func: Callable[[T], Coroutine], njobs
         for _ in range(njobs):
             tg_walking.create_task(process_queue())
         tg_walking.create_task(fill_queue())
+
+
+def safe_hex(root_id: ObjectID | None) -> str:
+    return binascii.hexlify(root_id).decode() if root_id else "None"

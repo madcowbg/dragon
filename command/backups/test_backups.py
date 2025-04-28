@@ -100,24 +100,31 @@ class TestBackups(IsolatedAsyncioTestCase):
         hoard_cmd, partial_cave_cmd, full_cave_cmd, incoming_cave_cmd = await init_complex_hoard(self.tmpdir.name)
 
         res = await hoard_cmd.contents.pull(all=True)
-        self.assertEqual(
-            "ADD_NEW_TO_HOARD /test.me.1\n"
-            "ADD_NEW_TO_HOARD /wat/test.me.2\n"
+        self.assertEqual((
+            'Before: Hoard [a80f91] <- repo [curr: None, stg: bf039a, des: None]\n'
+            'ADD_NEW_TO_HOARD /test.me.1\n'
+            'ADD_NEW_TO_HOARD /wat/test.me.2\n'
+            'After: Hoard [bf039a], repo [curr: bf039a, stg: bf039a, des: None]\n'
             "Sync'ed repo-partial-name to hoard!\n"
-            "=/test.me.1\n"
-            "=/wat/test.me.2\n"
-            "ADD_NEW_TO_HOARD /test.me.4\n"
-            "ADD_NEW_TO_HOARD /wat/test.me.3\n"
+            'Before: Hoard [bf039a] <- repo [curr: None, stg: 749cff, des: None]\n'
+            '=/test.me.1\n'
+            '=/wat/test.me.2\n'
+            'ADD_NEW_TO_HOARD /test.me.4\n'
+            'ADD_NEW_TO_HOARD /wat/test.me.3\n'
+            'After: Hoard [749cff], repo [curr: 749cff, stg: 749cff, des: None]\n'
             "Sync'ed repo-full-name to hoard!\n"
-            "CLEANUP_SAME /test.me.4\n"
-            "INCOMING_TO_HOARD /test.me.5\n"
-            "INCOMING_TO_HOARD /wat/test.me.6\n"
-            "CLEANUP_DIFFERENT /wat/test.me.3\n"
+            'Before: Hoard [749cff] <- repo [curr: None, stg: fabddf, des: None]\n'
+            'CLEANUP_SAME /test.me.4\n'
+            'INCOMING_TO_HOARD /test.me.5\n'
+            'INCOMING_TO_HOARD /wat/test.me.6\n'
+            'CLEANUP_DIFFERENT /wat/test.me.3\n'
+            'After: Hoard [d96cdc], repo [curr: fabddf, stg: fabddf, des: None]\n'
             "Sync'ed repo-incoming-name to hoard!\n"
-            "DONE", res)
+            'DONE'), res)
 
         res = await hoard_cmd.contents.ls()
         self.assertEqual(
+            'Root: d96cdc8b927bd585d2fe8760122ccc3a17231683\n'
             "/\n"
             "/test.me.1 = a:2\n"
             "/test.me.4 = a:1 c:1\n"
@@ -164,6 +171,7 @@ class TestBackups(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.ls()
         self.assertEqual(
+            'Root: d96cdc8b927bd585d2fe8760122ccc3a17231683\n'
             "/\n"
             "/test.me.1 = a:2\n"
             "/test.me.4 = a:1\n"
@@ -197,31 +205,46 @@ class TestBackups(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull(all=True)
         self.assertEqual([
+            'Before: Hoard [a80f91] <- repo [curr: None, stg: bf039a, des: None]',
             'ADD_NEW_TO_HOARD /test.me.1',
             'ADD_NEW_TO_HOARD /wat/test.me.2',
+            'After: Hoard [bf039a], repo [curr: bf039a, stg: bf039a, des: None]',
             "Sync'ed repo-partial-name to hoard!",
+            'Before: Hoard [bf039a] <- repo [curr: None, stg: 749cff, des: None]',
             '=/test.me.1',
             '=/wat/test.me.2',
             'ADD_NEW_TO_HOARD /test.me.4',
             'ADD_NEW_TO_HOARD /wat/test.me.3',
+            'After: Hoard [749cff], repo [curr: 749cff, stg: 749cff, des: None]',
             "Sync'ed repo-full-name to hoard!",
+            'Before: Hoard [749cff] <- repo [curr: None, stg: fabddf, des: None]',
             'CLEANUP_SAME /test.me.4',
             'INCOMING_TO_HOARD /test.me.5',
             'INCOMING_TO_HOARD /wat/test.me.6',
             'CLEANUP_DIFFERENT /wat/test.me.3',
+            'After: Hoard [d96cdc], repo [curr: fabddf, stg: fabddf, des: None]',
             "Sync'ed repo-incoming-name to hoard!",
+            'Before: Hoard [d96cdc] <- repo [curr: None, stg: 66eab2, des: None]',
             '=/test.me.1',
             '=/wat/test.me.3',
+            'After: Hoard [d96cdc], repo [curr: 66eab2, stg: 66eab2, des: None]',
             "Sync'ed backup-1 to hoard!",
+            'Before: Hoard [d96cdc] <- repo [curr: None, stg: 4d62e6, des: None]',
             '=/test.me.1',
+            'After: Hoard [d96cdc], repo [curr: 4d62e6, stg: 4d62e6, des: None]',
             "Sync'ed backup-2 to hoard!",
+            'Before: Hoard [d96cdc] <- repo [curr: None, stg: 558dfc, des: None]',
             '?/test.me.obsolete',
+            'After: Hoard [d96cdc], repo [curr: 558dfc, stg: 558dfc, des: None]',
             "Sync'ed backup-3 to hoard!",
+            'Before: Hoard [d96cdc] <- repo [curr: None, stg: a80f91, des: None]',
+            'After: Hoard [d96cdc], repo [curr: a80f91, stg: a80f91, des: None]',
             "Sync'ed backup-4 to hoard!",
             'DONE'], res.splitlines())
 
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual([
+            'Root: d96cdc8b927bd585d2fe8760122ccc3a17231683',
             '|Num Files                |total     |available |get       |cleanup   |',
             '|backup-1                 |         3|         2|         1|          |',
             '|backup-2                 |         3|         1|         2|          |',
@@ -242,6 +265,7 @@ class TestBackups(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.status(path="/wat", hide_time=True, hide_disk_sizes=True)
         self.assertEqual([
+            'Root: d96cdc8b927bd585d2fe8760122ccc3a17231683',
             '|Num Files                |total     |available |get       |cleanup   |',
             '|backup-1                 |         2|         1|         1|          |',
             '|backup-2                 |         1|          |         1|          |',
@@ -335,6 +359,7 @@ class TestBackups(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual([
+            'Root: d96cdc8b927bd585d2fe8760122ccc3a17231683',
             '|Num Files                |total     |available |cleanup   |',
             '|backup-1                 |         3|         3|          |',
             '|backup-2                 |         3|         2|         1|',
@@ -375,22 +400,31 @@ class TestBackups(IsolatedAsyncioTestCase):
             type=CaveType.BACKUP)
 
         res = await hoard_cmd.contents.pull(all=True)
-        self.assertEqual(
-            "Skipping update as past epoch 1 is not after hoard epoch 1\n"
-            "Skipping update as past epoch 1 is not after hoard epoch 1\n"
-            "Skipping update as past epoch 1 is not after hoard epoch 1\n"
-            "=/test.me.1\n"
-            "=/wat/test.me.3\n"
+        self.assertEqual((
+            'Skipping update as past epoch 1 is not after hoard epoch 1\n'
+            'Skipping update as past epoch 1 is not after hoard epoch 1\n'
+            'Skipping update as past epoch 1 is not after hoard epoch 1\n'
+            'Before: Hoard [d96cdc] <- repo [curr: None, stg: 66eab2, des: None]\n'
+            '=/test.me.1\n'
+            '=/wat/test.me.3\n'
+            'After: Hoard [d96cdc], repo [curr: 66eab2, stg: 66eab2, des: None]\n'
             "Sync'ed backup-1 to hoard!\n"
-            "=/test.me.1\n"
+            'Before: Hoard [d96cdc] <- repo [curr: None, stg: 4d62e6, des: None]\n'
+            '=/test.me.1\n'
+            'After: Hoard [d96cdc], repo [curr: 4d62e6, stg: 4d62e6, des: None]\n'
             "Sync'ed backup-2 to hoard!\n"
-            "?/test.me.obsolete\n"
+            'Before: Hoard [d96cdc] <- repo [curr: None, stg: 558dfc, des: None]\n'
+            '?/test.me.obsolete\n'
+            'After: Hoard [d96cdc], repo [curr: 558dfc, stg: 558dfc, des: None]\n'
             "Sync'ed backup-3 to hoard!\n"
+            'Before: Hoard [d96cdc] <- repo [curr: None, stg: a80f91, des: None]\n'
+            'After: Hoard [d96cdc], repo [curr: a80f91, stg: a80f91, des: None]\n'
             "Sync'ed backup-4 to hoard!\n"
-            "DONE", res)
+            'DONE'), res)
 
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual([
+            'Root: d96cdc8b927bd585d2fe8760122ccc3a17231683',
             '|Num Files                |total     |available |get       |cleanup   |',
             '|backup-1                 |         2|         2|          |          |',
             '|backup-2                 |         1|         1|          |          |',
@@ -437,6 +471,7 @@ class TestBackups(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual([
+            'Root: d96cdc8b927bd585d2fe8760122ccc3a17231683',
             '|Num Files                |total     |available |get       |cleanup   |',
             '|backup-1                 |         2|         2|          |          |',
             '|backup-2                 |         2|         1|         1|          |',
@@ -463,6 +498,7 @@ class TestBackups(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual([
+            'Root: d96cdc8b927bd585d2fe8760122ccc3a17231683',
             '|Num Files                |total     |available |get       |cleanup   |',
             '|backup-1                 |         2|         1|          |         1|',
             '|backup-2                 |         2|         1|         1|          |',
@@ -560,10 +596,14 @@ class TestBackups(IsolatedAsyncioTestCase):
             'Skipping update as past epoch 1 is not after hoard epoch 1',
             'Skipping update as past epoch 1 is not after hoard epoch 1',
             'Skipping update as past epoch 1 is not after hoard epoch 1',
+            'Before: Hoard [d96cdc] <- repo [curr: None, stg: 66eab2, des: None]',
             '=/test.me.1',
             '=/wat/test.me.3',
+            'After: Hoard [d96cdc], repo [curr: 66eab2, stg: 66eab2, des: None]',
             "Sync'ed backup-1 to hoard!",
+            'Before: Hoard [d96cdc] <- repo [curr: None, stg: 4d62e6, des: None]',
             '=/test.me.1',
+            'After: Hoard [d96cdc], repo [curr: 4d62e6, stg: 4d62e6, des: None]',
             "Sync'ed backup-2 to hoard!",
             'DONE'], res.splitlines())
 

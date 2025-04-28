@@ -45,9 +45,11 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull(cave_cmd.current_uuid())
         self.assertEqual([
+            'Before: Hoard [a80f91] <- repo [curr: None, stg: b09bd5, des: None]',
             'ADD_NEW_TO_HOARD /wat/test.me.different',
             'ADD_NEW_TO_HOARD /wat/test.me.once',
             'ADD_NEW_TO_HOARD /wat/test.me.twice',
+            'After: Hoard [b09bd5], repo [curr: b09bd5, stg: b09bd5, des: None]',
             "Sync'ed repo-in-local to hoard!",
             'DONE'], res.splitlines())
 

@@ -62,6 +62,8 @@ class TestRepoCommand(IsolatedAsyncioTestCase):
             'PRESENT_FILE wat/test.me.different',
             'PRESENT_FILE wat/test.me.once',
             'PRESENT_FILE wat/test.me.twice',
+            'old: None',
+            'current: b09bd5b9c68780abde8a55aa5c7a4a70d66e78b5',
             'Refresh done!'], res.splitlines())
 
         current_uuid = cave_cmd.current_uuid()
@@ -86,7 +88,7 @@ class TestRepoCommand(IsolatedAsyncioTestCase):
             'wat/test.me.once: present @ -1',
             'wat/test.me.twice: present @ -1',
             '--- SUMMARY ---',
-            'Result for local',
+            'Result for local [b09bd5b9c68780abde8a55aa5c7a4a70d66e78b5]:',
             'Max size: 3.5TB',
             f'UUID: {cave_cmd.current_uuid()}',
             '  # files = 3 of size 19',
@@ -94,7 +96,7 @@ class TestRepoCommand(IsolatedAsyncioTestCase):
 
         res = await cave_cmd.status()
         self.assertEqual(
-            f"{cave_cmd.current_uuid()}:\n"
+            f"{cave_cmd.current_uuid()} [b09bd5b9c68780abde8a55aa5c7a4a70d66e78b5]:\n"
             f"files:\n"
             f"    same: 3 (100.0%)\n"
             f"     mod: 0 (0.0%)\n"
@@ -118,6 +120,8 @@ class TestRepoCommand(IsolatedAsyncioTestCase):
             'PRESENT_FILE wat/test.me.different',
             'PRESENT_FILE wat/test.me.once',
             'PRESENT_FILE wat/test.me.twice',
+            'old: None',
+            'current: b09bd5b9c68780abde8a55aa5c7a4a70d66e78b5',
             'Refresh done!'], res.splitlines())
 
         res = cave_cmd.status_index(show_dates=False)
@@ -126,7 +130,7 @@ class TestRepoCommand(IsolatedAsyncioTestCase):
             'wat/test.me.once: present @ -1',
             'wat/test.me.twice: present @ -1',
             '--- SUMMARY ---',
-            'Result for local',
+            'Result for local [b09bd5b9c68780abde8a55aa5c7a4a70d66e78b5]:',
             'Max size: 3.5TB',
             f'UUID: {cave_cmd.current_uuid()}',
             '  # files = 3 of size 19',
@@ -142,6 +146,8 @@ class TestRepoCommand(IsolatedAsyncioTestCase):
             'DELETED_NO_COPY wat/test.me.twice',
             'PRESENT_FILE wat/test.me.anew',
             'MODIFIED_FILE wat/test.me.once',
+            'old: b09bd5b9c68780abde8a55aa5c7a4a70d66e78b5',
+            'current: 95572b7cc4354b3f7dcff3fc87d0243f9a356e55',
             'Refresh done!'], res.splitlines())
 
         res = cave_cmd.status_index(show_dates=False)
@@ -150,7 +156,7 @@ class TestRepoCommand(IsolatedAsyncioTestCase):
             'wat/test.me.different: present @ -1',
             'wat/test.me.once: present @ -1',
             '--- SUMMARY ---',
-            'Result for local',
+            'Result for local [95572b7cc4354b3f7dcff3fc87d0243f9a356e55]:',
             'Max size: 3.5TB',
             f'UUID: {cave_cmd.current_uuid()}',
             '  # files = 3 of size 27',
@@ -158,7 +164,7 @@ class TestRepoCommand(IsolatedAsyncioTestCase):
 
         res = await cave_cmd.status()
         self.assertEqual(
-            f"{cave_cmd.current_uuid()}:\n"
+            f"{cave_cmd.current_uuid()} [95572b7cc4354b3f7dcff3fc87d0243f9a356e55]:\n"
             f"files:\n"
             f"    same: 3 (100.0%)\n"
             f"     mod: 0 (0.0%)\n"
@@ -172,7 +178,7 @@ class TestRepoCommand(IsolatedAsyncioTestCase):
 
         res = await cave_cmd.status()
         self.assertEqual(
-            f"{cave_cmd.current_uuid()}:\n"
+            f"{cave_cmd.current_uuid()} [95572b7cc4354b3f7dcff3fc87d0243f9a356e55]:\n"
             f"files:\n"
             f"    same: 3 (75.0%)\n"
             f"     mod: 0 (0.0%)\n"
@@ -183,7 +189,11 @@ class TestRepoCommand(IsolatedAsyncioTestCase):
             f" deleted: 0 (0.0%)\n", res)
 
         res = await cave_cmd.refresh()
-        self.assertEqual(['PRESENT_FILE test.me.anew2', 'Refresh done!'], res.splitlines())
+        self.assertEqual([
+            'PRESENT_FILE test.me.anew2',
+            'old: 95572b7cc4354b3f7dcff3fc87d0243f9a356e55',
+            'current: 0159fa604019d5926a995fb06f91ed19bfa4fcef',
+            'Refresh done!'], res.splitlines())
 
         res = cave_cmd.status_index(show_dates=False)
         self.assertEqual([
@@ -192,7 +202,7 @@ class TestRepoCommand(IsolatedAsyncioTestCase):
             'wat/test.me.different: present @ -1',
             'wat/test.me.once: present @ -1',
             '--- SUMMARY ---',
-            'Result for local',
+            'Result for local [0159fa604019d5926a995fb06f91ed19bfa4fcef]:',
             'Max size: 3.5TB',
             f'UUID: {cave_cmd.current_uuid()}',
             '  # files = 4 of size 32',

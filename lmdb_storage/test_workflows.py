@@ -63,7 +63,7 @@ class TestWorkflows(unittest.TestCase):
 
         # init it as empty staging
         roots = env.roots(write=True)
-        roots["HOARD"].current = empty_tree_id
+        roots["HOARD"].desired = empty_tree_id
         roots["partial-uuid"].desired = empty_tree_id
         roots["partial-uuid"].current = empty_tree_id
         roots["full-uuid"].desired = empty_tree_id

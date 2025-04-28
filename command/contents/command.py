@@ -18,12 +18,11 @@ from command.pending_file_ops import GetFile, CopyFile, CleanupFile, get_pending
 from config import CaveType, HoardRemote
 from contents.hoard import HoardContents, HoardFile, HoardDir
 from contents.hoard_props import HoardFileStatus, HoardFileProps
-from contents.repo import RepoContents
-from contents.repo_props import FileDesc, RepoFileStatus
+from contents.repo_props import FileDesc
 from contents_diff import DiffType, Diff
 from exceptions import MissingRepoContents
 from resolve_uuid import resolve_remote_uuid
-from util import format_size, custom_isabs
+from util import format_size, custom_isabs, safe_hex
 
 
 def _file_stats(props: HoardFileProps) -> str:
@@ -135,7 +134,16 @@ async def execute_pull(
             copy_local_staging_to_hoard(hoard_contents, current_contents)
             uuid = current_contents.config.uuid
 
-            await sync_fsobject_to_object_storage(hoard_contents.env, hoard_contents.fsobjects)
+            await sync_fsobject_to_object_storage(hoard_contents.env, hoard_contents.fsobjects) # fixme remove
+
+            repo_current = hoard_contents.env.roots(False)[uuid].current
+            repo_staging = hoard_contents.env.roots(False)[uuid].staging
+            repo_desired = hoard_contents.env.roots(False)[uuid].desired
+            assert repo_staging == current_contents.fsobjects.root_id, f"{repo_current} != {current_contents.fsobjects.root_id}"
+
+            out.write(
+                f"Before: Hoard [{safe_hex(hoard_contents.env.roots(False)['HOARD'].desired)[:6]}] "
+                f"<- repo [curr: {safe_hex(repo_current)[:6]}, stg: {safe_hex(repo_staging)[:6]}, des: {safe_hex(repo_desired)[:6]}]\n")
 
             resolutions = await resolution_to_match_repo_and_hoard(
                 uuid, hoard_contents, pathing, preferences, progress_bar)
@@ -146,6 +154,17 @@ async def execute_pull(
             # fixme this should happen via merge, but is hacked now
             hoard_contents.env.roots(write=True)[uuid].current = \
                 hoard_contents.env.roots(write=True)[uuid].staging
+
+            await sync_fsobject_to_object_storage(hoard_contents.env, hoard_contents.fsobjects)  # fixme remove, just dumping
+
+            repo_current = hoard_contents.env.roots(False)[uuid].current
+            repo_staging = hoard_contents.env.roots(False)[uuid].staging
+            repo_desired = hoard_contents.env.roots(False)[uuid].desired
+            assert repo_staging == current_contents.fsobjects.root_id, f"{repo_current} != {current_contents.fsobjects.root_id}"
+
+            out.write(
+                f"After: Hoard [{safe_hex(hoard_contents.env.roots(False)['HOARD'].desired)[:6]}],"
+                f" repo [curr: {safe_hex(repo_current)[:6]}, stg: {safe_hex(repo_staging)[:6]}, des: {safe_hex(repo_desired)[:6]}]\n")
 
             logging.info(f"Updating epoch of {remote_uuid} to {current_contents.config.epoch}")
             hoard_contents.config.mark_up_to_date(
@@ -171,7 +190,6 @@ def init_pull_preferences(
 async def execute_print_pending(
         hoard: HoardContents, repo_uuid: str, pathing: HoardPathing, ignore_missing: bool,
         out: StringIO):
-
     hoard.env.roots(write=False)
     async for diff in compare_local_to_hoard(repo_uuid, hoard, pathing):
         if diff.diff_type == DiffType.FileOnlyInLocal:
@@ -272,6 +290,8 @@ class HoardCommandContents:
                         current_contents.config.uuid, hoard_contents, pathing, preferences, alive_it)
 
                     with StringIO() as other_out:
+                        out.write(f"Hoard root: {safe_hex(hoard_contents.env.roots(False)['HOARD'].desired)}:\n")
+                        out.write(f"Repo root: {safe_hex(current_contents.fsobjects.root_id)}:\n")
                         for action in calculate_actions(preferences, resolutions, pathing, config, other_out):
                             out.write(f"{action.__class__.action_type().upper()} {action.file_being_acted_on}\n")
                         logging.debug(other_out.getvalue())
@@ -290,13 +310,15 @@ class HoardCommandContents:
                 logging.info(f"Computing status ...")
 
                 with StringIO() as out:
+                    out.write(f"Root: {safe_hex(hoard.env.roots(False)['HOARD'].desired)}\n")
                     out.write(f"Status of {self.hoard.config().remotes[remote_uuid].name}:\n")
 
                     copy_local_staging_to_hoard(hoard, current_contents)
                     await sync_fsobject_to_object_storage(hoard.env, hoard.fsobjects)
 
                     await execute_print_pending(
-                        hoard, current_contents.uuid, HoardPathing(self.hoard.config(), self.hoard.paths()), ignore_missing,
+                        hoard, current_contents.uuid, HoardPathing(self.hoard.config(), self.hoard.paths()),
+                        ignore_missing,
                         out)
                     return out.getvalue()
 
@@ -314,6 +336,7 @@ class HoardCommandContents:
                 HoardFileStatus.COPY.value, HoardFileStatus.MOVE.value,
                 HoardFileStatus.CLEANUP.value) if s in available_states)]
             with StringIO() as out:
+                out.write(f"Root: {safe_hex(hoard.env.roots(False)['HOARD'].desired)}\n")
                 out.write(f"|{'Num Files':<25}|")
                 if not hide_time:
                     out.write(f"{'updated':>20}|")
@@ -379,6 +402,7 @@ class HoardCommandContents:
 
             logging.info(f"Listing files...")
             with StringIO() as out:
+                out.write(f"Root: {safe_hex(hoard.env.roots(False)['HOARD'].desired)}\n")
                 file: Optional[HoardFile]
                 folder: Optional[HoardDir]
                 for folder, file in (await hoard.fsobjects.tree).walk(selected_path, depth=depth):
