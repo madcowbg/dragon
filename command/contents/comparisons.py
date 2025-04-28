@@ -17,6 +17,7 @@ from lmdb_storage.file_object import FileObject
 from lmdb_storage.object_store import ObjectStorage
 from lmdb_storage.tree_iteration import dfs, zip_dfs
 from lmdb_storage.tree_structure import Objects, ObjectType
+from util import safe_hex
 
 
 def is_same_file(current: FileDesc, hoard: HoardFileProps):
@@ -148,9 +149,11 @@ async def sync_fsobject_to_object_storage(env: ObjectStorage, fsobjects: HoardFS
 
         root = env.roots(True)[remote.uuid]
         if remote_current_id != root.current:
-            logging.error(f"{remote.name}: {remote_current_id} is not current, current={root.current}")
+            logging.error(f"{remote.name}: {safe_hex(remote_current_id)} is not current, current={safe_hex(root.current)}")
+            # assert root.current is None, f"{remote.name}: {safe_hex(remote_current_id)} is not current, current={safe_hex(root.current)}"
         if remote_desired_id != root.desired:
-            logging.error(f"{remote.name}: {remote_desired_id} is not desired, desired={root.desired}")
+            logging.error(f"{remote.name}: {safe_hex(remote_desired_id)} is not desired, desired={safe_hex(root.desired)}")
+            # assert root.desired is None, f"{remote.name}: {safe_hex(remote_desired_id)} is not desired, desired={safe_hex(root.desired)}"
 
         root.current = remote_current_id
         root.desired = remote_desired_id
