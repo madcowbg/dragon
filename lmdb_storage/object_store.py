@@ -55,10 +55,10 @@ class ObjectStorage:
     def begin(self, db_name: str, write: bool) -> Transaction:
         return self.env.begin(db=self.env.open_db(db_name.encode()), write=write)
 
-    def objects(self, write: bool) -> "StoredObjects":
+    def objects(self, write: bool) -> StoredObjects:
         return StoredObjects(self, write, FileObject)
 
-    def roots(self, write: bool) -> "Roots":
+    def roots(self, write: bool) -> Roots:
         return Roots(self, write)
 
 
