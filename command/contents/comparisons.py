@@ -7,8 +7,9 @@ from alive_progress import alive_it
 
 from command.fast_path import FastPosixPath
 from command.pathing import HoardPathing
-from contents.hoard import HoardContents, HoardFSObjects
-from contents.hoard_props import HoardFileProps
+from config import HoardConfig
+from contents.hoard import HoardContents, HoardFSObjects, HoardContentsConfig
+from contents.hoard_props import HoardFileProps, HoardFileStatus
 from contents.repo import RepoContents
 from contents.repo_props import FileDesc, RepoFileStatus
 from contents_diff import Diff, DiffType
@@ -70,7 +71,8 @@ async def compare_local_to_hoard(
 
     logging.info("Loaded all objects.")
 
-    for current_file, (status, props) in progress_tool(all_local_with_any_status.items(), title="Current files vs. Hoard"):
+    for current_file, (status, props) in progress_tool(all_local_with_any_status.items(),
+                                                       title="Current files vs. Hoard"):
         if status == RepoFileStatus.DELETED or status == RepoFileStatus.MOVED_FROM:
             pass
 
@@ -99,7 +101,8 @@ async def compare_local_to_hoard(
         curr_path_in_local = pathing.in_hoard(hoard_file).at_local(uuid)
         assert curr_path_in_local is not None  # hoard file is not in the mounted location
         local_props: FileDesc | None
-        status, local_props = all_local_with_any_status.get(curr_path_in_local.as_pure_path, (RepoFileStatus.DELETED, None))
+        status, local_props = all_local_with_any_status.get(curr_path_in_local.as_pure_path,
+                                                            (RepoFileStatus.DELETED, None))
 
         assert isinstance(props, HoardFileProps)
 
@@ -120,7 +123,7 @@ async def compare_local_to_hoard(
             raise ValueError(f"Unrecognized state: {status}")
 
 
-async def sync_fsobject_to_object_storage(env: ObjectStorage, fsobjects: HoardFSObjects):
+async def sync_fsobject_to_object_storage(env: ObjectStorage, fsobjects: HoardFSObjects, hoard_config: HoardConfig):
     old_root_id = env.roots(False)["HOARD"].desired
 
     all_nondeleted = [
@@ -129,6 +132,28 @@ async def sync_fsobject_to_object_storage(env: ObjectStorage, fsobjects: HoardFS
 
     with env.objects(write=True) as objects:
         current_root_id = objects.mktree_from_tuples(all_nondeleted)
+
+    for remote in hoard_config.remotes.all():
+        with env.objects(write=True) as objects:
+            remote_current_id = objects.mktree_from_tuples([
+                ("/" + path.relative_to(remote.mounted_at).as_posix(), FileObject.create(hfo.fasthash, hfo.size))
+                async for path, hfo in fsobjects.in_folder_non_deleted(FastPosixPath("/"))
+                if hfo.get_status(remote.uuid) == HoardFileStatus.AVAILABLE])
+
+            remote_desired_id = objects.mktree_from_tuples([
+                ("/" + path.relative_to(remote.mounted_at).as_posix(), FileObject.create(hfo.fasthash, hfo.size))  # fixme make path absolute
+                async for path, hfo in fsobjects.in_folder_non_deleted(FastPosixPath("/"))
+                if hfo.get_status(remote.uuid) in (
+                    HoardFileStatus.AVAILABLE, HoardFileStatus.GET, HoardFileStatus.COPY, HoardFileStatus.MOVE)])
+
+        root = env.roots(True)[remote.uuid]
+        if remote_current_id != root.current:
+            logging.error(f"{remote.name}: {remote_current_id} is not current, current={root.current}")
+        if remote_desired_id != root.desired:
+            logging.error(f"{remote.name}: {remote_desired_id} is not desired, desired={root.desired}")
+
+        root.current = remote_current_id
+        root.desired = remote_desired_id
 
     env.roots(write=True)["HOARD"].desired = current_root_id
     print(

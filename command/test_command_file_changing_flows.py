@@ -30,12 +30,12 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
         self.assertEqual((
-            'Before: Hoard [a80f91] <- repo [curr: None, stg: d99580, des: None]\n'
+            'Before: Hoard [a80f91] <- repo [curr: a80f91, stg: d99580, des: a80f91]\n'
             'ADD_NEW_TO_HOARD /test.me.1\n'
             'ADD_NEW_TO_HOARD /test.me.4\n'
             'ADD_NEW_TO_HOARD /wat/test.me.2\n'
             'ADD_NEW_TO_HOARD /wat/test.me.3\n'
-            'After: Hoard [d99580], repo [curr: d99580, stg: d99580, des: None]\n'
+            'After: Hoard [d99580], repo [curr: d99580, stg: d99580, des: d99580]\n'
             "Sync'ed repo-full-name to hoard!\n"
             'DONE'), res)
 
@@ -53,10 +53,10 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull(partial_cave_cmd.current_uuid())
         self.assertEqual((
-            'Before: Hoard [d99580] <- repo [curr: None, stg: f6a740, des: None]\n'
+            'Before: Hoard [d99580] <- repo [curr: a80f91, stg: f6a740, des: a80f91]\n'
             '=/test.me.1\n'
             '=/wat/test.me.2\n'
-            'After: Hoard [d99580], repo [curr: f6a740, stg: f6a740, des: None]\n'
+            'After: Hoard [d99580], repo [curr: f6a740, stg: f6a740, des: f6a740]\n'
             "Sync'ed repo-partial-name to hoard!\n"
             'DONE'), res)
 
@@ -92,21 +92,21 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull(partial_cave_cmd.current_uuid())
         self.assertEqual((
-            'Before: Hoard [a80f91] <- repo [curr: None, stg: f6a740, des: None]\n'
+            'Before: Hoard [a80f91] <- repo [curr: a80f91, stg: f6a740, des: a80f91]\n'
             'ADD_NEW_TO_HOARD /test.me.1\n'
             'ADD_NEW_TO_HOARD /wat/test.me.2\n'
-            'After: Hoard [f6a740], repo [curr: f6a740, stg: f6a740, des: None]\n'
+            'After: Hoard [f6a740], repo [curr: f6a740, stg: f6a740, des: f6a740]\n'
             "Sync'ed repo-partial-name to hoard!\n"
             'DONE'), res)
 
         res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
         self.assertEqual((
-            'Before: Hoard [f6a740] <- repo [curr: None, stg: d99580, des: None]\n'
+            'Before: Hoard [f6a740] <- repo [curr: a80f91, stg: d99580, des: f6a740]\n'
             '=/test.me.1\n'
             '=/wat/test.me.2\n'
             'ADD_NEW_TO_HOARD /test.me.4\n'
             'ADD_NEW_TO_HOARD /wat/test.me.3\n'
-            'After: Hoard [d99580], repo [curr: d99580, stg: d99580, des: None]\n'
+            'After: Hoard [d99580], repo [curr: d99580, stg: d99580, des: d99580]\n'
             "Sync'ed repo-full-name to hoard!\n"
             'DONE'), res)
 
@@ -148,10 +148,10 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
         self.assertEqual((
-            'Before: Hoard [d99580] <- repo [curr: d99580, stg: 186d70, des: None]\n'
+            'Before: Hoard [d99580] <- repo [curr: d99580, stg: 186d70, des: d99580]\n'
             'ADD_NEW_TO_HOARD /wat/test.me.z\n'
             'DELETE_FROM_HOARD /wat/test.me.3\n'
-            'After: Hoard [186d70], repo [curr: 186d70, stg: 186d70, des: None]\n'
+            'After: Hoard [186d70], repo [curr: 186d70, stg: 186d70, des: 186d70]\n'
             'remove dangling /wat/test.me.3\n'
             "Sync'ed repo-full-name to hoard!\n"
             'DONE'), res)
@@ -192,9 +192,9 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull(partial_cave_cmd.current_uuid())
         self.assertEqual((
-            'Before: Hoard [186d70] <- repo [curr: f6a740, stg: d404e3, des: None]\n'
+            'Before: Hoard [186d70] <- repo [curr: f6a740, stg: d404e3, des: f6a740]\n'
             'ADD_NEW_TO_HOARD /test.me.5\n'
-            'After: Hoard [038992], repo [curr: d404e3, stg: d404e3, des: None]\n'
+            'After: Hoard [038992], repo [curr: d404e3, stg: d404e3, des: d404e3]\n'
             "Sync'ed repo-partial-name to hoard!\n"
             'DONE'), res)
 
@@ -324,10 +324,10 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
         self.assertEqual((
-            'Before: Hoard [d99580] <- repo [curr: d99580, stg: 186d70, des: None]\n'
+            'Before: Hoard [d99580] <- repo [curr: d99580, stg: 186d70, des: d99580]\n'
             'ADD_NEW_TO_HOARD /wat/test.me.z\n'
             'DELETE_FROM_HOARD /wat/test.me.3\n'
-            'After: Hoard [186d70], repo [curr: 186d70, stg: 186d70, des: None]\n'
+            'After: Hoard [186d70], repo [curr: 186d70, stg: 186d70, des: 186d70]\n'
             'remove dangling /wat/test.me.3\n'
             "Sync'ed repo-full-name to hoard!\n"
             'DONE'), res)
@@ -388,9 +388,9 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
         self.assertEqual((
-            'Before: Hoard [d99580] <- repo [curr: d99580, stg: ef6ec6, des: None]\n'
+            'Before: Hoard [d99580] <- repo [curr: d99580, stg: ef6ec6, des: d99580]\n'
             'DELETE_FROM_HOARD /wat/test.me.2\n'
-            'After: Hoard [ef6ec6], repo [curr: ef6ec6, stg: ef6ec6, des: None]\n'
+            'After: Hoard [ef6ec6], repo [curr: ef6ec6, stg: ef6ec6, des: ef6ec6]\n'
             "Sync'ed repo-full-name to hoard!\n"
             'DONE'), res)
 
@@ -511,21 +511,21 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         # refresh new contents file
         res = await hoard_cmd.contents.pull(new_content_cmd.current_uuid())
         self.assertEqual((
-            'Before: Hoard [f6a740] <- repo [curr: None, stg: b632f9, des: None]\n'
+            'Before: Hoard [f6a740] <- repo [curr: a80f91, stg: b632f9, des: a80f91]\n'
             'ADD_NEW_TO_HOARD /wat/one-new.file\n'
-            'After: Hoard [7e6fc7], repo [curr: b632f9, stg: b632f9, des: None]\n'
+            'After: Hoard [7e6fc7], repo [curr: b632f9, stg: b632f9, des: b632f9]\n'
             "Sync'ed repo-new-contents-name to hoard!\n"
             'DONE'), res)
 
         # pull full as well - its files will be added to the new repop
         res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
         self.assertEqual((
-            'Before: Hoard [7e6fc7] <- repo [curr: None, stg: d99580, des: None]\n'
+            'Before: Hoard [7e6fc7] <- repo [curr: a80f91, stg: d99580, des: 7e6fc7]\n'
             '=/test.me.1\n'
             '=/wat/test.me.2\n'
             'ADD_NEW_TO_HOARD /test.me.4\n'
             'ADD_NEW_TO_HOARD /wat/test.me.3\n'
-            'After: Hoard [fe7ed2], repo [curr: d99580, stg: d99580, des: None]\n'
+            'After: Hoard [fe7ed2], repo [curr: d99580, stg: d99580, des: fe7ed2]\n'
             "Sync'ed repo-full-name to hoard!\n"
             'DONE'), res)
 
@@ -575,8 +575,8 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull(new_content_cmd.current_uuid())
         self.assertEqual((
-            'Before: Hoard [fe7ed2] <- repo [curr: b632f9, stg: b632f9, des: None]\n'
-            'After: Hoard [fe7ed2], repo [curr: b632f9, stg: b632f9, des: None]\n'
+            'Before: Hoard [fe7ed2] <- repo [curr: b632f9, stg: b632f9, des: 7a03be]\n'
+            'After: Hoard [fe7ed2], repo [curr: b632f9, stg: b632f9, des: 7a03be]\n'
             "Sync'ed repo-new-contents-name to hoard!\n"
             'DONE'), res)
 
@@ -640,21 +640,21 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull(partial_cave_cmd.current_uuid())
         self.assertEqual((
-            'Before: Hoard [a80f91] <- repo [curr: None, stg: f6a740, des: None]\n'
+            'Before: Hoard [a80f91] <- repo [curr: a80f91, stg: f6a740, des: a80f91]\n'
             'ADD_NEW_TO_HOARD /test.me.1\n'
             'ADD_NEW_TO_HOARD /wat/test.me.2\n'
-            'After: Hoard [f6a740], repo [curr: f6a740, stg: f6a740, des: None]\n'
+            'After: Hoard [f6a740], repo [curr: f6a740, stg: f6a740, des: f6a740]\n'
             "Sync'ed repo-partial-name to hoard!\n"
             'DONE'), res)
 
         res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
         self.assertEqual((
-            'Before: Hoard [f6a740] <- repo [curr: None, stg: d99580, des: None]\n'
+            'Before: Hoard [f6a740] <- repo [curr: a80f91, stg: d99580, des: f6a740]\n'
             '=/test.me.1\n'
             '=/wat/test.me.2\n'
             'ADD_NEW_TO_HOARD /test.me.4\n'
             'ADD_NEW_TO_HOARD /wat/test.me.3\n'
-            'After: Hoard [d99580], repo [curr: d99580, stg: d99580, des: None]\n'
+            'After: Hoard [d99580], repo [curr: d99580, stg: d99580, des: d99580]\n'
             "Sync'ed repo-full-name to hoard!\n"
             'DONE'), res)
 
@@ -673,12 +673,12 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull(changed_cave_cmd.current_uuid(), assume_current=True)
         self.assertEqual((
-            'Before: Hoard [d99580] <- repo [curr: None, stg: 71cadb, des: None]\n'
+            'Before: Hoard [d99580] <- repo [curr: a80f91, stg: 71cadb, des: a80f91]\n'
             '=/test.me.4\n'
             '=/wat/test.me.2\n'
             'RESETTING /test.me.1\n'
             'RESETTING /wat/test.me.3\n'
-            'After: Hoard [71cadb], repo [curr: 71cadb, stg: 71cadb, des: None]\n'
+            'After: Hoard [71cadb], repo [curr: 71cadb, stg: 71cadb, des: 71cadb]\n'
             "Sync'ed repo-changed-cave-name to hoard!\n"
             'DONE'), res)
 
@@ -807,10 +807,10 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull(partial_cave_cmd.current_uuid())
         self.assertEqual((
-            'Before: Hoard [a80f91] <- repo [curr: None, stg: f6a740, des: None]\n'
+            'Before: Hoard [a80f91] <- repo [curr: a80f91, stg: f6a740, des: a80f91]\n'
             'ADD_NEW_TO_HOARD /test.me.1\n'
             'ADD_NEW_TO_HOARD /wat/test.me.2\n'
-            'After: Hoard [f6a740], repo [curr: f6a740, stg: f6a740, des: None]\n'
+            'After: Hoard [f6a740], repo [curr: f6a740, stg: f6a740, des: f6a740]\n'
             "Sync'ed repo-partial-name to hoard!\n"
             'DONE'), res)
 
@@ -834,12 +834,12 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
         self.assertEqual((
-            'Before: Hoard [f6a740] <- repo [curr: None, stg: d99580, des: None]\n'
+            'Before: Hoard [f6a740] <- repo [curr: a80f91, stg: d99580, des: f6a740]\n'
             '=/test.me.1\n'
             '=/wat/test.me.2\n'
             'ADD_NEW_TO_HOARD /test.me.4\n'
             'ADD_NEW_TO_HOARD /wat/test.me.3\n'
-            'After: Hoard [d99580], repo [curr: d99580, stg: d99580, des: None]\n'
+            'After: Hoard [d99580], repo [curr: d99580, stg: d99580, des: d99580]\n'
             "Sync'ed repo-full-name to hoard!\n"
             'DONE'), res)
 
@@ -940,18 +940,18 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'DELETE_FILE_FROM_HOARD_BEHAVIOR /wat/test.me.2'], res.splitlines())
 
         res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
-        self.assertEqual((
-            'Before: Hoard [d99580] <- repo [curr: d99580, stg: 93044f, des: None]\n'
-            'ADD_NEW_TO_HOARD /lets_get_it_started/test.me.2-butnew\n'
-            'ADD_NEW_TO_HOARD /lets_get_it_started/test.me.2-butsecond\n'
-            'ADD_NEW_TO_HOARD /lets_get_it_started/test.me.4-renamed\n'  # todo should not be logged, as we move it
-            'ADD_NEW_TO_HOARD /test.me.added\n'
-            'g/test.me.1\n'
-            'DELETE_FROM_HOARD /test.me.4\n'
-            'DELETE_FROM_HOARD /wat/test.me.2\n'
-            'After: Hoard [9b791e], repo [curr: 93044f, stg: 93044f, des: None]\n'
-            "Sync'ed repo-full-name to hoard!\n"
-            'DONE'), res)
+        self.assertEqual(
+            ('Before: Hoard [d99580] <- repo [curr: d99580, stg: 93044f, des: d99580]\n'
+             'ADD_NEW_TO_HOARD /lets_get_it_started/test.me.2-butnew\n'
+             'ADD_NEW_TO_HOARD /lets_get_it_started/test.me.2-butsecond\n'
+             'ADD_NEW_TO_HOARD /lets_get_it_started/test.me.4-renamed\n'  # todo should not be logged, as we move it
+             'ADD_NEW_TO_HOARD /test.me.added\n'
+             'g/test.me.1\n'
+             'DELETE_FROM_HOARD /test.me.4\n'
+             'DELETE_FROM_HOARD /wat/test.me.2\n'
+             'After: Hoard [9b791e], repo [curr: bd737a, stg: 93044f, des: 9b791e]\n'
+             "Sync'ed repo-full-name to hoard!\n"
+             'DONE'), res)
 
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual((
@@ -1052,15 +1052,15 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull(copy_cave_cmd.current_uuid())
         self.assertEqual((
-            'Before: Hoard [9b791e] <- repo [curr: None, stg: 9b791e, des: None]\n'
-            'After: Hoard [9b791e], repo [curr: 9b791e, stg: 9b791e, des: None]\n'
+            'Before: Hoard [9b791e] <- repo [curr: 9b791e, stg: 9b791e, des: 9b791e]\n'
+            'After: Hoard [9b791e], repo [curr: 9b791e, stg: 9b791e, des: 9b791e]\n'
             "Sync'ed repo-copy-name to hoard!\n"
             'DONE'), res)
 
         res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
         self.assertEqual((
-            'Before: Hoard [9b791e] <- repo [curr: 93044f, stg: 9b791e, des: None]\n'
-            'After: Hoard [9b791e], repo [curr: 9b791e, stg: 9b791e, des: None]\n'
+            'Before: Hoard [9b791e] <- repo [curr: 9b791e, stg: 9b791e, des: 9b791e]\n'
+            'After: Hoard [9b791e], repo [curr: 9b791e, stg: 9b791e, des: 9b791e]\n'
             "Sync'ed repo-full-name to hoard!\n"
             'DONE'), res)
 
@@ -1083,10 +1083,10 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull(partial_cave_cmd.current_uuid())
         self.assertEqual((
-            'Before: Hoard [a80f91] <- repo [curr: None, stg: f6a740, des: None]\n'
+            'Before: Hoard [a80f91] <- repo [curr: a80f91, stg: f6a740, des: a80f91]\n'
             'ADD_NEW_TO_HOARD /test.me.1\n'
             'ADD_NEW_TO_HOARD /wat/test.me.2\n'
-            'After: Hoard [f6a740], repo [curr: f6a740, stg: f6a740, des: None]\n'
+            'After: Hoard [f6a740], repo [curr: f6a740, stg: f6a740, des: f6a740]\n'
             "Sync'ed repo-partial-name to hoard!\n"
             'DONE'), res)
 
@@ -1100,21 +1100,21 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
         self.assertEqual((
-            'Before: Hoard [f6a740] <- repo [curr: None, stg: d99580, des: None]\n'
+            'Before: Hoard [f6a740] <- repo [curr: a80f91, stg: d99580, des: f6a740]\n'
             '=/test.me.1\n'
             '=/wat/test.me.2\n'
             'ADD_NEW_TO_HOARD /test.me.4\n'
             'ADD_NEW_TO_HOARD /wat/test.me.3\n'
-            'After: Hoard [d99580], repo [curr: d99580, stg: d99580, des: None]\n'
+            'After: Hoard [d99580], repo [curr: d99580, stg: d99580, des: d99580]\n'
             "Sync'ed repo-full-name to hoard!\n"
             'DONE'), res)
 
         res = await hoard_cmd.contents.pull(backup_cave_cmd.current_uuid())
         self.assertEqual((
-            'Before: Hoard [d99580] <- repo [curr: None, stg: 9fbdcf, des: None]\n'
+            'Before: Hoard [d99580] <- repo [curr: a80f91, stg: 9fbdcf, des: d99580]\n'
             '=/test.me.1\n'
             '=/wat/test.me.3\n'
-            'After: Hoard [d99580], repo [curr: 9fbdcf, stg: 9fbdcf, des: None]\n'
+            'After: Hoard [d99580], repo [curr: 9fbdcf, stg: 9fbdcf, des: d99580]\n'
             "Sync'ed repo-backup-name to hoard!\n"
             'DONE'), res)
 
@@ -1226,17 +1226,17 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
         self.assertEqual((
-            'Before: Hoard [d99580] <- repo [curr: d99580, stg: 93044f, des: None]\n'
+            'Before: Hoard [d99580] <- repo [curr: d99580, stg: 93044f, des: d99580]\n'
             'ADD_NEW_TO_HOARD /lets_get_it_started/test.me.2-butnew\n'
             'ADD_NEW_TO_HOARD /lets_get_it_started/test.me.2-butsecond\n'
-            'ADD_NEW_TO_HOARD /lets_get_it_started/test.me.4-renamed\n'  # todo should not be logged, as we move it
+            'ADD_NEW_TO_HOARD /lets_get_it_started/test.me.4-renamed\n'
             'ADD_NEW_TO_HOARD /test.me.added\n'
             'g/test.me.1\n'
             'DELETE_FROM_HOARD /test.me.4\n'
             'DELETE_FROM_HOARD /wat/test.me.2\n'
             # "MOVE repo-backup-name: /test.me.4 to /lets_get_it_started/test.me.4-renamed\n"
             # "MOVE repo-copy-name: /test.me.4 to /lets_get_it_started/test.me.4-renamed\n"
-            'After: Hoard [9b791e], repo [curr: 93044f, stg: 93044f, des: None]\n'
+            'After: Hoard [9b791e], repo [curr: bd737a, stg: 93044f, des: 9b791e]\n'
             "Sync'ed repo-full-name to hoard!\n"
             'DONE'), res)
 
@@ -1363,15 +1363,15 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull(copy_cave_cmd.current_uuid())
         self.assertEqual((
-            'Before: Hoard [9b791e] <- repo [curr: None, stg: 9b791e, des: None]\n'
-            'After: Hoard [9b791e], repo [curr: 9b791e, stg: 9b791e, des: None]\n'
+            'Before: Hoard [9b791e] <- repo [curr: 9b791e, stg: 9b791e, des: 9b791e]\n'
+            'After: Hoard [9b791e], repo [curr: 9b791e, stg: 9b791e, des: 9b791e]\n'
             "Sync'ed repo-copy-name to hoard!\n"
             'DONE'), res)
 
         res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
         self.assertEqual((
-            'Before: Hoard [9b791e] <- repo [curr: 93044f, stg: 9b791e, des: None]\n'
-            'After: Hoard [9b791e], repo [curr: 9b791e, stg: 9b791e, des: None]\n'
+            'Before: Hoard [9b791e] <- repo [curr: 9b791e, stg: 9b791e, des: 9b791e]\n'
+            'After: Hoard [9b791e], repo [curr: 9b791e, stg: 9b791e, des: 9b791e]\n'
             "Sync'ed repo-full-name to hoard!\n"
             'DONE'), res)
 
@@ -1414,12 +1414,12 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull(partial_cave_cmd.current_uuid())
         self.assertEqual((
-            'Before: Hoard [9b791e] <- repo [curr: f6a740, stg: dde8f8, des: None]\n'
+            'Before: Hoard [9b791e] <- repo [curr: 10a305, stg: dde8f8, des: 10a305]\n'
             '?/wat/test.me.2\n'
             'ADD_NEW_TO_HOARD /test.me.1-newlocation\n'
             'DELETE_FROM_HOARD /test.me.1\n'
             # fixme we expected error - move will fail, but the fallback is to just get it
-            'After: Hoard [18e59d], repo [curr: dde8f8, stg: dde8f8, des: None]\n'
+            'After: Hoard [18e59d], repo [curr: f238b2, stg: dde8f8, des: f238b2]\n'
             "Sync'ed repo-partial-name to hoard!\n"
             'DONE'), res)
 
@@ -1507,12 +1507,12 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
         self.assertEqual((
-            'Before: Hoard [f6a740] <- repo [curr: None, stg: d99580, des: None]\n'
+            'Before: Hoard [f6a740] <- repo [curr: a80f91, stg: d99580, des: f6a740]\n'
             '=/test.me.1\n'
             '=/wat/test.me.2\n'
             'ADD_NEW_TO_HOARD /test.me.4\n'
             'ADD_NEW_TO_HOARD /wat/test.me.3\n'
-            'After: Hoard [d99580], repo [curr: d99580, stg: d99580, des: None]\n'
+            'After: Hoard [d99580], repo [curr: d99580, stg: d99580, des: d99580]\n'
             "Sync'ed repo-full-name to hoard!\n"
             'DONE'), res)
 
@@ -1572,12 +1572,12 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
         self.assertEqual((
-            'Before: Hoard [d99580] <- repo [curr: d99580, stg: 3aabb1, des: None]\n'
+            'Before: Hoard [d99580] <- repo [curr: d99580, stg: 3aabb1, des: d99580]\n'
             'ADD_NEW_TO_HOARD /lets_get_it_started/test.me.4-renamed\n'
             'ADD_NEW_TO_HOARD /test.me.added\n'
             'g/test.me.1\n'
             'DELETE_FROM_HOARD /test.me.4\n'
-            'After: Hoard [96be5f], repo [curr: 3aabb1, stg: 3aabb1, des: None]\n'
+            'After: Hoard [96be5f], repo [curr: 38d7f4, stg: 3aabb1, des: 96be5f]\n'
             "Sync'ed repo-full-name to hoard!\n"
             'DONE'), res)
 
@@ -1598,10 +1598,10 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull(backup_cave_cmd.current_uuid())
         self.assertEqual((
-            'Before: Hoard [96be5f] <- repo [curr: None, stg: 9fbdcf, des: None]\n'
+            'Before: Hoard [96be5f] <- repo [curr: eb5581, stg: 9fbdcf, des: 96be5f]\n'
             # f"ALREADY_MARKED_GET /test.me.1\n"  # fixme
             'g/wat/test.me.2\n'
-            'After: Hoard [96be5f], repo [curr: 9fbdcf, stg: 9fbdcf, des: None]\n'
+            'After: Hoard [96be5f], repo [curr: 9fbdcf, stg: 9fbdcf, des: 96be5f]\n'
             "Sync'ed repo-backup-name to hoard!\n"
             'DONE'), res)
 
@@ -1686,12 +1686,12 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
         self.assertEqual((
-            'Before: Hoard [96be5f] <- repo [curr: 3aabb1, stg: 93044f, des: None]\n'
+            'Before: Hoard [96be5f] <- repo [curr: 38d7f4, stg: 93044f, des: 96be5f]\n'
             'ADD_NEW_TO_HOARD /lets_get_it_started/test.me.2-butnew\n'
             'ADD_NEW_TO_HOARD /lets_get_it_started/test.me.2-butsecond\n'
             'ALREADY_MARKED_GET /test.me.1\n'  # fixme shan't do
             'DELETE_FROM_HOARD /wat/test.me.2\n'
-            'After: Hoard [9b791e], repo [curr: 93044f, stg: 93044f, des: None]\n'
+            'After: Hoard [9b791e], repo [curr: bd737a, stg: 93044f, des: 9b791e]\n'
             "Sync'ed repo-full-name to hoard!\n"
             'DONE'), res)
 
@@ -1716,29 +1716,29 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull(all=True)
         self.assertEqual([
-            'Before: Hoard [a80f91] <- repo [curr: None, stg: f6a740, des: None]',
+            'Before: Hoard [a80f91] <- repo [curr: a80f91, stg: f6a740, des: a80f91]',
             'ADD_NEW_TO_HOARD /test.me.1',
             'ADD_NEW_TO_HOARD /wat/test.me.2',
-            'After: Hoard [f6a740], repo [curr: f6a740, stg: f6a740, des: None]',
+            'After: Hoard [f6a740], repo [curr: f6a740, stg: f6a740, des: f6a740]',
             "Sync'ed repo-partial-name to hoard!",
-            'Before: Hoard [f6a740] <- repo [curr: None, stg: d99580, des: None]',
+            'Before: Hoard [f6a740] <- repo [curr: a80f91, stg: d99580, des: f6a740]',
             '=/test.me.1',
             '=/wat/test.me.2',
             'ADD_NEW_TO_HOARD /test.me.4',
             'ADD_NEW_TO_HOARD /wat/test.me.3',
-            'After: Hoard [d99580], repo [curr: d99580, stg: d99580, des: None]',
+            'After: Hoard [d99580], repo [curr: d99580, stg: d99580, des: d99580]',
             "Sync'ed repo-full-name to hoard!",
-            'Before: Hoard [d99580] <- repo [curr: None, stg: 9fbdcf, des: None]',
+            'Before: Hoard [d99580] <- repo [curr: a80f91, stg: 9fbdcf, des: d99580]',
             '=/test.me.1',
             '=/wat/test.me.3',
-            'After: Hoard [d99580], repo [curr: 9fbdcf, stg: 9fbdcf, des: None]',
+            'After: Hoard [d99580], repo [curr: 9fbdcf, stg: 9fbdcf, des: d99580]',
             "Sync'ed repo-backup-name to hoard!",
-            'Before: Hoard [d99580] <- repo [curr: None, stg: e9ce07, des: None]',
+            'Before: Hoard [d99580] <- repo [curr: a80f91, stg: e9ce07, des: a80f91]',
             'CLEANUP_SAME /test.me.4',
             'INCOMING_TO_HOARD /test.me.5',
             'INCOMING_TO_HOARD /wat/test.me.6',
             'CLEANUP_DIFFERENT /wat/test.me.3',
-            'After: Hoard [89527b], repo [curr: e9ce07, stg: e9ce07, des: None]',
+            'After: Hoard [89527b], repo [curr: a80f91, stg: e9ce07, des: a80f91]',
             "Sync'ed repo-incoming-name to hoard!",
             'DONE'], res.splitlines())
 
@@ -1769,8 +1769,8 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
         self.assertEqual([
-            'Before: Hoard [89527b] <- repo [curr: d99580, stg: 89527b, des: None]',
-            'After: Hoard [89527b], repo [curr: 89527b, stg: 89527b, des: None]',
+            'Before: Hoard [89527b] <- repo [curr: 89527b, stg: 89527b, des: 89527b]',
+            'After: Hoard [89527b], repo [curr: 89527b, stg: 89527b, des: 89527b]',
             "Sync'ed repo-full-name to hoard!",
             'DONE'], res.splitlines())
 
@@ -1819,12 +1819,12 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.restore(full_cave_cmd.current_uuid())
         self.assertEqual([
-            'Before: Hoard [89527b] <- repo [curr: 89527b, stg: 0577b2, des: None]',
+            'Before: Hoard [89527b] <- repo [curr: 89527b, stg: 0577b2, des: 89527b]',
             'DELETE /test.me.6-moved',  # fixme should clean up unnecessary files maybe?
             'g/test.me.4',
             'g/wat/test.me.2',
             'g/wat/test.me.6',
-            'After: Hoard [89527b], repo [curr: 0577b2, stg: 0577b2, des: None]',
+            'After: Hoard [89527b], repo [curr: 2f92d4, stg: 0577b2, des: 89527b]',
             "Sync'ed repo-full-name to hoard!",
             'DONE'], res.splitlines())
 
@@ -1884,13 +1884,11 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         self.assertEqual([
             'Status of repo-full-name:',
             'Hoard root: 89527b0fa576e127d04089d9cb5aab0e5619696d:',
-            'Repo root: 89527b0fa576e127d04089d9cb5aab0e5619696d:',
-            'ADD_NEW_FILE_BEHAVIOR /test.me.6-moved'], res.splitlines())
+            'Repo root: 89527b0fa576e127d04089d9cb5aab0e5619696d:'], res.splitlines())
 
         res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
         self.assertEqual([
-            'Before: Hoard [89527b] <- repo [curr: 0577b2, stg: 89527b, des: None]',
-            'ADD_NEW_TO_HOARD /test.me.6-moved',
-            'After: Hoard [806fc5], repo [curr: 89527b, stg: 89527b, des: None]',
+            'Before: Hoard [89527b] <- repo [curr: 89527b, stg: 89527b, des: 89527b]',
+            'After: Hoard [89527b], repo [curr: 89527b, stg: 89527b, des: 89527b]',
             "Sync'ed repo-full-name to hoard!",
             'DONE'], res.splitlines())

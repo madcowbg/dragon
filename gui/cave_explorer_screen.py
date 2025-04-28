@@ -188,7 +188,7 @@ class HoardContentsPendingToPull(Tree[Action]):
 
                     copy_local_staging_to_hoard(hoard_contents, current_contents)
                     uuid = current_contents.config.uuid
-                    await sync_fsobject_to_object_storage(hoard_contents.env, hoard_contents.fsobjects)
+                    await sync_fsobject_to_object_storage(hoard_contents.env, hoard_contents.fsobjects, hoard_config)
 
                     resolutions = await resolution_to_match_repo_and_hoard(
                         uuid, hoard_contents, pathing, preferences,

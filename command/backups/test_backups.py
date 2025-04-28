@@ -101,24 +101,24 @@ class TestBackups(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull(all=True)
         self.assertEqual((
-            'Before: Hoard [a80f91] <- repo [curr: None, stg: bf039a, des: None]\n'
+            'Before: Hoard [a80f91] <- repo [curr: a80f91, stg: bf039a, des: a80f91]\n'
             'ADD_NEW_TO_HOARD /test.me.1\n'
             'ADD_NEW_TO_HOARD /wat/test.me.2\n'
-            'After: Hoard [bf039a], repo [curr: bf039a, stg: bf039a, des: None]\n'
+            'After: Hoard [bf039a], repo [curr: bf039a, stg: bf039a, des: bf039a]\n'
             "Sync'ed repo-partial-name to hoard!\n"
-            'Before: Hoard [bf039a] <- repo [curr: None, stg: 749cff, des: None]\n'
+            'Before: Hoard [bf039a] <- repo [curr: a80f91, stg: 749cff, des: bf039a]\n'
             '=/test.me.1\n'
             '=/wat/test.me.2\n'
             'ADD_NEW_TO_HOARD /test.me.4\n'
             'ADD_NEW_TO_HOARD /wat/test.me.3\n'
-            'After: Hoard [749cff], repo [curr: 749cff, stg: 749cff, des: None]\n'
+            'After: Hoard [749cff], repo [curr: 749cff, stg: 749cff, des: 749cff]\n'
             "Sync'ed repo-full-name to hoard!\n"
-            'Before: Hoard [749cff] <- repo [curr: None, stg: fabddf, des: None]\n'
+            'Before: Hoard [749cff] <- repo [curr: a80f91, stg: fabddf, des: a80f91]\n'
             'CLEANUP_SAME /test.me.4\n'
             'INCOMING_TO_HOARD /test.me.5\n'
             'INCOMING_TO_HOARD /wat/test.me.6\n'
             'CLEANUP_DIFFERENT /wat/test.me.3\n'
-            'After: Hoard [d96cdc], repo [curr: fabddf, stg: fabddf, des: None]\n'
+            'After: Hoard [d96cdc], repo [curr: a80f91, stg: fabddf, des: a80f91]\n'
             "Sync'ed repo-incoming-name to hoard!\n"
             'DONE'), res)
 
@@ -205,40 +205,40 @@ class TestBackups(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull(all=True)
         self.assertEqual([
-            'Before: Hoard [a80f91] <- repo [curr: None, stg: bf039a, des: None]',
+            'Before: Hoard [a80f91] <- repo [curr: a80f91, stg: bf039a, des: a80f91]',
             'ADD_NEW_TO_HOARD /test.me.1',
             'ADD_NEW_TO_HOARD /wat/test.me.2',
-            'After: Hoard [bf039a], repo [curr: bf039a, stg: bf039a, des: None]',
+            'After: Hoard [bf039a], repo [curr: bf039a, stg: bf039a, des: bf039a]',
             "Sync'ed repo-partial-name to hoard!",
-            'Before: Hoard [bf039a] <- repo [curr: None, stg: 749cff, des: None]',
+            'Before: Hoard [bf039a] <- repo [curr: a80f91, stg: 749cff, des: bf039a]',
             '=/test.me.1',
             '=/wat/test.me.2',
             'ADD_NEW_TO_HOARD /test.me.4',
             'ADD_NEW_TO_HOARD /wat/test.me.3',
-            'After: Hoard [749cff], repo [curr: 749cff, stg: 749cff, des: None]',
+            'After: Hoard [749cff], repo [curr: 749cff, stg: 749cff, des: 749cff]',
             "Sync'ed repo-full-name to hoard!",
-            'Before: Hoard [749cff] <- repo [curr: None, stg: fabddf, des: None]',
+            'Before: Hoard [749cff] <- repo [curr: a80f91, stg: fabddf, des: a80f91]',
             'CLEANUP_SAME /test.me.4',
             'INCOMING_TO_HOARD /test.me.5',
             'INCOMING_TO_HOARD /wat/test.me.6',
             'CLEANUP_DIFFERENT /wat/test.me.3',
-            'After: Hoard [d96cdc], repo [curr: fabddf, stg: fabddf, des: None]',
+            'After: Hoard [d96cdc], repo [curr: a80f91, stg: fabddf, des: a80f91]',
             "Sync'ed repo-incoming-name to hoard!",
-            'Before: Hoard [d96cdc] <- repo [curr: None, stg: 66eab2, des: None]',
+            'Before: Hoard [d96cdc] <- repo [curr: a80f91, stg: 66eab2, des: a8af74]',
             '=/test.me.1',
             '=/wat/test.me.3',
-            'After: Hoard [d96cdc], repo [curr: 66eab2, stg: 66eab2, des: None]',
+            'After: Hoard [d96cdc], repo [curr: 66eab2, stg: 66eab2, des: 5c70b4]',
             "Sync'ed backup-1 to hoard!",
-            'Before: Hoard [d96cdc] <- repo [curr: None, stg: 4d62e6, des: None]',
+            'Before: Hoard [d96cdc] <- repo [curr: a80f91, stg: 4d62e6, des: 169a15]',
             '=/test.me.1',
-            'After: Hoard [d96cdc], repo [curr: 4d62e6, stg: 4d62e6, des: None]',
+            'After: Hoard [d96cdc], repo [curr: 4d62e6, stg: 4d62e6, des: 41b3c8]',
             "Sync'ed backup-2 to hoard!",
-            'Before: Hoard [d96cdc] <- repo [curr: None, stg: 558dfc, des: None]',
+            'Before: Hoard [d96cdc] <- repo [curr: a80f91, stg: 558dfc, des: 43e602]',
             '?/test.me.obsolete',
-            'After: Hoard [d96cdc], repo [curr: 558dfc, stg: 558dfc, des: None]',
+            'After: Hoard [d96cdc], repo [curr: a80f91, stg: 558dfc, des: 43e602]',
             "Sync'ed backup-3 to hoard!",
-            'Before: Hoard [d96cdc] <- repo [curr: None, stg: a80f91, des: None]',
-            'After: Hoard [d96cdc], repo [curr: a80f91, stg: a80f91, des: None]',
+            'Before: Hoard [d96cdc] <- repo [curr: a80f91, stg: a80f91, des: 6a4c4e]',
+            'After: Hoard [d96cdc], repo [curr: a80f91, stg: a80f91, des: 6a4c4e]',
             "Sync'ed backup-4 to hoard!",
             'DONE'], res.splitlines())
 
@@ -404,21 +404,21 @@ class TestBackups(IsolatedAsyncioTestCase):
             'Skipping update as past epoch 1 is not after hoard epoch 1\n'
             'Skipping update as past epoch 1 is not after hoard epoch 1\n'
             'Skipping update as past epoch 1 is not after hoard epoch 1\n'
-            'Before: Hoard [d96cdc] <- repo [curr: None, stg: 66eab2, des: None]\n'
+            'Before: Hoard [d96cdc] <- repo [curr: a80f91, stg: 66eab2, des: a80f91]\n'
             '=/test.me.1\n'
             '=/wat/test.me.3\n'
-            'After: Hoard [d96cdc], repo [curr: 66eab2, stg: 66eab2, des: None]\n'
+            'After: Hoard [d96cdc], repo [curr: 66eab2, stg: 66eab2, des: 66eab2]\n'
             "Sync'ed backup-1 to hoard!\n"
-            'Before: Hoard [d96cdc] <- repo [curr: None, stg: 4d62e6, des: None]\n'
+            'Before: Hoard [d96cdc] <- repo [curr: a80f91, stg: 4d62e6, des: a80f91]\n'
             '=/test.me.1\n'
-            'After: Hoard [d96cdc], repo [curr: 4d62e6, stg: 4d62e6, des: None]\n'
+            'After: Hoard [d96cdc], repo [curr: 4d62e6, stg: 4d62e6, des: 4d62e6]\n'
             "Sync'ed backup-2 to hoard!\n"
-            'Before: Hoard [d96cdc] <- repo [curr: None, stg: 558dfc, des: None]\n'
+            'Before: Hoard [d96cdc] <- repo [curr: a80f91, stg: 558dfc, des: a80f91]\n'
             '?/test.me.obsolete\n'
-            'After: Hoard [d96cdc], repo [curr: 558dfc, stg: 558dfc, des: None]\n'
+            'After: Hoard [d96cdc], repo [curr: a80f91, stg: 558dfc, des: a80f91]\n'
             "Sync'ed backup-3 to hoard!\n"
-            'Before: Hoard [d96cdc] <- repo [curr: None, stg: a80f91, des: None]\n'
-            'After: Hoard [d96cdc], repo [curr: a80f91, stg: a80f91, des: None]\n'
+            'Before: Hoard [d96cdc] <- repo [curr: a80f91, stg: a80f91, des: a80f91]\n'
+            'After: Hoard [d96cdc], repo [curr: a80f91, stg: a80f91, des: a80f91]\n'
             "Sync'ed backup-4 to hoard!\n"
             'DONE'), res)
 
@@ -596,14 +596,14 @@ class TestBackups(IsolatedAsyncioTestCase):
             'Skipping update as past epoch 1 is not after hoard epoch 1',
             'Skipping update as past epoch 1 is not after hoard epoch 1',
             'Skipping update as past epoch 1 is not after hoard epoch 1',
-            'Before: Hoard [d96cdc] <- repo [curr: None, stg: 66eab2, des: None]',
+            'Before: Hoard [d96cdc] <- repo [curr: a80f91, stg: 66eab2, des: a80f91]',
             '=/test.me.1',
             '=/wat/test.me.3',
-            'After: Hoard [d96cdc], repo [curr: 66eab2, stg: 66eab2, des: None]',
+            'After: Hoard [d96cdc], repo [curr: 66eab2, stg: 66eab2, des: 66eab2]',
             "Sync'ed backup-1 to hoard!",
-            'Before: Hoard [d96cdc] <- repo [curr: None, stg: 4d62e6, des: None]',
+            'Before: Hoard [d96cdc] <- repo [curr: a80f91, stg: 4d62e6, des: a80f91]',
             '=/test.me.1',
-            'After: Hoard [d96cdc], repo [curr: 4d62e6, stg: 4d62e6, des: None]',
+            'After: Hoard [d96cdc], repo [curr: 4d62e6, stg: 4d62e6, des: 4d62e6]',
             "Sync'ed backup-2 to hoard!",
             'DONE'], res.splitlines())
 
