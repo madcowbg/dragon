@@ -22,6 +22,9 @@ class Root:
         self.name = name
         self.roots = roots
 
+    def __eq__(self, other):
+        return isinstance(other, Root) and other.name == self.name
+
     @property
     def current(self) -> bytes | None:
         with self.roots:

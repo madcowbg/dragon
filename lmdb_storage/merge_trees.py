@@ -65,7 +65,7 @@ class Merge[F]:
     def allowed_roots(self, objects_by_root: ObjectsByRoot) -> List[str]:
         pass
 
-    def merge_trees[F](self, obj_ids: ObjectsByRoot) -> ObjectsByRoot:
+    def merge_trees(self, obj_ids: ObjectsByRoot) -> ObjectsByRoot:
         assert isinstance(obj_ids, ObjectsByRoot)
 
         obj_ids = ObjectsByRoot(self.allowed_roots(obj_ids), obj_ids.assigned().items())

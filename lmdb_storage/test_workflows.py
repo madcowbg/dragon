@@ -1,55 +1,11 @@
 import binascii
 import unittest
 from tempfile import TemporaryDirectory
-from typing import Set
 
-from lmdb_storage.merge_trees import ObjectsByRoot
-from lmdb_storage.object_store import ObjectStorage
+from lmdb_storage.pull_contents import pull_contents
 from lmdb_storage.test_experiment_lmdb import dump_tree
 from lmdb_storage.test_merge_trees import populate_trees
-from lmdb_storage.three_way_merge import ThreewayMerge
-from lmdb_storage.tree_structure import ObjectID, remove_file_object
-
-
-def pull_contents(env: ObjectStorage, repo_uuid: str, staging_id: ObjectID, fetch_new: Set[str]):
-    assert "HOARD" not in fetch_new
-    fetch_new = fetch_new.copy()
-    fetch_new.add("HOARD")
-
-    # assign roots
-    roots = env.roots(write=False)
-    repo_current_id = roots[repo_uuid].current
-    hoard_head_id = roots["HOARD"].desired
-
-    repo_staging_id = staging_id
-
-    other_roots = [r for r in roots.all if r.name != "HOARD"]
-    other_root_names = [r.name for r in other_roots]
-    current_ids = ObjectsByRoot(
-        list(set([r.name for r in roots.all] + ["current", "staging", "HOARD"])),
-        [(r.name, r.desired) for r in other_roots] + [
-            ("current", repo_current_id),
-            ("staging", repo_staging_id),
-            ("HOARD", hoard_head_id)])
-
-    assert all(v is not None for v in current_ids.assigned_values())
-
-    # execute merge
-    with env.objects(write=True) as objects:
-        merged_ids = ThreewayMerge(
-            objects, current="current", staging='staging', others=other_root_names,
-            fetch_new=set([repo_uuid] + list(fetch_new))).merge_trees(current_ids) # fixme hack to fetch_new maybe not proper?
-
-        assert len(set(current_ids.assigned().keys()) - set(merged_ids.assigned().keys())) == 0, \
-            f"{set(merged_ids.assigned().keys())} not contains all of {set(current_ids.assigned().keys())}"
-
-    # accept the changed IDs todo implement dry-run
-    roots = env.roots(write=True)
-    for other_name in other_root_names:
-        roots[other_name].desired = merged_ids.get_if_present(other_name)
-
-    roots["HOARD"].desired = merged_ids.get_if_present("HOARD")
-    roots[repo_uuid].current = merged_ids.get_if_present("current")
+from lmdb_storage.tree_structure import remove_file_object
 
 
 class TestWorkflows(unittest.TestCase):
