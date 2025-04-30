@@ -186,7 +186,7 @@ class HoardContentsPendingToPull(Tree[Action]):
                     preferences = init_pull_preferences(
                         self.remote, assume_current=False, force_fetch_local_missing=False)
 
-                    copy_local_staging_to_hoard(hoard_contents, current_contents)
+                    copy_local_staging_to_hoard(hoard_contents, current_contents, self.hoard.config())
                     uuid = current_contents.config.uuid
                     await sync_fsobject_to_object_storage(hoard_contents.env, hoard_contents.fsobjects, hoard_config)
 

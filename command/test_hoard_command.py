@@ -148,10 +148,10 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull("repo-in-local-2")
         self.assertEqual((
-            'Before: Hoard [b09bd5] <- repo [curr: a80f91, stg: c17cdf, des: 98265a]\n'
+            'Before: Hoard [b09bd5] <- repo [curr: a80f91, stg: 9bf6ad, des: b09bd5]\n'
             '=/wat/test.me.twice\n'
             'ALREADY_MARKED_GET /wat/test.me.different\n'
-            'After: Hoard [b09bd5], repo [curr: 986422, stg: c17cdf, des: 98265a]\n'
+            'After: Hoard [b09bd5], repo [curr: 1249be, stg: 9bf6ad, des: b09bd5]\n'
             "Sync'ed repo-in-local-2 to hoard!\n"
             'DONE'),
             res.strip())
@@ -831,10 +831,10 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull("repo-partial-name")
         self.assertEqual((
-            'Before: Hoard [a80f91] <- repo [curr: a80f91, stg: f6a740, des: a80f91]\n'
+            'Before: Hoard [a80f91] <- repo [curr: a80f91, stg: 9eb9bc, des: a80f91]\n'
             'ADD_NEW_TO_HOARD /first-point/test.me.1\n'
             'ADD_NEW_TO_HOARD /first-point/wat/test.me.2\n'
-            'After: Hoard [9eb9bc], repo [curr: f6a740, stg: f6a740, des: f6a740]\n'
+            'After: Hoard [9eb9bc], repo [curr: 9eb9bc, stg: 9eb9bc, des: 9eb9bc]\n'
             "Sync'ed repo-partial-name to hoard!\n"
             'DONE'), res.strip())
 

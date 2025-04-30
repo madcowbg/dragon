@@ -223,16 +223,20 @@ def pop_and_write_obj(stack: List[Tuple[ObjPath, TreeObject]], objects: Objects)
 
 
 def add_file_object[F](objects: Objects[F], tree_id: ObjectID | None, filepath: ObjPath, file: F) -> ObjectID:
-    if len(filepath) == 0:  # is here
-        objects[file.file_id] = file
-        return file.file_id
+    objects[file.file_id] = file
+    return add_object(objects, tree_id, filepath, file.file_id)
+
+
+def add_object[F](objects: Objects[F], tree_id: ObjectID | None, path: ObjPath, obj_id: ObjectID) -> ObjectID:
+    if len(path) == 0:  # is here
+        return obj_id
 
     tree_obj = objects[tree_id] if tree_id is not None else TreeObject(dict())
     assert isinstance(tree_obj, TreeObject)
 
-    sub_name = filepath[0]
+    sub_name = path[0]
     assert sub_name != ''
-    tree_obj.children[sub_name] = add_file_object(objects, tree_obj.children.get(sub_name, None), filepath[1:], file)
+    tree_obj.children[sub_name] = add_object(objects, tree_obj.children.get(sub_name, None), path[1:], obj_id)
 
     new_tree_id = tree_obj.id
     if new_tree_id != tree_id:

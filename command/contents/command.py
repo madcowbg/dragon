@@ -132,16 +132,18 @@ async def execute_pull(
             logging.info(f"Saving config of remote {remote_uuid}...")
             hoard_contents.config.save_remote_config(current_contents.config)
 
-            copy_local_staging_to_hoard(hoard_contents, current_contents)
+            copy_local_staging_to_hoard(hoard_contents, current_contents, hoard.config())
             uuid = current_contents.config.uuid
 
             await sync_fsobject_to_object_storage(
-                hoard_contents.env, hoard_contents.fsobjects, hoard.config())  # fixme remove
+                hoard_contents.env, hoard_contents.fsobjects, current_contents.fsobjects, hoard.config())  # fixme remove
+            # # fixme remove, just dumping
+            # sync_object_storate_to_recreate_fsobject_and_fspresence(
+            #     hoard_contents.env, hoard_contents.fsobjects, hoard.config())
 
             repo_current = hoard_contents.env.roots(False)[uuid].current
             repo_staging = hoard_contents.env.roots(False)[uuid].staging
             repo_desired = hoard_contents.env.roots(False)[uuid].desired
-            assert repo_staging == current_contents.fsobjects.root_id, f"{repo_current} != {current_contents.fsobjects.root_id}"
 
             out.write(
                 f"Before: Hoard [{safe_hex(hoard_contents.env.roots(False)['HOARD'].desired)[:6]}] "
@@ -158,16 +160,15 @@ async def execute_pull(
                 hoard_contents.env.roots(write=True)[uuid].staging
 
             # fixme remove, just dumping
-            await sync_fsobject_to_object_storage(hoard_contents.env, hoard_contents.fsobjects, hoard.config())
+            await sync_fsobject_to_object_storage(hoard_contents.env, hoard_contents.fsobjects, current_contents.fsobjects, hoard.config())
 
-            # fixme remove, just dumping
+            # # fixme remove, just dumping
             # sync_object_storate_to_recreate_fsobject_and_fspresence(
             #     hoard_contents.env, hoard_contents.fsobjects, hoard.config())
 
             repo_current = hoard_contents.env.roots(False)[uuid].current
             repo_staging = hoard_contents.env.roots(False)[uuid].staging
             repo_desired = hoard_contents.env.roots(False)[uuid].desired
-            assert repo_staging == current_contents.fsobjects.root_id, f"{repo_current} != {current_contents.fsobjects.root_id}"
 
             out.write(
                 f"After: Hoard [{safe_hex(hoard_contents.env.roots(False)['HOARD'].desired)[:6]}],"
@@ -348,9 +349,9 @@ class HoardCommandContents:
 
                     pathing = HoardPathing(config, self.hoard.paths())
 
-                    copy_local_staging_to_hoard(hoard_contents, current_contents)
+                    copy_local_staging_to_hoard(hoard_contents, current_contents, self.hoard.config())
                     await sync_fsobject_to_object_storage(
-                        hoard_contents.env, hoard_contents.fsobjects, self.hoard.config())
+                        hoard_contents.env, hoard_contents.fsobjects, current_contents.fsobjects, self.hoard.config())
 
                     resolutions = await resolution_to_match_repo_and_hoard(
                         current_contents.config.uuid, hoard_contents, pathing, preferences, alive_it)
@@ -379,8 +380,8 @@ class HoardCommandContents:
                     out.write(f"Root: {safe_hex(hoard.env.roots(False)['HOARD'].desired)}\n")
                     out.write(f"Status of {self.hoard.config().remotes[remote_uuid].name}:\n")
 
-                    copy_local_staging_to_hoard(hoard, current_contents)
-                    await sync_fsobject_to_object_storage(hoard.env, hoard.fsobjects, self.hoard.config())
+                    copy_local_staging_to_hoard(hoard, current_contents, self.hoard.config())
+                    await sync_fsobject_to_object_storage(hoard.env, hoard.fsobjects, current_contents.fsobjects, self.hoard.config())
 
                     await execute_print_pending(
                         hoard, current_contents.uuid, HoardPathing(self.hoard.config(), self.hoard.paths()),

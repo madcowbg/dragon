@@ -1,6 +1,5 @@
 import binascii
 import logging
-import uuid
 from typing import Dict, AsyncGenerator, Iterable, Tuple
 
 from alive_progress import alive_it
@@ -8,15 +7,15 @@ from alive_progress import alive_it
 from command.fast_path import FastPosixPath
 from command.pathing import HoardPathing
 from config import HoardConfig
-from contents.hoard import HoardContents, HoardFSObjects, HoardContentsConfig
+from contents.hoard import HoardContents, HoardFSObjects
 from contents.hoard_props import HoardFileProps, HoardFileStatus
-from contents.repo import RepoContents
+from contents.repo import RepoContents, RepoFSObjects
 from contents.repo_props import FileDesc, RepoFileStatus
 from contents_diff import Diff, DiffType
 from lmdb_storage.file_object import FileObject
 from lmdb_storage.object_store import ObjectStorage
-from lmdb_storage.tree_iteration import dfs, zip_dfs, zip_trees_dfs
-from lmdb_storage.tree_structure import Objects, ObjectType, TreeObject
+from lmdb_storage.tree_iteration import zip_dfs, zip_trees_dfs
+from lmdb_storage.tree_structure import Objects, TreeObject, add_object
 from util import safe_hex
 
 
@@ -58,8 +57,9 @@ async def DEPRECATED_compare_local_to_hoard(
     assert repo_staging_id is not None
 
     logging.info("Load current objects")
-    all_local_with_any_status: Dict[FastPosixPath, Tuple[RepoFileStatus, FileDesc]] = \
-        dict(read_files(hoard.objects, repo_staging_id, repo_current_id))
+    all_local_with_any_status: Dict[FastPosixPath, Tuple[RepoFileStatus, FileDesc]] = dict(
+        (f.relative_to(pathing.mounted_at(uuid).relative_to("/")), p)
+        for f, p in read_files(hoard.objects, repo_staging_id, repo_current_id))
 
     logging.info("Load hoard objects in folder")
 
@@ -124,7 +124,8 @@ async def DEPRECATED_compare_local_to_hoard(
             raise ValueError(f"Unrecognized state: {status}")
 
 
-async def sync_fsobject_to_object_storage(env: ObjectStorage, fsobjects: HoardFSObjects, hoard_config: HoardConfig):
+async def sync_fsobject_to_object_storage(
+        env: ObjectStorage, fsobjects: HoardFSObjects, repo_objects: RepoFSObjects, hoard_config: HoardConfig):
     old_root_id = env.roots(False)["HOARD"].desired
 
     all_nondeleted = [
@@ -137,12 +138,12 @@ async def sync_fsobject_to_object_storage(env: ObjectStorage, fsobjects: HoardFS
     for remote in hoard_config.remotes.all():
         with env.objects(write=True) as objects:
             remote_current_id = objects.mktree_from_tuples([
-                ("/" + path.relative_to(remote.mounted_at).as_posix(), FileObject.create(hfo.fasthash, hfo.size))
+                (path.as_posix(), FileObject.create(hfo.fasthash, hfo.size))
                 async for path, hfo in fsobjects.in_folder_non_deleted(FastPosixPath("/"))
                 if hfo.get_status(remote.uuid) in (HoardFileStatus.AVAILABLE, HoardFileStatus.CLEANUP)])
 
             remote_desired_id = objects.mktree_from_tuples([
-                ("/" + path.relative_to(remote.mounted_at).as_posix(), FileObject.create(hfo.fasthash, hfo.size))
+                (path.as_posix(), FileObject.create(hfo.fasthash, hfo.size))
                 # fixme make path absolute
                 async for path, hfo in fsobjects.in_folder_non_deleted(FastPosixPath("/"))
                 if hfo.get_status(remote.uuid) in (
@@ -189,7 +190,7 @@ def sync_object_storate_to_recreate_fsobject_and_fspresence(
 
             existing_ids = set(sub_id for sub_id in sub_ids if sub_id is not None)
             assert len(existing_ids) == 1, \
-                f"should have only one non-None file id, {sub_ids}"
+                f"should have only one file id, {sub_ids}"
 
             # create fsobject from desc
             only_file_id = next(iter(existing_ids))
@@ -228,7 +229,7 @@ def sync_object_storate_to_recreate_fsobject_and_fspresence(
                     hoard_props.mark_to_delete_everywhere()
 
 
-def copy_local_staging_to_hoard(hoard: HoardContents, local: RepoContents) -> None:
+def copy_local_staging_to_hoard(hoard: HoardContents, local: RepoContents, config: HoardConfig) -> None:
     logging.info("Copying objects from local to hoard")
     staging_root_id = local.fsobjects.root_id
 
@@ -240,4 +241,10 @@ def copy_local_staging_to_hoard(hoard: HoardContents, local: RepoContents) -> No
 
     # ensures we have the same tree
     hoard.env.copy_trees_from(local.env, [staging_root_id])
-    hoard.env.roots(write=True)[local.uuid].staging = staging_root_id
+
+    with hoard.env.objects(write=True) as objects:
+        abs_staging_root_id = add_object(
+            objects, None,
+            path=config.remotes[local.uuid].mounted_at._rem,
+            obj_id=staging_root_id)
+    hoard.env.roots(write=True)[local.uuid].staging = abs_staging_root_id
