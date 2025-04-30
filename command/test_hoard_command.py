@@ -494,7 +494,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             'INCOMING_TO_HOARD /test.me.5\n'
             'INCOMING_TO_HOARD /wat/test.me.6\n'
             'CLEANUP_DIFFERENT /wat/test.me.3\n'
-            'After: Hoard [89527b], repo [curr: a80f91, stg: e9ce07, des: a80f91]\n'
+            'After: Hoard [89527b], repo [curr: 843a75, stg: e9ce07, des: a80f91]\n'
             "Sync'ed repo-incoming-name to hoard!\n"
             'DONE'), res.strip())
 
@@ -506,8 +506,8 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull("repo-incoming-name")
         self.assertEqual((
-            'Before: Hoard [89527b] <- repo [curr: a80f91, stg: e9ce07, des: a80f91]\n'
-            'After: Hoard [89527b], repo [curr: a80f91, stg: e9ce07, des: a80f91]\n'
+            'Before: Hoard [89527b] <- repo [curr: 843a75, stg: e9ce07, des: a80f91]\n'
+            'After: Hoard [89527b], repo [curr: 843a75, stg: e9ce07, des: a80f91]\n'
             "Sync'ed repo-incoming-name to hoard!\n"
             'DONE'), res.strip())
 
@@ -537,7 +537,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             'INCOMING_TO_HOARD /test.me.5\n'
             'INCOMING_TO_HOARD /wat/test.me.6\n'
             'CLEANUP_DIFFERENT /wat/test.me.3\n'
-            'After: Hoard [89527b], repo [curr: a80f91, stg: e9ce07, des: a80f91]\n'
+            'After: Hoard [89527b], repo [curr: 843a75, stg: e9ce07, des: a80f91]\n'
             "Sync'ed repo-incoming-name to hoard!\n"
             'DONE'), res)
 
@@ -624,7 +624,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             'INCOMING_TO_HOARD /test.me.5\n'
             'INCOMING_TO_HOARD /wat/test.me.6\n'
             'CLEANUP_DIFFERENT /wat/test.me.3\n'
-            'After: Hoard [89527b], repo [curr: a80f91, stg: e9ce07, des: a80f91]\n'
+            'After: Hoard [89527b], repo [curr: 843a75, stg: e9ce07, des: a80f91]\n'
             "Sync'ed repo-incoming-name to hoard!\n"
             'DONE'), res)
 

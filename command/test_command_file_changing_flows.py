@@ -1738,7 +1738,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'INCOMING_TO_HOARD /test.me.5',
             'INCOMING_TO_HOARD /wat/test.me.6',
             'CLEANUP_DIFFERENT /wat/test.me.3',
-            'After: Hoard [89527b], repo [curr: a80f91, stg: e9ce07, des: a80f91]',
+            'After: Hoard [89527b], repo [curr: 843a75, stg: e9ce07, des: a80f91]',
             "Sync'ed repo-incoming-name to hoard!",
             'DONE'], res.splitlines())
 

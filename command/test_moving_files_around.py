@@ -45,7 +45,7 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
             'INCOMING_TO_HOARD /test.me.5',
             'INCOMING_TO_HOARD /wat/test.me.6',
             'CLEANUP_DIFFERENT /wat/test.me.3',
-            'After: Hoard [89527b], repo [curr: a80f91, stg: e9ce07, des: a80f91]',
+            'After: Hoard [89527b], repo [curr: 843a75, stg: e9ce07, des: a80f91]',
             "Sync'ed repo-incoming-name to hoard!",
             'DONE'], res.splitlines())
 
@@ -87,8 +87,8 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
             'Before: Hoard [89527b] <- repo [curr: 9fbdcf, stg: 9fbdcf, des: 89527b]',
             'After: Hoard [89527b], repo [curr: 9fbdcf, stg: 9fbdcf, des: 89527b]',
             "Sync'ed repo-backup-name to hoard!",
-            'Before: Hoard [89527b] <- repo [curr: a80f91, stg: e9ce07, des: a80f91]',
-            'After: Hoard [89527b], repo [curr: a80f91, stg: e9ce07, des: a80f91]',
+            'Before: Hoard [89527b] <- repo [curr: 843a75, stg: e9ce07, des: a80f91]',
+            'After: Hoard [89527b], repo [curr: 843a75, stg: e9ce07, des: a80f91]',
             "Sync'ed repo-incoming-name to hoard!",
             'DONE'], res.splitlines())
 
@@ -156,8 +156,8 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull(incoming_cave_cmd.current_uuid())
         self.assertEqual([
-            'Before: Hoard [894baf] <- repo [curr: a80f91, stg: e9ce07, des: a80f91]',
-            'After: Hoard [894baf], repo [curr: a80f91, stg: e9ce07, des: a80f91]',
+            'Before: Hoard [894baf] <- repo [curr: b36f83, stg: e9ce07, des: a80f91]',
+            'After: Hoard [894baf], repo [curr: b36f83, stg: e9ce07, des: a80f91]',
             "Sync'ed repo-incoming-name to hoard!",
             'DONE'], res.splitlines())
 
@@ -198,8 +198,8 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull(incoming_cave_cmd.current_uuid())
         self.assertEqual([
-            'Before: Hoard [0f6ca5] <- repo [curr: a80f91, stg: e9ce07, des: a80f91]',
-            'After: Hoard [0f6ca5], repo [curr: a80f91, stg: e9ce07, des: a80f91]',
+            'Before: Hoard [0f6ca5] <- repo [curr: 4745b9, stg: e9ce07, des: a80f91]',
+            'After: Hoard [0f6ca5], repo [curr: 4745b9, stg: e9ce07, des: a80f91]',
             "Sync'ed repo-incoming-name to hoard!",
             'DONE'], res.splitlines())
 

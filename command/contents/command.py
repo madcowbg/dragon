@@ -8,7 +8,7 @@ from alive_progress import alive_bar, alive_it
 
 from command.content_prefs import ContentPrefs
 from command.contents.comparisons import DEPRECATED_compare_local_to_hoard, copy_local_staging_to_hoard, \
-    sync_fsobject_to_object_storage
+    sync_fsobject_to_object_storage, sync_object_storate_to_recreate_fsobject_and_fspresence
 from command.contents.handle_pull import PullPreferences, resolution_to_match_repo_and_hoard, PullIntention, \
     _calculate_local_only, ResetLocalAsCurrentBehavior, calculate_actions
 from command.fast_path import FastPosixPath
@@ -157,10 +157,12 @@ async def execute_pull(
             hoard_contents.env.roots(write=True)[uuid].current = \
                 hoard_contents.env.roots(write=True)[uuid].staging
 
-            await sync_fsobject_to_object_storage(
-                hoard_contents.env, hoard_contents.fsobjects, hoard.config())  # fixme remove, just dumping
+            # fixme remove, just dumping
+            await sync_fsobject_to_object_storage(hoard_contents.env, hoard_contents.fsobjects, hoard.config())
 
-            # sync_object_storate_to_recreate_fsobject_and_fspresence(hoard_contents.env, hoard_contents.fsobjects, hoard.config())  # fixme remove, just dumping
+            # fixme remove, just dumping
+            # sync_object_storate_to_recreate_fsobject_and_fspresence(
+            #     hoard_contents.env, hoard_contents.fsobjects, hoard.config())
 
             repo_current = hoard_contents.env.roots(False)[uuid].current
             repo_staging = hoard_contents.env.roots(False)[uuid].staging

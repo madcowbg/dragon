@@ -139,7 +139,7 @@ async def sync_fsobject_to_object_storage(env: ObjectStorage, fsobjects: HoardFS
             remote_current_id = objects.mktree_from_tuples([
                 ("/" + path.relative_to(remote.mounted_at).as_posix(), FileObject.create(hfo.fasthash, hfo.size))
                 async for path, hfo in fsobjects.in_folder_non_deleted(FastPosixPath("/"))
-                if hfo.get_status(remote.uuid) == HoardFileStatus.AVAILABLE])
+                if hfo.get_status(remote.uuid) in (HoardFileStatus.AVAILABLE, HoardFileStatus.CLEANUP)])
 
             remote_desired_id = objects.mktree_from_tuples([
                 ("/" + path.relative_to(remote.mounted_at).as_posix(), FileObject.create(hfo.fasthash, hfo.size))
@@ -168,8 +168,8 @@ async def sync_fsobject_to_object_storage(env: ObjectStorage, fsobjects: HoardFS
     return current_root_id
 
 
-def sync_object_storate_to_recreate_fsobject_and_fspresence(env: ObjectStorage, fsobjects: HoardFSObjects,
-                                                            hoard_config: HoardConfig):
+def sync_object_storate_to_recreate_fsobject_and_fspresence(
+        env: ObjectStorage, fsobjects: HoardFSObjects, hoard_config: HoardConfig):
     fsobjects.parent.conn.execute("DELETE FROM fspresence")  # fixme DANGEROUS
     fsobjects.parent.conn.execute("DELETE FROM fsobject")  # fixme DANGEROUS
 
@@ -196,8 +196,9 @@ def sync_object_storate_to_recreate_fsobject_and_fspresence(env: ObjectStorage, 
             file_object = objects[only_file_id]
             assert isinstance(file_object, FileObject)
             # fixme add md5
-            hoard_props = fsobjects.add_or_replace_file(FastPosixPath(path),
-                                                        FileDesc(file_object.size, file_object.fasthash, None))
+            hoard_props = fsobjects.add_or_replace_file(
+                FastPosixPath(path),
+                FileDesc(file_object.size, file_object.fasthash, None))
 
             hoard_sub_id = sub_ids[-1]
             should_exist = hoard_sub_id is not None

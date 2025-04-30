@@ -118,7 +118,7 @@ class TestBackups(IsolatedAsyncioTestCase):
             'INCOMING_TO_HOARD /test.me.5\n'
             'INCOMING_TO_HOARD /wat/test.me.6\n'
             'CLEANUP_DIFFERENT /wat/test.me.3\n'
-            'After: Hoard [d96cdc], repo [curr: a80f91, stg: fabddf, des: a80f91]\n'
+            'After: Hoard [d96cdc], repo [curr: fef20f, stg: fabddf, des: a80f91]\n'
             "Sync'ed repo-incoming-name to hoard!\n"
             'DONE'), res)
 
@@ -222,7 +222,7 @@ class TestBackups(IsolatedAsyncioTestCase):
             'INCOMING_TO_HOARD /test.me.5',
             'INCOMING_TO_HOARD /wat/test.me.6',
             'CLEANUP_DIFFERENT /wat/test.me.3',
-            'After: Hoard [d96cdc], repo [curr: a80f91, stg: fabddf, des: a80f91]',
+            'After: Hoard [d96cdc], repo [curr: fef20f, stg: fabddf, des: a80f91]',
             "Sync'ed repo-incoming-name to hoard!",
             'Before: Hoard [d96cdc] <- repo [curr: a80f91, stg: 66eab2, des: a8af74]',
             '=/test.me.1',
