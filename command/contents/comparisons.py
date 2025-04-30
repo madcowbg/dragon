@@ -15,8 +15,8 @@ from contents.repo_props import FileDesc, RepoFileStatus
 from contents_diff import Diff, DiffType
 from lmdb_storage.file_object import FileObject
 from lmdb_storage.object_store import ObjectStorage
-from lmdb_storage.tree_iteration import dfs, zip_dfs
-from lmdb_storage.tree_structure import Objects, ObjectType
+from lmdb_storage.tree_iteration import dfs, zip_dfs, zip_trees_dfs
+from lmdb_storage.tree_structure import Objects, ObjectType, TreeObject
 from util import safe_hex
 
 
@@ -49,7 +49,7 @@ def read_files(objects: Objects[FileObject], root_id: bytes, current_root_id: by
                         (RepoFileStatus.DELETED, FileDesc(left_obj.size, left_obj.fasthash, None)))
 
 
-async def compare_local_to_hoard(
+async def DEPRECATED_compare_local_to_hoard(
         uuid: str, hoard: HoardContents, pathing: HoardPathing,
         progress_tool=alive_it) \
         -> AsyncGenerator[Diff]:
@@ -142,17 +142,20 @@ async def sync_fsobject_to_object_storage(env: ObjectStorage, fsobjects: HoardFS
                 if hfo.get_status(remote.uuid) == HoardFileStatus.AVAILABLE])
 
             remote_desired_id = objects.mktree_from_tuples([
-                ("/" + path.relative_to(remote.mounted_at).as_posix(), FileObject.create(hfo.fasthash, hfo.size))  # fixme make path absolute
+                ("/" + path.relative_to(remote.mounted_at).as_posix(), FileObject.create(hfo.fasthash, hfo.size))
+                # fixme make path absolute
                 async for path, hfo in fsobjects.in_folder_non_deleted(FastPosixPath("/"))
                 if hfo.get_status(remote.uuid) in (
                     HoardFileStatus.AVAILABLE, HoardFileStatus.GET, HoardFileStatus.COPY, HoardFileStatus.MOVE)])
 
         root = env.roots(True)[remote.uuid]
         if remote_current_id != root.current:
-            logging.error(f"{remote.name}: {safe_hex(remote_current_id)} is not current, current={safe_hex(root.current)}")
+            logging.error(
+                f"{remote.name}: {safe_hex(remote_current_id)} is not current, current={safe_hex(root.current)}")
             # assert root.current is None, f"{remote.name}: {safe_hex(remote_current_id)} is not current, current={safe_hex(root.current)}"
         if remote_desired_id != root.desired:
-            logging.error(f"{remote.name}: {safe_hex(remote_desired_id)} is not desired, desired={safe_hex(root.desired)}")
+            logging.error(
+                f"{remote.name}: {safe_hex(remote_desired_id)} is not desired, desired={safe_hex(root.desired)}")
             # assert root.desired is None, f"{remote.name}: {safe_hex(remote_desired_id)} is not desired, desired={safe_hex(root.desired)}"
 
         root.current = remote_current_id
@@ -163,6 +166,65 @@ async def sync_fsobject_to_object_storage(env: ObjectStorage, fsobjects: HoardFS
         f"Old HEAD: {binascii.hexlify(old_root_id) if old_root_id is not None else 'None'}"
         f" vs new head {binascii.hexlify(current_root_id)}.")
     return current_root_id
+
+
+def sync_object_storate_to_recreate_fsobject_and_fspresence(env: ObjectStorage, fsobjects: HoardFSObjects,
+                                                            hoard_config: HoardConfig):
+    fsobjects.parent.conn.execute("DELETE FROM fspresence")  # fixme DANGEROUS
+    fsobjects.parent.conn.execute("DELETE FROM fsobject")  # fixme DANGEROUS
+
+    remotes = list(hoard_config.remotes.all())
+    root_ids = (
+            [env.roots(write=False)[r.uuid].desired for r in remotes] +
+            [env.roots(write=False)[r.uuid].current for r in remotes] +
+            [env.roots(write=False)["HOARD"].desired])
+    with (env.objects(write=True) as objects):
+        for path, sub_ids, _ in zip_trees_dfs(objects, "", root_ids, drilldown_same=True):
+            sub_ids = list(sub_ids)
+
+            objs = [objects[sub_id] for sub_id in sub_ids if sub_id is not None]
+            if any(isinstance(obj, TreeObject) for obj in objs):  # has tree
+                assert all(not isinstance(obj, FileObject) for obj in objs)  # has no files
+                continue
+
+            existing_ids = set(sub_id for sub_id in sub_ids if sub_id is not None)
+            assert len(existing_ids) == 1, \
+                f"should have only one non-None file id, {sub_ids}"
+
+            # create fsobject from desc
+            only_file_id = next(iter(existing_ids))
+            file_object = objects[only_file_id]
+            assert isinstance(file_object, FileObject)
+            # fixme add md5
+            hoard_props = fsobjects.add_or_replace_file(FastPosixPath(path),
+                                                        FileDesc(file_object.size, file_object.fasthash, None))
+
+            hoard_sub_id = sub_ids[-1]
+            should_exist = hoard_sub_id is not None
+
+            for remote, sub_id_in_remote_desired, sub_id_in_remote_current \
+                    in zip(remotes, sub_ids[:len(remotes)], sub_ids[len(remotes):-1]):  # skip the last, is the hoard
+
+                assert remote is not None
+                assert sub_id_in_remote_desired is None or sub_id_in_remote_desired == only_file_id, \
+                    f"bad - file is not the same?! {only_file_id} != {sub_id_in_remote_desired}"
+
+                if sub_id_in_remote_current is not None:  # file is in current
+                    if sub_id_in_remote_desired is not None:
+                        if sub_id_in_remote_desired == sub_id_in_remote_current:
+                            hoard_props.mark_available(remote.uuid)
+                        else:
+                            hoard_props.mark_to_get([remote.uuid])
+                    else:
+                        hoard_props.mark_for_cleanup([remote.uuid])
+                else:
+                    if sub_id_in_remote_desired is not None:
+                        hoard_props.mark_to_get([remote.uuid])
+                    else:
+                        pass  # file not desired and not current
+
+                if not should_exist:
+                    hoard_props.mark_to_delete_everywhere()
 
 
 def copy_local_staging_to_hoard(hoard: HoardContents, local: RepoContents) -> None:

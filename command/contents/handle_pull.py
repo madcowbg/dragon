@@ -6,7 +6,7 @@ from io import StringIO
 from typing import Iterable, Tuple
 
 from command.content_prefs import ContentPrefs
-from command.contents.comparisons import compare_local_to_hoard
+from command.contents.comparisons import DEPRECATED_compare_local_to_hoard
 from command.fast_path import FastPosixPath
 from command.pathing import HoardPathing
 from config import HoardConfig
@@ -432,7 +432,7 @@ async def resolution_to_match_repo_and_hoard(
         uuid: str, hoard_contents: HoardContents,
         pathing: HoardPathing, preferences: PullPreferences, progress_tool):
     all_diffs = [
-        diff async for diff in compare_local_to_hoard(uuid, hoard_contents, pathing, progress_tool)]
+        diff async for diff in DEPRECATED_compare_local_to_hoard(uuid, hoard_contents, pathing, progress_tool)]
     return compute_resolutions(all_diffs, preferences)
 
 

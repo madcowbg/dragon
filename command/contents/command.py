@@ -7,7 +7,7 @@ import humanize
 from alive_progress import alive_bar, alive_it
 
 from command.content_prefs import ContentPrefs
-from command.contents.comparisons import compare_local_to_hoard, copy_local_staging_to_hoard, \
+from command.contents.comparisons import DEPRECATED_compare_local_to_hoard, copy_local_staging_to_hoard, \
     sync_fsobject_to_object_storage
 from command.contents.handle_pull import PullPreferences, resolution_to_match_repo_and_hoard, PullIntention, \
     _calculate_local_only, ResetLocalAsCurrentBehavior, calculate_actions
@@ -21,6 +21,7 @@ from contents.hoard_props import HoardFileStatus, HoardFileProps
 from contents.repo_props import FileDesc
 from contents_diff import DiffType, Diff
 from exceptions import MissingRepoContents
+from lmdb_storage.tree_structure import Objects, ObjectID, TreeObject
 from resolve_uuid import resolve_remote_uuid
 from util import format_size, custom_isabs, safe_hex
 
@@ -134,7 +135,8 @@ async def execute_pull(
             copy_local_staging_to_hoard(hoard_contents, current_contents)
             uuid = current_contents.config.uuid
 
-            await sync_fsobject_to_object_storage(hoard_contents.env, hoard_contents.fsobjects, hoard.config()) # fixme remove
+            await sync_fsobject_to_object_storage(
+                hoard_contents.env, hoard_contents.fsobjects, hoard.config())  # fixme remove
 
             repo_current = hoard_contents.env.roots(False)[uuid].current
             repo_staging = hoard_contents.env.roots(False)[uuid].staging
@@ -155,7 +157,10 @@ async def execute_pull(
             hoard_contents.env.roots(write=True)[uuid].current = \
                 hoard_contents.env.roots(write=True)[uuid].staging
 
-            await sync_fsobject_to_object_storage(hoard_contents.env, hoard_contents.fsobjects, hoard.config())  # fixme remove, just dumping
+            await sync_fsobject_to_object_storage(
+                hoard_contents.env, hoard_contents.fsobjects, hoard.config())  # fixme remove, just dumping
+
+            # sync_object_storate_to_recreate_fsobject_and_fspresence(hoard_contents.env, hoard_contents.fsobjects, hoard.config())  # fixme remove, just dumping
 
             repo_current = hoard_contents.env.roots(False)[uuid].current
             repo_staging = hoard_contents.env.roots(False)[uuid].staging
@@ -187,11 +192,69 @@ def init_pull_preferences(
         return _init_pull_preferences_partial(remote_obj.uuid, assume_current, force_fetch_local_missing)
 
 
+def is_tree_or_none(objects: Objects, obj_id: ObjectID | None) -> bool:
+    return True if obj_id is None else isinstance(objects[obj_id], TreeObject)
+
+
 async def execute_print_pending(
         hoard: HoardContents, repo_uuid: str, pathing: HoardPathing, ignore_missing: bool,
         out: StringIO):
-    hoard.env.roots(write=False)
-    async for diff in compare_local_to_hoard(repo_uuid, hoard, pathing):
+    # repo_root = hoard.env.roots(write=False)[repo_uuid]
+    # merged_ids = merge_contents(hoard.env, repo_root, [repo_root], set())
+    #
+    # with (hoard.env.objects(write=False) as objects):
+    #     for path, (sub_before_hoard_id, sub_after_hoard_id, sub_repo_current, sub_repo_staging), _ in zip_trees_dfs(
+    #             objects, "",[
+    #                 hoard.env.roots(write=False)["HOARD"].desired,
+    #                 merged_ids.get_if_present("HOARD"),
+    #                 repo_root.current, repo_root.staging,],
+    #             drilldown_same=True):
+    #
+    #         # if sub_before_hoard_id is None: # was not there before
+    #         #     if not is_tree_or_none(objects, sub_after_hoard_id): # is a file object now
+    #         #         out.write(f"PRESENT {path}\n")
+    #         # elif sub_after_hoard_id is None: # does not exist after
+    #         #     if not is_tree_or_none(objects, sub_before_hoard_id):  # was a file before
+    #         #         if sub_repo_current is not None:
+    #         #             out.write(f"DELETED {path}\n")
+    #         #         else:
+    #         #             if not ignore_missing:
+    #         #                 out.write(f"MISSING {path}\n")
+    #         #
+    #         # elif sub_before_hoard_id != sub_after_hoard_id:
+    #         #     if not is_tree_or_none(objects, sub_after_hoard_id) \
+    #         #             or not is_tree_or_none(objects, sub_before_hoard_id):
+    #         #         out.write(f"MODIFIED {path}\n")
+    #
+    #         if sub_before_hoard_id is not None:  # file is in hoard
+    #             if is_tree_or_none(objects, sub_before_hoard_id):
+    #                 continue
+    #
+    #             if sub_repo_staging is not None:  # file is in local
+    #                 if is_tree_or_none(objects, sub_repo_staging):
+    #                     continue
+    #
+    #                 if sub_before_hoard_id == sub_repo_staging:
+    #                     pass
+    #                     # out.write(f"PRESENT {path}\n")
+    #                 else:
+    #                     out.write(f"MODIFIED {path}\n")
+    #             else:  # file not in local
+    #                 if sub_repo_current is not None:
+    #                     out.write(f"DELETED {path}\n")
+    #                 else:
+    #                     if not ignore_missing:
+    #                         out.write(f"MISSING {path}\n")
+    #                 #
+    #         else: # not in hoard
+    #             if sub_repo_staging is not None:
+    #                 if is_tree_or_none(objects, sub_repo_staging):
+    #                     continue
+    #                 out.write(f"PRESENT {path}\n")
+    #             else:
+    #                 pass
+
+    async for diff in DEPRECATED_compare_local_to_hoard(repo_uuid, hoard, pathing):
         if diff.diff_type == DiffType.FileOnlyInLocal:
             if diff.is_added:
                 out.write(f"ADDED {diff.hoard_file.as_posix()}\n")
@@ -284,7 +347,8 @@ class HoardCommandContents:
                     pathing = HoardPathing(config, self.hoard.paths())
 
                     copy_local_staging_to_hoard(hoard_contents, current_contents)
-                    await sync_fsobject_to_object_storage(hoard_contents.env, hoard_contents.fsobjects, self.hoard.config())
+                    await sync_fsobject_to_object_storage(
+                        hoard_contents.env, hoard_contents.fsobjects, self.hoard.config())
 
                     resolutions = await resolution_to_match_repo_and_hoard(
                         current_contents.config.uuid, hoard_contents, pathing, preferences, alive_it)
