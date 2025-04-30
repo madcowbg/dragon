@@ -21,6 +21,8 @@ from contents.hoard_props import HoardFileStatus, HoardFileProps
 from contents.repo_props import FileDesc
 from contents_diff import DiffType, Diff
 from exceptions import MissingRepoContents
+from lmdb_storage.pull_contents import merge_contents
+from lmdb_storage.tree_iteration import zip_trees_dfs
 from lmdb_storage.tree_structure import Objects, ObjectID, TreeObject
 from resolve_uuid import resolve_remote_uuid
 from util import format_size, custom_isabs, safe_hex
@@ -136,7 +138,8 @@ async def execute_pull(
             uuid = current_contents.config.uuid
 
             await sync_fsobject_to_object_storage(
-                hoard_contents.env, hoard_contents.fsobjects, current_contents.fsobjects, hoard.config())  # fixme remove
+                hoard_contents.env, hoard_contents.fsobjects, current_contents.fsobjects,
+                hoard.config())  # fixme remove
             # # fixme remove, just dumping
             # sync_object_storate_to_recreate_fsobject_and_fspresence(
             #     hoard_contents.env, hoard_contents.fsobjects, hoard.config())
@@ -160,7 +163,8 @@ async def execute_pull(
                 hoard_contents.env.roots(write=True)[uuid].staging
 
             # fixme remove, just dumping
-            await sync_fsobject_to_object_storage(hoard_contents.env, hoard_contents.fsobjects, current_contents.fsobjects, hoard.config())
+            await sync_fsobject_to_object_storage(hoard_contents.env, hoard_contents.fsobjects,
+                                                  current_contents.fsobjects, hoard.config())
 
             # # fixme remove, just dumping
             # sync_object_storate_to_recreate_fsobject_and_fspresence(
@@ -199,83 +203,44 @@ def is_tree_or_none(objects: Objects, obj_id: ObjectID | None) -> bool:
     return True if obj_id is None else isinstance(objects[obj_id], TreeObject)
 
 
-async def execute_print_pending(
-        hoard: HoardContents, repo_uuid: str, pathing: HoardPathing, ignore_missing: bool,
-        out: StringIO):
-    # repo_root = hoard.env.roots(write=False)[repo_uuid]
-    # merged_ids = merge_contents(hoard.env, repo_root, [repo_root], set())
-    #
-    # with (hoard.env.objects(write=False) as objects):
-    #     for path, (sub_before_hoard_id, sub_after_hoard_id, sub_repo_current, sub_repo_staging), _ in zip_trees_dfs(
-    #             objects, "",[
-    #                 hoard.env.roots(write=False)["HOARD"].desired,
-    #                 merged_ids.get_if_present("HOARD"),
-    #                 repo_root.current, repo_root.staging,],
-    #             drilldown_same=True):
-    #
-    #         # if sub_before_hoard_id is None: # was not there before
-    #         #     if not is_tree_or_none(objects, sub_after_hoard_id): # is a file object now
-    #         #         out.write(f"PRESENT {path}\n")
-    #         # elif sub_after_hoard_id is None: # does not exist after
-    #         #     if not is_tree_or_none(objects, sub_before_hoard_id):  # was a file before
-    #         #         if sub_repo_current is not None:
-    #         #             out.write(f"DELETED {path}\n")
-    #         #         else:
-    #         #             if not ignore_missing:
-    #         #                 out.write(f"MISSING {path}\n")
-    #         #
-    #         # elif sub_before_hoard_id != sub_after_hoard_id:
-    #         #     if not is_tree_or_none(objects, sub_after_hoard_id) \
-    #         #             or not is_tree_or_none(objects, sub_before_hoard_id):
-    #         #         out.write(f"MODIFIED {path}\n")
-    #
-    #         if sub_before_hoard_id is not None:  # file is in hoard
-    #             if is_tree_or_none(objects, sub_before_hoard_id):
-    #                 continue
-    #
-    #             if sub_repo_staging is not None:  # file is in local
-    #                 if is_tree_or_none(objects, sub_repo_staging):
-    #                     continue
-    #
-    #                 if sub_before_hoard_id == sub_repo_staging:
-    #                     pass
-    #                     # out.write(f"PRESENT {path}\n")
-    #                 else:
-    #                     out.write(f"MODIFIED {path}\n")
-    #             else:  # file not in local
-    #                 if sub_repo_current is not None:
-    #                     out.write(f"DELETED {path}\n")
-    #                 else:
-    #                     if not ignore_missing:
-    #                         out.write(f"MISSING {path}\n")
-    #                 #
-    #         else: # not in hoard
-    #             if sub_repo_staging is not None:
-    #                 if is_tree_or_none(objects, sub_repo_staging):
-    #                     continue
-    #                 out.write(f"PRESENT {path}\n")
-    #             else:
-    #                 pass
+async def execute_print_pending(hoard: HoardContents, repo_uuid: str, ignore_missing: bool, out: StringIO):
+    repo_root = hoard.env.roots(write=False)[repo_uuid]
+    merged_ids = merge_contents(hoard.env, repo_root, [repo_root], set())
 
-    async for diff in DEPRECATED_compare_local_to_hoard(repo_uuid, hoard, pathing):
-        if diff.diff_type == DiffType.FileOnlyInLocal:
-            if diff.is_added:
-                out.write(f"ADDED {diff.hoard_file.as_posix()}\n")
-            else:
-                out.write(f"PRESENT {diff.hoard_file.as_posix()}\n")
-        elif diff.diff_type == DiffType.FileContentsDiffer:
-            out.write(f"MODIFIED {diff.hoard_file.as_posix()}\n")
-        elif diff.diff_type == DiffType.FileOnlyInHoardLocalDeleted:
-            out.write(f"DELETED {diff.hoard_file.as_posix()}\n")
-        elif diff.diff_type == DiffType.FileOnlyInHoardLocalUnknown:
-            if not ignore_missing:
-                out.write(f"MISSING {diff.hoard_file.as_posix()}\n")
-        elif diff.diff_type == DiffType.FileOnlyInHoardLocalMoved:
-            out.write(f"MOVED {diff.hoard_file.as_posix()}\n")
-        elif diff.diff_type == DiffType.FileIsSame:
-            pass
-        else:
-            raise ValueError(f"Unused diff class: {type(diff)}")
+    with (hoard.env.objects(write=False) as objects):
+        for path, (sub_before_hoard_id, sub_after_hoard_id, sub_repo_current, sub_repo_staging), _ in zip_trees_dfs(
+                objects, "", [
+                    hoard.env.roots(write=False)["HOARD"].desired,
+                    merged_ids.get_if_present("HOARD"),
+                    repo_root.current, repo_root.staging, ],
+                drilldown_same=True):
+
+            if sub_before_hoard_id is not None:  # file is in hoard
+                if is_tree_or_none(objects, sub_before_hoard_id):
+                    continue
+
+                if sub_repo_staging is not None:  # file is in local
+                    if is_tree_or_none(objects, sub_repo_staging):
+                        continue
+
+                    if sub_before_hoard_id == sub_repo_staging:
+                        pass  # skipping same files
+                    else:
+                        out.write(f"MODIFIED {path}\n")
+                else:  # file not in local
+                    if sub_repo_current is not None:
+                        out.write(f"DELETED {path}\n")
+                    else:
+                        if not ignore_missing:
+                            out.write(f"MISSING {path}\n")
+            else:  # not in hoard
+                if sub_repo_staging is not None:
+                    if is_tree_or_none(objects, sub_repo_staging):
+                        continue
+                    out.write(f"PRESENT {path}\n")
+                else:
+                    pass
+
     out.write("DONE")
 
 
@@ -381,12 +346,10 @@ class HoardCommandContents:
                     out.write(f"Status of {self.hoard.config().remotes[remote_uuid].name}:\n")
 
                     copy_local_staging_to_hoard(hoard, current_contents, self.hoard.config())
-                    await sync_fsobject_to_object_storage(hoard.env, hoard.fsobjects, current_contents.fsobjects, self.hoard.config())
+                    await sync_fsobject_to_object_storage(
+                        hoard.env, hoard.fsobjects, current_contents.fsobjects, self.hoard.config())
 
-                    await execute_print_pending(
-                        hoard, current_contents.uuid, HoardPathing(self.hoard.config(), self.hoard.paths()),
-                        ignore_missing,
-                        out)
+                    await execute_print_pending(hoard, current_contents.uuid, ignore_missing, out)
                     return out.getvalue()
 
     async def status(

@@ -921,8 +921,8 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'PRESENT /lets_get_it_started/test.me.2-butsecond\n'
             'PRESENT /lets_get_it_started/test.me.4-renamed\n'
             'MODIFIED /test.me.1\n'
-            'PRESENT /test.me.added\n'
             'DELETED /test.me.4\n'
+            'PRESENT /test.me.added\n'
             'DELETED /wat/test.me.2\n'
             'DONE'), res)
 
@@ -1206,8 +1206,8 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'PRESENT /lets_get_it_started/test.me.2-butsecond\n'
             'PRESENT /lets_get_it_started/test.me.4-renamed\n'
             'MODIFIED /test.me.1\n'
-            'PRESENT /test.me.added\n'
             'DELETED /test.me.4\n'
+            'PRESENT /test.me.added\n'
             'DELETED /wat/test.me.2\n'
             'DONE'), res)
 
