@@ -156,8 +156,8 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull(incoming_cave_cmd.current_uuid())
         self.assertEqual([
-            'Before: Hoard [894baf] <- repo [curr: b36f83, stg: e9ce07, des: a80f91]',
-            'After: Hoard [894baf], repo [curr: b36f83, stg: e9ce07, des: a80f91]',
+            'Before: Hoard [894baf] <- repo [curr: 843a75, stg: e9ce07, des: a80f91]',
+            'After: Hoard [894baf], repo [curr: 843a75, stg: e9ce07, des: a80f91]',
             "Sync'ed repo-incoming-name to hoard!",
             'DONE'], res.splitlines())
 
@@ -198,8 +198,8 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull(incoming_cave_cmd.current_uuid())
         self.assertEqual([
-            'Before: Hoard [0f6ca5] <- repo [curr: 4745b9, stg: e9ce07, des: a80f91]',
-            'After: Hoard [0f6ca5], repo [curr: 4745b9, stg: e9ce07, des: a80f91]',
+            'Before: Hoard [0f6ca5] <- repo [curr: 843a75, stg: e9ce07, des: a80f91]',
+            'After: Hoard [0f6ca5], repo [curr: 843a75, stg: e9ce07, des: a80f91]',
             "Sync'ed repo-incoming-name to hoard!",
             'DONE'], res.splitlines())
 
@@ -355,7 +355,6 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
             'ADD_NEW_TO_HOARD /wat3/test.me.3',
             'DELETE_FROM_HOARD /wat2/test.me.3',  # fixme should be cleanup for moved maybe
             'After: Hoard [b2cf90], repo [curr: dfd71d, stg: dfd71d, des: b2cf90]',
-            'remove dangling /wat2/test.me.3',
             "Sync'ed repo-full-name to hoard!",
             'DONE'], res.splitlines())
 

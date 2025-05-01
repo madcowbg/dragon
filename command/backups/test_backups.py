@@ -139,8 +139,8 @@ class TestBackups(IsolatedAsyncioTestCase):
         self.assertEqual(
             "repo-incoming-name:\n"
             "TO_CLEANUP (is in 1) /test.me.4\n"
-            "TO_CLEANUP (is in 1) /wat/test.me.3\n"
             "TO_CLEANUP (is in 0) /test.me.5\n"
+            "TO_CLEANUP (is in 1) /wat/test.me.3\n"
             "TO_CLEANUP (is in 0) /wat/test.me.6\n"
             "DONE", res)
 
@@ -462,12 +462,12 @@ class TestBackups(IsolatedAsyncioTestCase):
             'DONE'], res.splitlines())
 
         res = await hoard_cmd.backups.assign(available_only=False)
-        self.assertEqual(
+        self.assertEqual((
             'set: / with 4/4 media\n'
-            ' backup-2 <- 1 files (77)\n'
-            ' backup-3 <- 2 files (76)\n'
-            ' backup-4 <- 1 files (77)\n'
-            'DONE', res)
+            ' backup-2 <- 1 files (16)\n'
+            ' backup-3 <- 1 files (77)\n'
+            ' backup-4 <- 2 files (137)\n'
+            'DONE'), res)
 
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual([
@@ -475,17 +475,17 @@ class TestBackups(IsolatedAsyncioTestCase):
             '|Num Files                |total     |available |get       |cleanup   |',
             '|backup-1                 |         2|         2|          |          |',
             '|backup-2                 |         2|         1|         1|          |',
-            '|backup-3                 |         2|          |         2|          |',
-            '|backup-4                 |         1|          |         1|          |',
+            '|backup-3                 |         1|          |         1|          |',
+            '|backup-4                 |         2|          |         2|          |',
             '|repo-full-name           |         6|         4|         2|          |',
             '|repo-incoming-name       |         4|          |          |         4|',
             '|repo-partial-name        |         2|         2|          |          |',
             '',
             '|Size                     |total     |available |get       |cleanup   |',
             '|backup-1                 |       150|       150|          |          |',
-            '|backup-2                 |       137|        60|        77|          |',
-            '|backup-3                 |        76|          |        76|          |',
-            '|backup-4                 |        77|          |        77|          |',
+            '|backup-2                 |        76|        60|        16|          |',
+            '|backup-3                 |        77|          |        77|          |',
+            '|backup-4                 |       137|          |       137|          |',
             '|repo-full-name           |       380|       243|       137|          |',
             '|repo-incoming-name       |       304|          |          |       304|',
             '|repo-partial-name        |        76|        76|          |          |'], res.splitlines())
@@ -502,17 +502,17 @@ class TestBackups(IsolatedAsyncioTestCase):
             '|Num Files                |total     |available |get       |cleanup   |',
             '|backup-1                 |         2|         1|          |         1|',
             '|backup-2                 |         2|         1|         1|          |',
-            '|backup-3                 |         2|          |         2|          |',
-            '|backup-4                 |         1|          |         1|          |',
+            '|backup-3                 |         1|          |         1|          |',
+            '|backup-4                 |         2|          |         2|          |',
             '|repo-full-name           |         6|         4|         2|          |',
             '|repo-incoming-name       |         4|          |          |         4|',
             '|repo-partial-name        |         2|         2|          |          |',
             '',
             '|Size                     |total     |available |get       |cleanup   |',
             '|backup-1                 |       150|        60|          |        90|',
-            '|backup-2                 |       137|        60|        77|          |',
-            '|backup-3                 |        76|          |        76|          |',
-            '|backup-4                 |        77|          |        77|          |',
+            '|backup-2                 |        76|        60|        16|          |',
+            '|backup-3                 |        77|          |        77|          |',
+            '|backup-4                 |       137|          |       137|          |',
             '|repo-full-name           |       380|       243|       137|          |',
             '|repo-incoming-name       |       304|          |          |       304|',
             '|repo-partial-name        |        76|        76|          |          |'], res.splitlines())
@@ -610,8 +610,8 @@ class TestBackups(IsolatedAsyncioTestCase):
         res = await hoard_cmd.backups.assign(available_only=False)
         self.assertEqual([
             'set: / with 2/2 media',
-            ' backup-1 <- 1 files (60)',
-            ' backup-2 <- 3 files (170)',
+            ' backup-1 <- 2 files (93)',
+            ' backup-2 <- 2 files (137)',
             'DONE'], res.splitlines())
 
         res = await hoard_cmd.backups.health()
@@ -642,14 +642,13 @@ class TestBackups(IsolatedAsyncioTestCase):
         self.assertEqual([
             'Remote backup-1 is available, will not unassign',
             'Unassigning from backup-2:',
-            'WONT_GET /wat/test.me.2',
             'WONT_GET /test.me.4',
-            'WONT_GET /wat/test.me.6'], res.splitlines())
+            'WONT_GET /test.me.5'], res.splitlines())
 
         res = await hoard_cmd.backups.assign(available_only=True)
         self.assertEqual([
             'set: / with 1/2 media',
-            ' backup-1 <- 3 files (170)',
+            ' backup-1 <- 2 files (137)',
             'DONE'], res.splitlines())
 
     async def test_reassign_backup_when_unassigning_custom_repo(self):
@@ -671,18 +670,19 @@ class TestBackups(IsolatedAsyncioTestCase):
         res = await hoard_cmd.backups.assign(available_only=False)
         self.assertEqual([
             'set: / with 2/2 media',
-            ' backup-1 <- 1 files (60)',
-            ' backup-2 <- 3 files (170)',
+            ' backup-1 <- 2 files (93)',
+            ' backup-2 <- 2 files (137)',
             'DONE'], res.splitlines())
 
         res = await hoard_cmd.backups.unassign(repo="backup-1")
         self.assertEqual([
             'Unassigning from backup-1:',
-            'WONT_GET /test.me.5',
+            'WONT_GET /wat/test.me.2',
+            'WONT_GET /wat/test.me.6',
             'Skipping backup-2!'], res.splitlines())
 
         res = await hoard_cmd.backups.assign(available_only=False)
         self.assertEqual([
             'set: / with 2/2 media',
-            ' backup-1 <- 1 files (60)',
+            ' backup-1 <- 2 files (93)',
             'DONE'], res.splitlines())

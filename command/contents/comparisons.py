@@ -137,15 +137,19 @@ async def sync_fsobject_to_object_storage(
 
     for remote in hoard_config.remotes.all():
         with env.objects(write=True) as objects:
+            # remote_current_id = objects.mktree_from_tuples([
+            #     (hoard_config.remotes[remote.uuid].mounted_at.joinpath(path).as_posix(),
+            #      FileObject.create(hfo.fasthash, hfo.size))
+            #     for path, hfo in repo_objects.existing()])
             remote_current_id = objects.mktree_from_tuples([
                 (path.as_posix(), FileObject.create(hfo.fasthash, hfo.size))
-                async for path, hfo in fsobjects.in_folder_non_deleted(FastPosixPath("/"))
+                async for path, hfo in fsobjects.in_folder(FastPosixPath("/"))
                 if hfo.get_status(remote.uuid) in (HoardFileStatus.AVAILABLE, HoardFileStatus.CLEANUP)])
 
             remote_desired_id = objects.mktree_from_tuples([
                 (path.as_posix(), FileObject.create(hfo.fasthash, hfo.size))
                 # fixme make path absolute
-                async for path, hfo in fsobjects.in_folder_non_deleted(FastPosixPath("/"))
+                async for path, hfo in fsobjects.in_folder(FastPosixPath("/"))
                 if hfo.get_status(remote.uuid) in (
                     HoardFileStatus.AVAILABLE, HoardFileStatus.GET, HoardFileStatus.COPY, HoardFileStatus.MOVE)])
 

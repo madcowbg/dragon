@@ -282,7 +282,6 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             'ADD_NEW_TO_HOARD /newdir/newfile.is\n'
             'DELETE_FROM_HOARD /wat/test.me.different\n'
             'After: Hoard [7393db], repo [curr: 7393db, stg: 7393db, des: 7393db]\n'
-            'remove dangling /wat/test.me.different\n'
             "Sync'ed repo-in-local to hoard!\n"
             'DONE'), res)
 

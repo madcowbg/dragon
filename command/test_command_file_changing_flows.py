@@ -152,7 +152,6 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'ADD_NEW_TO_HOARD /wat/test.me.z\n'
             'DELETE_FROM_HOARD /wat/test.me.3\n'
             'After: Hoard [186d70], repo [curr: 186d70, stg: 186d70, des: 186d70]\n'
-            'remove dangling /wat/test.me.3\n'
             "Sync'ed repo-full-name to hoard!\n"
             'DONE'), res)
 
@@ -328,7 +327,6 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'ADD_NEW_TO_HOARD /wat/test.me.z\n'
             'DELETE_FROM_HOARD /wat/test.me.3\n'
             'After: Hoard [186d70], repo [curr: 186d70, stg: 186d70, des: 186d70]\n'
-            'remove dangling /wat/test.me.3\n'
             "Sync'ed repo-full-name to hoard!\n"
             'DONE'), res)
 
@@ -708,8 +706,8 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             " repo-changed-cave-name has 2 files\n"
             "repo-backup-name:\n"
             "TO_GET (from 1) /test.me.1\n"
-            "TO_GET (from 3) /wat/test.me.2\n"
             "TO_GET (from 2) /test.me.4\n"
+            "TO_GET (from 3) /wat/test.me.2\n"
             "TO_GET (from 1) /wat/test.me.3\n"
             " repo-changed-cave-name has 4 files\n"
             " repo-full-name has 2 files\n"
@@ -734,8 +732,8 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             "repo-full-name:\n"
             "repo-backup-name:\n"
             "TO_GET (from 1) /test.me.1\n"
-            "TO_GET (from 3) /wat/test.me.2\n"
             "TO_GET (from 2) /test.me.4\n"
+            "TO_GET (from 3) /wat/test.me.2\n"
             "TO_GET (from 1) /wat/test.me.3\n"
             " repo-changed-cave-name has 4 files\n"
             " repo-full-name has 2 files\n"
@@ -760,8 +758,8 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             "repo-full-name:\n"
             "repo-backup-name:\n"
             "TO_GET (from 1) /test.me.1\n"
-            "TO_GET (from 3) /wat/test.me.2\n"
             "TO_GET (from 2) /test.me.4\n"
+            "TO_GET (from 3) /wat/test.me.2\n"
             "TO_GET (from 1) /wat/test.me.3\n"
             " repo-changed-cave-name has 2 files\n"
             " repo-full-name has 4 files\n"
@@ -975,12 +973,12 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         self.assertEqual(
             "repo-copy-name:\n"
             # "TO_GET (from 1) /test.me.1\n"
-            "TO_CLEANUP (is in 0) /wat/test.me.2\n"
-            "TO_CLEANUP (is in 0) /test.me.4\n"
             "TO_GET (from 1) /lets_get_it_started/test.me.2-butnew\n"
             "TO_GET (from 1) /lets_get_it_started/test.me.2-butsecond\n"
             "TO_GET (from 1) /lets_get_it_started/test.me.4-renamed\n"  # fixme should MOVE instead
+            "TO_CLEANUP (is in 0) /test.me.4\n"
             "TO_GET (from 1) /test.me.added\n"
+            "TO_CLEANUP (is in 0) /wat/test.me.2\n"
             " repo-full-name has 4 files\n"
             "DONE", res)
 
@@ -1016,13 +1014,13 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.files.pending(backup_cave_cmd.current_uuid())
         self.assertEqual(
             'repo-backup-name:\n'
-            'TO_GET (from 3) /test.me.1\n'
-            # 'TO_CLEANUP (is in 0) /test.me.4\n'  # fixme do it
-            'TO_GET (from 2) /wat/test.me.3\n'
             'TO_GET (from 2) /lets_get_it_started/test.me.2-butnew\n'
             'TO_GET (from 2) /lets_get_it_started/test.me.2-butsecond\n'
             'TO_GET (from 2) /lets_get_it_started/test.me.4-renamed\n'
+            'TO_GET (from 3) /test.me.1\n'
+            # 'TO_CLEANUP (is in 0) /test.me.4\n'  # fixme do it
             'TO_GET (from 2) /test.me.added\n'
+            'TO_GET (from 2) /wat/test.me.3\n'
             ' repo-copy-name has 6 files\n'
             ' repo-full-name has 6 files\n'
             ' repo-partial-name has 1 files\n'  # fixme shan't
@@ -1266,12 +1264,12 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.files.pending(copy_cave_cmd.current_uuid())
         self.assertEqual((
             'repo-copy-name:\n'
-            'TO_CLEANUP (is in 0) /wat/test.me.2\n'
-            'TO_CLEANUP (is in 0) /test.me.4\n'
             'TO_GET (from 1) /lets_get_it_started/test.me.2-butnew\n'
             'TO_GET (from 1) /lets_get_it_started/test.me.2-butsecond\n'
             'TO_GET (from 1) /lets_get_it_started/test.me.4-renamed\n'
+            'TO_CLEANUP (is in 0) /test.me.4\n'
             'TO_GET (from 1) /test.me.added\n'
+            'TO_CLEANUP (is in 0) /wat/test.me.2\n'
             ' repo-full-name has 4 files\n'
             'DONE'), res)
 
@@ -1305,12 +1303,12 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.files.pending(backup_cave_cmd.current_uuid())
         self.assertEqual((
             'repo-backup-name:\n'
-            'TO_CLEANUP (is in 0) /wat/test.me.2\n'
-            'TO_CLEANUP (is in 0) /test.me.4\n'
             'TO_GET (from 2) /lets_get_it_started/test.me.2-butnew\n'
             'TO_GET (from 2) /lets_get_it_started/test.me.2-butsecond\n'
             'TO_GET (from 2) /lets_get_it_started/test.me.4-renamed\n'  # fixme MOVED
+            'TO_CLEANUP (is in 0) /test.me.4\n'
             'TO_GET (from 2) /test.me.added\n'
+            'TO_CLEANUP (is in 0) /wat/test.me.2\n'
             ' repo-copy-name has 4 files\n'
             ' repo-full-name has 4 files\n'
             'DONE'), res)
@@ -1414,12 +1412,12 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull(partial_cave_cmd.current_uuid())
         self.assertEqual((
-            'Before: Hoard [9b791e] <- repo [curr: 10a305, stg: dde8f8, des: 10a305]\n'
+            'Before: Hoard [9b791e] <- repo [curr: f6a740, stg: dde8f8, des: 10a305]\n'
             '?/wat/test.me.2\n'
             'ADD_NEW_TO_HOARD /test.me.1-newlocation\n'
             'DELETE_FROM_HOARD /test.me.1\n'
             # fixme we expected error - move will fail, but the fallback is to just get it
-            'After: Hoard [18e59d], repo [curr: f238b2, stg: dde8f8, des: f238b2]\n'
+            'After: Hoard [18e59d], repo [curr: dde8f8, stg: dde8f8, des: f238b2]\n'
             "Sync'ed repo-partial-name to hoard!\n"
             'DONE'), res)
 
@@ -1542,8 +1540,8 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.export_contents_to_repo(full_cave_cmd.current_uuid())
         self.assertEqual(
             "PRESENT test.me.1\n"
-            "PRESENT wat/test.me.2\n"
             "PRESENT test.me.4\n"
+            "PRESENT wat/test.me.2\n"
             "PRESENT wat/test.me.3\n"
             "DONE", res)
 
@@ -1598,10 +1596,10 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull(backup_cave_cmd.current_uuid())
         self.assertEqual((
-            'Before: Hoard [96be5f] <- repo [curr: eb5581, stg: 9fbdcf, des: 96be5f]\n'
-            # f"ALREADY_MARKED_GET /test.me.1\n"  # fixme
+            'Before: Hoard [96be5f] <- repo [curr: d99580, stg: 9fbdcf, des: 96be5f]\n'
+            '?/test.me.4\n'
             'g/wat/test.me.2\n'
-            'After: Hoard [96be5f], repo [curr: 9fbdcf, stg: 9fbdcf, des: 96be5f]\n'
+            'After: Hoard [96be5f], repo [curr: ef6ec6, stg: 9fbdcf, des: 96be5f]\n'
             "Sync'ed repo-backup-name to hoard!\n"
             'DONE'), res)
 
@@ -1824,17 +1822,17 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'g/test.me.4',
             'g/wat/test.me.2',
             'g/wat/test.me.6',
-            'After: Hoard [89527b], repo [curr: 2f92d4, stg: 0577b2, des: 89527b]',
+            'After: Hoard [89527b], repo [curr: d6c45b, stg: 0577b2, des: 89527b]',
             "Sync'ed repo-full-name to hoard!",
             'DONE'], res.splitlines())
 
         res = await hoard_cmd.files.pending(full_cave_cmd.current_uuid())
         self.assertEqual([
             'repo-full-name:',
-            'TO_GET (from 1) /wat/test.me.2',
             'TO_GET (from 0) /test.me.4',
-            'TO_GET (from 0) /wat/test.me.6',
             'TO_CLEANUP (is in 0) /test.me.6-moved',
+            'TO_GET (from 1) /wat/test.me.2',
+            'TO_GET (from 0) /wat/test.me.6',
             ' repo-partial-name has 1 files',
             'DONE'], res.splitlines())
 

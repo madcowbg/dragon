@@ -140,9 +140,9 @@ async def execute_pull(
             await sync_fsobject_to_object_storage(
                 hoard_contents.env, hoard_contents.fsobjects, current_contents.fsobjects,
                 hoard.config())  # fixme remove
-            # # fixme remove, just dumping
-            # sync_object_storate_to_recreate_fsobject_and_fspresence(
-            #     hoard_contents.env, hoard_contents.fsobjects, hoard.config())
+            # fixme remove, just dumping
+            sync_object_storate_to_recreate_fsobject_and_fspresence(
+                hoard_contents.env, hoard_contents.fsobjects, hoard.config())
 
             repo_current = hoard_contents.env.roots(False)[uuid].current
             repo_staging = hoard_contents.env.roots(False)[uuid].staging
@@ -158,17 +158,17 @@ async def execute_pull(
             for action in calculate_actions(preferences, resolutions, pathing, config, out):
                 action.execute(preferences.local_uuid, content_prefs, hoard_contents, out)
 
-            # fixme this should happen via merge, but is hacked now
-            hoard_contents.env.roots(write=True)[uuid].current = \
-                hoard_contents.env.roots(write=True)[uuid].staging
+            # # fixme this should happen via merge, but is hacked now
+            # hoard_contents.env.roots(write=True)[uuid].current = \
+            #     hoard_contents.env.roots(write=True)[uuid].staging
 
             # fixme remove, just dumping
-            await sync_fsobject_to_object_storage(hoard_contents.env, hoard_contents.fsobjects,
-                                                  current_contents.fsobjects, hoard.config())
+            await sync_fsobject_to_object_storage(
+                hoard_contents.env, hoard_contents.fsobjects, current_contents.fsobjects, hoard.config())
 
-            # # fixme remove, just dumping
-            # sync_object_storate_to_recreate_fsobject_and_fspresence(
-            #     hoard_contents.env, hoard_contents.fsobjects, hoard.config())
+            # fixme remove, just dumping
+            sync_object_storate_to_recreate_fsobject_and_fspresence(
+                hoard_contents.env, hoard_contents.fsobjects, hoard.config())
 
             repo_current = hoard_contents.env.roots(False)[uuid].current
             repo_staging = hoard_contents.env.roots(False)[uuid].staging
