@@ -15,9 +15,10 @@ from command.fast_path import FastPosixPath
 from command.hoard import Hoard
 from command.pathing import HoardPathing
 from command.pending_file_ops import GetFile, CopyFile, CleanupFile, get_pending_operations
-from config import CaveType, HoardRemote
+from config import CaveType, HoardRemote, HoardConfig
 from contents.hoard import HoardContents, HoardFile, HoardDir
 from contents.hoard_props import HoardFileStatus, HoardFileProps
+from contents.repo import RepoContents
 from contents.repo_props import FileDesc
 from contents_diff import DiffType, Diff
 from exceptions import MissingRepoContents
@@ -205,14 +206,12 @@ def is_tree_or_none(objects: Objects, obj_id: ObjectID | None) -> bool:
 
 async def execute_print_pending(hoard: HoardContents, repo_uuid: str, ignore_missing: bool, out: StringIO):
     repo_root = hoard.env.roots(write=False)[repo_uuid]
-    merged_ids = merge_contents(hoard.env, repo_root, [repo_root], set())
 
     with (hoard.env.objects(write=False) as objects):
-        for path, (sub_before_hoard_id, sub_after_hoard_id, sub_repo_current, sub_repo_staging), _ in zip_trees_dfs(
+        for path, (sub_before_hoard_id, sub_repo_current, sub_repo_staging), _ in zip_trees_dfs(
                 objects, "", [
                     hoard.env.roots(write=False)["HOARD"].desired,
-                    merged_ids.get_if_present("HOARD"),
-                    repo_root.current, repo_root.staging, ],
+                    repo_root.current, repo_root.staging],
                 drilldown_same=True):
 
             if sub_before_hoard_id is not None:  # file is in hoard
@@ -290,6 +289,28 @@ async def clear_pending_file_ops(hoard: Hoard, repo_uuid: str, out: StringIO):
                 raise ValueError(f"Unhandled op type: {type(op)}")
 
 
+async def print_pending_pull(
+        hoard_contents: HoardContents, current_contents: RepoContents, config: HoardConfig, pathing: HoardPathing,
+        preferences: PullPreferences, out):
+    resolutions = await resolution_to_match_repo_and_hoard(
+        current_contents.config.uuid, hoard_contents, pathing, preferences, alive_it)
+
+    with StringIO() as other_out:
+        out.write(f"Hoard root: {safe_hex(hoard_contents.env.roots(False)['HOARD'].desired)}:\n")
+        out.write(f"Repo root: {safe_hex(current_contents.fsobjects.root_id)}:\n")
+
+        roots = hoard_contents.env.roots(write=False)
+        repo_root = roots[current_contents.uuid]
+        hoard_root = roots["HOARD"]
+
+        # merge_contents(hoard_contents.env, repo_root, [hoard_root])
+
+        for action in calculate_actions(preferences, resolutions, pathing, config, other_out):
+            out.write(f"{action.__class__.action_type().upper()} {action.file_being_acted_on}\n")
+
+        logging.debug(other_out.getvalue())
+
+
 class HoardCommandContents:
     def __init__(self, hoard: Hoard):
         self.hoard = hoard
@@ -315,18 +336,11 @@ class HoardCommandContents:
                     pathing = HoardPathing(config, self.hoard.paths())
 
                     copy_local_staging_to_hoard(hoard_contents, current_contents, self.hoard.config())
+                    # fixme temporary
                     await sync_fsobject_to_object_storage(
                         hoard_contents.env, hoard_contents.fsobjects, current_contents.fsobjects, self.hoard.config())
 
-                    resolutions = await resolution_to_match_repo_and_hoard(
-                        current_contents.config.uuid, hoard_contents, pathing, preferences, alive_it)
-
-                    with StringIO() as other_out:
-                        out.write(f"Hoard root: {safe_hex(hoard_contents.env.roots(False)['HOARD'].desired)}:\n")
-                        out.write(f"Repo root: {safe_hex(current_contents.fsobjects.root_id)}:\n")
-                        for action in calculate_actions(preferences, resolutions, pathing, config, other_out):
-                            out.write(f"{action.__class__.action_type().upper()} {action.file_being_acted_on}\n")
-                        logging.debug(other_out.getvalue())
+                    await print_pending_pull(hoard_contents, current_contents, config, pathing, preferences, out)
 
                     return out.getvalue()
 

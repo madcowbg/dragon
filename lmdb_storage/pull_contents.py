@@ -8,6 +8,10 @@ from lmdb_storage.tree_structure import ObjectID
 
 
 def pull_contents(env: ObjectStorage, repo_uuid: str, staging_id: ObjectID, fetch_new: Set[str]):
+    assert "HOARD" not in fetch_new
+    fetch_new = fetch_new.copy()
+    fetch_new.add("HOARD")
+
     env.roots(write=True)[repo_uuid].staging = staging_id
 
     roots = env.roots(write=False)
@@ -22,10 +26,6 @@ def pull_contents(env: ObjectStorage, repo_uuid: str, staging_id: ObjectID, fetc
 
 
 def merge_contents(env: ObjectStorage, repo_root: Root, other_repo_roots: List[Root], fetch_new: Set[str]) -> ObjectsByRoot:
-    assert "HOARD" not in fetch_new
-    fetch_new = fetch_new.copy()
-    fetch_new.add("HOARD")
-
     assert repo_root in other_repo_roots, f"{repo_root.name} is missing from other_roots={other_repo_roots}"
 
     # assign roots
