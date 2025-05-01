@@ -5,6 +5,7 @@ from tempfile import TemporaryDirectory
 from lmdb_storage.pull_contents import pull_contents
 from lmdb_storage.test_experiment_lmdb import dump_tree
 from lmdb_storage.test_merge_trees import populate_trees
+from lmdb_storage.three_way_merge import NaiveMergePreferences
 from lmdb_storage.tree_structure import remove_file_object
 
 
@@ -29,7 +30,7 @@ class TestWorkflows(unittest.TestCase):
         roots["incoming-uuid"].desired = empty_tree_id
         roots["incoming-uuid"].current = empty_tree_id
 
-        pull_contents(env, repo_uuid="partial-uuid", staging_id=partial_id, fetch_new={"full-uuid"})
+        pull_contents(env, repo_uuid="partial-uuid", staging_id=partial_id, merge_prefs=NaiveMergePreferences({"full-uuid"}))
 
         roots = env.roots(write=False)
         current_full_id = roots["full-uuid"].desired
@@ -52,7 +53,7 @@ class TestWorkflows(unittest.TestCase):
                 ('$ROOT/wat/test.me.7', 2, '46e7da788d1c605a2293d580eeceeefd')],
                 dump_tree(objects, current_hoard_id, show_fasthash=True))
 
-        pull_contents(env, repo_uuid="incoming-uuid", staging_id=incoming_id, fetch_new={"full-uuid"})
+        pull_contents(env, repo_uuid="incoming-uuid", staging_id=incoming_id, merge_prefs=NaiveMergePreferences({"full-uuid"}))
 
         current_full_id = roots["full-uuid"].desired
         current_hoard_id = roots["HOARD"].desired
@@ -97,7 +98,7 @@ class TestWorkflows(unittest.TestCase):
             staging_incoming_id = remove_file_object(objects, current_incoming_id, "wat/test.me.6".split("/"))
             self.assertNotEqual(incoming_id, staging_incoming_id)
 
-        pull_contents(env, repo_uuid="incoming-uuid", staging_id=staging_incoming_id, fetch_new={"full-uuid"})
+        pull_contents(env, repo_uuid="incoming-uuid", staging_id=staging_incoming_id, merge_prefs=NaiveMergePreferences({"full-uuid"}))
 
         current_full_id = roots["full-uuid"].desired
         current_hoard_id = roots["HOARD"].desired
@@ -142,7 +143,7 @@ class TestWorkflows(unittest.TestCase):
                 dump_tree(objects, current_backup_id, show_fasthash=True))
 
         # adding the backup too
-        pull_contents(env, repo_uuid="backup-uuid", staging_id=backup_id, fetch_new={"full-uuid"})
+        pull_contents(env, repo_uuid="backup-uuid", staging_id=backup_id, merge_prefs=NaiveMergePreferences({"full-uuid"}))
 
         current_full_id = roots["full-uuid"].desired
         current_hoard_id = roots["HOARD"].desired

@@ -3,14 +3,13 @@ from typing import Set, List
 from lmdb_storage.merge_trees import ObjectsByRoot
 from lmdb_storage.object_store import ObjectStorage
 from lmdb_storage.roots import Root
-from lmdb_storage.three_way_merge import ThreewayMerge
+from lmdb_storage.three_way_merge import ThreewayMerge, MergePreferences, NaiveMergePreferences
 from lmdb_storage.tree_structure import ObjectID
 
 
-def pull_contents(env: ObjectStorage, repo_uuid: str, staging_id: ObjectID, fetch_new: Set[str]):
-    assert "HOARD" not in fetch_new
-    fetch_new = fetch_new.copy()
-    fetch_new.add("HOARD")
+def pull_contents(env: ObjectStorage, repo_uuid: str, staging_id: ObjectID, merge_prefs: NaiveMergePreferences):
+    assert "HOARD" not in merge_prefs.to_modify
+    merge_prefs = NaiveMergePreferences(merge_prefs.to_modify + [repo_uuid, "HOARD"])
 
     env.roots(write=True)[repo_uuid].staging = staging_id
 
@@ -18,14 +17,16 @@ def pull_contents(env: ObjectStorage, repo_uuid: str, staging_id: ObjectID, fetc
     repo_roots = [r for r in roots.all if r.name != "HOARD"]
     repo_root_names = [r.name for r in repo_roots]
 
-    merged_ids = merge_contents(env, roots[repo_uuid], repo_roots, fetch_new)
+    merged_ids = merge_contents(env, roots[repo_uuid], repo_roots, merge_prefs)
 
     commit_merged(env, repo_uuid, repo_root_names, merged_ids)
 
     return merged_ids
 
 
-def merge_contents(env: ObjectStorage, repo_root: Root, other_repo_roots: List[Root], fetch_new: Set[str]) -> ObjectsByRoot:
+def merge_contents(
+        env: ObjectStorage, repo_root: Root, other_repo_roots: List[Root], merge_prefs: MergePreferences) \
+        -> ObjectsByRoot:
     assert repo_root in other_repo_roots, f"{repo_root.name} is missing from other_roots={other_repo_roots}"
 
     # assign roots
@@ -47,9 +48,8 @@ def merge_contents(env: ObjectStorage, repo_root: Root, other_repo_roots: List[R
     # execute merge
     with env.objects(write=True) as objects:
         merged_ids = ThreewayMerge(
-            objects, current="current", staging='staging', others=other_root_names,
-            fetch_new=set([repo_root.name] + list(fetch_new))).merge_trees(
-            current_ids)  # fixme hack to fetch_new maybe not proper?
+            objects, current="current", staging='staging', others=other_root_names, merge_prefs=merge_prefs) \
+            .merge_trees(current_ids)
 
         assert len(set(current_ids.assigned().keys()) - set(merged_ids.assigned().keys())) == 0, \
             f"{set(merged_ids.assigned().keys())} not contains all of {set(current_ids.assigned().keys())}"
