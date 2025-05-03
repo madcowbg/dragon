@@ -423,11 +423,12 @@ async def print_pending_to_pull(
 def print_differences(
         hoard_contents: HoardContents, hoard_root: Root, repo_root: Root, merged_ids: ObjectsByRoot, out: StringIO):
     with hoard_contents.env.objects(write=False) as objects:
-        for path, (base_hoard_id, merged_hoard_id, base_current_repo_id, merged_repo_id), _ in zip_trees_dfs(
-                objects, "", [
-                    hoard_root.desired, merged_ids.get_if_present("HOARD"),
-                    repo_root.current, merged_ids.get_if_present(repo_root.name), ],
-                drilldown_same=True):
+        for path, (base_hoard_id, merged_hoard_id, base_current_repo_id, merged_repo_id, staging_repo_id), _ \
+                in zip_trees_dfs(
+            objects, "", [
+                hoard_root.desired, merged_ids.get_if_present("HOARD"),
+                repo_root.current, merged_ids.get_if_present(repo_root.name), repo_root.staging],
+            drilldown_same=True):
 
             if base_current_repo_id and merged_repo_id:
                 if not (is_tree_or_none(objects, base_current_repo_id) or is_tree_or_none(objects, merged_repo_id)):
@@ -438,7 +439,11 @@ def print_differences(
                 if not is_tree_or_none(objects, merged_repo_id):
                     assert merged_repo_id == merged_hoard_id, f"File somehow desired but not in hoard?! {path}"
                     if merged_repo_id == base_hoard_id:
-                        out.write(f"REPO_DESIRED_FILE_TO_GET {path}\n")
+                        if merged_repo_id == staging_repo_id:
+                            # file was added just now
+                            out.write(f"REPO_MARK_FILE_AVAILABLE {path}\n")
+                        else:
+                            out.write(f"REPO_DESIRED_FILE_TO_GET {path}\n")
                     else:
                         out.write(f"REPO_DESIRED_FILE_ADDED {path}\n")
             elif base_current_repo_id:

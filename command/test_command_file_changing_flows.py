@@ -825,10 +825,10 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'Status of repo-full-name:',
             'Hoard root: f6a74030fa0a826b18e424d44f8aca9be8c657f3:',
             'Repo root: d995800c80add686a027bac8628ca610418c64b6:',
-            'REPO_DESIRED_FILE_TO_GET /test.me.1',
+            'REPO_MARK_FILE_AVAILABLE /test.me.1',
             'REPO_DESIRED_FILE_ADDED /test.me.4',
             'HOARD_FILE_ADDED /test.me.4',
-            'REPO_DESIRED_FILE_TO_GET /wat/test.me.2',
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.2',
             'REPO_DESIRED_FILE_ADDED /wat/test.me.3',
             'HOARD_FILE_ADDED /wat/test.me.3'], res.splitlines())
 
