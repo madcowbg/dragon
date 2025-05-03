@@ -207,7 +207,7 @@ def is_tree_or_none(objects: Objects, obj_id: ObjectID | None) -> bool:
     return True if obj_id is None else isinstance(objects[obj_id], TreeObject)
 
 
-async def execute_print_pending(hoard: HoardContents, repo_uuid: str, ignore_missing: bool, out: StringIO):
+async def execute_print_differences(hoard: HoardContents, repo_uuid: str, ignore_missing: bool, out: StringIO):
     repo_root = hoard.env.roots(write=False)[repo_uuid]
 
     with (hoard.env.objects(write=False) as objects):
@@ -375,7 +375,7 @@ class PullMergePreferences(MergePreferences):
         return original_roots
 
 
-async def print_pending_pull(
+async def print_pending_to_pull(
         hoard_contents: HoardContents, content_prefs: ContentPrefs, current_contents: RepoContents, config: HoardConfig,
         preferences: PullPreferences, out):
     with StringIO() as other_out:
@@ -468,7 +468,7 @@ class HoardCommandContents:
                     await sync_fsobject_to_object_storage(
                         hoard_contents.env, hoard_contents.fsobjects, current_contents.fsobjects, self.hoard.config())
 
-                    await print_pending_pull(hoard_contents, content_prefs, current_contents, config, preferences, out)
+                    await print_pending_to_pull(hoard_contents, content_prefs, current_contents, config, preferences, out)
 
                     return out.getvalue()
 
@@ -491,7 +491,7 @@ class HoardCommandContents:
                     await sync_fsobject_to_object_storage(
                         hoard.env, hoard.fsobjects, current_contents.fsobjects, self.hoard.config())
 
-                    await execute_print_pending(hoard, current_contents.uuid, ignore_missing, out)
+                    await execute_print_differences(hoard, current_contents.uuid, ignore_missing, out)
                     return out.getvalue()
 
     async def status(
