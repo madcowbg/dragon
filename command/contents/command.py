@@ -24,7 +24,8 @@ from contents_diff import DiffType, Diff
 from exceptions import MissingRepoContents
 from lmdb_storage.file_object import FileObject
 from lmdb_storage.merge_trees import ObjectsByRoot
-from lmdb_storage.pull_contents import merge_contents
+from lmdb_storage.pull_contents import merge_contents, pull_contents, commit_merged
+from lmdb_storage.roots import Root
 from lmdb_storage.three_way_merge import NaiveMergePreferences, MergePreferences
 from lmdb_storage.tree_iteration import zip_trees_dfs
 from lmdb_storage.tree_structure import Objects, ObjectID, TreeObject
@@ -148,38 +149,55 @@ async def execute_pull(
             sync_object_storate_to_recreate_fsobject_and_fspresence(
                 hoard_contents.env, hoard_contents.fsobjects, hoard.config())
 
-            repo_current = hoard_contents.env.roots(False)[uuid].current
-            repo_staging = hoard_contents.env.roots(False)[uuid].staging
-            repo_desired = hoard_contents.env.roots(False)[uuid].desired
+            roots = hoard_contents.env.roots(False)
+            repo_current = roots[uuid].current
+            repo_staging = roots[uuid].staging
+            repo_desired = roots[uuid].desired
 
             out.write(
-                f"Before: Hoard [{safe_hex(hoard_contents.env.roots(False)['HOARD'].desired)[:6]}] "
+                f"Before: Hoard [{safe_hex(roots['HOARD'].desired)[:6]}] "
                 f"<- repo [curr: {safe_hex(repo_current)[:6]}, stg: {safe_hex(repo_staging)[:6]}, des: {safe_hex(repo_desired)[:6]}]\n")
 
-            resolutions = await resolution_to_match_repo_and_hoard(
-                uuid, hoard_contents, pathing, preferences, progress_bar)
+            if True:
+                resolutions = await resolution_to_match_repo_and_hoard(
+                    uuid, hoard_contents, pathing, preferences, progress_bar)
 
-            for action in calculate_actions(preferences, resolutions, pathing, config, out):
-                action.execute(preferences.local_uuid, content_prefs, hoard_contents, out)
+                for action in calculate_actions(preferences, resolutions, pathing, config, out):
+                    action.execute(preferences.local_uuid, content_prefs, hoard_contents, out)
 
-            # # fixme this should happen via merge, but is hacked now
-            # hoard_contents.env.roots(write=True)[uuid].current = \
-            #     hoard_contents.env.roots(write=True)[uuid].staging
+                # # fixme this should happen via merge, but is hacked now
+                # hoard_contents.env.roots(write=True)[uuid].current = \
+                #     hoard_contents.env.roots(write=True)[uuid].staging
 
-            # fixme remove, just dumping
-            await sync_fsobject_to_object_storage(
-                hoard_contents.env, hoard_contents.fsobjects, current_contents.fsobjects, hoard.config())
+                # fixme remove, just dumping
+                await sync_fsobject_to_object_storage(
+                    hoard_contents.env, hoard_contents.fsobjects, current_contents.fsobjects, hoard.config())
+            else:
+                all_remote_roots = [roots[remote.uuid] for remote in config.remotes.all()]
+                hoard_root = roots["HOARD"]
+                repo_root = roots[uuid]
+
+                merged_ids = merge_contents(
+                    hoard_contents.env, repo_root, all_repo_roots=[hoard_root] + all_remote_roots,
+                    merge_prefs=PullMergePreferences(
+                        preferences, content_prefs, hoard_contents, current_contents.uuid,
+                        config.remotes, [r.name for r in all_remote_roots]))
+
+                # print what actually changed for the hoard and the repo todo consider printing other repo changes?
+                print_differences(hoard_contents, hoard_root, repo_root, merged_ids, out)
+
+                commit_merged(hoard_contents.env, repo_root.name, all_remote_roots, merged_ids)
 
             # fixme remove, just dumping
             sync_object_storate_to_recreate_fsobject_and_fspresence(
                 hoard_contents.env, hoard_contents.fsobjects, hoard.config())
 
-            repo_current = hoard_contents.env.roots(False)[uuid].current
-            repo_staging = hoard_contents.env.roots(False)[uuid].staging
-            repo_desired = hoard_contents.env.roots(False)[uuid].desired
+            repo_current = roots[uuid].current
+            repo_staging = roots[uuid].staging
+            repo_desired = roots[uuid].desired
 
             out.write(
-                f"After: Hoard [{safe_hex(hoard_contents.env.roots(False)['HOARD'].desired)[:6]}],"
+                f"After: Hoard [{safe_hex(roots['HOARD'].desired)[:6]}],"
                 f" repo [curr: {safe_hex(repo_current)[:6]}, stg: {safe_hex(repo_staging)[:6]}, des: {safe_hex(repo_desired)[:6]}]\n")
 
             logging.info(f"Updating epoch of {remote_uuid} to {current_contents.config.epoch}")
@@ -388,54 +406,60 @@ async def print_pending_to_pull(
 
         merged_ids = merge_contents(
             hoard_contents.env, repo_root, [repo_root, hoard_root],
-            PullMergePreferences(preferences, content_prefs, hoard_contents, current_contents.uuid, config.remotes, [repo_root.name]))
+            PullMergePreferences(
+                preferences, content_prefs, hoard_contents, current_contents.uuid, config.remotes, [repo_root.name]))
 
         # raise ValueError()
-        with hoard_contents.env.objects(write=False) as objects:
-            for path, (base_hoard_id, merged_hoard_id, base_current_repo_id, merged_repo_id), _ in zip_trees_dfs(
-                    objects, "", [
-                        hoard_root.desired, merged_ids.get_if_present("HOARD"),
-                        repo_root.current, merged_ids.get_if_present(repo_root.name), ],
-                    drilldown_same=True):
-
-                if base_current_repo_id and merged_repo_id:
-                    if not (is_tree_or_none(objects, base_current_repo_id) or is_tree_or_none(objects, merged_repo_id)):
-                        if base_current_repo_id != merged_repo_id:
-                            out.write(f"REPO_DESIRED_FILE_CHANGED {path}\n")
-                elif merged_repo_id:
-                    assert base_current_repo_id is None
-                    if not is_tree_or_none(objects, merged_repo_id):
-                        assert merged_repo_id == merged_hoard_id, f"File somehow desired but not in hoard?! {path}"
-                        if merged_repo_id == base_hoard_id:
-                            out.write(f"REPO_DESIRED_FILE_TO_GET {path}\n")
-                        else:
-                            out.write(f"REPO_DESIRED_FILE_ADDED {path}\n")
-                elif base_current_repo_id:
-                    assert merged_repo_id is None
-                    if not is_tree_or_none(objects, base_current_repo_id):
-                        out.write(f"REPO_FILE_TO_DELETE {path}\n")
-                else:
-                    assert base_current_repo_id is None and merged_repo_id is None
-                    logging.debug(f"Ignoring %s as is not in repo past or future", path)
-                    pass
-
-                if merged_hoard_id and base_hoard_id:
-                    if not (is_tree_or_none(objects, merged_hoard_id) or is_tree_or_none(objects, base_hoard_id)):
-                        if merged_hoard_id != base_hoard_id:
-                            out.write(f"HOARD_FILE_CHANGED {path}\n")
-                elif merged_hoard_id:
-                    assert base_hoard_id is None
-                    if not is_tree_or_none(objects, merged_hoard_id):
-                        out.write(f"HOARD_FILE_ADDED {path}\n")
-                elif base_hoard_id:
-                    assert merged_hoard_id is None
-                    if not is_tree_or_none(objects, base_hoard_id):
-                        out.write(f"HOARD_FILE_DELETED {path}\n")
-                else:
-                    assert base_hoard_id is None and merged_hoard_id is None
-                    logging.debug(f"Ignoring %s as is not in hoard past or future", path)
+        print_differences(hoard_contents, hoard_root, repo_root, merged_ids, out)
 
         logging.debug(other_out.getvalue())
+
+
+def print_differences(
+        hoard_contents: HoardContents, hoard_root: Root, repo_root: Root, merged_ids: ObjectsByRoot, out: StringIO):
+    with hoard_contents.env.objects(write=False) as objects:
+        for path, (base_hoard_id, merged_hoard_id, base_current_repo_id, merged_repo_id), _ in zip_trees_dfs(
+                objects, "", [
+                    hoard_root.desired, merged_ids.get_if_present("HOARD"),
+                    repo_root.current, merged_ids.get_if_present(repo_root.name), ],
+                drilldown_same=True):
+
+            if base_current_repo_id and merged_repo_id:
+                if not (is_tree_or_none(objects, base_current_repo_id) or is_tree_or_none(objects, merged_repo_id)):
+                    if base_current_repo_id != merged_repo_id:
+                        out.write(f"REPO_DESIRED_FILE_CHANGED {path}\n")
+            elif merged_repo_id:
+                assert base_current_repo_id is None
+                if not is_tree_or_none(objects, merged_repo_id):
+                    assert merged_repo_id == merged_hoard_id, f"File somehow desired but not in hoard?! {path}"
+                    if merged_repo_id == base_hoard_id:
+                        out.write(f"REPO_DESIRED_FILE_TO_GET {path}\n")
+                    else:
+                        out.write(f"REPO_DESIRED_FILE_ADDED {path}\n")
+            elif base_current_repo_id:
+                assert merged_repo_id is None
+                if not is_tree_or_none(objects, base_current_repo_id):
+                    out.write(f"REPO_FILE_TO_DELETE {path}\n")
+            else:
+                assert base_current_repo_id is None and merged_repo_id is None
+                logging.debug(f"Ignoring %s as is not in repo past or future", path)
+                pass
+
+            if merged_hoard_id and base_hoard_id:
+                if not (is_tree_or_none(objects, merged_hoard_id) or is_tree_or_none(objects, base_hoard_id)):
+                    if merged_hoard_id != base_hoard_id:
+                        out.write(f"HOARD_FILE_CHANGED {path}\n")
+            elif merged_hoard_id:
+                assert base_hoard_id is None
+                if not is_tree_or_none(objects, merged_hoard_id):
+                    out.write(f"HOARD_FILE_ADDED {path}\n")
+            elif base_hoard_id:
+                assert merged_hoard_id is None
+                if not is_tree_or_none(objects, base_hoard_id):
+                    out.write(f"HOARD_FILE_DELETED {path}\n")
+            else:
+                assert base_hoard_id is None and merged_hoard_id is None
+                logging.debug(f"Ignoring %s as is not in hoard past or future", path)
 
 
 class HoardCommandContents:
@@ -468,7 +492,8 @@ class HoardCommandContents:
                     await sync_fsobject_to_object_storage(
                         hoard_contents.env, hoard_contents.fsobjects, current_contents.fsobjects, self.hoard.config())
 
-                    await print_pending_to_pull(hoard_contents, content_prefs, current_contents, config, preferences, out)
+                    await print_pending_to_pull(hoard_contents, content_prefs, current_contents, config, preferences,
+                                                out)
 
                     return out.getvalue()
 

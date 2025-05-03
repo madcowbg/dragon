@@ -25,9 +25,9 @@ def pull_contents(env: ObjectStorage, repo_uuid: str, staging_id: ObjectID, merg
 
 
 def merge_contents(
-        env: ObjectStorage, repo_root: Root, other_repo_roots: List[Root], merge_prefs: MergePreferences) \
+        env: ObjectStorage, repo_root: Root, all_repo_roots: List[Root], merge_prefs: MergePreferences) \
         -> ObjectsByRoot:
-    assert repo_root in other_repo_roots, f"{repo_root.name} is missing from other_roots={other_repo_roots}"
+    assert repo_root in all_repo_roots, f"{repo_root.name} is missing from other_roots={all_repo_roots}"
 
     # assign roots
     repo_current_id = repo_root.current
@@ -35,10 +35,10 @@ def merge_contents(
 
     hoard_head_id = env.roots(False)["HOARD"].desired
 
-    other_root_names = [r.name for r in other_repo_roots]
+    all_root_names = [r.name for r in all_repo_roots]
     current_ids = ObjectsByRoot(
-        list(set(list(other_root_names) + ["current", "staging", "HOARD"])),
-        [(r.name, r.desired) for r in other_repo_roots] + [
+        list(set(list(all_root_names) + ["current", "staging", "HOARD"])),
+        [(r.name, r.desired) for r in all_repo_roots] + [
             ("current", repo_current_id),
             ("staging", repo_staging_id),
             ("HOARD", hoard_head_id)])
@@ -48,7 +48,7 @@ def merge_contents(
     # execute merge
     with env.objects(write=True) as objects:
         merged_ids = ThreewayMerge(
-            objects, current="current", staging='staging', others=other_root_names, merge_prefs=merge_prefs) \
+            objects, current="current", staging='staging', others=all_root_names, merge_prefs=merge_prefs) \
             .merge_trees(current_ids)
 
         assert len(set(current_ids.assigned().keys()) - set(merged_ids.assigned().keys())) == 0, \
@@ -57,7 +57,7 @@ def merge_contents(
     return merged_ids
 
 
-def commit_merged(env: ObjectStorage, repo_uuid: str, other_root_names: List[str], merged_ids):
+def commit_merged(env: ObjectStorage, repo_uuid: str, all_root_names: List[str], merged_ids):
     roots = env.roots(write=True)
 
     # set current for the repo being merged
@@ -65,5 +65,5 @@ def commit_merged(env: ObjectStorage, repo_uuid: str, other_root_names: List[str
 
     # accept the changed IDs as desired
     roots["HOARD"].desired = merged_ids.get_if_present("HOARD")
-    for other_name in other_root_names:
+    for other_name in all_root_names:
         roots[other_name].desired = merged_ids.get_if_present(other_name)
