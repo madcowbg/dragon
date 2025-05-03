@@ -173,6 +173,8 @@ async def execute_pull(
                 await sync_fsobject_to_object_storage(
                     hoard_contents.env, hoard_contents.fsobjects, current_contents.fsobjects, hoard.config())
             else:
+                roots = hoard_contents.env.roots(True)
+
                 all_remote_roots = [roots[remote.uuid] for remote in config.remotes.all()]
                 hoard_root = roots["HOARD"]
                 repo_root = roots[uuid]
@@ -186,7 +188,7 @@ async def execute_pull(
                 # print what actually changed for the hoard and the repo todo consider printing other repo changes?
                 print_differences(hoard_contents, hoard_root, repo_root, merged_ids, out)
 
-                commit_merged(hoard_contents.env, repo_root.name, all_remote_roots, merged_ids)
+                commit_merged(hoard_root, repo_root, all_remote_roots, merged_ids)
 
             # fixme remove, just dumping
             sync_object_storate_to_recreate_fsobject_and_fspresence(
@@ -314,7 +316,9 @@ class PullMergePreferences(MergePreferences):
     def __init__(
             self, preferences: PullPreferences, content_prefs: ContentPrefs, hoard_contents: HoardContents,  # fixme rem
             remote_uuid: str, remotes: HoardRemotes, uuid_roots: List[str]):
+        self.remote_uuid = remote_uuid
         self.remote_type = remotes[remote_uuid].type
+
         self.preferences = preferences
         self.content_prefs = content_prefs
 
@@ -333,7 +337,8 @@ class PullMergePreferences(MergePreferences):
             file_path,
             file_desc,
             self.hoard_contents.fsobjects[file_path] if file_path in self.hoard_contents.fsobjects else None)
-        return ["HOARD"] + [r for r in repos_to_add if r in self._where_to_apply_adds]
+        base_to_add = ["HOARD", self.remote_uuid] if self.remote_type == CaveType.PARTIAL else ["HOARD"]
+        return base_to_add + [r for r in repos_to_add if r in self._where_to_apply_adds]
 
     def combine_both_existing(
             self, path: List[str], original_roots: ObjectsByRoot, staging_name: str, base_name: str,

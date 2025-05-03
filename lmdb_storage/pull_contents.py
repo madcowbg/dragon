@@ -58,11 +58,13 @@ def merge_contents(
     return merged_ids
 
 
-def commit_merged(hoard: Root, repo: Root, all_root_names: List[Root], merged_ids):
+def commit_merged(hoard: Root, repo: Root, all_roots: List[Root], merged_ids: ObjectsByRoot):
     # set current for the repo being merged
     repo.current = merged_ids.get_if_present("current")
+    assert repo.name in merged_ids, f"{repo.name} is missing from merged_ids={merged_ids}"
+    assert repo in all_roots, f"{repo} is missing from all_roots={all_roots}"
 
     # accept the changed IDs as desired
     hoard.desired = merged_ids.get_if_present("HOARD")
-    for other_root in all_root_names:
+    for other_root in all_roots:
         other_root.desired = merged_ids.get_if_present(other_root.name)
