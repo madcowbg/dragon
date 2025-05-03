@@ -825,10 +825,12 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'Status of repo-full-name:',
             'Hoard root: f6a74030fa0a826b18e424d44f8aca9be8c657f3:',
             'Repo root: d995800c80add686a027bac8628ca610418c64b6:',
-            'MARK_IS_AVAILABLE_BEHAVIOR /test.me.1',
-            'MARK_IS_AVAILABLE_BEHAVIOR /wat/test.me.2',
-            'ADD_NEW_FILE_BEHAVIOR /test.me.4',
-            'ADD_NEW_FILE_BEHAVIOR /wat/test.me.3'], res.splitlines())
+            'REPO_DESIRED_FILE_TO_GET /test.me.1',
+            'REPO_DESIRED_FILE_ADDED /test.me.4',
+            'HOARD_FILE_ADDED /test.me.4',
+            'REPO_DESIRED_FILE_TO_GET /wat/test.me.2',
+            'REPO_DESIRED_FILE_ADDED /wat/test.me.3',
+            'HOARD_FILE_ADDED /wat/test.me.3'], res.splitlines())
 
         res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
         self.assertEqual((
@@ -929,13 +931,21 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'Status of repo-full-name:',
             'Hoard root: d995800c80add686a027bac8628ca610418c64b6:',
             'Repo root: 93044fb853800db246860982a52eeb78e214ca4a:',
-            'ADD_NEW_FILE_BEHAVIOR /lets_get_it_started/test.me.2-butnew',
-            'ADD_NEW_FILE_BEHAVIOR /lets_get_it_started/test.me.2-butsecond',
-            'ADD_NEW_FILE_BEHAVIOR /lets_get_it_started/test.me.4-renamed',
-            'ADD_NEW_FILE_BEHAVIOR /test.me.added',
-            'MARK_TO_GET_BEHAVIOR /test.me.1',  # fixme should push instead of getting!
-            'DELETE_FILE_FROM_HOARD_BEHAVIOR /test.me.4',
-            'DELETE_FILE_FROM_HOARD_BEHAVIOR /wat/test.me.2'], res.splitlines())
+            'REPO_DESIRED_FILE_ADDED /lets_get_it_started/test.me.2-butnew',
+            'HOARD_FILE_ADDED /lets_get_it_started/test.me.2-butnew',
+            'REPO_DESIRED_FILE_ADDED /lets_get_it_started/test.me.2-butsecond',
+            'HOARD_FILE_ADDED /lets_get_it_started/test.me.2-butsecond',
+            'REPO_DESIRED_FILE_ADDED /lets_get_it_started/test.me.4-renamed',
+            'HOARD_FILE_ADDED /lets_get_it_started/test.me.4-renamed',
+            'REPO_DESIRED_FILE_CHANGED /test.me.1',
+            'HOARD_FILE_CHANGED /test.me.1',
+            'REPO_FILE_TO_DELETE /test.me.4',
+            'HOARD_FILE_DELETED /test.me.4',
+            'REPO_DESIRED_FILE_ADDED /test.me.added',
+            'HOARD_FILE_ADDED /test.me.added',
+            'REPO_FILE_TO_DELETE /wat/test.me.2',
+            'HOARD_FILE_DELETED /wat/test.me.2'
+        ], res.splitlines())
 
         res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
         self.assertEqual(
@@ -1214,13 +1224,20 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'Status of repo-full-name:',
             'Hoard root: d995800c80add686a027bac8628ca610418c64b6:',
             'Repo root: 93044fb853800db246860982a52eeb78e214ca4a:',
-            'ADD_NEW_FILE_BEHAVIOR /lets_get_it_started/test.me.2-butnew',
-            'ADD_NEW_FILE_BEHAVIOR /lets_get_it_started/test.me.2-butsecond',
-            'ADD_NEW_FILE_BEHAVIOR /lets_get_it_started/test.me.4-renamed',
-            'ADD_NEW_FILE_BEHAVIOR /test.me.added',
-            'MARK_TO_GET_BEHAVIOR /test.me.1',  # fixme should be pushed, insteaf of pulled
-            'DELETE_FILE_FROM_HOARD_BEHAVIOR /test.me.4',
-            'DELETE_FILE_FROM_HOARD_BEHAVIOR /wat/test.me.2'], res.splitlines())
+            'REPO_DESIRED_FILE_ADDED /lets_get_it_started/test.me.2-butnew',
+            'HOARD_FILE_ADDED /lets_get_it_started/test.me.2-butnew',
+            'REPO_DESIRED_FILE_ADDED /lets_get_it_started/test.me.2-butsecond',
+            'HOARD_FILE_ADDED /lets_get_it_started/test.me.2-butsecond',
+            'REPO_DESIRED_FILE_ADDED /lets_get_it_started/test.me.4-renamed',
+            'HOARD_FILE_ADDED /lets_get_it_started/test.me.4-renamed',
+            'REPO_DESIRED_FILE_CHANGED /test.me.1',
+            'HOARD_FILE_CHANGED /test.me.1',
+            'REPO_FILE_TO_DELETE /test.me.4',
+            'HOARD_FILE_DELETED /test.me.4',
+            'REPO_DESIRED_FILE_ADDED /test.me.added',
+            'HOARD_FILE_ADDED /test.me.added',
+            'REPO_FILE_TO_DELETE /wat/test.me.2',
+            'HOARD_FILE_DELETED /wat/test.me.2'], res.splitlines())
 
         res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
         self.assertEqual((
@@ -1678,9 +1695,14 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'Status of repo-full-name:',
             'Hoard root: 96be5f3037f27a34a3acad1b9f3106652efdd8f7:',
             'Repo root: 93044fb853800db246860982a52eeb78e214ca4a:',
-            'ADD_NEW_FILE_BEHAVIOR /lets_get_it_started/test.me.2-butnew',
-            'ADD_NEW_FILE_BEHAVIOR /lets_get_it_started/test.me.2-butsecond',
-            'DELETE_FILE_FROM_HOARD_BEHAVIOR /wat/test.me.2'], res.splitlines())
+            'REPO_DESIRED_FILE_ADDED /lets_get_it_started/test.me.2-butnew',
+            'HOARD_FILE_ADDED /lets_get_it_started/test.me.2-butnew',
+            'REPO_DESIRED_FILE_ADDED /lets_get_it_started/test.me.2-butsecond',
+            'HOARD_FILE_ADDED /lets_get_it_started/test.me.2-butsecond',
+            'REPO_DESIRED_FILE_ADDED /test.me.1',
+            'HOARD_FILE_CHANGED /test.me.1',
+            'REPO_FILE_TO_DELETE /wat/test.me.2',
+            'HOARD_FILE_DELETED /wat/test.me.2'], res.splitlines())
 
         res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
         self.assertEqual((
@@ -1794,10 +1816,14 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'Status of repo-full-name:',
             'Hoard root: 89527b0fa576e127d04089d9cb5aab0e5619696d:',
             'Repo root: 0577b25af683498909c9834d8b54d299ffb47d03:',
-            'ADD_NEW_FILE_BEHAVIOR /test.me.6-moved',
-            'MARK_TO_GET_BEHAVIOR /test.me.4',  # fixme should be actually pushing the change, instead of resetting
-            'DELETE_FILE_FROM_HOARD_BEHAVIOR /wat/test.me.2',
-            'DELETE_FILE_FROM_HOARD_BEHAVIOR /wat/test.me.6'], res.splitlines())
+            'REPO_DESIRED_FILE_CHANGED /test.me.4',
+            'HOARD_FILE_CHANGED /test.me.4',
+            'REPO_DESIRED_FILE_ADDED /test.me.6-moved',
+            'HOARD_FILE_ADDED /test.me.6-moved',
+            'REPO_FILE_TO_DELETE /wat/test.me.2',
+            'HOARD_FILE_DELETED /wat/test.me.2',
+            'REPO_FILE_TO_DELETE /wat/test.me.6',
+            'HOARD_FILE_DELETED /wat/test.me.6'], res.splitlines())
 
         res = await hoard_cmd.files.pending(full_cave_cmd.current_uuid())
         self.assertEqual(['repo-full-name:', 'DONE'], res.splitlines())

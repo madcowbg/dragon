@@ -145,7 +145,11 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
         self.assertEqual([
             'Status of repo-incoming-name:',
             'Hoard root: 894baf9ffef6c3bdc358c61ad4c157b8903bd409:',
-            'Repo root: e9ce073b9d61e12d35bbb0fa537581065083c886:'], res.splitlines())
+            'Repo root: e9ce073b9d61e12d35bbb0fa537581065083c886:',
+            'REPO_FILE_TO_DELETE /test.me.4',
+            'REPO_FILE_TO_DELETE /test.me.5',
+            'REPO_FILE_TO_DELETE /wat/test.me.3',
+            'REPO_FILE_TO_DELETE /wat/test.me.6'], res.splitlines())
 
         res = await incoming_cave_cmd.refresh()
         self.assertEqual([
@@ -187,7 +191,12 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
         self.assertEqual([
             'Status of repo-incoming-name:',
             'Hoard root: 0f6ca590b141ab71406b9f2a09b9e1a78223cc8d:',
-            'Repo root: e9ce073b9d61e12d35bbb0fa537581065083c886:'], res.splitlines())
+            'Repo root: e9ce073b9d61e12d35bbb0fa537581065083c886:',
+            'REPO_FILE_TO_DELETE /test.me.4',
+            'REPO_FILE_TO_DELETE /test.me.5',
+            'REPO_FILE_TO_DELETE /wat/test.me.3',
+            'REPO_FILE_TO_DELETE /wat/test.me.6'
+        ], res.splitlines())
 
         res = await incoming_cave_cmd.refresh()
         self.assertEqual([

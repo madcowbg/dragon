@@ -15,14 +15,17 @@ from command.fast_path import FastPosixPath
 from command.hoard import Hoard
 from command.pathing import HoardPathing
 from command.pending_file_ops import GetFile, CopyFile, CleanupFile, get_pending_operations
-from config import CaveType, HoardRemote, HoardConfig
+from config import CaveType, HoardRemote, HoardConfig, HoardRemotes
 from contents.hoard import HoardContents, HoardFile, HoardDir
 from contents.hoard_props import HoardFileStatus, HoardFileProps
 from contents.repo import RepoContents
 from contents.repo_props import FileDesc
 from contents_diff import DiffType, Diff
 from exceptions import MissingRepoContents
+from lmdb_storage.file_object import FileObject
+from lmdb_storage.merge_trees import ObjectsByRoot
 from lmdb_storage.pull_contents import merge_contents
+from lmdb_storage.three_way_merge import NaiveMergePreferences, MergePreferences
 from lmdb_storage.tree_iteration import zip_trees_dfs
 from lmdb_storage.tree_structure import Objects, ObjectID, TreeObject
 from resolve_uuid import resolve_remote_uuid
@@ -289,12 +292,92 @@ async def clear_pending_file_ops(hoard: Hoard, repo_uuid: str, out: StringIO):
                 raise ValueError(f"Unhandled op type: {type(op)}")
 
 
-async def print_pending_pull(
-        hoard_contents: HoardContents, current_contents: RepoContents, config: HoardConfig, pathing: HoardPathing,
-        preferences: PullPreferences, out):
-    resolutions = await resolution_to_match_repo_and_hoard(
-        current_contents.config.uuid, hoard_contents, pathing, preferences, alive_it)
+class PullMergePreferences(MergePreferences):
+    def __init__(
+            self, preferences: PullPreferences, content_prefs: ContentPrefs, hoard_contents: HoardContents,  # fixme rem
+            remote_uuid: str, remotes: HoardRemotes, uuid_roots: List[str]):
+        self.remote_type = remotes[remote_uuid].type
+        self.preferences = preferences
+        self.content_prefs = content_prefs
 
+        self.hoard_contents = hoard_contents  # fixme should not need this
+
+        self._where_to_apply_diffs = ["HOARD"] + uuid_roots
+        self._where_to_apply_adds = ["HOARD"] + uuid_roots
+
+    def where_to_apply_diffs(self, path: List[str]):
+        return self._where_to_apply_diffs
+
+    def where_to_apply_adds(self, path: List[str], staging_original: FileObject):
+        file_path = FastPosixPath("/" + "/".join(path))
+        file_desc = FileDesc(staging_original.size, staging_original.fasthash, None)  # fixme add md5
+        repos_to_add = self.content_prefs.repos_to_add(
+            file_path,
+            file_desc,
+            self.hoard_contents.fsobjects[file_path] if file_path in self.hoard_contents.fsobjects else None)
+        return ["HOARD"] + [r for r in repos_to_add if r in self._where_to_apply_adds]
+
+    def combine_both_existing(
+            self, path: List[str], original_roots: ObjectsByRoot, staging_name: str, base_name: str,
+            staging_original: FileObject, base_original: FileObject) -> ObjectsByRoot:
+        result: ObjectsByRoot = original_roots.new()
+
+        if staging_original.file_id == base_original.file_id:
+            # fixme lower
+            logging.error(f"Both staging and base staging for %s are identical, returns as-is.", path)
+            return original_roots
+
+        assert staging_original.file_id != base_original.file_id, staging_original.file_id
+
+        if self.remote_type == CaveType.BACKUP:  # fixme use PullPreferences
+            # fixme lower
+            logging.error("Ignoring changes to %s coming from a backup repo!", path)
+            return original_roots  # ignore changes coming from backups
+
+        if self.remote_type == CaveType.INCOMING:  # fixme use PullPreferences
+            # fixme lower
+            logging.error("Ignoring changes to %s coming from an incoming repo!", path)
+            return original_roots  # ignore changes coming from backups
+
+        # match self.remote_type:
+        #     case CaveType.PARTIAL
+        for merge_name in self.where_to_apply_diffs(path):
+            result[merge_name] = staging_original.file_id
+        return result
+
+    def combine_base_only(
+            self, path: List[str], original_roots: ObjectsByRoot, staging_name: str, base_name: str,
+            base_original: FileObject) -> ObjectsByRoot:
+
+        if self.remote_type == CaveType.BACKUP:  # fixme use PullPreferences
+            # fixme lower
+            logging.error("Ignoring changes to %s coming from a backup repo!", path)
+            return original_roots  # ignore changes coming from backups
+
+        return original_roots.new()
+
+    def combine_staging_only(
+            self, path: List[str], original_roots: ObjectsByRoot, staging_name: str, base_name: str,
+            staging_original: FileObject) -> ObjectsByRoot:
+
+        if self.remote_type == CaveType.BACKUP:  # fixme use PullPreferences
+            # fixme lower
+            logging.error("Ignoring changes to %s coming from a backup repo!", path)
+            return original_roots  # ignore changes coming from backups
+
+        result: ObjectsByRoot = original_roots.new()
+        for merge_name in [base_name, staging_name] + self.where_to_apply_adds(path, staging_original):
+            result[merge_name] = staging_original.file_id
+        return result
+
+    def merge_missing(self, path: List[str], original_roots: ObjectsByRoot, staging_name: str,
+                      base_name: str) -> ObjectsByRoot:
+        return original_roots
+
+
+async def print_pending_pull(
+        hoard_contents: HoardContents, content_prefs: ContentPrefs, current_contents: RepoContents, config: HoardConfig,
+        preferences: PullPreferences, out):
     with StringIO() as other_out:
         out.write(f"Hoard root: {safe_hex(hoard_contents.env.roots(False)['HOARD'].desired)}:\n")
         out.write(f"Repo root: {safe_hex(current_contents.fsobjects.root_id)}:\n")
@@ -303,10 +386,54 @@ async def print_pending_pull(
         repo_root = roots[current_contents.uuid]
         hoard_root = roots["HOARD"]
 
-        # merge_contents(hoard_contents.env, repo_root, [hoard_root])
+        merged_ids = merge_contents(
+            hoard_contents.env, repo_root, [repo_root, hoard_root],
+            PullMergePreferences(preferences, content_prefs, hoard_contents, current_contents.uuid, config.remotes, [repo_root.name]))
 
-        for action in calculate_actions(preferences, resolutions, pathing, config, other_out):
-            out.write(f"{action.__class__.action_type().upper()} {action.file_being_acted_on}\n")
+        # raise ValueError()
+        with hoard_contents.env.objects(write=False) as objects:
+            for path, (base_hoard_id, merged_hoard_id, base_current_repo_id, merged_repo_id), _ in zip_trees_dfs(
+                    objects, "", [
+                        hoard_root.desired, merged_ids.get_if_present("HOARD"),
+                        repo_root.current, merged_ids.get_if_present(repo_root.name), ],
+                    drilldown_same=True):
+
+                if base_current_repo_id and merged_repo_id:
+                    if not (is_tree_or_none(objects, base_current_repo_id) or is_tree_or_none(objects, merged_repo_id)):
+                        if base_current_repo_id != merged_repo_id:
+                            out.write(f"REPO_DESIRED_FILE_CHANGED {path}\n")
+                elif merged_repo_id:
+                    assert base_current_repo_id is None
+                    if not is_tree_or_none(objects, merged_repo_id):
+                        assert merged_repo_id == merged_hoard_id, f"File somehow desired but not in hoard?! {path}"
+                        if merged_repo_id == base_hoard_id:
+                            out.write(f"REPO_DESIRED_FILE_TO_GET {path}\n")
+                        else:
+                            out.write(f"REPO_DESIRED_FILE_ADDED {path}\n")
+                elif base_current_repo_id:
+                    assert merged_repo_id is None
+                    if not is_tree_or_none(objects, base_current_repo_id):
+                        out.write(f"REPO_FILE_TO_DELETE {path}\n")
+                else:
+                    assert base_current_repo_id is None and merged_repo_id is None
+                    logging.debug(f"Ignoring %s as is not in repo past or future", path)
+                    pass
+
+                if merged_hoard_id and base_hoard_id:
+                    if not (is_tree_or_none(objects, merged_hoard_id) or is_tree_or_none(objects, base_hoard_id)):
+                        if merged_hoard_id != base_hoard_id:
+                            out.write(f"HOARD_FILE_CHANGED {path}\n")
+                elif merged_hoard_id:
+                    assert base_hoard_id is None
+                    if not is_tree_or_none(objects, merged_hoard_id):
+                        out.write(f"HOARD_FILE_ADDED {path}\n")
+                elif base_hoard_id:
+                    assert merged_hoard_id is None
+                    if not is_tree_or_none(objects, base_hoard_id):
+                        out.write(f"HOARD_FILE_DELETED {path}\n")
+                else:
+                    assert base_hoard_id is None and merged_hoard_id is None
+                    logging.debug(f"Ignoring %s as is not in hoard past or future", path)
 
         logging.debug(other_out.getvalue())
 
@@ -334,13 +461,14 @@ class HoardCommandContents:
                     out.write(f"Status of {remote_obj.name}:\n")
 
                     pathing = HoardPathing(config, self.hoard.paths())
+                    content_prefs = ContentPrefs(config, pathing, hoard_contents, self.hoard.available_remotes())
 
                     copy_local_staging_to_hoard(hoard_contents, current_contents, self.hoard.config())
                     # fixme temporary
                     await sync_fsobject_to_object_storage(
                         hoard_contents.env, hoard_contents.fsobjects, current_contents.fsobjects, self.hoard.config())
 
-                    await print_pending_pull(hoard_contents, current_contents, config, pathing, preferences, out)
+                    await print_pending_pull(hoard_contents, content_prefs, current_contents, config, preferences, out)
 
                     return out.getvalue()
 

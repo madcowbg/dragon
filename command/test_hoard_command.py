@@ -76,9 +76,9 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             'Status of repo-in-local:',
             'Hoard root: a80f91bc48850a1fb3459bb76b9f6308d4d35710:',
             'Repo root: b09bd5b9c68780abde8a55aa5c7a4a70d66e78b5:',
-            'ADD_NEW_FILE_BEHAVIOR /wat/test.me.different',
-            'ADD_NEW_FILE_BEHAVIOR /wat/test.me.once',
-            'ADD_NEW_FILE_BEHAVIOR /wat/test.me.twice'], res.splitlines())
+            'HOARD_FILE_ADDED /wat/test.me.different',
+            'HOARD_FILE_ADDED /wat/test.me.once',
+            'HOARD_FILE_ADDED /wat/test.me.twice'], res.splitlines())
 
         res = await hoard_cmd.contents.pull("repo-in-local")
         self.assertEqual((
@@ -191,7 +191,9 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         self.assertEqual([
             'Status of repo-in-local-2:',
             'Hoard root: b09bd5b9c68780abde8a55aa5c7a4a70d66e78b5:',
-            'Repo root: c17cdfe722957d756b35f362cfd1113fc90097e0:'], res.splitlines())
+            'Repo root: c17cdfe722957d756b35f362cfd1113fc90097e0:',
+            'REPO_DESIRED_FILE_TO_GET /wat/test.me.different',
+            'REPO_DESIRED_FILE_TO_GET /wat/test.me.once'], res.splitlines())
 
         res = await hoard_cmd.contents.differences("repo-in-local")
         self.assertEqual('Root: b09bd5b9c68780abde8a55aa5c7a4a70d66e78b5\nStatus of repo-in-local:\nDONE', res.strip())
@@ -350,7 +352,10 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         self.assertEqual([
             'Status of cloned-repo:',
             'Hoard root: b09bd5b9c68780abde8a55aa5c7a4a70d66e78b5:',
-            'Repo root: a80f91bc48850a1fb3459bb76b9f6308d4d35710:'], res.splitlines())
+            'Repo root: a80f91bc48850a1fb3459bb76b9f6308d4d35710:',
+            'REPO_DESIRED_FILE_TO_GET /wat/test.me.different',
+            'REPO_DESIRED_FILE_TO_GET /wat/test.me.once',
+            'REPO_DESIRED_FILE_TO_GET /wat/test.me.twice'], res.splitlines())
 
         res = await hoard_cmd.files.push(repo="cloned-repo")
         self.assertEqual(
