@@ -386,7 +386,11 @@ class PullMergePreferences(MergePreferences):
         if self.remote_type == CaveType.BACKUP:  # fixme use PullPreferences
             # fixme lower
             logging.error("Ignoring changes to %s coming from a backup repo!", path)
-            return original_roots  # ignore changes coming from backups
+
+            result: ObjectsByRoot = original_roots.copy()
+            result[base_name] = staging_original.file_id  # register file as available
+
+            return result  # ignore changes coming from backups
 
         result: ObjectsByRoot = original_roots.new()
         for merge_name in [base_name, staging_name] + self.where_to_apply_adds(path, staging_original):
@@ -438,14 +442,14 @@ def print_differences(
                 assert base_current_repo_id is None
                 if not is_tree_or_none(objects, merged_repo_id):
                     assert merged_repo_id == merged_hoard_id, f"File somehow desired but not in hoard?! {path}"
-                    if merged_repo_id == base_hoard_id:
-                        if merged_repo_id == staging_repo_id:
-                            # file was added just now
-                            out.write(f"REPO_MARK_FILE_AVAILABLE {path}\n")
-                        else:
-                            out.write(f"REPO_DESIRED_FILE_TO_GET {path}\n")
+                    if merged_repo_id == staging_repo_id:
+                        # file was added just now
+                        out.write(f"REPO_MARK_FILE_AVAILABLE {path}\n")
                     else:
-                        out.write(f"REPO_DESIRED_FILE_ADDED {path}\n")
+                        if merged_repo_id == base_hoard_id:
+                            out.write(f"REPO_DESIRED_FILE_TO_GET {path}\n")
+                        else:
+                            out.write(f"REPO_DESIRED_FILE_ADDED {path}\n")
             elif base_current_repo_id:
                 assert merged_repo_id is None
                 if not is_tree_or_none(objects, base_current_repo_id):

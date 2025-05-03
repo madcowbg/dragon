@@ -76,11 +76,11 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             'Status of repo-in-local:',
             'Hoard root: a80f91bc48850a1fb3459bb76b9f6308d4d35710:',
             'Repo root: b09bd5b9c68780abde8a55aa5c7a4a70d66e78b5:',
-            'REPO_DESIRED_FILE_ADDED /wat/test.me.different',
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.different',
             'HOARD_FILE_ADDED /wat/test.me.different',
-            'REPO_DESIRED_FILE_ADDED /wat/test.me.once',
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.once',
             'HOARD_FILE_ADDED /wat/test.me.once',
-            'REPO_DESIRED_FILE_ADDED /wat/test.me.twice',
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.twice',
             'HOARD_FILE_ADDED /wat/test.me.twice'], res.splitlines())
 
         res = await hoard_cmd.contents.pull("repo-in-local")

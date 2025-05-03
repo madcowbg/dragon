@@ -48,6 +48,9 @@ class ObjectsByRoot:
     def from_map(cls, dictionary: Dict[str, ObjectID]) -> "ObjectsByRoot":
         return ObjectsByRoot(list(dictionary), dictionary.items())
 
+    def copy(self) -> "ObjectsByRoot":
+        return ObjectsByRoot(self.allowed_roots, self._roots_to_object.items())
+
 
 class Merge[F]:
     objects: Objects[F]
