@@ -1,18 +1,35 @@
 import abc
-from typing import List, Set, Dict, Collection
+from typing import List, Collection
 
 from lmdb_storage.file_object import FileObject
 from lmdb_storage.merge_trees import Merge, ObjectsByRoot
-from lmdb_storage.roots import Root
 from lmdb_storage.tree_structure import Objects, TreeObject
 
 
 class MergePreferences:
-    @abc.abstractmethod
-    def where_to_apply_diffs(self, original_roots: List[str]) -> List[str]: pass
 
     @abc.abstractmethod
-    def where_to_apply_adds(self, original_roots: List[str]) -> List[str]: pass
+    def combine_both_existing(
+            self, path: List[str], original_roots: ObjectsByRoot, staging_name: str, base_name: str,
+            staging_original: FileObject, base_original: FileObject) -> ObjectsByRoot:
+        pass
+
+    @abc.abstractmethod
+    def combine_base_only(
+            self, path: List[str], original_roots: ObjectsByRoot, staging_name: str, base_name: str,
+            base_original: FileObject) -> ObjectsByRoot:
+        return original_roots.new()
+
+    @abc.abstractmethod
+    def combine_staging_only(
+            self, path: List[str], original_roots: ObjectsByRoot, staging_name: str, base_name: str,
+            staging_original: FileObject) -> ObjectsByRoot:
+        pass
+
+    @abc.abstractmethod
+    def merge_missing(
+            self, path: List[str], original_roots: ObjectsByRoot, staging_name: str, base_name: str) -> ObjectsByRoot:
+        pass
 
 
 class NaiveMergePreferences(MergePreferences):
@@ -24,6 +41,33 @@ class NaiveMergePreferences(MergePreferences):
 
     def where_to_apply_adds(self, original_roots: List[str]) -> List[str]:
         return list(set(original_roots + self.to_modify))
+
+    def combine_both_existing(
+            self, path: List[str], original_roots: ObjectsByRoot, staging_name: str, base_name: str,
+            staging_original: FileObject, base_original: FileObject) -> ObjectsByRoot:
+        result: ObjectsByRoot = original_roots.new()
+        for merge_name in (
+                [staging_name, base_name] + self.where_to_apply_diffs(list(original_roots.assigned().keys()))):
+            result[merge_name] = staging_original.file_id
+        return result
+
+    def combine_base_only(
+            self, path: List[str], original_roots: ObjectsByRoot, staging_name: str, base_name: str,
+            base_original: FileObject) -> ObjectsByRoot:
+
+        return original_roots.new()
+
+    def combine_staging_only(
+            self, path: List[str], original_roots: ObjectsByRoot, staging_name: str, base_name: str,
+            staging_original: FileObject) -> ObjectsByRoot:
+        result: ObjectsByRoot = original_roots.new()
+        for merge_name in (
+                [base_name, staging_name] + self.where_to_apply_adds(list(original_roots.assigned().keys()))):
+            result[merge_name] = staging_original.file_id
+        return result
+
+    def merge_missing(self, path: List[str], original_roots: ObjectsByRoot, staging_name: str, base_name: str) -> ObjectsByRoot:
+        return original_roots
 
 
 class ThreewayMerge(Merge[FileObject]):
@@ -55,30 +99,24 @@ class ThreewayMerge(Merge[FileObject]):
         # we are on file level
         base_original = original.get_if_present(self.current)
         staging_original = original.get_if_present(self.staging)
-        assert not isinstance(staging_original, TreeObject)  # is file or None
-        assert not isinstance(base_original, TreeObject)  # is file or None
+        assert staging_original is None or not isinstance(self.objects[staging_original], TreeObject)  # is file or None
+        assert base_original is None or not isinstance(self.objects[base_original], TreeObject)  # is file or None
 
         if staging_original and base_original:
             # left and right both exist, apply difference to the other roots
-            result: ObjectsByRoot = merged.new()
-            for merge_name in [self.current, self.staging] + self.merge_prefs.where_to_apply_diffs(
-                    list(original.assigned().keys())):
-                result[merge_name] = staging_original
-
-            return result
+            return self.merge_prefs.combine_both_existing(
+                path, original, self.staging, self.current, self.objects[staging_original], self.objects[base_original])
 
         elif base_original:
             # file is deleted in staging
-            return merged.new()
+            return self.merge_prefs.combine_base_only(
+                path, original, self.staging, self.current, self.objects[base_original])
 
         elif staging_original:
             # is added in staging
-            result: ObjectsByRoot = merged.new()
-            for merge_name in [self.current, self.staging] + self.merge_prefs.where_to_apply_adds(
-                    list(original.assigned().keys())):
-                result[merge_name] = staging_original
-            return result
+            return self.merge_prefs.combine_staging_only(
+                path, original, self.staging, self.current, self.objects[staging_original])
 
         else:
             # current and staging are not in original, retain what was already there
-            return original
+            return self.merge_prefs.merge_missing(path, original, self.staging, self.current)
