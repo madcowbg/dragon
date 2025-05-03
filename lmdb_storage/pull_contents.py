@@ -19,7 +19,8 @@ def pull_contents(env: ObjectStorage, repo_uuid: str, staging_id: ObjectID, merg
 
     merged_ids = merge_contents(env, roots[repo_uuid], repo_roots, merge_prefs)
 
-    commit_merged(env, repo_uuid, repo_root_names, merged_ids)
+    roots = env.roots(write=True)
+    commit_merged(roots['HOARD'], roots[repo_uuid], [roots[rn] for rn in repo_root_names], merged_ids)
 
     return merged_ids
 
@@ -57,13 +58,11 @@ def merge_contents(
     return merged_ids
 
 
-def commit_merged(env: ObjectStorage, repo_uuid: str, all_root_names: List[str], merged_ids):
-    roots = env.roots(write=True)
-
+def commit_merged(hoard: Root, repo: Root, all_root_names: List[Root], merged_ids):
     # set current for the repo being merged
-    roots[repo_uuid].current = merged_ids.get_if_present("current")
+    repo.current = merged_ids.get_if_present("current")
 
     # accept the changed IDs as desired
-    roots["HOARD"].desired = merged_ids.get_if_present("HOARD")
-    for other_name in all_root_names:
-        roots[other_name].desired = merged_ids.get_if_present(other_name)
+    hoard.desired = merged_ids.get_if_present("HOARD")
+    for other_root in all_root_names:
+        other_root.desired = merged_ids.get_if_present(other_root.name)
