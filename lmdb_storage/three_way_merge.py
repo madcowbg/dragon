@@ -66,7 +66,8 @@ class NaiveMergePreferences(MergePreferences):
             result[merge_name] = staging_original.file_id
         return result
 
-    def merge_missing(self, path: List[str], original_roots: ObjectsByRoot, staging_name: str, base_name: str) -> ObjectsByRoot:
+    def merge_missing(
+            self, path: List[str], original_roots: ObjectsByRoot, staging_name: str, base_name: str) -> ObjectsByRoot:
         return original_roots
 
 
@@ -79,6 +80,8 @@ class ThreewayMerge(Merge[FileObject]):
         self.staging = staging
         self.others = others
         self.merge_prefs = merge_prefs
+
+        self.allowed_roots = [current, staging] + others
 
     def allowed_roots(self, objects_by_root: ObjectsByRoot) -> List[str]:
         return objects_by_root.allowed_roots + [self.staging, self.current]

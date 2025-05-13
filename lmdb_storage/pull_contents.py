@@ -36,9 +36,9 @@ def merge_contents(
 
     hoard_head_id = env.roots(False)["HOARD"].desired
 
-    all_root_names = [r.name for r in all_repo_roots]
+    all_root_names = [r.name for r in all_repo_roots] + ["HOARD"]
     current_ids = ObjectsByRoot(
-        list(set(list(all_root_names) + ["current", "staging", "HOARD"])),
+        list(set(list(all_root_names) + ["current", "staging"])),
         [(r.name, r.desired) for r in all_repo_roots] + [
             ("current", repo_current_id),
             ("staging", repo_staging_id),

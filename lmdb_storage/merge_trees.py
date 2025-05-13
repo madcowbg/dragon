@@ -54,6 +54,7 @@ class ObjectsByRoot:
 
 class Merge[F]:
     objects: Objects[F]
+    allowed_roots: List[str]
 
     @abc.abstractmethod
     def combine(self, path: List[str], merged: ObjectsByRoot, original: ObjectsByRoot) -> ObjectsByRoot:
@@ -64,14 +65,10 @@ class Merge[F]:
     def should_drill_down(self, path: List[str], trees: ObjectsByRoot, files: ObjectsByRoot) -> bool:
         pass
 
-    @abc.abstractmethod
-    def allowed_roots(self, objects_by_root: ObjectsByRoot) -> List[str]:
-        pass
-
     def merge_trees(self, obj_ids: ObjectsByRoot) -> ObjectsByRoot:
         assert isinstance(obj_ids, ObjectsByRoot)
 
-        obj_ids = ObjectsByRoot(self.allowed_roots(obj_ids), obj_ids.assigned().items())
+        obj_ids = ObjectsByRoot(self.allowed_roots, obj_ids.assigned().items())
         return self.merge_trees_recursively([], obj_ids)
 
     def merge_trees_recursively(self, path: List[str], obj_ids: ObjectsByRoot) -> ObjectsByRoot:
@@ -96,7 +93,7 @@ class Merge[F]:
 
         child_name_to_tree_root_and_obj = group_to_dict(all_children, lambda cto: cto[0], map_to=lambda cto: cto[1:])
         for child_name, tree_root_to_obj_id in child_name_to_tree_root_and_obj.items():
-            all_objects_in_name: ObjectsByRoot = ObjectsByRoot(trees.allowed_roots, tree_root_to_obj_id)
+            all_objects_in_name: ObjectsByRoot = ObjectsByRoot(self.allowed_roots, tree_root_to_obj_id)
 
             merged_child_by_roots: ObjectsByRoot = \
                 self.merge_trees_recursively(path + [child_name], all_objects_in_name) \
@@ -108,7 +105,7 @@ class Merge[F]:
 
                 merged_children[root_name].children[child_name] = obj_id
 
-        result = ObjectsByRoot(trees.allowed_roots)
+        result = ObjectsByRoot(self.allowed_roots)
         for root_name, child_tree in merged_children.items():
             new_child_id = child_tree.id
             self.objects[new_child_id] = child_tree
@@ -118,11 +115,9 @@ class Merge[F]:
 
 
 class TakeOneFile[F](Merge[F]):
-    def allowed_roots(self, objects_by_root: ObjectsByRoot) -> List[str]:
-        return objects_by_root.allowed_roots + ["MERGED"]
-
-    def __init__(self, objects: Objects[F]):
+    def __init__(self, objects: Objects[F], allowed_roots: Collection[str]):
         self.objects = objects
+        self.allowed_roots = list(allowed_roots) + ['MERGED']  # fixme only return merged
 
     def combine(self, path: List[str], merged: ObjectsByRoot, original: ObjectsByRoot) -> ObjectsByRoot:
         """Take the first value that is a file object as the resolved combined value."""
