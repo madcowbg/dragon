@@ -2,7 +2,7 @@ import abc
 from typing import List, Collection
 
 from lmdb_storage.file_object import FileObject
-from lmdb_storage.merge_trees import Merge, ByRoot
+from lmdb_storage.merge_trees import Merge, ByRoot, MergeResult, SeparateRootsMergeResult
 from lmdb_storage.tree_structure import Objects, TreeObject, ObjectID
 
 
@@ -28,7 +28,8 @@ class MergePreferences:
 
     @abc.abstractmethod
     def merge_missing(
-            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject], staging_name: str, base_name: str) -> ByRoot[ObjectID]:
+            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject], staging_name: str,
+            base_name: str) -> ByRoot[ObjectID]:
         pass
 
 
@@ -67,11 +68,12 @@ class NaiveMergePreferences(MergePreferences):
         return result
 
     def merge_missing(
-            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject], staging_name: str, base_name: str) -> ByRoot[ObjectID]:
+            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject], staging_name: str,
+            base_name: str) -> ByRoot[ObjectID]:
         return original_roots.map(lambda obj: obj.id)
 
 
-class ThreewayMerge(Merge[FileObject]):
+class ThreewayMerge(Merge[FileObject, ByRoot[ObjectID]]):
     def __init__(
             self, objects: Objects[FileObject], current: str, staging: str, others: List[str],
             merge_prefs: MergePreferences):
@@ -87,7 +89,11 @@ class ThreewayMerge(Merge[FileObject]):
         # we have trees and the current and staging trees are different
         return len(trees) > 0 and trees.get_if_present(self.current) != trees.get_if_present(self.staging)
 
-    def combine(self, path: List[str], merged: ByRoot[ObjectID], original: ByRoot[TreeObject | FileObject] ) -> ByRoot[ObjectID]:
+    def create_merge_result(self) -> MergeResult[FileObject, ByRoot[ObjectID]]:
+        return SeparateRootsMergeResult[FileObject](self.allowed_roots, self.objects)
+
+    def combine(self, path: List[str], merged: ByRoot[ObjectID], original: ByRoot[TreeObject | FileObject]) -> ByRoot[
+        ObjectID]:
         if len(merged) > 0:  # tree-level, just return the merged
             # fixme this is needed because empty folders get dropped in "merged" - should fix that problem
             merged = merged.copy()

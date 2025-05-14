@@ -67,12 +67,57 @@ class ObjectsByRoot:
         return ByRoot[ObjectID](list(dictionary), dictionary.items())
 
 
-class Merge[F]:
+class MergeResult[F, R]:
+    @abc.abstractmethod
+    def add_for_child(self, child_name: str, merged_child_by_roots: R) -> None:
+        pass
+
+    @abc.abstractmethod
+    def get_value(self) -> R:
+        pass
+
+    @abc.abstractmethod
+    def add_for_unmerged(self, child_name: str, all_objects_in_child_name: ByRoot[ObjectID]) -> None:
+        pass
+
+
+class SeparateRootsMergeResult[F](MergeResult[F, ByRoot[ObjectID]]):
+    def __init__(self, allowed_roots: List[str], objects: Objects[F]):
+        self.allowed_roots = allowed_roots
+        self.objects = objects
+
+        self._merged_children: Dict[str, TreeObject] = dict()
+
+    def add_for_child(self, child_name: str, merged_child_by_roots: ByRoot[ObjectID]) -> None:
+        for root_name, obj_id in merged_child_by_roots.items():
+            if root_name not in self._merged_children:
+                self._merged_children[root_name] = TreeObject({})
+
+            self._merged_children[root_name].children[child_name] = obj_id
+
+    def get_value(self) -> ByRoot[ObjectID]:
+        # store potential new objects
+        for root_name, child_tree in self._merged_children.items():
+            new_child_id = child_tree.id
+            self.objects[new_child_id] = child_tree
+
+        result = ByRoot[ObjectID](
+            self.allowed_roots,
+            ((root_name, child_tree.id) for root_name, child_tree in self._merged_children.items()))
+
+        return result
+
+
+    def add_for_unmerged(self, child_name: str, all_objects_in_child_name: ByRoot[ObjectID]) -> None:
+        self.add_for_child(child_name, all_objects_in_child_name)
+
+
+class Merge[F, R]:
     objects: Objects[F]
     allowed_roots: List[str]
 
     @abc.abstractmethod
-    def combine(self, path: List[str], merged: ByRoot[ObjectID], original: ByRoot[TreeObject | FileObject]) -> ByRoot[ObjectID]:
+    def combine(self, path: List[str], merged: ByRoot[ObjectID], original: ByRoot[TreeObject | FileObject]) -> R:
         """Calculates values for the combined path by working on trees and files that are attached to this path."""
         pass
 
@@ -80,11 +125,15 @@ class Merge[F]:
     def should_drill_down(self, path: List[str], trees: ByRoot[TreeObject], files: ByRoot[FileObject]) -> bool:
         pass
 
-    def merge_trees(self, obj_ids: ByRoot[ObjectID]) -> ByRoot[ObjectID]:
+    @abc.abstractmethod
+    def create_merge_result(self) -> MergeResult[F, R]:
+        pass
+
+    def merge_trees(self, obj_ids: ByRoot[ObjectID]) -> R:
         assert isinstance(obj_ids, ByRoot)
         return self.merge_trees_recursively([], obj_ids)
 
-    def merge_trees_recursively(self, path: List[str], obj_ids: ByRoot[ObjectID]) -> ByRoot[ObjectID]:
+    def merge_trees_recursively(self, path: List[str], obj_ids: ByRoot[ObjectID]) -> R:
         all_original: ByRoot[TreeObject | FileObject] = obj_ids.map(lambda obj_id: self.objects[obj_id])
 
         trees = all_original.filter_type(TreeObject)
@@ -100,40 +149,26 @@ class Merge[F]:
         all_children_names = list(sorted(set(
             child_name for tree_obj in trees.values() for child_name in tree_obj.children)))
 
-        # group by child name first
-        merged_children: Dict[str, TreeObject] = dict()
-
+        merge_result: MergeResult[F, R] = self.create_merge_result()
         for child_name in all_children_names:
             all_objects_in_child_name = trees.map(lambda obj: obj.children.get(child_name))
 
-            merged_child_by_roots: ByRoot[ObjectID] = \
-                self.merge_trees_recursively(path + [child_name], all_objects_in_child_name) \
-                    if should_drill_down else all_objects_in_child_name
+            if should_drill_down:
+                merged_child_by_roots: R = self.merge_trees_recursively(path + [child_name], all_objects_in_child_name)
+                merge_result.add_for_child(child_name, merged_child_by_roots)
+            else:
+                merge_result.add_for_unmerged(child_name, all_objects_in_child_name)
 
-            for root_name, obj_id in merged_child_by_roots.items():
-                if root_name not in merged_children:
-                    merged_children[root_name] = TreeObject({})
-
-                merged_children[root_name].children[child_name] = obj_id
-
-        # store potential new objects
-        for root_name, child_tree in merged_children.items():
-            new_child_id = child_tree.id
-            self.objects[new_child_id] = child_tree
-
-        result = ByRoot[ObjectID](self.allowed_roots)
-        for root_name, child_tree in merged_children.items():
-            result[root_name] = child_tree.id
-
-        return result
+        return merge_result.get_value()
 
 
-class TakeOneFile[F](Merge[F]):
+class TakeOneFile[F](Merge[F, ByRoot[ObjectID]]):
     def __init__(self, objects: Objects[F], allowed_roots: Collection[str]):
         self.objects = objects
         self.allowed_roots = list(allowed_roots) + ['MERGED']  # fixme only return merged
 
-    def combine(self, path: List[str], merged: ByRoot[ObjectID], original: ByRoot[TreeObject | FileObject] ) -> ByRoot[ObjectID]:
+    def combine(self, path: List[str], merged: ByRoot[ObjectID], original: ByRoot[TreeObject | FileObject]) -> ByRoot[
+        ObjectID]:
         """Take the first value that is a file object as the resolved combined value."""
         if len(merged.values()) > 0:
             return ObjectsByRoot.singleton("MERGED", merged.get_if_present("MERGED"))
@@ -145,6 +180,10 @@ class TakeOneFile[F](Merge[F]):
 
     def should_drill_down(self, path: List[str], trees: ByRoot[TreeObject], files: ByRoot[FileObject]) -> bool:
         return len(files) == 0  # as we prioritize taking the first file
+
+    def create_merge_result(self) -> MergeResult[F, ByRoot[ObjectID]]:
+        return SeparateRootsMergeResult(self.allowed_roots, self.objects)
+
 
 
 def remap[A, B, C](dictionary: Dict[A, B], key: Callable[[B], C]) -> Dict[A, C]:
