@@ -82,22 +82,19 @@ class Merge[F]:
             self, path: List[str], trees: ObjectsByRoot, should_drill_down) -> ObjectsByRoot:
         trees_objects = remap(trees.assigned(), lambda obj_id: self.objects[obj_id])
 
-        # merging child folders first
-        all_children = [
-            (child_name, tree_root, child_obj_id)
-            for tree_root, tree_obj in trees_objects.items()
-            for child_name, child_obj_id in tree_obj.children.items()]
+        all_children_names = list(sorted(set(
+            child_name for tree_obj in trees_objects.values() for child_name in tree_obj.children)))
 
         # group by child name first
         merged_children: Dict[str, TreeObject] = dict()
 
-        child_name_to_tree_root_and_obj = group_to_dict(all_children, lambda cto: cto[0], map_to=lambda cto: cto[1:])
-        for child_name, tree_root_to_obj_id in child_name_to_tree_root_and_obj.items():
-            all_objects_in_name: ObjectsByRoot = ObjectsByRoot(self.allowed_roots, tree_root_to_obj_id)
+        for child_name in all_children_names:
+            tree_root_to_obj_id = remap(trees_objects, lambda obj: obj.children.get(child_name) if obj is not None else None)
+            all_objects_in_name: ObjectsByRoot = ObjectsByRoot(self.allowed_roots, tree_root_to_obj_id.items())
 
             merged_child_by_roots: ObjectsByRoot = \
                 self.merge_trees_recursively(path + [child_name], all_objects_in_name) \
-                if should_drill_down else all_objects_in_name
+                    if should_drill_down else all_objects_in_name
 
             for root_name, obj_id in merged_child_by_roots.assigned().items():
                 if root_name not in merged_children:
