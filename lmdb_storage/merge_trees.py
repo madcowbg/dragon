@@ -21,7 +21,7 @@ class ByRoot[V]:
     def assigned_values(self) -> Iterable[ObjectID]:
         return self._roots_to_object.values()
 
-    def assigned(self) -> Dict[str, ObjectID]:  # fixme deprecate, too powerful
+    def assigned(self) -> Dict[str, V]:  # fixme deprecate, too powerful
         return self._roots_to_object
 
     def get_if_present(self, child_name: str, default: ObjectID | None = None) -> ObjectID | None:
@@ -41,6 +41,9 @@ class ByRoot[V]:
 
     def copy(self) -> "ByRoot[ObjectID]":
         return ByRoot[ObjectID](self.allowed_roots, self._roots_to_object.items())
+
+    def map[R](self, mapper: Callable[[V], R]) -> "ByRoot[R]":
+        return ByRoot[R](self.allowed_roots, remap(self._roots_to_object, mapper).items())
 
 
 class ObjectsByRoot:
@@ -81,18 +84,16 @@ class Merge[F]:
 
     def merge_children(
             self, path: List[str], trees: ByRoot[ObjectID], should_drill_down) -> ByRoot[ObjectID]:
-        trees_objects = remap(trees.assigned(), lambda obj_id: self.objects[obj_id])
+        trees_objects: ByRoot[TreeObject] = trees.map(lambda tree_id: self.objects[tree_id])  # fixme move to caller
 
         all_children_names = list(sorted(set(
-            child_name for tree_obj in trees_objects.values() for child_name in tree_obj.children)))
+            child_name for tree_obj in trees_objects.assigned().values() for child_name in tree_obj.children)))
 
         # group by child name first
         merged_children: Dict[str, TreeObject] = dict()
 
         for child_name in all_children_names:
-            tree_root_to_obj_id = remap(trees_objects,
-                                        lambda obj: obj.children.get(child_name) if obj is not None else None)
-            all_objects_in_name: ByRoot[ObjectID] = ByRoot[ObjectID](self.allowed_roots, tree_root_to_obj_id.items())
+            all_objects_in_name = trees_objects.map(lambda obj: obj.children.get(child_name))
 
             merged_child_by_roots: ByRoot[ObjectID] = \
                 self.merge_trees_recursively(path + [child_name], all_objects_in_name) \
@@ -104,11 +105,14 @@ class Merge[F]:
 
                 merged_children[root_name].children[child_name] = obj_id
 
-        result = ByRoot[ObjectID](self.allowed_roots)
+        # store potential new objects
         for root_name, child_tree in merged_children.items():
             new_child_id = child_tree.id
             self.objects[new_child_id] = child_tree
-            result[root_name] = new_child_id
+
+        result = ByRoot[ObjectID](self.allowed_roots)
+        for root_name, child_tree in merged_children.items():
+            result[root_name] = child_tree.id
 
         return result
 
