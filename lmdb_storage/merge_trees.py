@@ -1,12 +1,12 @@
 import abc
-from typing import List, Dict, Callable, Collection, Tuple, Iterable
+from typing import List, Dict, Callable, Collection, Tuple, Iterable, Type
 
 from lmdb_storage.file_object import FileObject
 from lmdb_storage.tree_structure import Objects, TreeObject, ObjectID
 
 
 class ByRoot[V]:
-    def __init__(self, allowed_roots: List[str], roots_to_object: Iterable[Tuple[str, V]] = ()):
+    def __init__(self, allowed_roots: List[str], roots_to_object: Iterable[Tuple[str, V | None]] = ()):
         self.allowed_roots = allowed_roots
         self._roots_to_object = dict((k, v) for k, v in roots_to_object if v is not None)
         for child_name in self._roots_to_object:
@@ -51,6 +51,11 @@ class ByRoot[V]:
     def assigned_keys(self) -> Collection[str]:
         return self._roots_to_object.keys()
 
+    def filter_type[T](self, selected_type: Type[T], exclude: bool=False):
+        return ByRoot[T](
+            self.allowed_roots,
+            remap(self._roots_to_object, lambda obj: obj if (exclude ^ (type(obj) is selected_type)) else None).items())
+
 
 class ObjectsByRoot:
     @classmethod
@@ -72,7 +77,7 @@ class Merge[F]:
         pass
 
     @abc.abstractmethod
-    def should_drill_down(self, path: List[str], trees: ByRoot[ObjectID], files: ByRoot[ObjectID]) -> bool:
+    def should_drill_down(self, path: List[str], trees: ByRoot[TreeObject], files: ByRoot[FileObject]) -> bool:
         pass
 
     def merge_trees(self, obj_ids: ByRoot[ObjectID]) -> ByRoot[ObjectID]:
@@ -80,11 +85,13 @@ class Merge[F]:
         return self.merge_trees_recursively([], obj_ids)
 
     def merge_trees_recursively(self, path: List[str], obj_ids: ByRoot[ObjectID]) -> ByRoot[ObjectID]:
-        trees, files = split_by_object_type(self.objects, obj_ids)
+        all_original = obj_ids.map(lambda obj_id: self.objects[obj_id])
+
+        trees = all_original.filter_type(TreeObject)
+        files = all_original.filter_type(FileObject)
 
         should_drill_down = self.should_drill_down(path, trees, files)
-        trees_objects: ByRoot[TreeObject] = trees.map(lambda tree_id: self.objects[tree_id])  # fixme move to caller
-        merged_objects = self.merge_children(path, trees_objects, should_drill_down)
+        merged_objects = self.merge_children(path, trees, should_drill_down)
         return self.combine(path, merged_objects, obj_ids)
 
     def merge_children(
@@ -136,18 +143,8 @@ class TakeOneFile[F](Merge[F]):
         file = next(iter(files))  # fixme take with priority
         return ObjectsByRoot.singleton("MERGED", file)
 
-    def should_drill_down(self, path: List[str], trees: ByRoot[ObjectID], files: ByRoot[ObjectID]) -> bool:
+    def should_drill_down(self, path: List[str], trees: ByRoot[TreeObject], files: ByRoot[FileObject]) -> bool:
         return len(files) == 0  # as we prioritize taking the first file
-
-
-def split_by_object_type[F](objects: Objects[F], obj_ids: ByRoot[ObjectID]) -> (ByRoot[ObjectID], ByRoot[ObjectID]):
-    files = ByRoot[ObjectID](
-        obj_ids.allowed_roots,
-        [(name, obj_id) for name, obj_id in obj_ids.items() if type(objects[obj_id]) is not TreeObject])
-    trees = ByRoot[ObjectID](
-        obj_ids.allowed_roots,
-        [(name, obj_id) for name, obj_id in obj_ids.items() if type(objects[obj_id]) is TreeObject])
-    return trees, files
 
 
 def remap[A, B, C](dictionary: Dict[A, B], key: Callable[[B], C]) -> Dict[A, C]:

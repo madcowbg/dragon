@@ -83,7 +83,7 @@ class ThreewayMerge(Merge[FileObject]):
 
         self.allowed_roots = [current, staging] + others
 
-    def should_drill_down(self, path: List[str], trees: ByRoot[ObjectID], files: ByRoot[ObjectID]) -> bool:
+    def should_drill_down(self, path: List[str], trees: ByRoot[TreeObject], files: ByRoot[FileObject]) -> bool:
         # we have trees and the current and staging trees are different
         return len(trees) > 0 and trees.get_if_present(self.current) != trees.get_if_present(self.staging)
 
