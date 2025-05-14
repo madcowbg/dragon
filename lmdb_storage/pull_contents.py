@@ -1,6 +1,6 @@
 from typing import Set, List
 
-from lmdb_storage.merge_trees import ObjectsByRoot
+from lmdb_storage.merge_trees import ObjectsByRoot, ByRoot
 from lmdb_storage.object_store import ObjectStorage
 from lmdb_storage.roots import Root
 from lmdb_storage.three_way_merge import ThreewayMerge, MergePreferences, NaiveMergePreferences
@@ -37,7 +37,7 @@ def merge_contents(
     hoard_head_id = env.roots(False)["HOARD"].desired
 
     all_root_names = [r.name for r in all_repo_roots] + ["HOARD"]
-    current_ids = ObjectsByRoot(
+    current_ids = ByRoot[ObjectID](
         list(set(list(all_root_names) + ["current", "staging"])),
         [(r.name, r.desired) for r in all_repo_roots] + [
             ("current", repo_current_id),

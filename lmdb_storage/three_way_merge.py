@@ -2,33 +2,33 @@ import abc
 from typing import List, Collection
 
 from lmdb_storage.file_object import FileObject
-from lmdb_storage.merge_trees import Merge, ObjectsByRoot
-from lmdb_storage.tree_structure import Objects, TreeObject
+from lmdb_storage.merge_trees import Merge, ByRoot
+from lmdb_storage.tree_structure import Objects, TreeObject, ObjectID
 
 
 class MergePreferences:
 
     @abc.abstractmethod
     def combine_both_existing(
-            self, path: List[str], original_roots: ObjectsByRoot, staging_name: str, base_name: str,
-            staging_original: FileObject, base_original: FileObject) -> ObjectsByRoot:
+            self, path: List[str], original_roots: ByRoot[ObjectID], staging_name: str, base_name: str,
+            staging_original: FileObject, base_original: FileObject) -> ByRoot[ObjectID]:
         pass
 
     @abc.abstractmethod
     def combine_base_only(
-            self, path: List[str], original_roots: ObjectsByRoot, staging_name: str, base_name: str,
-            base_original: FileObject) -> ObjectsByRoot:
+            self, path: List[str], original_roots: ByRoot[ObjectID], staging_name: str, base_name: str,
+            base_original: FileObject) -> ByRoot[ObjectID]:
         return original_roots.new()
 
     @abc.abstractmethod
     def combine_staging_only(
-            self, path: List[str], original_roots: ObjectsByRoot, staging_name: str, base_name: str,
-            staging_original: FileObject) -> ObjectsByRoot:
+            self, path: List[str], original_roots: ByRoot[ObjectID], staging_name: str, base_name: str,
+            staging_original: FileObject) -> ByRoot[ObjectID]:
         pass
 
     @abc.abstractmethod
     def merge_missing(
-            self, path: List[str], original_roots: ObjectsByRoot, staging_name: str, base_name: str) -> ObjectsByRoot:
+            self, path: List[str], original_roots: ByRoot[ObjectID], staging_name: str, base_name: str) -> ByRoot[ObjectID]:
         pass
 
 
@@ -43,31 +43,31 @@ class NaiveMergePreferences(MergePreferences):
         return list(set(original_roots + self.to_modify))
 
     def combine_both_existing(
-            self, path: List[str], original_roots: ObjectsByRoot, staging_name: str, base_name: str,
-            staging_original: FileObject, base_original: FileObject) -> ObjectsByRoot:
-        result: ObjectsByRoot = original_roots.new()
+            self, path: List[str], original_roots: ByRoot[ObjectID], staging_name: str, base_name: str,
+            staging_original: FileObject, base_original: FileObject) -> ByRoot[ObjectID]:
+        result: ByRoot[ObjectID] = original_roots.new()
         for merge_name in (
                 [staging_name, base_name] + self.where_to_apply_diffs(list(original_roots.assigned().keys()))):
             result[merge_name] = staging_original.file_id
         return result
 
     def combine_base_only(
-            self, path: List[str], original_roots: ObjectsByRoot, staging_name: str, base_name: str,
-            base_original: FileObject) -> ObjectsByRoot:
+            self, path: List[str], original_roots: ByRoot[ObjectID], staging_name: str, base_name: str,
+            base_original: FileObject) -> ByRoot[ObjectID]:
 
         return original_roots.new()
 
     def combine_staging_only(
-            self, path: List[str], original_roots: ObjectsByRoot, staging_name: str, base_name: str,
-            staging_original: FileObject) -> ObjectsByRoot:
-        result: ObjectsByRoot = original_roots.new()
+            self, path: List[str], original_roots: ByRoot[ObjectID], staging_name: str, base_name: str,
+            staging_original: FileObject) -> ByRoot[ObjectID]:
+        result: ByRoot[ObjectID] = original_roots.new()
         for merge_name in (
                 [base_name, staging_name] + self.where_to_apply_adds(list(original_roots.assigned().keys()))):
             result[merge_name] = staging_original.file_id
         return result
 
     def merge_missing(
-            self, path: List[str], original_roots: ObjectsByRoot, staging_name: str, base_name: str) -> ObjectsByRoot:
+            self, path: List[str], original_roots: ByRoot[ObjectID], staging_name: str, base_name: str) -> ByRoot[ObjectID]:
         return original_roots
 
 
@@ -83,17 +83,14 @@ class ThreewayMerge(Merge[FileObject]):
 
         self.allowed_roots = [current, staging] + others
 
-    def allowed_roots(self, objects_by_root: ObjectsByRoot) -> List[str]:
-        return objects_by_root.allowed_roots + [self.staging, self.current]
-
-    def should_drill_down(self, path: List[str], trees: ObjectsByRoot, files: ObjectsByRoot) -> bool:
+    def should_drill_down(self, path: List[str], trees: ByRoot[ObjectID], files: ByRoot[ObjectID]) -> bool:
         # we have trees and the current and staging trees are different
         return len(trees) > 0 and trees.get_if_present(self.current) != trees.get_if_present(self.staging)
 
-    def combine(self, path: List[str], merged: ObjectsByRoot, original: ObjectsByRoot) -> ObjectsByRoot:
+    def combine(self, path: List[str], merged: ByRoot[ObjectID], original: ByRoot[ObjectID]) -> ByRoot[ObjectID]:
         if len(merged) > 0:  # tree-level, just return the merged
             # fixme this is needed because empty folders get dropped in "merged" - should fix that problem
-            merged = ObjectsByRoot(merged.allowed_roots, merged.assigned().items())
+            merged = ByRoot[ObjectID](merged.allowed_roots, merged.assigned().items())
             for merged_name, original_obj_id in original.assigned().items():
                 if merged.get_if_present(merged_name) is None:
                     merged[merged_name] = original_obj_id
