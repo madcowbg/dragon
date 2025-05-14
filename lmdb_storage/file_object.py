@@ -3,7 +3,7 @@ import hashlib
 import msgpack
 from propcache import cached_property
 
-from lmdb_storage.tree_structure import ObjectType
+from lmdb_storage.tree_structure import ObjectType, ObjectID
 
 
 class FileObject:
@@ -31,3 +31,7 @@ class FileObject:
         object_type, data = msgpack.unpackb(data)
         assert object_type == ObjectType.BLOB.value
         return FileObject(file_id, data)
+
+    @property
+    def id(self) -> ObjectID:
+        return self.file_id

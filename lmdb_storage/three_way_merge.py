@@ -10,25 +10,25 @@ class MergePreferences:
 
     @abc.abstractmethod
     def combine_both_existing(
-            self, path: List[str], original_roots: ByRoot[ObjectID], staging_name: str, base_name: str,
+            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject], staging_name: str, base_name: str,
             staging_original: FileObject, base_original: FileObject) -> ByRoot[ObjectID]:
         pass
 
     @abc.abstractmethod
     def combine_base_only(
-            self, path: List[str], original_roots: ByRoot[ObjectID], staging_name: str, base_name: str,
+            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject], staging_name: str, base_name: str,
             base_original: FileObject) -> ByRoot[ObjectID]:
         return original_roots.new()
 
     @abc.abstractmethod
     def combine_staging_only(
-            self, path: List[str], original_roots: ByRoot[ObjectID], staging_name: str, base_name: str,
+            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject], staging_name: str, base_name: str,
             staging_original: FileObject) -> ByRoot[ObjectID]:
         pass
 
     @abc.abstractmethod
     def merge_missing(
-            self, path: List[str], original_roots: ByRoot[ObjectID], staging_name: str, base_name: str) -> ByRoot[ObjectID]:
+            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject], staging_name: str, base_name: str) -> ByRoot[ObjectID]:
         pass
 
 
@@ -43,7 +43,7 @@ class NaiveMergePreferences(MergePreferences):
         return list(set(original_roots + self.to_modify))
 
     def combine_both_existing(
-            self, path: List[str], original_roots: ByRoot[ObjectID], staging_name: str, base_name: str,
+            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject], staging_name: str, base_name: str,
             staging_original: FileObject, base_original: FileObject) -> ByRoot[ObjectID]:
         result: ByRoot[ObjectID] = original_roots.new()
         for merge_name in (
@@ -52,13 +52,13 @@ class NaiveMergePreferences(MergePreferences):
         return result
 
     def combine_base_only(
-            self, path: List[str], original_roots: ByRoot[ObjectID], staging_name: str, base_name: str,
+            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject], staging_name: str, base_name: str,
             base_original: FileObject) -> ByRoot[ObjectID]:
 
         return original_roots.new()
 
     def combine_staging_only(
-            self, path: List[str], original_roots: ByRoot[ObjectID], staging_name: str, base_name: str,
+            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject], staging_name: str, base_name: str,
             staging_original: FileObject) -> ByRoot[ObjectID]:
         result: ByRoot[ObjectID] = original_roots.new()
         for merge_name in (
@@ -67,8 +67,8 @@ class NaiveMergePreferences(MergePreferences):
         return result
 
     def merge_missing(
-            self, path: List[str], original_roots: ByRoot[ObjectID], staging_name: str, base_name: str) -> ByRoot[ObjectID]:
-        return original_roots
+            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject], staging_name: str, base_name: str) -> ByRoot[ObjectID]:
+        return original_roots.map(lambda obj: obj.id)
 
 
 class ThreewayMerge(Merge[FileObject]):
@@ -87,35 +87,35 @@ class ThreewayMerge(Merge[FileObject]):
         # we have trees and the current and staging trees are different
         return len(trees) > 0 and trees.get_if_present(self.current) != trees.get_if_present(self.staging)
 
-    def combine(self, path: List[str], merged: ByRoot[ObjectID], original: ByRoot[ObjectID]) -> ByRoot[ObjectID]:
+    def combine(self, path: List[str], merged: ByRoot[ObjectID], original: ByRoot[TreeObject | FileObject] ) -> ByRoot[ObjectID]:
         if len(merged) > 0:  # tree-level, just return the merged
             # fixme this is needed because empty folders get dropped in "merged" - should fix that problem
-            merged = ByRoot[ObjectID](merged.allowed_roots, merged.items())
-            for merged_name, original_obj_id in original.items():
+            merged = merged.copy()
+            for merged_name, original_obj in original.items():
                 if merged.get_if_present(merged_name) is None:
-                    merged[merged_name] = original_obj_id
+                    merged[merged_name] = original_obj.id
             return merged
 
         # we are on file level
         base_original = original.get_if_present(self.current)
         staging_original = original.get_if_present(self.staging)
-        assert staging_original is None or not isinstance(self.objects[staging_original], TreeObject)  # is file or None
-        assert base_original is None or not isinstance(self.objects[base_original], TreeObject)  # is file or None
+        assert staging_original is None or not isinstance(staging_original, TreeObject)  # is file or None
+        assert base_original is None or not isinstance(base_original, TreeObject)  # is file or None
 
         if staging_original and base_original:
             # left and right both exist, apply difference to the other roots
             return self.merge_prefs.combine_both_existing(
-                path, original, self.staging, self.current, self.objects[staging_original], self.objects[base_original])
+                path, original, self.staging, self.current, staging_original, base_original)
 
         elif base_original:
             # file is deleted in staging
             return self.merge_prefs.combine_base_only(
-                path, original, self.staging, self.current, self.objects[base_original])
+                path, original, self.staging, self.current, base_original)
 
         elif staging_original:
             # is added in staging
             return self.merge_prefs.combine_staging_only(
-                path, original, self.staging, self.current, self.objects[staging_original])
+                path, original, self.staging, self.current, staging_original)
 
         else:
             # current and staging are not in original, retain what was already there

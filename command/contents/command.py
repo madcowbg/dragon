@@ -23,7 +23,7 @@ from contents.repo_props import FileDesc
 from contents_diff import DiffType, Diff
 from exceptions import MissingRepoContents
 from lmdb_storage.file_object import FileObject
-from lmdb_storage.merge_trees import ObjectsByRoot
+from lmdb_storage.merge_trees import ByRoot
 from lmdb_storage.pull_contents import merge_contents, pull_contents, commit_merged
 from lmdb_storage.roots import Root
 from lmdb_storage.three_way_merge import NaiveMergePreferences, MergePreferences
@@ -341,26 +341,26 @@ class PullMergePreferences(MergePreferences):
         return base_to_add + [r for r in repos_to_add if r in self._where_to_apply_adds]
 
     def combine_both_existing(
-            self, path: List[str], original_roots: ObjectsByRoot, staging_name: str, base_name: str,
-            staging_original: FileObject, base_original: FileObject) -> ObjectsByRoot:
-        result: ObjectsByRoot = original_roots.new()
+            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject], staging_name: str, base_name: str,
+            staging_original: FileObject, base_original: FileObject) -> ByRoot[ObjectID]:
+        result: ByRoot[ObjectID] = original_roots.new()
 
         if staging_original.file_id == base_original.file_id:
             # fixme lower
             logging.error(f"Both staging and base staging for %s are identical, returns as-is.", path)
-            return original_roots
+            return original_roots.map(lambda obj: obj.id)
 
         assert staging_original.file_id != base_original.file_id, staging_original.file_id
 
         if self.remote_type == CaveType.BACKUP:  # fixme use PullPreferences
             # fixme lower
             logging.error("Ignoring changes to %s coming from a backup repo!", path)
-            return original_roots  # ignore changes coming from backups
+            return original_roots.map(lambda obj: obj.id)  # ignore changes coming from backups
 
         if self.remote_type == CaveType.INCOMING:  # fixme use PullPreferences
             # fixme lower
             logging.error("Ignoring changes to %s coming from an incoming repo!", path)
-            return original_roots  # ignore changes coming from backups
+            return original_roots.map(lambda obj: obj.id)  # ignore changes coming from backups
 
         # match self.remote_type:
         #     case CaveType.PARTIAL
@@ -369,37 +369,38 @@ class PullMergePreferences(MergePreferences):
         return result
 
     def combine_base_only(
-            self, path: List[str], original_roots: ObjectsByRoot, staging_name: str, base_name: str,
-            base_original: FileObject) -> ObjectsByRoot:
+            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject], staging_name: str, base_name: str,
+            base_original: FileObject) -> ByRoot[ObjectID]:
 
         if self.remote_type == CaveType.BACKUP:  # fixme use PullPreferences
             # fixme lower
             logging.error("Ignoring changes to %s coming from a backup repo!", path)
-            return original_roots  # ignore changes coming from backups
+            return original_roots.map(lambda obj: obj.id)  # ignore changes coming from backups
 
         return original_roots.new()
 
     def combine_staging_only(
-            self, path: List[str], original_roots: ObjectsByRoot, staging_name: str, base_name: str,
-            staging_original: FileObject) -> ObjectsByRoot:
+            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject], staging_name: str, base_name: str,
+            staging_original: FileObject) -> ByRoot[ObjectID]:
 
         if self.remote_type == CaveType.BACKUP:  # fixme use PullPreferences
             # fixme lower
             logging.error("Ignoring changes to %s coming from a backup repo!", path)
 
-            result: ObjectsByRoot = original_roots.copy()
+            result: ByRoot[ObjectID] = original_roots.map(lambda obj: obj.id)
             result[base_name] = staging_original.file_id  # register file as available
 
             return result  # ignore changes coming from backups
 
-        result: ObjectsByRoot = original_roots.new()
+        result: ByRoot[ObjectID] = original_roots.new()
         for merge_name in [base_name, staging_name] + self.where_to_apply_adds(path, staging_original):
             result[merge_name] = staging_original.file_id
         return result
 
-    def merge_missing(self, path: List[str], original_roots: ObjectsByRoot, staging_name: str,
-                      base_name: str) -> ObjectsByRoot:
-        return original_roots
+    def merge_missing(
+            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject], staging_name: str,
+            base_name: str) -> ByRoot[ObjectID]:
+        return original_roots.map(lambda obj: obj.id)
 
 
 async def print_pending_to_pull(
@@ -425,7 +426,7 @@ async def print_pending_to_pull(
 
 
 def print_differences(
-        hoard_contents: HoardContents, hoard_root: Root, repo_root: Root, merged_ids: ObjectsByRoot, out: StringIO):
+        hoard_contents: HoardContents, hoard_root: Root, repo_root: Root, merged_ids: ByRoot[ObjectID], out: StringIO):
     with hoard_contents.env.objects(write=False) as objects:
         for path, (base_hoard_id, merged_hoard_id, base_current_repo_id, merged_repo_id, staging_repo_id), _ \
                 in zip_trees_dfs(

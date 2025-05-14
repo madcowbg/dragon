@@ -21,7 +21,7 @@ class ByRoot[V]:
     def assigned_values(self) -> Iterable[ObjectID]:
         return self._roots_to_object.values()
 
-    def get_if_present(self, child_name: str, default: ObjectID | None = None) -> ObjectID | None:
+    def get_if_present(self, child_name: str, default: ObjectID | None = None) -> V | None:
         assert child_name in self.allowed_roots, f"Can't get child '{child_name}'!"
         return self._roots_to_object.get(child_name, default)
 
@@ -51,7 +51,7 @@ class ByRoot[V]:
     def assigned_keys(self) -> Collection[str]:
         return self._roots_to_object.keys()
 
-    def filter_type[T](self, selected_type: Type[T], exclude: bool=False):
+    def filter_type[T](self, selected_type: Type[T], exclude: bool = False):
         return ByRoot[T](
             self.allowed_roots,
             remap(self._roots_to_object, lambda obj: obj if (exclude ^ (type(obj) is selected_type)) else None).items())
@@ -72,7 +72,7 @@ class Merge[F]:
     allowed_roots: List[str]
 
     @abc.abstractmethod
-    def combine(self, path: List[str], merged: ByRoot[ObjectID], original: ByRoot[ObjectID]) -> ByRoot[ObjectID]:
+    def combine(self, path: List[str], merged: ByRoot[ObjectID], original: ByRoot[TreeObject | FileObject]) -> ByRoot[ObjectID]:
         """Calculates values for the combined path by working on trees and files that are attached to this path."""
         pass
 
@@ -85,14 +85,14 @@ class Merge[F]:
         return self.merge_trees_recursively([], obj_ids)
 
     def merge_trees_recursively(self, path: List[str], obj_ids: ByRoot[ObjectID]) -> ByRoot[ObjectID]:
-        all_original = obj_ids.map(lambda obj_id: self.objects[obj_id])
+        all_original: ByRoot[TreeObject | FileObject] = obj_ids.map(lambda obj_id: self.objects[obj_id])
 
         trees = all_original.filter_type(TreeObject)
         files = all_original.filter_type(FileObject)
 
         should_drill_down = self.should_drill_down(path, trees, files)
         merged_objects = self.merge_children(path, trees, should_drill_down)
-        return self.combine(path, merged_objects, obj_ids)
+        return self.combine(path, merged_objects, all_original)
 
     def merge_children(
             self, path: List[str], trees: ByRoot[TreeObject], should_drill_down) -> ByRoot[ObjectID]:
@@ -133,15 +133,15 @@ class TakeOneFile[F](Merge[F]):
         self.objects = objects
         self.allowed_roots = list(allowed_roots) + ['MERGED']  # fixme only return merged
 
-    def combine(self, path: List[str], merged: ByRoot[ObjectID], original: ByRoot[ObjectID]) -> ByRoot[ObjectID]:
+    def combine(self, path: List[str], merged: ByRoot[ObjectID], original: ByRoot[TreeObject | FileObject] ) -> ByRoot[ObjectID]:
         """Take the first value that is a file object as the resolved combined value."""
         if len(merged.values()) > 0:
             return ObjectsByRoot.singleton("MERGED", merged.get_if_present("MERGED"))
 
-        files = [f_id for f_id in original.assigned_values() if isinstance(self.objects[f_id], FileObject)]
+        files = [file for file in original.assigned_values() if isinstance(file, FileObject)]
         assert len(files) > 0  # prioritize taking the first file
         file = next(iter(files))  # fixme take with priority
-        return ObjectsByRoot.singleton("MERGED", file)
+        return ObjectsByRoot.singleton("MERGED", file.file_id)
 
     def should_drill_down(self, path: List[str], trees: ByRoot[TreeObject], files: ByRoot[FileObject]) -> bool:
         return len(files) == 0  # as we prioritize taking the first file
