@@ -47,7 +47,7 @@ class NaiveMergePreferences(MergePreferences):
             staging_original: FileObject, base_original: FileObject) -> ByRoot[ObjectID]:
         result: ByRoot[ObjectID] = original_roots.new()
         for merge_name in (
-                [staging_name, base_name] + self.where_to_apply_diffs(list(original_roots.assigned().keys()))):
+                [staging_name, base_name] + self.where_to_apply_diffs(list(original_roots.assigned_keys()))):
             result[merge_name] = staging_original.file_id
         return result
 
@@ -62,7 +62,7 @@ class NaiveMergePreferences(MergePreferences):
             staging_original: FileObject) -> ByRoot[ObjectID]:
         result: ByRoot[ObjectID] = original_roots.new()
         for merge_name in (
-                [base_name, staging_name] + self.where_to_apply_adds(list(original_roots.assigned().keys()))):
+                [base_name, staging_name] + self.where_to_apply_adds(list(original_roots.assigned_keys()))):
             result[merge_name] = staging_original.file_id
         return result
 
@@ -90,8 +90,8 @@ class ThreewayMerge(Merge[FileObject]):
     def combine(self, path: List[str], merged: ByRoot[ObjectID], original: ByRoot[ObjectID]) -> ByRoot[ObjectID]:
         if len(merged) > 0:  # tree-level, just return the merged
             # fixme this is needed because empty folders get dropped in "merged" - should fix that problem
-            merged = ByRoot[ObjectID](merged.allowed_roots, merged.assigned().items())
-            for merged_name, original_obj_id in original.assigned().items():
+            merged = ByRoot[ObjectID](merged.allowed_roots, merged.items())
+            for merged_name, original_obj_id in original.items():
                 if merged.get_if_present(merged_name) is None:
                     merged[merged_name] = original_obj_id
             return merged

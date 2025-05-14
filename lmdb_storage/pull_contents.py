@@ -27,7 +27,7 @@ def pull_contents(env: ObjectStorage, repo_uuid: str, staging_id: ObjectID, merg
 
 def merge_contents(
         env: ObjectStorage, repo_root: Root, all_repo_roots: List[Root], merge_prefs: MergePreferences) \
-        -> ObjectsByRoot:
+        -> ByRoot[ObjectID]:
     assert repo_root in all_repo_roots, f"{repo_root.name} is missing from other_roots={all_repo_roots}"
 
     # assign roots
@@ -52,13 +52,13 @@ def merge_contents(
             objects, current="current", staging='staging', others=all_root_names, merge_prefs=merge_prefs) \
             .merge_trees(current_ids)
 
-        assert len(set(current_ids.assigned().keys()) - set(merged_ids.assigned().keys())) == 0, \
-            f"{set(merged_ids.assigned().keys())} not contains all of {set(current_ids.assigned().keys())}"
+        assert len(set(current_ids.assigned_keys()) - set(merged_ids.assigned_keys())) == 0, \
+            f"{set(merged_ids.assigned_keys())} not contains all of {set(current_ids.assigned_keys())}"
 
     return merged_ids
 
 
-def commit_merged(hoard: Root, repo: Root, all_roots: List[Root], merged_ids: ObjectsByRoot):
+def commit_merged(hoard: Root, repo: Root, all_roots: List[Root], merged_ids: ByRoot[ObjectID]):
     # set current for the repo being merged
     repo.current = merged_ids.get_if_present("current")
     assert repo.name in merged_ids, f"{repo.name} is missing from merged_ids={merged_ids}"

@@ -6,7 +6,7 @@ from lmdb_storage.tree_structure import Objects, TreeObject, ObjectID
 
 
 class ByRoot[V]:
-    def __init__(self, allowed_roots: List[str], roots_to_object: Collection[Tuple[str, V]] = ()):
+    def __init__(self, allowed_roots: List[str], roots_to_object: Iterable[Tuple[str, V]] = ()):
         self.allowed_roots = allowed_roots
         self._roots_to_object = dict((k, v) for k, v in roots_to_object if v is not None)
         for child_name in self._roots_to_object:
@@ -20,9 +20,6 @@ class ByRoot[V]:
 
     def assigned_values(self) -> Iterable[ObjectID]:
         return self._roots_to_object.values()
-
-    def assigned(self) -> Dict[str, V]:  # fixme deprecate, too powerful
-        return self._roots_to_object
 
     def get_if_present(self, child_name: str, default: ObjectID | None = None) -> ObjectID | None:
         assert child_name in self.allowed_roots, f"Can't get child '{child_name}'!"
@@ -44,6 +41,15 @@ class ByRoot[V]:
 
     def map[R](self, mapper: Callable[[V], R]) -> "ByRoot[R]":
         return ByRoot[R](self.allowed_roots, remap(self._roots_to_object, mapper).items())
+
+    def values(self) -> Collection[V]:
+        return self._roots_to_object.values()
+
+    def items(self) -> Collection[Tuple[str, V]]:
+        return self._roots_to_object.items()
+
+    def assigned_keys(self) -> Collection[str]:
+        return self._roots_to_object.keys()
 
 
 class ObjectsByRoot:
@@ -71,35 +77,33 @@ class Merge[F]:
 
     def merge_trees(self, obj_ids: ByRoot[ObjectID]) -> ByRoot[ObjectID]:
         assert isinstance(obj_ids, ByRoot)
-
-        obj_ids = ByRoot[ObjectID](self.allowed_roots, obj_ids.assigned().items())
         return self.merge_trees_recursively([], obj_ids)
 
     def merge_trees_recursively(self, path: List[str], obj_ids: ByRoot[ObjectID]) -> ByRoot[ObjectID]:
         trees, files = split_by_object_type(self.objects, obj_ids)
 
         should_drill_down = self.should_drill_down(path, trees, files)
-        merged_objects = self.merge_children(path, trees, should_drill_down)
+        trees_objects: ByRoot[TreeObject] = trees.map(lambda tree_id: self.objects[tree_id])  # fixme move to caller
+        merged_objects = self.merge_children(path, trees_objects, should_drill_down)
         return self.combine(path, merged_objects, obj_ids)
 
     def merge_children(
-            self, path: List[str], trees: ByRoot[ObjectID], should_drill_down) -> ByRoot[ObjectID]:
-        trees_objects: ByRoot[TreeObject] = trees.map(lambda tree_id: self.objects[tree_id])  # fixme move to caller
+            self, path: List[str], trees: ByRoot[TreeObject], should_drill_down) -> ByRoot[ObjectID]:
 
         all_children_names = list(sorted(set(
-            child_name for tree_obj in trees_objects.assigned().values() for child_name in tree_obj.children)))
+            child_name for tree_obj in trees.values() for child_name in tree_obj.children)))
 
         # group by child name first
         merged_children: Dict[str, TreeObject] = dict()
 
         for child_name in all_children_names:
-            all_objects_in_name = trees_objects.map(lambda obj: obj.children.get(child_name))
+            all_objects_in_child_name = trees.map(lambda obj: obj.children.get(child_name))
 
             merged_child_by_roots: ByRoot[ObjectID] = \
-                self.merge_trees_recursively(path + [child_name], all_objects_in_name) \
-                    if should_drill_down else all_objects_in_name
+                self.merge_trees_recursively(path + [child_name], all_objects_in_child_name) \
+                    if should_drill_down else all_objects_in_child_name
 
-            for root_name, obj_id in merged_child_by_roots.assigned().items():
+            for root_name, obj_id in merged_child_by_roots.items():
                 if root_name not in merged_children:
                     merged_children[root_name] = TreeObject({})
 
@@ -124,8 +128,8 @@ class TakeOneFile[F](Merge[F]):
 
     def combine(self, path: List[str], merged: ByRoot[ObjectID], original: ByRoot[ObjectID]) -> ByRoot[ObjectID]:
         """Take the first value that is a file object as the resolved combined value."""
-        if len(merged.assigned()) > 0:
-            return ObjectsByRoot.singleton("MERGED", merged.assigned()["MERGED"])
+        if len(merged.values()) > 0:
+            return ObjectsByRoot.singleton("MERGED", merged.get_if_present("MERGED"))
 
         files = [f_id for f_id in original.assigned_values() if isinstance(self.objects[f_id], FileObject)]
         assert len(files) > 0  # prioritize taking the first file
@@ -139,10 +143,10 @@ class TakeOneFile[F](Merge[F]):
 def split_by_object_type[F](objects: Objects[F], obj_ids: ByRoot[ObjectID]) -> (ByRoot[ObjectID], ByRoot[ObjectID]):
     files = ByRoot[ObjectID](
         obj_ids.allowed_roots,
-        [(name, obj_id) for name, obj_id in obj_ids.assigned().items() if type(objects[obj_id]) is not TreeObject])
+        [(name, obj_id) for name, obj_id in obj_ids.items() if type(objects[obj_id]) is not TreeObject])
     trees = ByRoot[ObjectID](
         obj_ids.allowed_roots,
-        [(name, obj_id) for name, obj_id in obj_ids.assigned().items() if type(objects[obj_id]) is TreeObject])
+        [(name, obj_id) for name, obj_id in obj_ids.items() if type(objects[obj_id]) is TreeObject])
     return trees, files
 
 

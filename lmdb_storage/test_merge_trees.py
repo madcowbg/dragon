@@ -92,7 +92,7 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
                 (binascii.hexlify(root_left_id).decode(), root_left_id),
                 (binascii.hexlify(root_right_id).decode(), root_right_id)]))
 
-            merged = TakeOneFile(objects, objects_by_root.assigned().keys()).merge_trees(objects_by_root)
+            merged = TakeOneFile(objects, objects_by_root.assigned_keys()).merge_trees(objects_by_root)
             self.assertEqual([
                 ('$ROOT', 1),
                 ('$ROOT/test.me.1', 2, '1881f6f9784fb08bf6690e9763b76ac3'),
@@ -102,7 +102,7 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
                 dump_tree(objects, merged.get_if_present("MERGED"), show_fasthash=True))
 
             objects_by_root = ObjectsByRoot.from_map(dict((binascii.hexlify(it).decode(), it) for it in root_ids))
-            merged = TakeOneFile(objects, objects_by_root.assigned().keys()).merge_trees(objects_by_root)
+            merged = TakeOneFile(objects, objects_by_root.assigned_keys()).merge_trees(objects_by_root)
             self.assertEqual([
                 ('$ROOT', 1),
                 ('$ROOT/test.me.1', 2, '1881f6f9784fb08bf6690e9763b76ac3'),
@@ -171,7 +171,7 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
                 'current': backup_id, 'staging': incoming_id,
                 'full': full_id, 'partial': partial_id, 'hoard': hoard_id}), )
 
-            self.assertEqual({'current', 'staging', 'full', 'partial', 'hoard'}, set(merged_ids.assigned().keys()))
+            self.assertEqual({'current', 'staging', 'full', 'partial', 'hoard'}, set(merged_ids.assigned_keys()))
 
             self.assertEqual([
                 ('$ROOT', 1),
@@ -333,7 +333,7 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
             'current': backup_id, 'staging': incoming_id,
             'full': full_id, 'partial': partial_id, 'hoard': hoard_id}))
 
-        self.assertEqual({'current', 'staging', 'full', 'partial', 'hoard'}, set(merged_ids.assigned().keys()))
+        self.assertEqual({'current', 'staging', 'full', 'partial', 'hoard'}, set(merged_ids.assigned_keys()))
 
         self.assertEqual([
             ('$ROOT', 1),
