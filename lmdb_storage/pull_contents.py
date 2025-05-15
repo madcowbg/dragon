@@ -44,7 +44,7 @@ def merge_contents(
             ("staging", repo_staging_id),
             ("HOARD", hoard_head_id)])
 
-    assert all(v is not None for v in current_ids.assigned_values())
+    assert all(v is not None for v in current_ids.values())
 
     # execute merge
     with env.objects(write=True) as objects:
