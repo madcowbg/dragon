@@ -52,9 +52,6 @@ def merge_contents(
             objects, current="current", staging='staging', others=all_root_names, merge_prefs=merge_prefs) \
             .merge_trees(current_ids)
 
-        assert len(set(current_ids.assigned_keys()) - set(merged_ids.assigned_keys())) == 0, \
-            f"{set(merged_ids.assigned_keys())} not contains all of {set(current_ids.assigned_keys())}"
-
     return merged_ids
 
 

@@ -171,9 +171,8 @@ class TakeOneFile[F](Merge[F, ObjectID]):
         def add_for_unmerged(self, child_name: str, all_objects_in_child_name: ByRoot[ObjectID]) -> None:
             raise NotImplementedError()
 
-    def __init__(self, objects: Objects[F], allowed_roots: Collection[str]):
+    def __init__(self, objects: Objects[F]):
         self.objects = objects
-        self.allowed_roots = list(allowed_roots) + ['MERGED']  # fixme only return merged
 
     def combine(self, path: List[str], merged: ObjectID, original: ByRoot[TreeObject | FileObject]) -> ObjectID:
         """Take the first value that is a file object as the resolved combined value."""

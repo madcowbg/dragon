@@ -124,9 +124,9 @@ class ThreewayMerge(Merge[FileObject, ByRoot[ObjectID]]):
     def combine(self, path: List[str], merged: ByRoot[ObjectID], original: ByRoot[TreeObject | FileObject]) -> ByRoot[
         ObjectID]:
         # tree-level, just return the merged
-        # fixme this is needed because empty folders get dropped in "merged" - should fix that problem
-        merged = merged.copy()
-        for merged_name, original_obj in original.items():
-            if merged.get_if_present(merged_name) is None:
-                merged[merged_name] = original_obj.id
+        # # fixme this is needed because empty folders get dropped in "merged" - should fix that problem
+        # merged = merged.copy()
+        # for root_name, original_obj in original.items():
+        #     if merged.get_if_present(root_name) is None:
+        #         merged[root_name] = original_obj.id
         return merged

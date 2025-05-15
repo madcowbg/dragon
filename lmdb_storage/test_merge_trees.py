@@ -92,7 +92,7 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
                 (binascii.hexlify(root_left_id).decode(), root_left_id),
                 (binascii.hexlify(root_right_id).decode(), root_right_id)]))
 
-            merged_id = TakeOneFile(objects, objects_by_root.assigned_keys()).merge_trees(objects_by_root)
+            merged_id = TakeOneFile(objects).merge_trees(objects_by_root)
             self.assertEqual([
                 ('$ROOT', 1),
                 ('$ROOT/test.me.1', 2, '1881f6f9784fb08bf6690e9763b76ac3'),
@@ -102,7 +102,7 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
                 dump_tree(objects, merged_id, show_fasthash=True))
 
             objects_by_root = ObjectsByRoot.from_map(dict((binascii.hexlify(it).decode(), it) for it in root_ids))
-            merged_id = TakeOneFile(objects, objects_by_root.assigned_keys()).merge_trees(objects_by_root)
+            merged_id = TakeOneFile(objects).merge_trees(objects_by_root)
             self.assertEqual([
                 ('$ROOT', 1),
                 ('$ROOT/test.me.1', 2, '1881f6f9784fb08bf6690e9763b76ac3'),
@@ -119,7 +119,7 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
         env, partial_id, full_id, backup_id, incoming_id = populate_trees(tmpdir.name + "/test-objects.lmdb")
 
         with env.objects(write=True) as objects:
-            merged_id = TakeOneFile(objects, ['one', 'another']).merge_trees(
+            merged_id = TakeOneFile(objects).merge_trees(
                 ObjectsByRoot.from_map({'one': backup_id, 'another': incoming_id}))
             self.assertEqual([
                 ('$ROOT', 1),

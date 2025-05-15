@@ -10,7 +10,7 @@ from lmdb_storage.tree_structure import remove_file_object
 
 
 class TestWorkflows(unittest.TestCase):
-    def test_pull_contents(self):
+    def test_check_empty_tree_id(self):
         tmpdir = TemporaryDirectory(delete=True)
         env, partial_id, full_id, backup_id, incoming_id = populate_trees(tmpdir.name + "/test-objects.lmdb")
 
@@ -18,19 +18,24 @@ class TestWorkflows(unittest.TestCase):
             empty_tree_id = objects.mktree_from_tuples([])
             self.assertEqual(b'a80f91bc48850a1fb3459bb76b9f6308d4d35710', binascii.hexlify(empty_tree_id))
 
+    def test_pull_contents(self):
+        tmpdir = TemporaryDirectory(delete=True)
+        env, partial_id, full_id, backup_id, incoming_id = populate_trees(tmpdir.name + "/test-objects.lmdb")
+
         # init it as empty staging
         roots = env.roots(write=True)
-        roots["HOARD"].desired = empty_tree_id
-        roots["partial-uuid"].desired = empty_tree_id
-        roots["partial-uuid"].current = empty_tree_id
-        roots["full-uuid"].desired = empty_tree_id
-        roots["full-uuid"].current = empty_tree_id
-        roots["backup-uuid"].desired = empty_tree_id
-        roots["backup-uuid"].current = empty_tree_id
-        roots["incoming-uuid"].desired = empty_tree_id
-        roots["incoming-uuid"].current = empty_tree_id
+        roots["HOARD"].desired = None
+        roots["partial-uuid"].desired = None
+        roots["partial-uuid"].current = None
+        roots["full-uuid"].desired = None
+        roots["full-uuid"].current = None
+        roots["backup-uuid"].desired = None
+        roots["backup-uuid"].current = None
+        roots["incoming-uuid"].desired = None
+        roots["incoming-uuid"].current = None
 
-        pull_contents(env, repo_uuid="partial-uuid", staging_id=partial_id, merge_prefs=NaiveMergePreferences({"full-uuid"}))
+        pull_contents(env, repo_uuid="partial-uuid", staging_id=partial_id,
+                      merge_prefs=NaiveMergePreferences({"full-uuid"}))
 
         roots = env.roots(write=False)
         current_full_id = roots["full-uuid"].desired
@@ -53,7 +58,8 @@ class TestWorkflows(unittest.TestCase):
                 ('$ROOT/wat/test.me.7', 2, '46e7da788d1c605a2293d580eeceeefd')],
                 dump_tree(objects, current_hoard_id, show_fasthash=True))
 
-        pull_contents(env, repo_uuid="incoming-uuid", staging_id=incoming_id, merge_prefs=NaiveMergePreferences({"full-uuid"}))
+        pull_contents(
+            env, repo_uuid="incoming-uuid", staging_id=incoming_id, merge_prefs=NaiveMergePreferences({"full-uuid"}))
 
         current_full_id = roots["full-uuid"].desired
         current_hoard_id = roots["HOARD"].desired
@@ -98,7 +104,9 @@ class TestWorkflows(unittest.TestCase):
             staging_incoming_id = remove_file_object(objects, current_incoming_id, "wat/test.me.6".split("/"))
             self.assertNotEqual(incoming_id, staging_incoming_id)
 
-        pull_contents(env, repo_uuid="incoming-uuid", staging_id=staging_incoming_id, merge_prefs=NaiveMergePreferences({"full-uuid"}))
+        pull_contents(
+            env, repo_uuid="incoming-uuid", staging_id=staging_incoming_id,
+            merge_prefs=NaiveMergePreferences({"full-uuid"}))
 
         current_full_id = roots["full-uuid"].desired
         current_hoard_id = roots["HOARD"].desired
@@ -138,12 +146,11 @@ class TestWorkflows(unittest.TestCase):
                 ('$ROOT/wat/test.me.7', 2, '46e7da788d1c605a2293d580eeceeefd')],
                 dump_tree(objects, current_hoard_id, show_fasthash=True))
 
-            self.assertEqual([
-                ('$ROOT', 1), ],
-                dump_tree(objects, current_backup_id, show_fasthash=True))
+            self.assertEqual([], dump_tree(objects, current_backup_id, show_fasthash=True))
 
         # adding the backup too
-        pull_contents(env, repo_uuid="backup-uuid", staging_id=backup_id, merge_prefs=NaiveMergePreferences({"full-uuid"}))
+        pull_contents(
+            env, repo_uuid="backup-uuid", staging_id=backup_id, merge_prefs=NaiveMergePreferences({"full-uuid"}))
 
         current_full_id = roots["full-uuid"].desired
         current_hoard_id = roots["HOARD"].desired
