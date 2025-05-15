@@ -92,19 +92,13 @@ class ThreewayMerge(Merge[FileObject, ByRoot[ObjectID]]):
     def create_merge_result(self) -> MergeResult[FileObject, ByRoot[ObjectID]]:
         return SeparateRootsMergeResult[FileObject](self.allowed_roots, self.objects)
 
-    def combine(self, path: List[str], merged: ByRoot[ObjectID], original: ByRoot[TreeObject | FileObject]) -> ByRoot[
-        ObjectID]:
-        if len(merged) > 0:  # tree-level, just return the merged
-            # fixme this is needed because empty folders get dropped in "merged" - should fix that problem
-            merged = merged.copy()
-            for merged_name, original_obj in original.items():
-                if merged.get_if_present(merged_name) is None:
-                    merged[merged_name] = original_obj.id
-            return merged
-
+    def combine_non_drilldown(self, path: List[str], original: ByRoot[TreeObject | FileObject]) -> ByRoot[ObjectID]:
         # we are on file level
         base_original = original.get_if_present(self.current)
         staging_original = original.get_if_present(self.staging)
+        if base_original == staging_original: # no diffs
+            return original.map(lambda obj: obj.id)
+
         assert staging_original is None or not isinstance(staging_original, TreeObject)  # is file or None
         assert base_original is None or not isinstance(base_original, TreeObject)  # is file or None
 
@@ -126,3 +120,13 @@ class ThreewayMerge(Merge[FileObject, ByRoot[ObjectID]]):
         else:
             # current and staging are not in original, retain what was already there
             return self.merge_prefs.merge_missing(path, original, self.staging, self.current)
+
+    def combine(self, path: List[str], merged: ByRoot[ObjectID], original: ByRoot[TreeObject | FileObject]) -> ByRoot[
+        ObjectID]:
+        # tree-level, just return the merged
+        # fixme this is needed because empty folders get dropped in "merged" - should fix that problem
+        merged = merged.copy()
+        for merged_name, original_obj in original.items():
+            if merged.get_if_present(merged_name) is None:
+                merged[merged_name] = original_obj.id
+        return merged
