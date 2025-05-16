@@ -26,11 +26,14 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull("repo-full-name")
         self.assertEqual((
+            'Pulling repo-full-name...\n'
             'Before: Hoard [a80f91] <- repo [curr: a80f91, stg: d99580, des: a80f91]\n'
             'ADD_NEW_TO_HOARD /test.me.1\n'
             'ADD_NEW_TO_HOARD /test.me.4\n'
             'ADD_NEW_TO_HOARD /wat/test.me.2\n'
             'ADD_NEW_TO_HOARD /wat/test.me.3\n'
+            'updated repo-full-name from a80f91 to d99580\n'
+            'updated repo-backup-name from a80f91 to d99580\n'
             'After: Hoard [d99580], repo [curr: d99580, stg: d99580, des: d99580]\n'
             "Sync'ed repo-full-name to hoard!\n"
             'DONE'), res)

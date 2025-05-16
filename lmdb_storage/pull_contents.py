@@ -1,3 +1,4 @@
+from io import StringIO
 from typing import Set, List
 
 from lmdb_storage.merge_trees import ObjectsByRoot, ByRoot

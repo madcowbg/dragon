@@ -142,6 +142,8 @@ async def execute_pull(
             copy_local_staging_to_hoard(hoard_contents, current_contents, hoard.config())
             uuid = current_contents.config.uuid
 
+            out.write(f"Pulling {config.remotes[uuid].name}...\n")
+
             await sync_fsobject_to_object_storage(
                 hoard_contents.env, hoard_contents.fsobjects, current_contents.fsobjects,
                 hoard.config())  # fixme remove
@@ -158,6 +160,10 @@ async def execute_pull(
                 f"Before: Hoard [{safe_hex(roots['HOARD'].desired)[:6]}] "
                 f"<- repo [curr: {safe_hex(repo_current)[:6]}, stg: {safe_hex(repo_staging)[:6]}, des: {safe_hex(repo_desired)[:6]}]\n")
 
+            roots = hoard_contents.env.roots(True)
+            all_remote_roots = [roots[remote.uuid] for remote in config.remotes.all()]
+            all_remote_roots_old_desired = dict((root.name, root.desired) for root in all_remote_roots)
+
             if True:
                 resolutions = await resolution_to_match_repo_and_hoard(
                     uuid, hoard_contents, pathing, preferences, progress_bar)
@@ -173,9 +179,6 @@ async def execute_pull(
                 await sync_fsobject_to_object_storage(
                     hoard_contents.env, hoard_contents.fsobjects, current_contents.fsobjects, hoard.config())
             else:
-                roots = hoard_contents.env.roots(True)
-
-                all_remote_roots = [roots[remote.uuid] for remote in config.remotes.all()]
                 hoard_root = roots["HOARD"]
                 repo_root = roots[uuid]
 
@@ -197,6 +200,11 @@ async def execute_pull(
             repo_current = roots[uuid].current
             repo_staging = roots[uuid].staging
             repo_desired = roots[uuid].desired
+
+            for root in all_remote_roots:
+                old_desired = all_remote_roots_old_desired[root.name]
+                if root.desired != old_desired:
+                    out.write(f"updated {config.remotes[root.name].name} from {safe_hex(old_desired)[:6]} to {safe_hex(root.desired)[:6]}\n")
 
             out.write(
                 f"After: Hoard [{safe_hex(roots['HOARD'].desired)[:6]}],"
