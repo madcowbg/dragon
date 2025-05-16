@@ -204,7 +204,8 @@ async def execute_pull(
             for root in all_remote_roots:
                 old_desired = all_remote_roots_old_desired[root.name]
                 if root.desired != old_desired:
-                    out.write(f"updated {config.remotes[root.name].name} from {safe_hex(old_desired)[:6]} to {safe_hex(root.desired)[:6]}\n")
+                    out.write(
+                        f"updated {config.remotes[root.name].name} from {safe_hex(old_desired)[:6]} to {safe_hex(root.desired)[:6]}\n")
 
             out.write(
                 f"After: Hoard [{safe_hex(roots['HOARD'].desired)[:6]}],"
@@ -349,7 +350,7 @@ class PullMergePreferences(MergePreferences):
         return base_to_add + [r for r in repos_to_add if r in self._where_to_apply_adds]
 
     def combine_both_existing(
-            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject], staging_name: str, base_name: str,
+            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject],
             staging_original: FileObject, base_original: FileObject) -> ByRoot[ObjectID]:
         result: ByRoot[ObjectID] = original_roots.new()
 
@@ -377,7 +378,7 @@ class PullMergePreferences(MergePreferences):
         return result
 
     def combine_base_only(
-            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject], staging_name: str, base_name: str,
+            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject],
             base_original: FileObject) -> ByRoot[ObjectID]:
 
         if self.remote_type == CaveType.BACKUP:  # fixme use PullPreferences
@@ -388,7 +389,7 @@ class PullMergePreferences(MergePreferences):
         return original_roots.new()
 
     def combine_staging_only(
-            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject], staging_name: str, base_name: str,
+            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject],
             staging_original: FileObject) -> ByRoot[ObjectID]:
 
         if self.remote_type == CaveType.BACKUP:  # fixme use PullPreferences
@@ -403,8 +404,7 @@ class PullMergePreferences(MergePreferences):
         return result
 
     def merge_missing(
-            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject], staging_name: str,
-            base_name: str) -> ByRoot[ObjectID]:
+            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject]) -> ByRoot[ObjectID]:
         return original_roots.map(lambda obj: obj.id)
 
 

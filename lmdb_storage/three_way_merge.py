@@ -12,26 +12,25 @@ class MergePreferences:
 
     @abc.abstractmethod
     def combine_both_existing(
-            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject], staging_name: str, base_name: str,
+            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject],
             staging_original: FileObject, base_original: FileObject) -> ByRoot[ObjectID]:
         pass
 
     @abc.abstractmethod
     def combine_base_only(
-            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject], staging_name: str, base_name: str,
+            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject],
             base_original: FileObject) -> ByRoot[ObjectID]:
         return original_roots.new()
 
     @abc.abstractmethod
     def combine_staging_only(
-            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject], staging_name: str, base_name: str,
+            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject],
             staging_original: FileObject) -> ByRoot[ObjectID]:
         pass
 
     @abc.abstractmethod
     def merge_missing(
-            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject], staging_name: str,
-            base_name: str) -> ByRoot[ObjectID]:
+            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject]) -> ByRoot[ObjectID]:
         pass
 
 
@@ -46,7 +45,7 @@ class NaiveMergePreferences(MergePreferences):
         return list(set(original_roots + self.to_modify))
 
     def combine_both_existing(
-            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject], staging_name: str, base_name: str,
+            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject],
             staging_original: FileObject, base_original: FileObject) -> ByRoot[ObjectID]:
         result: ByRoot[ObjectID] = original_roots.new()
         for merge_name in (self.where_to_apply_diffs(list(original_roots.assigned_keys()))):
@@ -54,13 +53,13 @@ class NaiveMergePreferences(MergePreferences):
         return result
 
     def combine_base_only(
-            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject], staging_name: str, base_name: str,
+            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject],
             base_original: FileObject) -> ByRoot[ObjectID]:
 
         return original_roots.new()
 
     def combine_staging_only(
-            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject], staging_name: str, base_name: str,
+            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject],
             staging_original: FileObject) -> ByRoot[ObjectID]:
         assert type(staging_original) is FileObject
 
@@ -70,8 +69,7 @@ class NaiveMergePreferences(MergePreferences):
         return result
 
     def merge_missing(
-            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject], staging_name: str,
-            base_name: str) -> ByRoot[ObjectID]:
+            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject]) -> ByRoot[ObjectID]:
         return original_roots.map(lambda obj: obj.id)
 
 
@@ -133,22 +131,19 @@ class ThreewayMerge(Merge[FileObject, ThreewayMergeState, ByRoot[ObjectID]]):
 
         if staging_original and base_original:
             # left and right both exist, apply difference to the other roots
-            return self.merge_prefs.combine_both_existing(
-                state.path, original, self.staging, self.current, staging_original, base_original)
+            return self.merge_prefs.combine_both_existing(state.path, original, staging_original, base_original)
 
         elif base_original:
             # file is deleted in staging
-            return self.merge_prefs.combine_base_only(
-                state.path, original, self.staging, self.current, base_original)
+            return self.merge_prefs.combine_base_only(state.path, original, base_original)
 
         elif staging_original:
             # is added in staging
-            return self.merge_prefs.combine_staging_only(
-                state.path, original, self.staging, self.current, staging_original)
+            return self.merge_prefs.combine_staging_only(state.path, original, staging_original)
 
         else:
             # current and staging are not in original, retain what was already there
-            return self.merge_prefs.merge_missing(state.path, original, self.staging, self.current)
+            return self.merge_prefs.merge_missing(state.path, original)
 
     def combine(self, state: ThreewayMergeState, merged: ByRoot[ObjectID], original: ByRoot[TreeObject | FileObject]) -> \
             ByRoot[ObjectID]:
