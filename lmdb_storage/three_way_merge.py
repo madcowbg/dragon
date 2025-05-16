@@ -49,8 +49,7 @@ class NaiveMergePreferences(MergePreferences):
             self, path: List[str], original_roots: ByRoot[TreeObject | FileObject], staging_name: str, base_name: str,
             staging_original: FileObject, base_original: FileObject) -> ByRoot[ObjectID]:
         result: ByRoot[ObjectID] = original_roots.new()
-        for merge_name in (
-                [staging_name, base_name] + self.where_to_apply_diffs(list(original_roots.assigned_keys()))):
+        for merge_name in (self.where_to_apply_diffs(list(original_roots.assigned_keys()))):
             result[merge_name] = staging_original.file_id
         return result
 
@@ -66,8 +65,7 @@ class NaiveMergePreferences(MergePreferences):
         assert type(staging_original) is FileObject
 
         result: ByRoot[ObjectID] = original_roots.new()
-        for merge_name in (
-                [base_name, staging_name] + self.where_to_apply_adds(list(original_roots.assigned_keys()))):
+        for merge_name in (self.where_to_apply_adds(list(original_roots.assigned_keys()))):
             result[merge_name] = staging_original.file_id
         return result
 
@@ -99,7 +97,8 @@ class ThreewayMerge(Merge[FileObject, ThreewayMergeState, ByRoot[ObjectID]]):
         assert type(base_obj) in (NoneType, FileObject, TreeObject)
         return ThreewayMergeState(
             merge_state.path + [child_name],
-            self.object_or_none(base_obj.children.get(child_name)) if isinstance(base_obj, TreeObject) else None,  # fixme handle files
+            self.object_or_none(base_obj.children.get(child_name)) if isinstance(base_obj, TreeObject) else None,
+            # fixme handle files
             self.object_or_none(staging_obj.children.get(child_name)) if isinstance(staging_obj, TreeObject) else None)
 
     def __init__(
@@ -129,8 +128,8 @@ class ThreewayMerge(Merge[FileObject, ThreewayMergeState, ByRoot[ObjectID]]):
         if base_original == staging_original:  # no diffs
             return original.map(lambda obj: obj.id)
 
-        assert staging_original is None or not isinstance(staging_original, TreeObject)  # is file or None
-        assert base_original is None or not isinstance(base_original, TreeObject)  # is file or None
+        assert staging_original is None or isinstance(staging_original, FileObject)
+        assert base_original is None or isinstance(base_original, FileObject)
 
         if staging_original and base_original:
             # left and right both exist, apply difference to the other roots
@@ -152,8 +151,7 @@ class ThreewayMerge(Merge[FileObject, ThreewayMergeState, ByRoot[ObjectID]]):
             return self.merge_prefs.merge_missing(state.path, original, self.staging, self.current)
 
     def combine(self, state: ThreewayMergeState, merged: ByRoot[ObjectID], original: ByRoot[TreeObject | FileObject]) -> \
-    ByRoot[
-        ObjectID]:
+            ByRoot[ObjectID]:
         # tree-level, just return the merged
         # # fixme this is needed because empty folders get dropped in "merged" - should fix that problem
         # merged = merged.copy()

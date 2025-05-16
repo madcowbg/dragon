@@ -1,7 +1,6 @@
-from io import StringIO
-from typing import Set, List
+from typing import List
 
-from lmdb_storage.merge_trees import ObjectsByRoot, ByRoot
+from lmdb_storage.merge_trees import ByRoot
 from lmdb_storage.object_store import ObjectStorage
 from lmdb_storage.roots import Root
 from lmdb_storage.three_way_merge import ThreewayMerge, MergePreferences, NaiveMergePreferences
@@ -58,7 +57,8 @@ def merge_contents(
 
 def commit_merged(hoard: Root, repo: Root, all_roots: List[Root], merged_ids: ByRoot[ObjectID]):
     # set current for the repo being merged
-    repo.current = merged_ids.get_if_present("current")
+    repo.current = merged_ids.get_if_present("staging")
+
     assert repo.name in merged_ids, f"{repo.name} is missing from merged_ids={merged_ids}"
     assert repo in all_roots, f"{repo} is missing from all_roots={all_roots}"
 

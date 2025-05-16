@@ -7,6 +7,7 @@ from lmdb_storage.test_experiment_lmdb import dump_tree
 from lmdb_storage.test_merge_trees import populate_trees
 from lmdb_storage.three_way_merge import NaiveMergePreferences
 from lmdb_storage.tree_structure import remove_file_object
+from util import safe_hex
 
 
 class TestWorkflows(unittest.TestCase):
@@ -99,6 +100,14 @@ class TestWorkflows(unittest.TestCase):
                 ('$ROOT/wat/test.me.7', 2, '46e7da788d1c605a2293d580eeceeefd')],
                 dump_tree(objects, current_hoard_id, show_fasthash=True))
 
+        self.assertEqual([
+            ('HOARD', '691cd8'),
+            ('backup-uuid', 'None'),
+            ('full-uuid', '691cd8'),
+            ('incoming-uuid', '9785d8'),
+            ('partial-uuid', '275c4d')],
+            sorted((root.name, safe_hex(root.desired)[:6]) for root in roots.all))
+
         # remove a file from staging
         with env.objects(write=True) as objects:
             staging_incoming_id = remove_file_object(objects, current_incoming_id, "wat/test.me.6".split("/"))
@@ -107,6 +116,14 @@ class TestWorkflows(unittest.TestCase):
         pull_contents(
             env, repo_uuid="incoming-uuid", staging_id=staging_incoming_id,
             merge_prefs=NaiveMergePreferences({"full-uuid"}))
+
+        self.assertEqual([
+            ('HOARD', '264c54'),
+            ('backup-uuid', 'None'),
+            ('full-uuid', '264c54'),
+            ('incoming-uuid', '8f9393'),
+            ('partial-uuid', '275c4d')],
+            sorted((root.name, safe_hex(root.desired)[:6]) for root in roots.all))
 
         current_full_id = roots["full-uuid"].desired
         current_hoard_id = roots["HOARD"].desired

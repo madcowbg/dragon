@@ -192,11 +192,8 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
 
             self.assertEqual([
                 ('$ROOT', 1),
-                ('$ROOT/test.me.4', 2, '5c8ffab0d25ab7692378bf41d495e046'),
-                ('$ROOT/test.me.5', 2, '79e651dd08483b1483fb6e992c928e21'),
                 ('$ROOT/wat', 1),
-                ('$ROOT/wat/test.me.3', 2, 'ad78b7d31e769862e45f8efc7d39618d'),
-                ('$ROOT/wat/test.me.6', 2, 'd6a296dae0ca6991df926b8d18f43cc5')],
+                ('$ROOT/wat/test.me.3', 2, 'ad78b7d31e769862e45f8efc7d39618d')],
                 dump_tree(objects, merged_ids.get_if_present('current'), show_fasthash=True))
 
             self.assertEqual([
@@ -356,11 +353,8 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
 
         self.assertEqual([
             ('$ROOT', 1),
-            ('$ROOT/test.me.4', 2, '5c8ffab0d25ab7692378bf41d495e046'),
-            ('$ROOT/test.me.5', 2, '79e651dd08483b1483fb6e992c928e21'),
             ('$ROOT/wat', 1),
-            ('$ROOT/wat/test.me.3', 2, 'ad78b7d31e769862e45f8efc7d39618d'),
-            ('$ROOT/wat/test.me.6', 2, 'd6a296dae0ca6991df926b8d18f43cc5')],
+            ('$ROOT/wat/test.me.3', 2, 'ad78b7d31e769862e45f8efc7d39618d')],
             dump_tree(objects, merged_ids.get_if_present('current'), show_fasthash=True))
 
         self.assertEqual([

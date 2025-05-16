@@ -394,14 +394,11 @@ class PullMergePreferences(MergePreferences):
         if self.remote_type == CaveType.BACKUP:  # fixme use PullPreferences
             # fixme lower
             logging.error("Ignoring changes to %s coming from a backup repo!", path)
-
             result: ByRoot[ObjectID] = original_roots.map(lambda obj: obj.id)
-            result[base_name] = staging_original.file_id  # register file as available
-
             return result  # ignore changes coming from backups
 
         result: ByRoot[ObjectID] = original_roots.new()
-        for merge_name in [base_name, staging_name] + self.where_to_apply_adds(path, staging_original):
+        for merge_name in self.where_to_apply_adds(path, staging_original):
             result[merge_name] = staging_original.file_id
         return result
 
