@@ -1,5 +1,6 @@
 import abc
 import dataclasses
+from types import NoneType
 from typing import List, Collection, Tuple
 
 from lmdb_storage.file_object import FileObject
@@ -62,6 +63,8 @@ class NaiveMergePreferences(MergePreferences):
     def combine_staging_only(
             self, path: List[str], original_roots: ByRoot[TreeObject | FileObject], staging_name: str, base_name: str,
             staging_original: FileObject) -> ByRoot[ObjectID]:
+        assert type(staging_original) is FileObject
+
         result: ByRoot[ObjectID] = original_roots.new()
         for merge_name in (
                 [base_name, staging_name] + self.where_to_apply_adds(list(original_roots.assigned_keys()))):
@@ -77,21 +80,27 @@ class NaiveMergePreferences(MergePreferences):
 @dataclasses.dataclass
 class ThreewayMergeState:
     path: List[str]
-    base: ObjectID | None
-    staging: ObjectID | None
+    base: FileObject | TreeObject | None
+    staging: FileObject | TreeObject | None
 
 
 class ThreewayMerge(Merge[FileObject, ThreewayMergeState, ByRoot[ObjectID]]):
+    def object_or_none(self, object_id: ObjectID) -> FileObject | TreeObject | None:
+        return self.objects[object_id] if object_id is not None else None
+
     def initial_state(self, obj_ids: ByRoot[ObjectID]) -> ThreewayMergeState:
-        return ThreewayMergeState([], obj_ids.get_if_present(self.current), obj_ids.get_if_present(self.staging))
+        base_id = obj_ids.get_if_present(self.current)
+        staging_id = obj_ids.get_if_present(self.staging)
+        return ThreewayMergeState([], self.object_or_none(base_id), self.object_or_none(staging_id))
 
     def drilldown_state(self, child_name: str, merge_state: ThreewayMergeState) -> ThreewayMergeState:
-        base_obj = self.objects[merge_state.base] if merge_state.base is not None else None
-        staging_obj = self.objects[merge_state.staging] if merge_state.staging is not None else None
+        base_obj = merge_state.base
+        staging_obj = merge_state.staging
+        assert type(base_obj) in (NoneType, FileObject, TreeObject)
         return ThreewayMergeState(
             merge_state.path + [child_name],
-            base_obj.children.get(child_name) if isinstance(base_obj, TreeObject) else None,  # fixme handle files
-            staging_obj.children.get(child_name) if isinstance(staging_obj, TreeObject) else None)
+            self.object_or_none(base_obj.children.get(child_name)) if isinstance(base_obj, TreeObject) else None,  # fixme handle files
+            self.object_or_none(staging_obj.children.get(child_name)) if isinstance(staging_obj, TreeObject) else None)
 
     def __init__(
             self, objects: Objects[FileObject], current: str, staging: str, others: List[str],
@@ -104,17 +113,19 @@ class ThreewayMerge(Merge[FileObject, ThreewayMergeState, ByRoot[ObjectID]]):
 
         self.allowed_roots = [current, staging] + others
 
-    def should_drill_down(self, state: ThreewayMergeState, trees: ByRoot[TreeObject], files: ByRoot[FileObject]) -> bool:
+    def should_drill_down(self, state: ThreewayMergeState, trees: ByRoot[TreeObject],
+                          files: ByRoot[FileObject]) -> bool:
         # we have trees and the current and staging trees are different
         return len(trees) > 0 and trees.get_if_present(self.current) != trees.get_if_present(self.staging)
 
     def create_merge_result(self) -> MergeResult[FileObject, ByRoot[ObjectID]]:
         return SeparateRootsMergeResult[FileObject](self.allowed_roots, self.objects)
 
-    def combine_non_drilldown(self, state: ThreewayMergeState, original: ByRoot[TreeObject | FileObject]) -> ByRoot[ObjectID]:
+    def combine_non_drilldown(self, state: ThreewayMergeState, original: ByRoot[TreeObject | FileObject]) -> ByRoot[
+        ObjectID]:
         # we are on file level
-        base_original = original.get_if_present(self.current)
-        staging_original = original.get_if_present(self.staging)
+        base_original = state.base
+        staging_original = state.staging
         if base_original == staging_original:  # no diffs
             return original.map(lambda obj: obj.id)
 
@@ -140,7 +151,8 @@ class ThreewayMerge(Merge[FileObject, ThreewayMergeState, ByRoot[ObjectID]]):
             # current and staging are not in original, retain what was already there
             return self.merge_prefs.merge_missing(state.path, original, self.staging, self.current)
 
-    def combine(self, state: ThreewayMergeState, merged: ByRoot[ObjectID], original: ByRoot[TreeObject | FileObject]) -> ByRoot[
+    def combine(self, state: ThreewayMergeState, merged: ByRoot[ObjectID], original: ByRoot[TreeObject | FileObject]) -> \
+    ByRoot[
         ObjectID]:
         # tree-level, just return the merged
         # # fixme this is needed because empty folders get dropped in "merged" - should fix that problem
