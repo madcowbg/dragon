@@ -113,12 +113,12 @@ class Merge[F, S, R]:
     allowed_roots: List[str]
 
     @abc.abstractmethod
-    def combine(self, path: List[str], merged: R, original: ByRoot[TreeObject | FileObject]) -> R:
+    def combine(self, state: S, merged: R, original: ByRoot[TreeObject | FileObject]) -> R:
         """Calculates values for the combined path by working on trees and files that are attached to this path."""
         pass
 
     @abc.abstractmethod
-    def should_drill_down(self, path: List[str], trees: ByRoot[TreeObject], files: ByRoot[FileObject]) -> bool:
+    def should_drill_down(self, state: S, trees: ByRoot[TreeObject], files: ByRoot[FileObject]) -> bool:
         pass
 
     @abc.abstractmethod
@@ -126,20 +126,20 @@ class Merge[F, S, R]:
         pass
 
     @abc.abstractmethod
-    def combine_non_drilldown(self, path: List[str], original: ByRoot[TreeObject | FileObject]) -> R:
+    def combine_non_drilldown(self, state: S, original: ByRoot[TreeObject | FileObject]) -> R:
         pass
 
     def merge_trees(self, obj_ids: ByRoot[ObjectID]) -> R:
         assert isinstance(obj_ids, ByRoot)
-        return self.merge_trees_recursively([], self.initial_state(obj_ids), obj_ids)
+        return self.merge_trees_recursively(self.initial_state(obj_ids), obj_ids)
 
-    def merge_trees_recursively(self, path: List[str], merge_state: S, obj_ids: ByRoot[ObjectID]) -> R:
+    def merge_trees_recursively(self, merge_state: S, obj_ids: ByRoot[ObjectID]) -> R:
         all_original: ByRoot[TreeObject | FileObject] = obj_ids.map(lambda obj_id: self.objects[obj_id])
 
         trees = all_original.filter_type(TreeObject)
         files = all_original.filter_type(FileObject)
 
-        if self.should_drill_down(path, trees, files):
+        if self.should_drill_down(merge_state, trees, files):
             all_children_names = list(sorted(set(
                 child_name for tree_obj in trees.values() for child_name in tree_obj.children)))
 
@@ -147,15 +147,14 @@ class Merge[F, S, R]:
             for child_name in all_children_names:
                 all_objects_in_child_name = trees.map(lambda obj: obj.children.get(child_name))
                 merged_child_by_roots: R = self.merge_trees_recursively(
-                    path + [child_name],
                     self.drilldown_state(child_name, merge_state),
                     all_objects_in_child_name)
                 merge_result.add_for_child(child_name, merged_child_by_roots)
 
             merged_objects: R = merge_result.get_value()
-            return self.combine(path, merged_objects, all_original)
+            return self.combine(merge_state, merged_objects, all_original)
         else:
-            return self.combine_non_drilldown(path, all_original)
+            return self.combine_non_drilldown(merge_state, all_original)
 
     @abc.abstractmethod
     def initial_state(self, obj_ids: ByRoot[ObjectID]) -> S:
@@ -191,17 +190,17 @@ class TakeOneFile[F](Merge[F, List[str], ObjectID]):
     def __init__(self, objects: Objects[F]):
         self.objects = objects
 
-    def combine(self, path: List[str], merged: ObjectID, original: ByRoot[TreeObject | FileObject]) -> ObjectID:
+    def combine(self, state: List[str], merged: ObjectID, original: ByRoot[TreeObject | FileObject]) -> ObjectID:
         """Take the first value that is a file object as the resolved combined value."""
         return merged
 
-    def should_drill_down(self, path: List[str], trees: ByRoot[TreeObject], files: ByRoot[FileObject]) -> bool:
+    def should_drill_down(self, state: List[str], trees: ByRoot[TreeObject], files: ByRoot[FileObject]) -> bool:
         return len(files) == 0  # as we prioritize taking the first file
 
     def create_merge_result(self) -> MergeResult[F, ObjectID]:
         return TakeOneFile.TakeOneMergeResult(self.objects)
 
-    def combine_non_drilldown(self, path: List[str], original: ByRoot[TreeObject | FileObject]) -> ObjectID:
+    def combine_non_drilldown(self, state: List[str], original: ByRoot[TreeObject | FileObject]) -> ObjectID:
         files = original.filter_type(FileObject)
         assert len(files.values()) > 0, len(files.values())
         return next(files.values().__iter__()).id
