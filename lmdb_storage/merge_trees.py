@@ -110,7 +110,6 @@ class SeparateRootsMergeResult[F](MergeResult[F, ByRoot[ObjectID]]):
 
 class Merge[F, S, R]:
     objects: Objects[F]
-    allowed_roots: List[str]
 
     @abc.abstractmethod
     def combine(self, state: S, merged: R, original: ByRoot[TreeObject | FileObject]) -> R:

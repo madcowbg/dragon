@@ -108,7 +108,15 @@ class ThreewayMerge(Merge[FileObject, ThreewayMergeState, ByRoot[ObjectID]]):
         self.others = others
         self.merge_prefs = merge_prefs
 
-        self.allowed_roots = [current, staging] + others
+        self.allowed_roots = None  # fixme pass as argument maybe
+
+    def merge_trees(self, obj_ids: ByRoot[ObjectID]) -> ByRoot[ObjectID]:
+        assert self.allowed_roots is None
+        self.allowed_roots = obj_ids.allowed_roots
+        try:
+            return super().merge_trees(obj_ids)
+        finally:
+            self.allowed_roots = None
 
     def should_drill_down(self, state: ThreewayMergeState, trees: ByRoot[TreeObject],
                           files: ByRoot[FileObject]) -> bool:
