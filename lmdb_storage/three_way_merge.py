@@ -1,5 +1,6 @@
 import abc
-from typing import List, Collection
+import dataclasses
+from typing import List, Collection, Tuple
 
 from lmdb_storage.file_object import FileObject
 from lmdb_storage.merge_trees import Merge, ByRoot, MergeResult, SeparateRootsMergeResult
@@ -73,7 +74,25 @@ class NaiveMergePreferences(MergePreferences):
         return original_roots.map(lambda obj: obj.id)
 
 
-class ThreewayMerge(Merge[FileObject, ByRoot[ObjectID]]):
+@dataclasses.dataclass
+class ThreewayMergeState:
+    path: List[str]
+    base: ObjectID | None
+    staging: ObjectID | None
+
+
+class ThreewayMerge(Merge[FileObject, ThreewayMergeState, ByRoot[ObjectID]]):
+    def initial_state(self, obj_ids: ByRoot[ObjectID]) -> ThreewayMergeState:
+        return ThreewayMergeState([], obj_ids.get_if_present(self.current), obj_ids.get_if_present(self.staging))
+
+    def drilldown_state(self, child_name: str, merge_state: ThreewayMergeState) -> ThreewayMergeState:
+        base_obj = self.objects[merge_state.base] if merge_state.base is not None else None
+        staging_obj = self.objects[merge_state.staging] if merge_state.staging is not None else None
+        return ThreewayMergeState(
+            merge_state.path + [child_name],
+            base_obj.children.get(child_name) if isinstance(base_obj, TreeObject) else None,  # fixme handle files
+            staging_obj.children.get(child_name) if isinstance(staging_obj, TreeObject) else None)
+
     def __init__(
             self, objects: Objects[FileObject], current: str, staging: str, others: List[str],
             merge_prefs: MergePreferences):
@@ -96,7 +115,7 @@ class ThreewayMerge(Merge[FileObject, ByRoot[ObjectID]]):
         # we are on file level
         base_original = original.get_if_present(self.current)
         staging_original = original.get_if_present(self.staging)
-        if base_original == staging_original: # no diffs
+        if base_original == staging_original:  # no diffs
             return original.map(lambda obj: obj.id)
 
         assert staging_original is None or not isinstance(staging_original, TreeObject)  # is file or None

@@ -108,7 +108,7 @@ class SeparateRootsMergeResult[F](MergeResult[F, ByRoot[ObjectID]]):
         return result
 
 
-class Merge[F, R]:
+class Merge[F, S, R]:
     objects: Objects[F]
     allowed_roots: List[str]
 
@@ -131,9 +131,9 @@ class Merge[F, R]:
 
     def merge_trees(self, obj_ids: ByRoot[ObjectID]) -> R:
         assert isinstance(obj_ids, ByRoot)
-        return self.merge_trees_recursively([], obj_ids)
+        return self.merge_trees_recursively([], self.initial_state(obj_ids), obj_ids)
 
-    def merge_trees_recursively(self, path: List[str], obj_ids: ByRoot[ObjectID]) -> R:
+    def merge_trees_recursively(self, path: List[str], merge_state: S, obj_ids: ByRoot[ObjectID]) -> R:
         all_original: ByRoot[TreeObject | FileObject] = obj_ids.map(lambda obj_id: self.objects[obj_id])
 
         trees = all_original.filter_type(TreeObject)
@@ -146,7 +146,10 @@ class Merge[F, R]:
             merge_result: MergeResult[F, R] = self.create_merge_result()
             for child_name in all_children_names:
                 all_objects_in_child_name = trees.map(lambda obj: obj.children.get(child_name))
-                merged_child_by_roots: R = self.merge_trees_recursively(path + [child_name], all_objects_in_child_name)
+                merged_child_by_roots: R = self.merge_trees_recursively(
+                    path + [child_name],
+                    self.drilldown_state(child_name, merge_state),
+                    all_objects_in_child_name)
                 merge_result.add_for_child(child_name, merged_child_by_roots)
 
             merged_objects: R = merge_result.get_value()
@@ -154,8 +157,22 @@ class Merge[F, R]:
         else:
             return self.combine_non_drilldown(path, all_original)
 
+    @abc.abstractmethod
+    def initial_state(self, obj_ids: ByRoot[ObjectID]) -> S:
+        pass
 
-class TakeOneFile[F](Merge[F, ObjectID]):
+    @abc.abstractmethod
+    def drilldown_state(self, child_name: str, merge_state: S) -> S:
+        pass
+
+
+class TakeOneFile[F](Merge[F, List[str], ObjectID]):
+    def initial_state(self, obj_ids: ByRoot[ObjectID]) -> List[str]:
+        return []
+
+    def drilldown_state(self, child_name: str, merge_state: List[str]) -> List[str]:
+        return merge_state + [child_name]
+
     class TakeOneMergeResult[F](MergeResult[F, ObjectID]):
         def __init__(self, objects: Objects[F]):
             self.objects = objects
