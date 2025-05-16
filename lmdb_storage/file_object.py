@@ -35,3 +35,6 @@ class FileObject:
     @property
     def id(self) -> ObjectID:
         return self.file_id
+
+    def __eq__(self, other: "FileObject") -> bool:
+        return isinstance(other, FileObject) and self.file_id == other.file_id

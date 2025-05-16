@@ -116,7 +116,7 @@ class ThreewayMerge(Merge[FileObject, ThreewayMergeState, ByRoot[ObjectID]]):
     def should_drill_down(self, state: ThreewayMergeState, trees: ByRoot[TreeObject],
                           files: ByRoot[FileObject]) -> bool:
         # we have trees and the current and staging trees are different
-        return len(trees) > 0 and trees.get_if_present(self.current) != trees.get_if_present(self.staging)
+        return len(trees) > 0 and state.base != state.staging
 
     def create_merge_result(self) -> MergeResult[FileObject, ByRoot[ObjectID]]:
         return SeparateRootsMergeResult[FileObject](self.allowed_roots, self.objects)

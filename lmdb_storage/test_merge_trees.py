@@ -262,7 +262,8 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
             hoard_id = merged_ids.get_if_present('hoard')
 
             merged_ids = ThreewayMerge(
-                objects, current='empty', staging='staging', others=['hoard'], merge_prefs=NaiveMergePreferences(['hoard'])).merge_trees(
+                objects, current='empty', staging='staging', others=['hoard'],
+                merge_prefs=NaiveMergePreferences(['hoard'])).merge_trees(
                 ObjectsByRoot.from_map(
                     {'empty': objects.mktree_from_tuples([]), "staging": full_id, 'hoard': hoard_id}))
 
@@ -278,7 +279,8 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
             hoard_id = merged_ids.get_if_present('hoard')
 
             merged_ids = ThreewayMerge(
-                objects, current='empty', staging='staging', others=['hoard'], merge_prefs=NaiveMergePreferences(['hoard'])).merge_trees(
+                objects, current='empty', staging='staging', others=['hoard'],
+                merge_prefs=NaiveMergePreferences(['hoard'])).merge_trees(
                 ObjectsByRoot.from_map(
                     {'empty': objects.mktree_from_tuples([]), "staging": backup_id, 'hoard': hoard_id}))
 

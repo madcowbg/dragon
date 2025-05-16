@@ -43,7 +43,7 @@ class TreeObject:
         return hashlib.sha1(self.serialized).digest()
 
     def __eq__(self, other):
-        return other is not None and isinstance(other, TreeObject) and self.id == other.id
+        return isinstance(other, TreeObject) and self.id == other.id
 
 
 class ExpandableTreeObject[F]:
