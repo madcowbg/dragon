@@ -5,6 +5,7 @@ import hashlib
 from typing import Dict, Iterable, Tuple, List, Callable, Union
 
 import msgpack
+from lmdb import Transaction
 from propcache import cached_property
 
 ## LMDB object format
@@ -86,6 +87,8 @@ def do_nothing[T](x: T, *, title) -> T: return x
 
 
 class Objects[F]:
+    txn: Transaction
+
     @abc.abstractmethod
     def __enter__(self) -> "Objects[F]":
         pass

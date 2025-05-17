@@ -72,10 +72,12 @@ def find_all_live[F](objects: Objects[F], root_ids: Collection[ObjectID]) -> Col
             bar()
             live_obj = objects[current_id]
             if isinstance(live_obj, TreeObject):
+                # add all children to queue
                 for child_id in live_obj.children.values():
                     if child_id not in live_ids:
                         live_ids.add(child_id)
                         q.append(child_id)
             else:
+                # do nothing on files, just verify that they exist
                 assert isinstance(live_obj, FileObject)
     return live_ids

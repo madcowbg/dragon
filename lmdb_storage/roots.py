@@ -108,15 +108,15 @@ class Roots:
         return Root(name, self)
 
     @property
-    def all(self) -> List[Root]:
+    def all_roots(self) -> List[Root]:
         with self:
             return [self[name.decode()] for name, _ in self.txn.cursor()]
 
     @property
     def all_live(self) -> Collection[ObjectID]:
+        all_roots = self.all_roots
         with self:
-            roots = (self[id.decode()].load_from_storage for id, root_data in self.txn.cursor())
-            root_ids = sum((root_data.all for root_data in roots), [])
+            root_ids = sum((root.load_from_storage.all for root in all_roots), [])
             return sorted(
                 list(root_id for root_id in root_ids if root_id is not None),
                 key=lambda v: binascii.hexlify(v))

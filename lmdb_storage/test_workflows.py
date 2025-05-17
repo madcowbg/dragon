@@ -106,7 +106,7 @@ class TestWorkflows(unittest.TestCase):
             ('full-uuid', '0038b3'),
             ('incoming-uuid', '5435fb'),
             ('partial-uuid', '0c4b36')],
-            sorted((root.name, safe_hex(root.desired)[:6]) for root in roots.all))
+            sorted((root.name, safe_hex(root.desired)[:6]) for root in roots.all_roots))
 
         # remove a file from staging
         with env.objects(write=True) as objects:
@@ -123,7 +123,7 @@ class TestWorkflows(unittest.TestCase):
             ('full-uuid', 'e1d05b'),
             ('incoming-uuid', '639323'),
             ('partial-uuid', '0c4b36')],
-            sorted((root.name, safe_hex(root.desired)[:6]) for root in roots.all))
+            sorted((root.name, safe_hex(root.desired)[:6]) for root in roots.all_roots))
 
         current_full_id = roots["full-uuid"].desired
         current_hoard_id = roots["HOARD"].desired

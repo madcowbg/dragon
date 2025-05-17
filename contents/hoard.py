@@ -5,6 +5,7 @@ import sys
 from datetime import datetime
 from functools import cached_property
 from sqlite3 import Connection
+from types import NoneType
 from typing import Dict, Any, Optional, Tuple, Generator, Iterable, List, Set, AsyncGenerator
 
 import rtoml
@@ -13,7 +14,10 @@ from command.fast_path import FastPosixPath
 from contents.hoard_props import HoardFileStatus, HoardFileProps
 from contents.repo import RepoContentsConfig
 from contents.repo_props import FileDesc
+from lmdb_storage.file_object import FileObject
 from lmdb_storage.object_store import ObjectStorage
+from lmdb_storage.tree_iteration import zip_trees_dfs
+from lmdb_storage.tree_structure import TreeObject
 from sql_util import SubfolderFilter, NoFilter, sqlite3_standard
 from util import FIRST_VALUE, custom_isabs
 
@@ -582,6 +586,7 @@ class ReadonlyHoardContentsConn:
     def writeable(self):
         return HoardContentsConn(self.folder)
 
+
 class HoardContentsConn:
     def __init__(self, folder: pathlib.Path):
         config_filename = os.path.join(folder, HOARD_CONTENTS_FILENAME)
@@ -634,6 +639,7 @@ class HoardContents:
         self.objects = None
 
         self.env.gc()
+        self.validate_desired()
         self.env = None
 
         if writeable:
@@ -646,6 +652,35 @@ class HoardContents:
         self.config = None
         self.fsobjects = None
         self.conn = None
+
+    def validate_desired(self):
+        """Validate that all desired trees have only one file version for each file."""
+        all_roots = self.env.roots(write=False).all_roots
+        try:
+            hoard_root_idx = [r.name for r in all_roots].index("HOARD")
+        except ValueError:
+            logging.warning("HOARD root is not defined?!")
+            hoard_root_idx = None
+
+        with self.env.objects(write=False) as objects:
+            for path, desired_roots, _ in zip_trees_dfs(
+                    objects, "", [r.desired for r in all_roots], drilldown_same=False):
+                desired_objs = list(map((lambda o_id: objects[o_id] if o_id is not None else None), desired_roots))
+                desired_types = map(type, desired_objs)
+                non_none_types = set(desired_types) - {NoneType}
+                if len(non_none_types) > 1:
+                    raise ValueError(f"object at path {path} is of many types in different trees: %s", non_none_types)
+                non_none_type = next(iter(non_none_types))
+                if non_none_type is TreeObject:
+                    pass
+                else:
+                    assert non_none_type is FileObject
+                    file_ids = {o.id for o in desired_objs if o is not None}
+                    if len(file_ids) > 1:
+                        raise ValueError(f"Object at path {path} has multiple desired file versions: {file_ids}")
+
+                    if hoard_root_idx is not None and desired_objs[hoard_root_idx] is None:
+                        raise ValueError(f"File at path {path} is not in hoard root!")
 
 
 def init_hoard_db_tables(curr):
@@ -671,47 +706,82 @@ def init_hoard_db_tables(curr):
     curr.execute("CREATE UNIQUE INDEX fspresence_fsobject_id__uuid ON fspresence(fsobject_id, uuid)")
 
     curr.executescript("""
-            CREATE TABLE folder_structure (
-              fullpath TEXT NOT NULL PRIMARY KEY,
-              fsobject_id INTEGER,
-              ISDIR BOOL NOT NULL,
-              parent TEXT,
-              FOREIGN KEY(parent) REFERENCES folder_structure(fullpath) ON DELETE RESTRICT
-              );
-            CREATE INDEX _folder_structure_parent ON folder_structure (parent);
+                       CREATE TABLE folder_structure
+                       (
+                           fullpath    TEXT NOT NULL PRIMARY KEY,
+                           fsobject_id INTEGER,
+                           ISDIR       BOOL NOT NULL,
+                           parent      TEXT,
+                           FOREIGN KEY (parent) REFERENCES folder_structure (fullpath) ON DELETE RESTRICT
+                       );
+                       CREATE INDEX _folder_structure_parent ON folder_structure (parent);
 
-            -- add to folder structure
-            CREATE TRIGGER add_missing__folder_structure_on_fsobject AFTER INSERT ON fsobject 
-            BEGIN
-              INSERT INTO folder_structure (fullpath, parent, isdir)
-              SELECT new.fullpath, CASE WHEN LENGTH(new.fullpath) == 0 THEN NULL ELSE rtrim(rtrim(new.fullpath, replace(new.fullpath, '/', '')), '/') END, new.isdir
-              WHERE NOT EXISTS (SELECT 1 FROM folder_structure WHERE folder_structure.fullpath = new.fullpath);
-              
-              UPDATE folder_structure SET fsobject_id = new.fsobject_id WHERE fullpath = new.fullpath; 
-            END;
+                       -- add to folder structure
+                       CREATE TRIGGER add_missing__folder_structure_on_fsobject
+                           AFTER INSERT
+                           ON fsobject
+                       BEGIN
+                           INSERT INTO folder_structure (fullpath, parent, isdir)
+                           SELECT new.fullpath,
+                                  CASE
+                                      WHEN LENGTH(new.fullpath) == 0 THEN NULL
+                                      ELSE rtrim(rtrim(new.fullpath, replace(new.fullpath, '/', '')), '/') END,
+                                  new.isdir
+                           WHERE NOT EXISTS (SELECT 1
+                                             FROM folder_structure
+                                             WHERE folder_structure.fullpath = new.fullpath);
 
-            CREATE TRIGGER add_missing__folder_structure_parent BEFORE INSERT ON folder_structure
-            WHEN new.parent IS NOT NULL AND NOT EXISTS (SELECT 1 FROM folder_structure WHERE folder_structure.fullpath = new.parent)
-            BEGIN
-              INSERT OR REPLACE INTO folder_structure(fullpath, parent, isdir)
-              VALUES (new.parent, CASE WHEN LENGTH(new.parent)=0 THEN NULL ELSE rtrim(rtrim(new.parent, replace(new.parent, '/', '')), '/') END, TRUE);
-            END;
+                           UPDATE folder_structure SET fsobject_id = new.fsobject_id WHERE fullpath = new.fullpath;
+                       END;
 
-            CREATE TRIGGER remove_obsolete__folder_structure_on_fsobject_can_delete AFTER DELETE ON fsobject
-            WHEN NOT EXISTS(SELECT 1 FROM folder_structure WHERE parent == old.fullpath)
-            BEGIN
-              DELETE FROM folder_structure WHERE folder_structure.fullpath = old.fullpath; -- no child folders
-            END;
-            
-            CREATE TRIGGER remove_obsolete__folder_structure_on_fsobject AFTER DELETE ON fsobject
-            BEGIN
-              UPDATE folder_structure SET fsobject_id = NULL WHERE folder_structure.fullpath = old.fullpath;
-            END;
+                       CREATE TRIGGER add_missing__folder_structure_parent
+                           BEFORE INSERT
+                           ON folder_structure
+                           WHEN new.parent IS NOT NULL AND NOT EXISTS (SELECT 1
+                                                                       FROM folder_structure
+                                                                       WHERE folder_structure.fullpath = new.parent)
+                       BEGIN
+                           INSERT OR
+                           REPLACE
+                           INTO folder_structure(fullpath, parent, isdir)
+                           VALUES (new.parent, CASE
+                                                   WHEN LENGTH(new.parent) = 0 THEN NULL
+                                                   ELSE rtrim(rtrim(new.parent, replace(new.parent, '/', '')), '/') END,
+                                   TRUE);
+                       END;
 
-            CREATE TRIGGER remove_obsolete__folder_structure_on_no_other_children AFTER DELETE ON folder_structure
-            WHEN NOT EXISTS (SELECT 1 FROM fsobject WHERE fsobject.fullpath = old.parent) 
-              AND NOT EXISTS (SELECT 1 FROM folder_structure WHERE folder_structure.parent = old.parent)
-            BEGIN
-              DELETE FROM folder_structure 
-              WHERE folder_structure.fullpath = old.parent;
-            END;""")
+                       CREATE TRIGGER remove_obsolete__folder_structure_on_fsobject_can_delete
+                           AFTER DELETE
+                           ON fsobject
+                           WHEN NOT EXISTS(SELECT 1
+                                           FROM folder_structure
+                                           WHERE parent == old.fullpath)
+                       BEGIN
+                           DELETE
+                           FROM folder_structure
+                           WHERE folder_structure.fullpath = old.fullpath; -- no child folders
+                       END;
+
+                       CREATE TRIGGER remove_obsolete__folder_structure_on_fsobject
+                           AFTER DELETE
+                           ON fsobject
+                       BEGIN
+                           UPDATE folder_structure
+                           SET fsobject_id = NULL
+                           WHERE folder_structure.fullpath = old.fullpath;
+                       END;
+
+                       CREATE TRIGGER remove_obsolete__folder_structure_on_no_other_children
+                           AFTER DELETE
+                           ON folder_structure
+                           WHEN NOT EXISTS (SELECT 1
+                                            FROM fsobject
+                                            WHERE fsobject.fullpath = old.parent)
+                               AND NOT EXISTS (SELECT 1
+                                               FROM folder_structure
+                                               WHERE folder_structure.parent = old.parent)
+                       BEGIN
+                           DELETE
+                           FROM folder_structure
+                           WHERE folder_structure.fullpath = old.parent;
+                       END;""")

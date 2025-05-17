@@ -5,6 +5,8 @@ from tempfile import TemporaryDirectory
 from typing import Iterable, Tuple, Union, Dict
 from unittest import IsolatedAsyncioTestCase
 
+from lmdb import Transaction
+
 from command.test_command_file_changing_flows import populate
 from command.test_hoard_command import populate_repotypes
 from lmdb_storage.file_object import FileObject
@@ -24,6 +26,10 @@ class InMemoryObjectsExtension(Objects[FileObject]):
     def __enter__(self) -> Objects[FileObject]:
         self.stored_objects.__enter__()
         return self
+
+    @property
+    def txn(self) -> Transaction:
+        return self.stored_objects.txn
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.stored_objects.__exit__(exc_type, exc_val, exc_tb)
