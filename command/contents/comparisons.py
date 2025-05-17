@@ -16,6 +16,15 @@ from util import safe_hex
 
 async def sync_fsobject_to_object_storage(
         env: ObjectStorage, fsobjects: HoardFSObjects, repo_objects: RepoFSObjects, hoard_config: HoardConfig):
+    # if env.roots(write=True)["HOARD"].desired is None:
+    #     # fixme ugly hack to ensure unit tests do not change
+    #     with env.objects(write=True) as objects:
+    #         empty_dir = objects.mktree_from_tuples([])
+    #     env.roots(write=True)["HOARD"].desired = empty_dir
+    #
+    # return
+    raise_exception = False
+
     old_root_id = env.roots(False)["HOARD"].desired
 
     all_nondeleted = [
@@ -24,6 +33,12 @@ async def sync_fsobject_to_object_storage(
 
     with env.objects(write=True) as objects:
         current_root_id = objects.mktree_from_tuples(all_nondeleted)
+
+    with env.objects(write=True) as objects:
+        empty_dir = objects.mktree_from_tuples([])
+    if raise_exception and old_root_id != current_root_id:
+        if old_root_id is not None and current_root_id != empty_dir:
+            raise ValueError(f"Hoard root changed: {old_root_id} != {current_root_id}")
 
     for remote in hoard_config.remotes.all():
         with env.objects(write=True) as objects:
@@ -45,12 +60,14 @@ async def sync_fsobject_to_object_storage(
 
         root = env.roots(True)[remote.uuid]
         if remote_current_id != root.current:
-            logging.error(
-                f"{remote.name}: {safe_hex(remote_current_id)} is not current, current={safe_hex(root.current)}")
+            if raise_exception and root.current is not None and remote_current_id != empty_dir:
+                raise ValueError(
+                    f"{remote.name}: {safe_hex(remote_current_id)} is not current, current={safe_hex(root.current)}")
             # assert root.current is None, f"{remote.name}: {safe_hex(remote_current_id)} is not current, current={safe_hex(root.current)}"
         if remote_desired_id != root.desired:
-            logging.error(
-                f"{remote.name}: {safe_hex(remote_desired_id)} is not desired, desired={safe_hex(root.desired)}")
+            if raise_exception and root.desired is not None and remote_desired_id != empty_dir:
+                raise ValueError(
+                    f"{remote.name}: {safe_hex(remote_desired_id)} is not desired, desired={safe_hex(root.desired)}")
             # assert root.desired is None, f"{remote.name}: {safe_hex(remote_desired_id)} is not desired, desired={safe_hex(root.desired)}"
 
         root.current = remote_current_id
