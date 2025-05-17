@@ -87,9 +87,12 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         self.assertEqual((
             'Pulling repo-in-local...\n'
             'Before: Hoard [a80f91] <- repo [curr: a80f91, stg: b09bd5, des: a80f91]\n'
-            'ADD_NEW_TO_HOARD /wat/test.me.different\n'
-            'ADD_NEW_TO_HOARD /wat/test.me.once\n'
-            'ADD_NEW_TO_HOARD /wat/test.me.twice\n'
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.different\n'
+            'HOARD_FILE_ADDED /wat/test.me.different\n'
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.once\n'
+            'HOARD_FILE_ADDED /wat/test.me.once\n'
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.twice\n'
+            'HOARD_FILE_ADDED /wat/test.me.twice\n'
             'updated repo-in-local from a80f91 to b09bd5\n'
             'After: Hoard [b09bd5], repo [curr: b09bd5, stg: b09bd5, des: b09bd5]\n'
             "Sync'ed repo-in-local to hoard!\n"
@@ -155,9 +158,10 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         self.assertEqual((
             'Pulling repo-in-local-2...\n'
             'Before: Hoard [b09bd5] <- repo [curr: a80f91, stg: 9bf6ad, des: b09bd5]\n'
-            '=/wat/test.me.twice\n'
-            'ALREADY_MARKED_GET /wat/test.me.different\n'
-            'After: Hoard [b09bd5], repo [curr: 1249be, stg: 9bf6ad, des: b09bd5]\n'
+            'REPO_DESIRED_FILE_TO_GET /wat/test.me.different\n'
+            'REPO_DESIRED_FILE_TO_GET /wat/test.me.once\n'
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.twice\n'
+            'After: Hoard [b09bd5], repo [curr: 9bf6ad, stg: 9bf6ad, des: b09bd5]\n'
             "Sync'ed repo-in-local-2 to hoard!\n"
             'DONE'),
             res.strip())
@@ -289,8 +293,10 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         self.assertEqual((
             'Pulling repo-in-local...\n'
             'Before: Hoard [b09bd5] <- repo [curr: b09bd5, stg: 7393db, des: b09bd5]\n'
-            'ADD_NEW_TO_HOARD /newdir/newfile.is\n'
-            'DELETE_FROM_HOARD /wat/test.me.different\n'
+            'REPO_MARK_FILE_AVAILABLE /newdir/newfile.is\n'
+            'HOARD_FILE_ADDED /newdir/newfile.is\n'
+            'REPO_FILE_TO_DELETE /wat/test.me.different\n'
+            'HOARD_FILE_DELETED /wat/test.me.different\n'
             'updated repo-in-local from b09bd5 to 7393db\n'
             'After: Hoard [7393db], repo [curr: 7393db, stg: 7393db, des: 7393db]\n'
             "Sync'ed repo-in-local to hoard!\n"
@@ -435,8 +441,10 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         self.assertEqual((
             'Pulling repo-partial-name...\n'
             'Before: Hoard [a80f91] <- repo [curr: a80f91, stg: f6a740, des: a80f91]\n'
-            'ADD_NEW_TO_HOARD /test.me.1\n'
-            'ADD_NEW_TO_HOARD /wat/test.me.2\n'
+            'REPO_MARK_FILE_AVAILABLE /test.me.1\n'
+            'HOARD_FILE_ADDED /test.me.1\n'
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.2\n'
+            'HOARD_FILE_ADDED /wat/test.me.2\n'
             'updated repo-partial-name from a80f91 to f6a740\n'
             'updated repo-full-name from a80f91 to f6a740\n'
             'updated repo-backup-name from a80f91 to f6a740\n'
@@ -470,10 +478,12 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         self.assertEqual((
             'Pulling repo-full-name...\n'
             'Before: Hoard [f6a740] <- repo [curr: a80f91, stg: d99580, des: f6a740]\n'
-            '=/test.me.1\n'
-            '=/wat/test.me.2\n'
-            'ADD_NEW_TO_HOARD /test.me.4\n'
-            'ADD_NEW_TO_HOARD /wat/test.me.3\n'
+            'REPO_MARK_FILE_AVAILABLE /test.me.1\n'
+            'REPO_MARK_FILE_AVAILABLE /test.me.4\n'
+            'HOARD_FILE_ADDED /test.me.4\n'
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.2\n'
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.3\n'
+            'HOARD_FILE_ADDED /wat/test.me.3\n'
             'updated repo-full-name from f6a740 to d99580\n'
             'updated repo-backup-name from f6a740 to d99580\n'
             'After: Hoard [d99580], repo [curr: d99580, stg: d99580, des: d99580]\n'
@@ -492,8 +502,10 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         self.assertEqual((
             'Pulling repo-backup-name...\n'
             'Before: Hoard [d99580] <- repo [curr: a80f91, stg: 9fbdcf, des: d99580]\n'
-            '=/test.me.1\n'
-            '=/wat/test.me.3\n'
+            'REPO_MARK_FILE_AVAILABLE /test.me.1\n'
+            'REPO_DESIRED_FILE_TO_GET /test.me.4\n'
+            'REPO_DESIRED_FILE_TO_GET /wat/test.me.2\n'
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.3\n'
             'After: Hoard [d99580], repo [curr: 9fbdcf, stg: 9fbdcf, des: d99580]\n'
             "Sync'ed repo-backup-name to hoard!\n"
             'DONE'), res.strip())
@@ -514,13 +526,14 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         self.assertEqual((
             'Pulling repo-incoming-name...\n'
             'Before: Hoard [d99580] <- repo [curr: a80f91, stg: e9ce07, des: a80f91]\n'
-            'CLEANUP_SAME /test.me.4\n'
-            'INCOMING_TO_HOARD /test.me.5\n'
-            'INCOMING_TO_HOARD /wat/test.me.6\n'
-            'CLEANUP_DIFFERENT /wat/test.me.3\n'
+            'REPO_MARK_FILE_AVAILABLE /test.me.4\n'
+            'REPO_MARK_FILE_AVAILABLE /test.me.5\n'
+            'HOARD_FILE_ADDED /test.me.5\n'
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.6\n'
+            'HOARD_FILE_ADDED /wat/test.me.6\n'
             'updated repo-full-name from d99580 to 89527b\n'
             'updated repo-backup-name from d99580 to 89527b\n'
-            'After: Hoard [89527b], repo [curr: 843a75, stg: e9ce07, des: a80f91]\n'
+            'After: Hoard [89527b], repo [curr: e9ce07, stg: e9ce07, des: a80f91]\n'
             "Sync'ed repo-incoming-name to hoard!\n"
             'DONE'), res.strip())
 
@@ -534,7 +547,11 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         self.assertEqual((
             'Pulling repo-incoming-name...\n'
             'Before: Hoard [89527b] <- repo [curr: 843a75, stg: e9ce07, des: a80f91]\n'
-            'After: Hoard [89527b], repo [curr: 843a75, stg: e9ce07, des: a80f91]\n'
+            'REPO_FILE_TO_DELETE /test.me.4\n'
+            'REPO_FILE_TO_DELETE /test.me.5\n'
+            'REPO_FILE_TO_DELETE /wat/test.me.3\n'
+            'REPO_FILE_TO_DELETE /wat/test.me.6\n'
+            'After: Hoard [89527b], repo [curr: e9ce07, stg: e9ce07, des: a80f91]\n'
             "Sync'ed repo-incoming-name to hoard!\n"
             'DONE'), res.strip())
 
@@ -561,13 +578,14 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         self.assertEqual((
             'Pulling repo-incoming-name...\n'
             'Before: Hoard [d99580] <- repo [curr: a80f91, stg: e9ce07, des: a80f91]\n'
-            'CLEANUP_SAME /test.me.4\n'
-            'INCOMING_TO_HOARD /test.me.5\n'
-            'INCOMING_TO_HOARD /wat/test.me.6\n'
-            'CLEANUP_DIFFERENT /wat/test.me.3\n'
+            'REPO_MARK_FILE_AVAILABLE /test.me.4\n'
+            'REPO_MARK_FILE_AVAILABLE /test.me.5\n'
+            'HOARD_FILE_ADDED /test.me.5\n'
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.6\n'
+            'HOARD_FILE_ADDED /wat/test.me.6\n'
             'updated repo-full-name from d99580 to 89527b\n'
             'updated repo-backup-name from d99580 to 89527b\n'
-            'After: Hoard [89527b], repo [curr: 843a75, stg: e9ce07, des: a80f91]\n'
+            'After: Hoard [89527b], repo [curr: e9ce07, stg: e9ce07, des: a80f91]\n'
             "Sync'ed repo-incoming-name to hoard!\n"
             'DONE'), res)
 
@@ -634,8 +652,10 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         self.assertEqual((
             'Pulling repo-partial-name...\n'
             'Before: Hoard [a80f91] <- repo [curr: a80f91, stg: f6a740, des: a80f91]\n'
-            'ADD_NEW_TO_HOARD /test.me.1\n'
-            'ADD_NEW_TO_HOARD /wat/test.me.2\n'
+            'REPO_MARK_FILE_AVAILABLE /test.me.1\n'
+            'HOARD_FILE_ADDED /test.me.1\n'
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.2\n'
+            'HOARD_FILE_ADDED /wat/test.me.2\n'
             'updated repo-partial-name from a80f91 to f6a740\n'
             'updated repo-full-name from a80f91 to f6a740\n'
             'updated repo-backup-name from a80f91 to f6a740\n'
@@ -643,29 +663,34 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             "Sync'ed repo-partial-name to hoard!\n"
             'Pulling repo-full-name...\n'
             'Before: Hoard [f6a740] <- repo [curr: a80f91, stg: d99580, des: f6a740]\n'
-            '=/test.me.1\n'
-            '=/wat/test.me.2\n'
-            'ADD_NEW_TO_HOARD /test.me.4\n'
-            'ADD_NEW_TO_HOARD /wat/test.me.3\n'
+            'REPO_MARK_FILE_AVAILABLE /test.me.1\n'
+            'REPO_MARK_FILE_AVAILABLE /test.me.4\n'
+            'HOARD_FILE_ADDED /test.me.4\n'
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.2\n'
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.3\n'
+            'HOARD_FILE_ADDED /wat/test.me.3\n'
             'updated repo-full-name from f6a740 to d99580\n'
             'updated repo-backup-name from f6a740 to d99580\n'
             'After: Hoard [d99580], repo [curr: d99580, stg: d99580, des: d99580]\n'
             "Sync'ed repo-full-name to hoard!\n"
             'Pulling repo-backup-name...\n'
             'Before: Hoard [d99580] <- repo [curr: a80f91, stg: 9fbdcf, des: d99580]\n'
-            '=/test.me.1\n'
-            '=/wat/test.me.3\n'
+            'REPO_MARK_FILE_AVAILABLE /test.me.1\n'
+            'REPO_DESIRED_FILE_TO_GET /test.me.4\n'
+            'REPO_DESIRED_FILE_TO_GET /wat/test.me.2\n'
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.3\n'
             'After: Hoard [d99580], repo [curr: 9fbdcf, stg: 9fbdcf, des: d99580]\n'
             "Sync'ed repo-backup-name to hoard!\n"
             'Pulling repo-incoming-name...\n'
             'Before: Hoard [d99580] <- repo [curr: a80f91, stg: e9ce07, des: a80f91]\n'
-            'CLEANUP_SAME /test.me.4\n'
-            'INCOMING_TO_HOARD /test.me.5\n'
-            'INCOMING_TO_HOARD /wat/test.me.6\n'
-            'CLEANUP_DIFFERENT /wat/test.me.3\n'
+            'REPO_MARK_FILE_AVAILABLE /test.me.4\n'
+            'REPO_MARK_FILE_AVAILABLE /test.me.5\n'
+            'HOARD_FILE_ADDED /test.me.5\n'
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.6\n'
+            'HOARD_FILE_ADDED /wat/test.me.6\n'
             'updated repo-full-name from d99580 to 89527b\n'
             'updated repo-backup-name from d99580 to 89527b\n'
-            'After: Hoard [89527b], repo [curr: 843a75, stg: e9ce07, des: a80f91]\n'
+            'After: Hoard [89527b], repo [curr: e9ce07, stg: e9ce07, des: a80f91]\n'
             "Sync'ed repo-incoming-name to hoard!\n"
             'DONE'), res)
 
@@ -787,11 +812,16 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         self.assertEqual((
             'Pulling repo-full-name...\n'
             'Before: Hoard [a80f91] <- repo [curr: a80f91, stg: 3f8d62, des: a80f91]\n'
-            'ADD_NEW_TO_HOARD /test.me.1\n'
-            'ADD_NEW_TO_HOARD /test.me.4\n'
-            'ADD_NEW_TO_HOARD /wat/inner/another.file\n'
-            'ADD_NEW_TO_HOARD /wat/test.me.2\n'
-            'ADD_NEW_TO_HOARD /wat/test.me.3\n'
+            'REPO_MARK_FILE_AVAILABLE /test.me.1\n'
+            'HOARD_FILE_ADDED /test.me.1\n'
+            'REPO_MARK_FILE_AVAILABLE /test.me.4\n'
+            'HOARD_FILE_ADDED /test.me.4\n'
+            'REPO_MARK_FILE_AVAILABLE /wat/inner/another.file\n'
+            'HOARD_FILE_ADDED /wat/inner/another.file\n'
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.2\n'
+            'HOARD_FILE_ADDED /wat/test.me.2\n'
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.3\n'
+            'HOARD_FILE_ADDED /wat/test.me.3\n'
             'updated repo-full-name from a80f91 to 3f8d62\n'
             'After: Hoard [3f8d62], repo [curr: 3f8d62, stg: 3f8d62, des: 3f8d62]\n'
             "Sync'ed repo-full-name to hoard!\n"
@@ -876,8 +906,10 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         self.assertEqual((
             'Pulling repo-partial-name...\n'
             'Before: Hoard [a80f91] <- repo [curr: a80f91, stg: 9eb9bc, des: a80f91]\n'
-            'ADD_NEW_TO_HOARD /first-point/test.me.1\n'
-            'ADD_NEW_TO_HOARD /first-point/wat/test.me.2\n'
+            'REPO_MARK_FILE_AVAILABLE /first-point/test.me.1\n'
+            'HOARD_FILE_ADDED /first-point/test.me.1\n'
+            'REPO_MARK_FILE_AVAILABLE /first-point/wat/test.me.2\n'
+            'HOARD_FILE_ADDED /first-point/wat/test.me.2\n'
             'updated repo-partial-name from a80f91 to 9eb9bc\n'
             'After: Hoard [9eb9bc], repo [curr: 9eb9bc, stg: 9eb9bc, des: 9eb9bc]\n'
             "Sync'ed repo-partial-name to hoard!\n"
@@ -1062,8 +1094,10 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         self.assertEqual((
             'Pulling repo-partial-name...\n'
             'Before: Hoard [a80f91] <- repo [curr: a80f91, stg: f6a740, des: a80f91]\n'
-            'ADD_NEW_TO_HOARD /test.me.1\n'
-            'ADD_NEW_TO_HOARD /wat/test.me.2\n'
+            'REPO_MARK_FILE_AVAILABLE /test.me.1\n'
+            'HOARD_FILE_ADDED /test.me.1\n'
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.2\n'
+            'HOARD_FILE_ADDED /wat/test.me.2\n'
             'updated repo-partial-name from a80f91 to f6a740\n'
             'updated repo-full-name from a80f91 to f6a740\n'
             'updated repo-backup-name from a80f91 to f6a740\n'
@@ -1075,9 +1109,9 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         self.assertEqual((
             'Pulling repo-backup-name...\n'
             'Before: Hoard [f6a740] <- repo [curr: a80f91, stg: 9fbdcf, des: f6a740]\n'
-            '=/test.me.1\n'
-            '?/wat/test.me.3\n'
-            'After: Hoard [f6a740], repo [curr: 10a305, stg: 9fbdcf, des: f6a740]\n'
+            'REPO_MARK_FILE_AVAILABLE /test.me.1\n'
+            'REPO_DESIRED_FILE_TO_GET /wat/test.me.2\n'
+            'After: Hoard [f6a740], repo [curr: 9fbdcf, stg: 9fbdcf, des: f6a740]\n'
             "Sync'ed repo-backup-name to hoard!\n"
             'DONE'), res)
 
@@ -1087,19 +1121,21 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             "/test.me.1 = a:2 g:1\n"
             "/wat\n"
             "/wat/test.me.2 = a:1 g:2\n"
+            '/wat/test.me.3 = c:1\n'
             "DONE", await hoard_cmd.contents.ls(depth=2))
 
         res = await hoard_cmd.files.push("repo-backup-name")
         self.assertEqual(
-            f"repo-backup-name:\n"
-            "+ wat/test.me.2\n"
-            f"repo-backup-name:\n"
-            "DONE", res.strip())
+            'repo-backup-name:\n'
+            '+ wat/test.me.2\n'
+            'repo-backup-name:\n'
+            'd wat/test.me.3\n'
+            'remove dangling /wat/test.me.3\n'
+            'DONE', res.strip())
 
         self.assertEqual([
             'repo-backup/test.me.1',
-            'repo-backup/wat/test.me.2',
-            'repo-backup/wat/test.me.3'], dump_file_list(self.tmpdir.name, 'repo-backup'))
+            'repo-backup/wat/test.me.2'], dump_file_list(self.tmpdir.name, 'repo-backup'))
 
         self.assertEqual(
             'Root: f6a74030fa0a826b18e424d44f8aca9be8c657f3\n'
@@ -1138,7 +1174,6 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         self.assertEqual((
             'Pulling repo-partial-name...\n'
             'Before: Hoard [f6a740] <- repo [curr: f6a740, stg: 10a305, des: f6a740]\n'
-            'g/wat/test.me.2\n'
             'After: Hoard [f6a740], repo [curr: 10a305, stg: 10a305, des: f6a740]\n'
             "Sync'ed repo-partial-name to hoard!\n"
             'DONE'), res)
@@ -1195,8 +1230,10 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         self.assertEqual((
             'Pulling repo-partial-name...\n'
             'Before: Hoard [a80f91] <- repo [curr: a80f91, stg: f6a740, des: a80f91]\n'
-            'ADD_NEW_TO_HOARD /test.me.1\n'
-            'ADD_NEW_TO_HOARD /wat/test.me.2\n'
+            'REPO_MARK_FILE_AVAILABLE /test.me.1\n'
+            'HOARD_FILE_ADDED /test.me.1\n'
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.2\n'
+            'HOARD_FILE_ADDED /wat/test.me.2\n'
             'updated repo-partial-name from a80f91 to f6a740\n'
             'After: Hoard [f6a740], repo [curr: f6a740, stg: f6a740, des: f6a740]\n'
             "Sync'ed repo-partial-name to hoard!\n"
@@ -1216,10 +1253,12 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             'Skipping update as past epoch 1 is not after hoard epoch 1\n'
             'Pulling repo-full-name...\n'
             'Before: Hoard [f6a740] <- repo [curr: a80f91, stg: d99580, des: a80f91]\n'
-            '=/test.me.1\n'
-            '=/wat/test.me.2\n'
-            'ADD_NEW_TO_HOARD /test.me.4\n'
-            'ADD_NEW_TO_HOARD /wat/test.me.3\n'
+            'REPO_MARK_FILE_AVAILABLE /test.me.1\n'
+            'REPO_MARK_FILE_AVAILABLE /test.me.4\n'
+            'HOARD_FILE_ADDED /test.me.4\n'
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.2\n'
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.3\n'
+            'HOARD_FILE_ADDED /wat/test.me.3\n'
             'updated repo-full-name from a80f91 to d99580\n'
             'After: Hoard [d99580], repo [curr: d99580, stg: d99580, des: d99580]\n'
             "Sync'ed repo-full-name to hoard!\n"

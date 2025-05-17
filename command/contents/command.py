@@ -7,10 +7,10 @@ import humanize
 from alive_progress import alive_bar, alive_it
 
 from command.content_prefs import ContentPrefs
-from command.contents.comparisons import DEPRECATED_compare_local_to_hoard, copy_local_staging_to_hoard, \
+from command.contents.comparisons import copy_local_staging_to_hoard, \
     sync_fsobject_to_object_storage, sync_object_storate_to_recreate_fsobject_and_fspresence
-from command.contents.handle_pull import PullPreferences, resolution_to_match_repo_and_hoard, PullIntention, \
-    _calculate_local_only, ResetLocalAsCurrentBehavior, calculate_actions
+from command.contents.handle_pull import PullPreferences, PullIntention, \
+    _calculate_local_only, ResetLocalAsCurrentBehavior
 from command.fast_path import FastPosixPath
 from command.hoard import Hoard
 from command.pathing import HoardPathing
@@ -24,9 +24,9 @@ from contents_diff import DiffType, Diff
 from exceptions import MissingRepoContents
 from lmdb_storage.file_object import FileObject
 from lmdb_storage.merge_trees import ByRoot
-from lmdb_storage.pull_contents import merge_contents, pull_contents, commit_merged
-from lmdb_storage.roots import Root
-from lmdb_storage.three_way_merge import NaiveMergePreferences, MergePreferences
+from lmdb_storage.pull_contents import merge_contents, commit_merged
+from lmdb_storage.roots import Root, Roots
+from lmdb_storage.three_way_merge import MergePreferences
 from lmdb_storage.tree_iteration import zip_trees_dfs
 from lmdb_storage.tree_structure import Objects, ObjectID, TreeObject
 from resolve_uuid import resolve_remote_uuid
@@ -54,43 +54,41 @@ def _init_pull_preferences_partial(
         remote_uuid: str, assume_current: bool = False,
         force_fetch_local_missing: bool = False) -> PullPreferences:
     return PullPreferences(
-        remote_uuid,
-        on_same_file_is_present=PullIntention.ADD_TO_HOARD,
+        remote_uuid, on_same_file_is_present=PullIntention.ADD_TO_HOARD,
         on_file_added_or_present=PullIntention.ADD_TO_HOARD,
         on_file_is_different_and_modified=PullIntention.ADD_TO_HOARD,
         on_file_is_different_and_added=PullIntention.ADD_TO_HOARD,
-        on_file_is_different_but_present=
-        PullIntention.RESTORE_FROM_HOARD if not assume_current else PullIntention.ADD_TO_HOARD,
+        on_file_is_different_but_present=PullIntention.RESTORE_FROM_HOARD if not assume_current else PullIntention.ADD_TO_HOARD,
+        on_hoard_only_local_deleted=PullIntention.DELETE_FROM_HOARD if not force_fetch_local_missing else PullIntention.RESTORE_FROM_HOARD,
+        on_hoard_only_local_unknown=PullIntention.ACCEPT_FROM_HOARD,
         on_hoard_only_local_moved=PullIntention.MOVE_IN_HOARD,
-        on_hoard_only_local_deleted=
-        PullIntention.DELETE_FROM_HOARD if not force_fetch_local_missing else PullIntention.RESTORE_FROM_HOARD,
-        on_hoard_only_local_unknown=PullIntention.ACCEPT_FROM_HOARD)
+        force_fetch_local_missing=force_fetch_local_missing)
 
 
 def _init_pull_preferences_backup(remote_uuid: str) -> PullPreferences:
     return PullPreferences(
-        remote_uuid,
-        on_same_file_is_present=PullIntention.ADD_TO_HOARD,
+        remote_uuid, on_same_file_is_present=PullIntention.ADD_TO_HOARD,
         on_file_added_or_present=PullIntention.IGNORE,
         on_file_is_different_and_modified=PullIntention.RESTORE_FROM_HOARD,
         on_file_is_different_and_added=PullIntention.RESTORE_FROM_HOARD,
         on_file_is_different_but_present=PullIntention.RESTORE_FROM_HOARD,
-        on_hoard_only_local_moved=PullIntention.RESTORE_FROM_HOARD,
         on_hoard_only_local_deleted=PullIntention.RESTORE_FROM_HOARD,
-        on_hoard_only_local_unknown=PullIntention.RESTORE_FROM_HOARD)
+        on_hoard_only_local_unknown=PullIntention.RESTORE_FROM_HOARD,
+        on_hoard_only_local_moved=PullIntention.RESTORE_FROM_HOARD,
+        force_fetch_local_missing=False)
 
 
 def _init_pull_preferences_incoming(remote_uuid: str) -> PullPreferences:
     return PullPreferences(
-        remote_uuid,
-        on_same_file_is_present=PullIntention.CLEANUP,
+        remote_uuid, on_same_file_is_present=PullIntention.CLEANUP,
         on_file_added_or_present=PullIntention.ADD_TO_HOARD_AND_CLEANUP,
         on_file_is_different_and_modified=PullIntention.ADD_TO_HOARD_AND_CLEANUP,
         on_file_is_different_and_added=PullIntention.ADD_TO_HOARD_AND_CLEANUP,
         on_file_is_different_but_present=PullIntention.CLEANUP,
-        on_hoard_only_local_moved=PullIntention.IGNORE,
         on_hoard_only_local_deleted=PullIntention.IGNORE,
-        on_hoard_only_local_unknown=PullIntention.IGNORE)
+        on_hoard_only_local_unknown=PullIntention.IGNORE,
+        on_hoard_only_local_moved=PullIntention.IGNORE,
+        force_fetch_local_missing=False)
 
 
 def augment_statuses(config, hoard, show_empty, statuses):
@@ -152,54 +150,32 @@ async def execute_pull(
                 hoard_contents.env, hoard_contents.fsobjects, hoard.config())
 
             roots = hoard_contents.env.roots(False)
-            repo_current = roots[uuid].current
-            repo_staging = roots[uuid].staging
-            repo_desired = roots[uuid].desired
-
-            out.write(
-                f"Before: Hoard [{safe_hex(roots['HOARD'].desired)[:6]}] "
-                f"<- repo [curr: {safe_hex(repo_current)[:6]}, stg: {safe_hex(repo_staging)[:6]}, des: {safe_hex(repo_desired)[:6]}]\n")
+            dump_before_op(roots, uuid, out)
 
             roots = hoard_contents.env.roots(True)
             all_remote_roots = [roots[remote.uuid] for remote in config.remotes.all()]
             all_remote_roots_old_desired = dict((root.name, root.desired) for root in all_remote_roots)
 
-            if True:
-                resolutions = await resolution_to_match_repo_and_hoard(
-                    uuid, hoard_contents, pathing, preferences, progress_bar)
+            hoard_root = roots["HOARD"]
+            repo_root = roots[uuid]
 
-                for action in calculate_actions(preferences, resolutions, pathing, config, out):
-                    action.execute(preferences.local_uuid, content_prefs, hoard_contents, out)
+            merged_ids = merge_contents(
+                hoard_contents.env, repo_root, all_repo_roots=[hoard_root] + all_remote_roots,
+                merge_prefs=PullMergePreferences(
+                    preferences, content_prefs, hoard_contents, current_contents.uuid,
+                    config.remotes, [r.name for r in all_remote_roots]))
 
-                # # fixme this should happen via merge, but is hacked now
-                # hoard_contents.env.roots(write=True)[uuid].current = \
-                #     hoard_contents.env.roots(write=True)[uuid].staging
+            # print what actually changed for the hoard and the repo todo consider printing other repo changes?
+            print_differences(hoard_contents, hoard_root, repo_root, merged_ids, out)
 
-                # fixme remove, just dumping
-                await sync_fsobject_to_object_storage(
-                    hoard_contents.env, hoard_contents.fsobjects, current_contents.fsobjects, hoard.config())
-            else:
-                hoard_root = roots["HOARD"]
-                repo_root = roots[uuid]
+            with hoard_contents.objects as objects:
+                empty_folder_id = objects.mktree_from_tuples([])
 
-                merged_ids = merge_contents(
-                    hoard_contents.env, repo_root, all_repo_roots=[hoard_root] + all_remote_roots,
-                    merge_prefs=PullMergePreferences(
-                        preferences, content_prefs, hoard_contents, current_contents.uuid,
-                        config.remotes, [r.name for r in all_remote_roots]))
-
-                # print what actually changed for the hoard and the repo todo consider printing other repo changes?
-                print_differences(hoard_contents, hoard_root, repo_root, merged_ids, out)
-
-                commit_merged(hoard_root, repo_root, all_remote_roots, merged_ids)
+            commit_merged(hoard_root, repo_root, all_remote_roots, merged_ids, empty_folder_id)
 
             # fixme remove, just dumping
             sync_object_storate_to_recreate_fsobject_and_fspresence(
                 hoard_contents.env, hoard_contents.fsobjects, hoard.config())
-
-            repo_current = roots[uuid].current
-            repo_staging = roots[uuid].staging
-            repo_desired = roots[uuid].desired
 
             for root in all_remote_roots:
                 old_desired = all_remote_roots_old_desired[root.name]
@@ -207,9 +183,7 @@ async def execute_pull(
                     out.write(
                         f"updated {config.remotes[root.name].name} from {safe_hex(old_desired)[:6]} to {safe_hex(root.desired)[:6]}\n")
 
-            out.write(
-                f"After: Hoard [{safe_hex(roots['HOARD'].desired)[:6]}],"
-                f" repo [curr: {safe_hex(repo_current)[:6]}, stg: {safe_hex(repo_staging)[:6]}, des: {safe_hex(repo_desired)[:6]}]\n")
+            dump_after_op(roots, uuid, out)
 
             logging.info(f"Updating epoch of {remote_uuid} to {current_contents.config.epoch}")
             hoard_contents.config.mark_up_to_date(
@@ -218,6 +192,24 @@ async def execute_pull(
         clean_dangling_files(hoard_contents, out)
 
     out.write(f"Sync'ed {config.remotes[remote_uuid].name} to hoard!\n")
+
+
+def dump_after_op(roots: Roots, uuid: str, out: TextIO):
+    repo_current = roots[uuid].current
+    repo_staging = roots[uuid].staging
+    repo_desired = roots[uuid].desired
+    out.write(
+        f"After: Hoard [{safe_hex(roots['HOARD'].desired)[:6]}],"
+        f" repo [curr: {safe_hex(repo_current)[:6]}, stg: {safe_hex(repo_staging)[:6]}, des: {safe_hex(repo_desired)[:6]}]\n")
+
+
+def dump_before_op(roots: Roots, uuid: str, out: TextIO):
+    repo_current = roots[uuid].current
+    repo_staging = roots[uuid].staging
+    repo_desired = roots[uuid].desired
+    out.write(
+        f"Before: Hoard [{safe_hex(roots['HOARD'].desired)[:6]}] "
+        f"<- repo [curr: {safe_hex(repo_current)[:6]}, stg: {safe_hex(repo_staging)[:6]}, des: {safe_hex(repo_desired)[:6]}]\n")
 
 
 def init_pull_preferences(
@@ -277,15 +269,15 @@ async def execute_print_differences(hoard: HoardContents, repo_uuid: str, ignore
 
 def pull_prefs_to_restore_from_hoard(remote_uuid):
     return PullPreferences(
-        remote_uuid,
-        on_same_file_is_present=PullIntention.ADD_TO_HOARD,
+        remote_uuid, on_same_file_is_present=PullIntention.ADD_TO_HOARD,
         on_file_added_or_present=PullIntention.CLEANUP,
         on_file_is_different_and_modified=PullIntention.RESTORE_FROM_HOARD,
         on_file_is_different_and_added=PullIntention.RESTORE_FROM_HOARD,
         on_file_is_different_but_present=PullIntention.RESTORE_FROM_HOARD,
-        on_hoard_only_local_moved=PullIntention.RESTORE_FROM_HOARD,
         on_hoard_only_local_deleted=PullIntention.RESTORE_FROM_HOARD,
-        on_hoard_only_local_unknown=PullIntention.RESTORE_FROM_HOARD)
+        on_hoard_only_local_unknown=PullIntention.RESTORE_FROM_HOARD,
+        on_hoard_only_local_moved=PullIntention.RESTORE_FROM_HOARD,
+        force_fetch_local_missing=False)
 
 
 async def clear_pending_file_ops(hoard: Hoard, repo_uuid: str, out: StringIO):
@@ -333,11 +325,7 @@ class PullMergePreferences(MergePreferences):
 
         self.hoard_contents = hoard_contents  # fixme should not need this
 
-        self._where_to_apply_diffs = ["HOARD"] + uuid_roots
         self._where_to_apply_adds = ["HOARD"] + uuid_roots
-
-    def where_to_apply_diffs(self, path: List[str]):
-        return self._where_to_apply_diffs
 
     def where_to_apply_adds(self, path: List[str], staging_original: FileObject):
         file_path = FastPosixPath("/" + "/".join(path))
@@ -355,30 +343,28 @@ class PullMergePreferences(MergePreferences):
         result: ByRoot[ObjectID] = original_roots.new()
 
         if staging_original.file_id == base_original.file_id:
-            # fixme lower
             logging.error(f"Both staging and base staging for %s are identical, returns as-is.", path)
             return original_roots.map(lambda obj: obj.id)
 
         assert staging_original.file_id != base_original.file_id, staging_original.file_id
 
         if self.remote_type == CaveType.BACKUP:  # fixme use PullPreferences
-            # fixme lower
             logging.error("Ignoring changes to %s coming from a backup repo!", path)
-            return original_roots.map(lambda obj: obj.id)  # ignore changes coming from backups
+
+            result: ByRoot[ObjectID] = original_roots.map(lambda obj: obj.id)
+            return result  # ignore changes coming from backups
 
         if self.remote_type == CaveType.INCOMING:  # fixme use PullPreferences
             # fixme lower
             logging.error("Ignoring changes to %s coming from an incoming repo!", path)
-            return original_roots.map(lambda obj: obj.id)  # ignore changes coming from backups
+            return original_roots.map(lambda obj: obj.id)  # ignore changes coming from incoming
 
-        # match self.remote_type:
-        #     case CaveType.PARTIAL
-        for merge_name in self.where_to_apply_diffs(path):
+        for merge_name in ["HOARD"] + list(original_roots.assigned_keys()):  # self.where_to_apply_diffs(path): FIXME!!!
             result[merge_name] = staging_original.file_id
         return result
 
     def combine_base_only(
-            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject],
+            self, path: List[str], repo_name: str, original_roots: ByRoot[TreeObject | FileObject],
             base_original: FileObject) -> ByRoot[ObjectID]:
 
         if self.remote_type == CaveType.BACKUP:  # fixme use PullPreferences
@@ -386,20 +372,46 @@ class PullMergePreferences(MergePreferences):
             logging.error("Ignoring changes to %s coming from a backup repo!", path)
             return original_roots.map(lambda obj: obj.id)  # ignore changes coming from backups
 
+        if self.preferences.force_fetch_local_missing:
+            hoard_object = original_roots.get_if_present("HOARD")
+            if hoard_object is not None:
+                result: ByRoot[ObjectID] = original_roots.map(lambda obj: obj.id)
+                result[repo_name] = hoard_object.id
+                return result
+
         return original_roots.new()
 
     def combine_staging_only(
-            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject],
+            self, path: List[str], repo_name: str, original_roots: ByRoot[TreeObject | FileObject],
             staging_original: FileObject) -> ByRoot[ObjectID]:
 
-        if self.remote_type == CaveType.BACKUP:  # fixme use PullPreferences
-            # fixme lower
+        hoard_object = original_roots.get_if_present("HOARD")
+        if self.remote_type == CaveType.BACKUP:
+            # fixme use PullPreferences
             logging.error("Ignoring changes to %s coming from a backup repo!", path)
             result: ByRoot[ObjectID] = original_roots.map(lambda obj: obj.id)
-            return result  # ignore changes coming from backups
 
+            if hoard_object is not None:  # there is a hoard object already
+                result[repo_name] = hoard_object.id  # reset desired to currently existing object
+
+            return result  # ignore changes coming from backups
+        elif self.remote_type == CaveType.INCOMING:
+            if hoard_object is not None:
+                return original_roots.map(lambda obj: obj.id)  # ignore from incoming
+            else:
+                return self.add_or_update_object(original_roots, path, staging_original)
+        else:  # for partials, update object
+            if hoard_object is not None and hoard_object.id == staging_original.id:
+                # the repo is just recognizing it already has the object
+                result: ByRoot[ObjectID] = original_roots.map(lambda obj: obj.id)
+                result[repo_name] = staging_original.id
+                return result
+            else:
+                return self.add_or_update_object(original_roots, path, staging_original)
+
+    def add_or_update_object(self, original_roots, path, staging_original):
         result: ByRoot[ObjectID] = original_roots.new()
-        for merge_name in self.where_to_apply_adds(path, staging_original):
+        for merge_name in self.where_to_apply_adds(path, staging_original) + list(original_roots.assigned_keys()):
             result[merge_name] = staging_original.file_id
         return result
 
@@ -432,12 +444,22 @@ async def print_pending_to_pull(
 
 def print_differences(
         hoard_contents: HoardContents, hoard_root: Root, repo_root: Root, merged_ids: ByRoot[ObjectID], out: StringIO):
+    print_differences_for_id(
+        hoard_contents, hoard_root, repo_root,
+        merged_ids.get_if_present("HOARD"),
+        merged_ids.get_if_present(repo_root.name),
+        out)
+
+
+def print_differences_for_id(
+        hoard_contents: HoardContents, hoard_root: Root, repo_root: Root,
+        desired_hoard_root_id: ObjectID | None, desired_repo_root_id: ObjectID | None, out: StringIO):
     with hoard_contents.env.objects(write=False) as objects:
         for path, (base_hoard_id, merged_hoard_id, base_current_repo_id, merged_repo_id, staging_repo_id), _ \
                 in zip_trees_dfs(
             objects, "", [
-                hoard_root.desired, merged_ids.get_if_present("HOARD"),
-                repo_root.current, merged_ids.get_if_present(repo_root.name), repo_root.staging],
+                hoard_root.desired, desired_hoard_root_id,
+                repo_root.current, desired_repo_root_id, repo_root.staging],
             drilldown_same=True):
 
             if base_current_repo_id and merged_repo_id:
@@ -462,6 +484,10 @@ def print_differences(
                     out.write(f"REPO_FILE_TO_DELETE {path}\n")
             else:
                 assert base_current_repo_id is None and merged_repo_id is None
+                if merged_hoard_id == staging_repo_id:
+                    if not is_tree_or_none(objects, staging_repo_id):
+                        # file was added just now
+                        out.write(f"REPO_MARK_FILE_AVAILABLE {path}\n")
                 logging.debug(f"Ignoring %s as is not in repo past or future", path)
                 pass
 
@@ -740,8 +766,27 @@ class HoardCommandContents:
                 out.write(f"Remote {remote_uuid} is not mounted!\n")
                 return
 
-            preferences = pull_prefs_to_restore_from_hoard(remote_uuid)
-            await execute_pull(self.hoard, preferences, ignore_epoch=False, out=out)
+            async with self.hoard.open_contents(create_missing=False).writeable() as hoard_contents:
+                roots = hoard_contents.env.roots(True)
+
+                dump_before_op(roots, remote_uuid, out)
+
+                # sets current to whatever is currently available, but do not update desired
+                # this effectively discards all changes
+                roots[remote_uuid].current = roots[remote_uuid].staging
+
+                # fixme remove, just dumping
+                sync_object_storate_to_recreate_fsobject_and_fspresence(
+                    hoard_contents.env, hoard_contents.fsobjects, self.hoard.config())
+
+                repo_root = roots[remote_uuid]
+                hoard_root = roots["HOARD"]
+
+                # print what actually changed for the hoard and the repo todo consider printing other repo changes?
+                print_differences_for_id(hoard_contents, hoard_root, repo_root, hoard_root.desired,
+                                         repo_root.desired, out)
+
+                dump_after_op(roots, remote_uuid, out)
 
             out.write("DONE")
             return out.getvalue()
@@ -776,10 +821,10 @@ class HoardCommandContents:
                                 on_file_is_different_and_modified=PullIntention.FAIL,
                                 on_file_is_different_and_added=PullIntention.FAIL,
                                 on_file_is_different_but_present=PullIntention.FAIL,
-                                on_hoard_only_local_moved=PullIntention.FAIL,
-                                on_hoard_only_local_unknown=PullIntention.FAIL,
                                 on_hoard_only_local_deleted=PullIntention.FAIL,
-                            )
+                                on_hoard_only_local_unknown=PullIntention.FAIL,
+                                on_hoard_only_local_moved=PullIntention.FAIL,
+                                force_fetch_local_missing=False)
                             added = False
                             diff = Diff(DiffType.FileOnlyInLocal, local_file, hoard_file, local_props, None, added)
                             for b in _calculate_local_only(preferences.on_file_added_or_present, diff, out):

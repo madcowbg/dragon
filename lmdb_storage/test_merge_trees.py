@@ -166,10 +166,12 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
                 dump_tree(objects, incoming_id, show_fasthash=True))
 
             merged_ids = ThreewayMerge(
-                objects, current='current', staging='staging', others=['full', 'partial', 'hoard'],
-                merge_prefs=NaiveMergePreferences(['full', 'hoard'])).merge_trees(ObjectsByRoot.from_map({
-                'current': backup_id, 'staging': incoming_id,
-                'full': full_id, 'partial': partial_id, 'hoard': hoard_id}), )
+                objects, current='current', staging='staging', repo_name='staging',
+                others=['full', 'partial', 'hoard'],
+                merge_prefs=NaiveMergePreferences(['full', 'hoard'])).merge_trees(
+                ObjectsByRoot.from_map({
+                    'current': backup_id, 'staging': incoming_id,
+                    'full': full_id, 'partial': partial_id, 'hoard': hoard_id}), )
 
             self.assertEqual({'current', 'staging', 'full', 'partial', 'hoard'}, set(merged_ids.assigned_keys()))
 
@@ -244,8 +246,8 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
             self.assertEqual(b'a80f91bc48850a1fb3459bb76b9f6308d4d35710', binascii.hexlify(hoard_id))
 
             merged_ids = ThreewayMerge(
-                objects, current='empty', staging='staging', others=['hoard'],
-                merge_prefs=NaiveMergePreferences(['hoard'])).merge_trees(
+                objects, current='empty', staging='staging', repo_name='staging',
+                others=['hoard'], merge_prefs=NaiveMergePreferences(['hoard'])).merge_trees(
                 ObjectsByRoot.from_map(
                     {'empty': objects.mktree_from_tuples([]), "staging": partial_id, 'hoard': hoard_id}))
 
@@ -259,8 +261,8 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
             hoard_id = merged_ids.get_if_present('hoard')
 
             merged_ids = ThreewayMerge(
-                objects, current='empty', staging='staging', others=['hoard'],
-                merge_prefs=NaiveMergePreferences(['hoard'])).merge_trees(
+                objects, current='empty', staging='staging', repo_name='staging',
+                others=['hoard'], merge_prefs=NaiveMergePreferences(['hoard'])).merge_trees(
                 ObjectsByRoot.from_map(
                     {'empty': objects.mktree_from_tuples([]), "staging": full_id, 'hoard': hoard_id}))
 
@@ -276,8 +278,8 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
             hoard_id = merged_ids.get_if_present('hoard')
 
             merged_ids = ThreewayMerge(
-                objects, current='empty', staging='staging', others=['hoard'],
-                merge_prefs=NaiveMergePreferences(['hoard'])).merge_trees(
+                objects, current='empty', staging='staging', repo_name='staging',
+                others=['hoard'], merge_prefs=NaiveMergePreferences(['hoard'])).merge_trees(
                 ObjectsByRoot.from_map(
                     {'empty': objects.mktree_from_tuples([]), "staging": backup_id, 'hoard': hoard_id}))
 
@@ -327,10 +329,12 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
             dump_tree(objects, incoming_id, show_fasthash=True))
 
         merged_ids = ThreewayMerge(
-            objects, current='current', staging='staging', others=['full', 'partial', 'hoard'],
-            merge_prefs=NaiveMergePreferences(['full', 'hoard'])).merge_trees(ObjectsByRoot.from_map({
-            'current': backup_id, 'staging': incoming_id,
-            'full': full_id, 'partial': partial_id, 'hoard': hoard_id}))
+            objects, current='current', staging='staging', repo_name='staging',
+            others=['full', 'partial', 'hoard'],
+            merge_prefs=NaiveMergePreferences(['full', 'hoard'])).merge_trees(
+            ObjectsByRoot.from_map({
+                'current': backup_id, 'staging': incoming_id,
+                'full': full_id, 'partial': partial_id, 'hoard': hoard_id}))
 
         self.assertEqual({'current', 'staging', 'full', 'partial', 'hoard'}, set(merged_ids.assigned_keys()))
 

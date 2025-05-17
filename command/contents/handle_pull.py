@@ -39,7 +39,8 @@ class PullPreferences:
             on_file_is_different_but_present: PullIntention,
             on_hoard_only_local_deleted: PullIntention,
             on_hoard_only_local_unknown: PullIntention,
-            on_hoard_only_local_moved: PullIntention):
+            on_hoard_only_local_moved: PullIntention,
+            force_fetch_local_missing):
         self.local_uuid = local_uuid
 
         self.on_same_file_is_present = on_same_file_is_present
@@ -51,6 +52,8 @@ class PullPreferences:
         self.on_hoard_only_local_deleted = on_hoard_only_local_deleted
         self.on_hoard_only_local_unknown = on_hoard_only_local_unknown
         self.on_hoard_only_local_moved = on_hoard_only_local_moved
+
+        self.force_fetch_local_missing = force_fetch_local_missing
 
 
 class Action(abc.ABC):

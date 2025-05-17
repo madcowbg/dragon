@@ -100,34 +100,39 @@ class TestBackups(IsolatedAsyncioTestCase):
         hoard_cmd, partial_cave_cmd, full_cave_cmd, incoming_cave_cmd = await init_complex_hoard(self.tmpdir.name)
 
         res = await hoard_cmd.contents.pull(all=True)
-        self.assertEqual((
-            'Pulling repo-partial-name...\n'
-            'Before: Hoard [a80f91] <- repo [curr: a80f91, stg: bf039a, des: a80f91]\n'
-            'ADD_NEW_TO_HOARD /test.me.1\n'
-            'ADD_NEW_TO_HOARD /wat/test.me.2\n'
-            'updated repo-partial-name from a80f91 to bf039a\n'
-            'updated repo-full-name from a80f91 to bf039a\n'
-            'After: Hoard [bf039a], repo [curr: bf039a, stg: bf039a, des: bf039a]\n'
-            "Sync'ed repo-partial-name to hoard!\n"
-            'Pulling repo-full-name...\n'
-            'Before: Hoard [bf039a] <- repo [curr: a80f91, stg: 749cff, des: bf039a]\n'
-            '=/test.me.1\n'
-            '=/wat/test.me.2\n'
-            'ADD_NEW_TO_HOARD /test.me.4\n'
-            'ADD_NEW_TO_HOARD /wat/test.me.3\n'
-            'updated repo-full-name from bf039a to 749cff\n'
-            'After: Hoard [749cff], repo [curr: 749cff, stg: 749cff, des: 749cff]\n'
-            "Sync'ed repo-full-name to hoard!\n"
-            'Pulling repo-incoming-name...\n'
-            'Before: Hoard [749cff] <- repo [curr: a80f91, stg: fabddf, des: a80f91]\n'
-            'CLEANUP_SAME /test.me.4\n'
-            'INCOMING_TO_HOARD /test.me.5\n'
-            'INCOMING_TO_HOARD /wat/test.me.6\n'
-            'CLEANUP_DIFFERENT /wat/test.me.3\n'
-            'updated repo-full-name from 749cff to d96cdc\n'
-            'After: Hoard [d96cdc], repo [curr: fef20f, stg: fabddf, des: a80f91]\n'
-            "Sync'ed repo-incoming-name to hoard!\n"
-            'DONE'), res)
+        self.assertEqual([
+            'Pulling repo-partial-name...',
+            'Before: Hoard [a80f91] <- repo [curr: a80f91, stg: bf039a, des: a80f91]',
+            'REPO_MARK_FILE_AVAILABLE /test.me.1',
+            'HOARD_FILE_ADDED /test.me.1',
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.2',
+            'HOARD_FILE_ADDED /wat/test.me.2',
+            'updated repo-partial-name from a80f91 to bf039a',
+            'updated repo-full-name from a80f91 to bf039a',
+            'After: Hoard [bf039a], repo [curr: bf039a, stg: bf039a, des: bf039a]',
+            "Sync'ed repo-partial-name to hoard!",
+            'Pulling repo-full-name...',
+            'Before: Hoard [bf039a] <- repo [curr: a80f91, stg: 749cff, des: bf039a]',
+            'REPO_MARK_FILE_AVAILABLE /test.me.1',
+            'REPO_MARK_FILE_AVAILABLE /test.me.4',
+            'HOARD_FILE_ADDED /test.me.4',
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.2',
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.3',
+            'HOARD_FILE_ADDED /wat/test.me.3',
+            'updated repo-full-name from bf039a to 749cff',
+            'After: Hoard [749cff], repo [curr: 749cff, stg: 749cff, des: 749cff]',
+            "Sync'ed repo-full-name to hoard!",
+            'Pulling repo-incoming-name...',
+            'Before: Hoard [749cff] <- repo [curr: a80f91, stg: fabddf, des: a80f91]',
+            'REPO_MARK_FILE_AVAILABLE /test.me.4',
+            'REPO_MARK_FILE_AVAILABLE /test.me.5',
+            'HOARD_FILE_ADDED /test.me.5',
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.6',
+            'HOARD_FILE_ADDED /wat/test.me.6',
+            'updated repo-full-name from 749cff to d96cdc',
+            'After: Hoard [d96cdc], repo [curr: fabddf, stg: fabddf, des: a80f91]',
+            "Sync'ed repo-incoming-name to hoard!",
+            'DONE'], res.splitlines())
 
         res = await hoard_cmd.contents.ls()
         self.assertEqual(
@@ -214,8 +219,10 @@ class TestBackups(IsolatedAsyncioTestCase):
         self.assertEqual([
             'Pulling repo-partial-name...',
             'Before: Hoard [a80f91] <- repo [curr: a80f91, stg: bf039a, des: a80f91]',
-            'ADD_NEW_TO_HOARD /test.me.1',
-            'ADD_NEW_TO_HOARD /wat/test.me.2',
+            'REPO_MARK_FILE_AVAILABLE /test.me.1',
+            'HOARD_FILE_ADDED /test.me.1',
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.2',
+            'HOARD_FILE_ADDED /wat/test.me.2',
             'updated repo-partial-name from a80f91 to bf039a',
             'updated repo-full-name from a80f91 to bf039a',
             'updated backup-1 from a80f91 to 4d62e6',
@@ -224,10 +231,12 @@ class TestBackups(IsolatedAsyncioTestCase):
             "Sync'ed repo-partial-name to hoard!",
             'Pulling repo-full-name...',
             'Before: Hoard [bf039a] <- repo [curr: a80f91, stg: 749cff, des: bf039a]',
-            '=/test.me.1',
-            '=/wat/test.me.2',
-            'ADD_NEW_TO_HOARD /test.me.4',
-            'ADD_NEW_TO_HOARD /wat/test.me.3',
+            'REPO_MARK_FILE_AVAILABLE /test.me.1',
+            'REPO_MARK_FILE_AVAILABLE /test.me.4',
+            'HOARD_FILE_ADDED /test.me.4',
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.2',
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.3',
+            'HOARD_FILE_ADDED /wat/test.me.3',
             'updated repo-full-name from bf039a to 749cff',
             'updated backup-3 from a80f91 to 43e602',
             'updated backup-4 from a80f91 to 6a4c4e',
@@ -235,35 +244,40 @@ class TestBackups(IsolatedAsyncioTestCase):
             "Sync'ed repo-full-name to hoard!",
             'Pulling repo-incoming-name...',
             'Before: Hoard [749cff] <- repo [curr: a80f91, stg: fabddf, des: a80f91]',
-            'CLEANUP_SAME /test.me.4',
-            'INCOMING_TO_HOARD /test.me.5',
-            'INCOMING_TO_HOARD /wat/test.me.6',
-            'CLEANUP_DIFFERENT /wat/test.me.3',
+            'REPO_MARK_FILE_AVAILABLE /test.me.4',
+            'REPO_MARK_FILE_AVAILABLE /test.me.5',
+            'HOARD_FILE_ADDED /test.me.5',
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.6',
+            'HOARD_FILE_ADDED /wat/test.me.6',
             'updated repo-full-name from 749cff to d96cdc',
             'updated backup-1 from 4d62e6 to a8af74',
             'updated backup-2 from 5d3444 to 169a15',
-            'After: Hoard [d96cdc], repo [curr: fef20f, stg: fabddf, des: a80f91]',
+            'After: Hoard [d96cdc], repo [curr: fabddf, stg: fabddf, des: a80f91]',
             "Sync'ed repo-incoming-name to hoard!",
             'Pulling backup-1...',
             'Before: Hoard [d96cdc] <- repo [curr: a80f91, stg: 66eab2, des: a8af74]',
-            '=/test.me.1',
-            '=/wat/test.me.3',
+            'REPO_MARK_FILE_AVAILABLE /test.me.1',
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.3',
+            'REPO_DESIRED_FILE_TO_GET /wat/test.me.6',
             'updated backup-1 from a8af74 to 5c70b4',
             'After: Hoard [d96cdc], repo [curr: 66eab2, stg: 66eab2, des: 5c70b4]',
             "Sync'ed backup-1 to hoard!",
             'Pulling backup-2...',
             'Before: Hoard [d96cdc] <- repo [curr: a80f91, stg: 4d62e6, des: 169a15]',
-            '=/test.me.1',
+            'REPO_MARK_FILE_AVAILABLE /test.me.1',
+            'REPO_DESIRED_FILE_TO_GET /test.me.5',
+            'REPO_DESIRED_FILE_TO_GET /wat/test.me.2',
             'updated backup-2 from 169a15 to 41b3c8',
             'After: Hoard [d96cdc], repo [curr: 4d62e6, stg: 4d62e6, des: 41b3c8]',
             "Sync'ed backup-2 to hoard!",
             'Pulling backup-3...',
             'Before: Hoard [d96cdc] <- repo [curr: a80f91, stg: 558dfc, des: 43e602]',
-            '?/test.me.obsolete',
-            'After: Hoard [d96cdc], repo [curr: a80f91, stg: 558dfc, des: 43e602]',
+            'REPO_DESIRED_FILE_TO_GET /test.me.4',
+            'After: Hoard [d96cdc], repo [curr: 558dfc, stg: 558dfc, des: 43e602]',
             "Sync'ed backup-3 to hoard!",
             'Pulling backup-4...',
             'Before: Hoard [d96cdc] <- repo [curr: a80f91, stg: a80f91, des: 6a4c4e]',
+            'REPO_DESIRED_FILE_TO_GET /wat/test.me.3',
             'After: Hoard [d96cdc], repo [curr: a80f91, stg: a80f91, des: 6a4c4e]',
             "Sync'ed backup-4 to hoard!",
             'DONE'], res.splitlines())
@@ -274,7 +288,7 @@ class TestBackups(IsolatedAsyncioTestCase):
             '|Num Files                |total     |available |get       |cleanup   |',
             '|backup-1                 |         3|         2|         1|          |',
             '|backup-2                 |         3|         1|         2|          |',
-            '|backup-3                 |         1|          |         1|          |',
+            '|backup-3                 |         2|          |         1|         1|',
             '|backup-4                 |         1|          |         1|          |',
             '|repo-full-name           |         6|         4|         2|          |',
             '|repo-incoming-name       |         4|          |          |         4|',
@@ -283,7 +297,7 @@ class TestBackups(IsolatedAsyncioTestCase):
             '|Size                     |total     |available |get       |cleanup   |',
             '|backup-1                 |       227|       150|        77|          |',
             '|backup-2                 |       136|        60|        76|          |',
-            '|backup-3                 |        77|          |        77|          |',
+            '|backup-3                 |       194|          |        77|       117|',
             '|backup-4                 |        90|          |        90|          |',
             '|repo-full-name           |       380|       243|       137|          |',
             '|repo-incoming-name       |       304|          |          |       304|',
@@ -313,21 +327,22 @@ class TestBackups(IsolatedAsyncioTestCase):
             '# backup sets: 1',
             '# backups: 4',
             'scheduled count:',
+            ' 0: 1 files (117)',
             ' 1: 4 files (230)',
             ' 2: 2 files (150)',
             'available count:',
-            ' 0: 4 files (230)',
+            ' 0: 5 files (347)',
             ' 1: 1 files (90)',
             ' 2: 1 files (60)',
             'get_or_copy count:',
-            ' 0: 1 files (60)',
+            ' 0: 2 files (177)',
             ' 1: 3 files (183)',
             ' 2: 2 files (137)',
             'move count:',
-            ' 0: 6 files (380)',
+            ' 0: 7 files (497)',
             'cleanup count:',
             ' 0: 2 files (76)',
-            ' 1: 4 files (304)',
+            ' 1: 5 files (421)',
             'DONE'], res.splitlines())
 
         res = await hoard_cmd.files.push(all=True)
@@ -356,7 +371,9 @@ class TestBackups(IsolatedAsyncioTestCase):
             'backup-1:',
             'backup-2:',
             'backup-3:',
+            'd test.me.obsolete',
             'backup-4:',
+            'remove dangling /test.me.obsolete',
             'DONE'], res.splitlines())
 
         res = await hoard_cmd.backups.health()
@@ -432,21 +449,20 @@ class TestBackups(IsolatedAsyncioTestCase):
             'Skipping update as past epoch 1 is not after hoard epoch 1\n'
             'Pulling backup-1...\n'
             'Before: Hoard [d96cdc] <- repo [curr: a80f91, stg: 66eab2, des: a80f91]\n'
-            '=/test.me.1\n'
-            '=/wat/test.me.3\n'
+            'REPO_MARK_FILE_AVAILABLE /test.me.1\n'
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.3\n'
             'updated backup-1 from a80f91 to 66eab2\n'
             'After: Hoard [d96cdc], repo [curr: 66eab2, stg: 66eab2, des: 66eab2]\n'
             "Sync'ed backup-1 to hoard!\n"
             'Pulling backup-2...\n'
             'Before: Hoard [d96cdc] <- repo [curr: a80f91, stg: 4d62e6, des: a80f91]\n'
-            '=/test.me.1\n'
+            'REPO_MARK_FILE_AVAILABLE /test.me.1\n'
             'updated backup-2 from a80f91 to 4d62e6\n'
             'After: Hoard [d96cdc], repo [curr: 4d62e6, stg: 4d62e6, des: 4d62e6]\n'
             "Sync'ed backup-2 to hoard!\n"
             'Pulling backup-3...\n'
             'Before: Hoard [d96cdc] <- repo [curr: a80f91, stg: 558dfc, des: a80f91]\n'
-            '?/test.me.obsolete\n'
-            'After: Hoard [d96cdc], repo [curr: a80f91, stg: 558dfc, des: a80f91]\n'
+            'After: Hoard [d96cdc], repo [curr: 558dfc, stg: 558dfc, des: a80f91]\n'
             "Sync'ed backup-3 to hoard!\n"
             'Pulling backup-4...\n'
             'Before: Hoard [d96cdc] <- repo [curr: a80f91, stg: a80f91, des: a80f91]\n'
@@ -460,6 +476,7 @@ class TestBackups(IsolatedAsyncioTestCase):
             '|Num Files                |total     |available |get       |cleanup   |',
             '|backup-1                 |         2|         2|          |          |',
             '|backup-2                 |         1|         1|          |          |',
+            '|backup-3                 |         1|          |          |         1|',
             '|repo-full-name           |         6|         4|         2|          |',
             '|repo-incoming-name       |         4|          |          |         4|',
             '|repo-partial-name        |         2|         2|          |          |',
@@ -467,6 +484,7 @@ class TestBackups(IsolatedAsyncioTestCase):
             '|Size                     |total     |available |get       |cleanup   |',
             '|backup-1                 |       150|       150|          |          |',
             '|backup-2                 |        60|        60|          |          |',
+            '|backup-3                 |       117|          |          |       117|',
             '|repo-full-name           |       380|       243|       137|          |',
             '|repo-incoming-name       |       304|          |          |       304|',
             '|repo-partial-name        |        76|        76|          |          |'], res.splitlines())
@@ -476,29 +494,28 @@ class TestBackups(IsolatedAsyncioTestCase):
             '# backup sets: 1',
             '# backups: 4',
             'scheduled count:',
-            ' 0: 4 files (230)',
+            ' 0: 5 files (347)',
             ' 1: 1 files (90)',
             ' 2: 1 files (60)',
             'available count:',
-            ' 0: 4 files (230)',
+            ' 0: 5 files (347)',
             ' 1: 1 files (90)',
             ' 2: 1 files (60)',
             'get_or_copy count:',
-            ' 0: 4 files (243)',
+            ' 0: 5 files (360)',
             ' 1: 2 files (137)',
             'move count:',
-            ' 0: 6 files (380)',
+            ' 0: 7 files (497)',
             'cleanup count:',
             ' 0: 2 files (76)',
-            ' 1: 4 files (304)',
+            ' 1: 5 files (421)',
             'DONE'], res.splitlines())
 
         res = await hoard_cmd.backups.assign(available_only=False)
         self.assertEqual((
             'set: / with 4/4 media\n'
-            ' backup-2 <- 1 files (16)\n'
-            ' backup-3 <- 1 files (77)\n'
-            ' backup-4 <- 2 files (137)\n'
+            ' backup-2 <- 1 files (60)\n'
+            ' backup-4 <- 3 files (170)\n'
             'DONE'), res)
 
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
@@ -507,17 +524,17 @@ class TestBackups(IsolatedAsyncioTestCase):
             '|Num Files                |total     |available |get       |cleanup   |',
             '|backup-1                 |         2|         2|          |          |',
             '|backup-2                 |         2|         1|         1|          |',
-            '|backup-3                 |         1|          |         1|          |',
-            '|backup-4                 |         2|          |         2|          |',
+            '|backup-3                 |         1|          |          |         1|',
+            '|backup-4                 |         3|          |         3|          |',
             '|repo-full-name           |         6|         4|         2|          |',
             '|repo-incoming-name       |         4|          |          |         4|',
             '|repo-partial-name        |         2|         2|          |          |',
             '',
             '|Size                     |total     |available |get       |cleanup   |',
             '|backup-1                 |       150|       150|          |          |',
-            '|backup-2                 |        76|        60|        16|          |',
-            '|backup-3                 |        77|          |        77|          |',
-            '|backup-4                 |       137|          |       137|          |',
+            '|backup-2                 |       120|        60|        60|          |',
+            '|backup-3                 |       117|          |          |       117|',
+            '|backup-4                 |       170|          |       170|          |',
             '|repo-full-name           |       380|       243|       137|          |',
             '|repo-incoming-name       |       304|          |          |       304|',
             '|repo-partial-name        |        76|        76|          |          |'], res.splitlines())
@@ -534,17 +551,17 @@ class TestBackups(IsolatedAsyncioTestCase):
             '|Num Files                |total     |available |get       |cleanup   |',
             '|backup-1                 |         2|         1|          |         1|',
             '|backup-2                 |         2|         1|         1|          |',
-            '|backup-3                 |         1|          |         1|          |',
-            '|backup-4                 |         2|          |         2|          |',
+            '|backup-3                 |         1|          |          |         1|',
+            '|backup-4                 |         3|          |         3|          |',
             '|repo-full-name           |         6|         4|         2|          |',
             '|repo-incoming-name       |         4|          |          |         4|',
             '|repo-partial-name        |         2|         2|          |          |',
             '',
             '|Size                     |total     |available |get       |cleanup   |',
             '|backup-1                 |       150|        60|          |        90|',
-            '|backup-2                 |        76|        60|        16|          |',
-            '|backup-3                 |        77|          |        77|          |',
-            '|backup-4                 |       137|          |       137|          |',
+            '|backup-2                 |       120|        60|        60|          |',
+            '|backup-3                 |       117|          |          |       117|',
+            '|backup-4                 |       170|          |       170|          |',
             '|repo-full-name           |       380|       243|       137|          |',
             '|repo-incoming-name       |       304|          |          |       304|',
             '|repo-partial-name        |        76|        76|          |          |'], res.splitlines())
@@ -554,21 +571,21 @@ class TestBackups(IsolatedAsyncioTestCase):
             '# backup sets: 1',
             '# backups: 4',
             'scheduled count:',
-            ' 0: 1 files (90)',
+            ' 0: 2 files (207)',
             ' 1: 4 files (230)',
             ' 2: 1 files (60)',
             'available count:',
-            ' 0: 5 files (320)',
+            ' 0: 6 files (437)',
             ' 2: 1 files (60)',
             'get_or_copy count:',
-            ' 0: 2 files (150)',
+            ' 0: 3 files (267)',
             ' 1: 2 files (93)',
             ' 2: 2 files (137)',
             'move count:',
-            ' 0: 6 files (380)',
+            ' 0: 7 files (497)',
             'cleanup count:',
             ' 0: 2 files (76)',
-            ' 1: 3 files (214)',
+            ' 1: 4 files (331)',
             ' 2: 1 files (90)',
             'DONE'], res.splitlines())
 
@@ -584,20 +601,20 @@ class TestBackups(IsolatedAsyncioTestCase):
             '# backup sets: 1',
             '# backups: 4',
             'scheduled count:',
-            ' 0: 1 files (90)',
+            ' 0: 2 files (207)',
             ' 1: 5 files (290)',
             'available count:',
-            ' 0: 5 files (320)',
+            ' 0: 6 files (437)',
             ' 1: 1 files (60)',
             'get_or_copy count:',
-            ' 0: 2 files (150)',
+            ' 0: 3 files (267)',
             ' 1: 2 files (93)',
             ' 2: 2 files (137)',
             'move count:',
-            ' 0: 6 files (380)',
+            ' 0: 7 files (497)',
             'cleanup count:',
             ' 0: 1 files (16)',
-            ' 1: 4 files (274)',
+            ' 1: 5 files (391)',
             ' 2: 1 files (90)',
             'DONE'], res.splitlines())
 
@@ -630,14 +647,14 @@ class TestBackups(IsolatedAsyncioTestCase):
             'Skipping update as past epoch 1 is not after hoard epoch 1',
             'Pulling backup-1...',
             'Before: Hoard [d96cdc] <- repo [curr: a80f91, stg: 66eab2, des: a80f91]',
-            '=/test.me.1',
-            '=/wat/test.me.3',
+            'REPO_MARK_FILE_AVAILABLE /test.me.1',
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.3',
             'updated backup-1 from a80f91 to 66eab2',
             'After: Hoard [d96cdc], repo [curr: 66eab2, stg: 66eab2, des: 66eab2]',
             "Sync'ed backup-1 to hoard!",
             'Pulling backup-2...',
             'Before: Hoard [d96cdc] <- repo [curr: a80f91, stg: 4d62e6, des: a80f91]',
-            '=/test.me.1',
+            'REPO_MARK_FILE_AVAILABLE /test.me.1',
             'updated backup-2 from a80f91 to 4d62e6',
             'After: Hoard [d96cdc], repo [curr: 4d62e6, stg: 4d62e6, des: 4d62e6]',
             "Sync'ed backup-2 to hoard!",

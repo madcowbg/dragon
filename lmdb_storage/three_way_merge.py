@@ -18,13 +18,13 @@ class MergePreferences:
 
     @abc.abstractmethod
     def combine_base_only(
-            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject],
+            self, path: List[str], repo_name: str, original_roots: ByRoot[TreeObject | FileObject],
             base_original: FileObject) -> ByRoot[ObjectID]:
         return original_roots.new()
 
     @abc.abstractmethod
     def combine_staging_only(
-            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject],
+            self, path: List[str], repo_name, original_roots: ByRoot[TreeObject | FileObject],
             staging_original: FileObject) -> ByRoot[ObjectID]:
         pass
 
@@ -53,13 +53,13 @@ class NaiveMergePreferences(MergePreferences):
         return result
 
     def combine_base_only(
-            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject],
+            self, path: List[str], repo_name: str, original_roots: ByRoot[TreeObject | FileObject],
             base_original: FileObject) -> ByRoot[ObjectID]:
 
         return original_roots.new()
 
     def combine_staging_only(
-            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject],
+            self, path: List[str], repo_name: str, original_roots: ByRoot[TreeObject | FileObject],
             staging_original: FileObject) -> ByRoot[ObjectID]:
         assert type(staging_original) is FileObject
 
@@ -100,12 +100,15 @@ class ThreewayMerge(Merge[FileObject, ThreewayMergeState, ByRoot[ObjectID]]):
             self.object_or_none(staging_obj.children.get(child_name)) if isinstance(staging_obj, TreeObject) else None)
 
     def __init__(
-            self, objects: Objects[FileObject], current: str, staging: str, others: List[str],
+            self, objects: Objects[FileObject], current: str, staging: str, repo_name: str, others: List[str],
             merge_prefs: MergePreferences):
         self.objects = objects
         self.current = current
         self.staging = staging
+
+        self.repo_name = repo_name
         self.others = others
+
         self.merge_prefs = merge_prefs
 
         self.allowed_roots = None  # fixme pass as argument maybe
@@ -143,11 +146,11 @@ class ThreewayMerge(Merge[FileObject, ThreewayMergeState, ByRoot[ObjectID]]):
 
         elif base_original:
             # file is deleted in staging
-            return self.merge_prefs.combine_base_only(state.path, original, base_original)
+            return self.merge_prefs.combine_base_only(state.path, self.repo_name, original, base_original)
 
         elif staging_original:
             # is added in staging
-            return self.merge_prefs.combine_staging_only(state.path, original, staging_original)
+            return self.merge_prefs.combine_staging_only(state.path, self.repo_name, original, staging_original)
 
         else:
             # current and staging are not in original, retain what was already there
