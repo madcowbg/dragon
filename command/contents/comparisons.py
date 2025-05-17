@@ -1,5 +1,6 @@
 import binascii
 import logging
+import sys
 
 from command.fast_path import FastPosixPath
 from config import HoardConfig
@@ -9,7 +10,7 @@ from contents.repo import RepoContents, RepoFSObjects
 from contents.repo_props import FileDesc
 from lmdb_storage.file_object import FileObject
 from lmdb_storage.object_store import ObjectStorage
-from lmdb_storage.tree_iteration import zip_trees_dfs
+from lmdb_storage.tree_iteration import zip_trees_dfs, zip_dfs
 from lmdb_storage.tree_structure import TreeObject, add_object
 from util import safe_hex
 
@@ -60,14 +61,19 @@ async def sync_fsobject_to_object_storage(
 
         root = env.roots(True)[remote.uuid]
         if remote_current_id != root.current:
-            if raise_exception and root.current is not None and remote_current_id != empty_dir:
-                raise ValueError(
-                    f"{remote.name}: {safe_hex(remote_current_id)} is not current, current={safe_hex(root.current)}")
+            if root.current is not None and remote_current_id != empty_dir:
+                if raise_exception:
+                    dump_tree_diffs(objects, remote_current_id, root)
+                    raise ValueError(
+                        f"current tree wrong - {remote.name}: {safe_hex(remote_desired_id)} is not desired, desired={safe_hex(root.desired)}")
+                logging.error(
+                    f"Current tree is not correct: {remote.name}: {safe_hex(remote_current_id)} is not current, current={safe_hex(root.current)}")
             # assert root.current is None, f"{remote.name}: {safe_hex(remote_current_id)} is not current, current={safe_hex(root.current)}"
         if remote_desired_id != root.desired:
             if raise_exception and root.desired is not None and remote_desired_id != empty_dir:
+                dump_tree_diffs(objects, remote_current_id, root)
                 raise ValueError(
-                    f"{remote.name}: {safe_hex(remote_desired_id)} is not desired, desired={safe_hex(root.desired)}")
+                    f"desired tree wrong - {remote.name}: {safe_hex(remote_desired_id)} is not desired, desired={safe_hex(root.desired)}")
             # assert root.desired is None, f"{remote.name}: {safe_hex(remote_desired_id)} is not desired, desired={safe_hex(root.desired)}"
 
         root.current = remote_current_id
@@ -80,7 +86,19 @@ async def sync_fsobject_to_object_storage(
     return current_root_id
 
 
-def sync_object_storate_to_recreate_fsobject_and_fspresence(
+def dump_tree_diffs(env, remote_current_id, root):
+    with env.objects(write=False) as objects:
+        diffs = [
+            f"{path}: {diff_type.value}"
+            for path, diff_type, left_id, right_id, should_skip
+            in zip_dfs(objects, "root", root.current, remote_current_id)]
+        sys.stdout.write(
+            "\n############ dumping diffs of trees ############\n"
+            + "\n".join(diffs)
+            + "\n############# end dumping tree ############\n\n")
+
+
+def sync_object_storage_to_recreate_fsobject_and_fspresence(
         env: ObjectStorage, fsobjects: HoardFSObjects, hoard_config: HoardConfig):
     fsobjects.parent.conn.execute("DELETE FROM fspresence")  # fixme DANGEROUS
     fsobjects.parent.conn.execute("DELETE FROM fsobject")  # fixme DANGEROUS

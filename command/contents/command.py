@@ -8,7 +8,7 @@ from alive_progress import alive_bar, alive_it
 
 from command.content_prefs import ContentPrefs
 from command.contents.comparisons import copy_local_staging_to_hoard, \
-    sync_fsobject_to_object_storage, sync_object_storate_to_recreate_fsobject_and_fspresence
+    sync_fsobject_to_object_storage, sync_object_storage_to_recreate_fsobject_and_fspresence
 from command.contents.pull_preferences import PullPreferences, PullIntention
 from command.fast_path import FastPosixPath
 from command.hoard import Hoard
@@ -141,8 +141,9 @@ async def execute_pull(
             await sync_fsobject_to_object_storage(
                 hoard_contents.env, hoard_contents.fsobjects, current_contents.fsobjects,
                 hoard.config())  # fixme remove
+
             # fixme remove, just dumping
-            sync_object_storate_to_recreate_fsobject_and_fspresence(
+            sync_object_storage_to_recreate_fsobject_and_fspresence(
                 hoard_contents.env, hoard_contents.fsobjects, hoard.config())
 
             roots = hoard_contents.env.roots(False)
@@ -170,7 +171,7 @@ async def execute_pull(
             commit_merged(hoard_root, repo_root, all_remote_roots, merged_ids, empty_folder_id)
 
             # fixme remove, just dumping
-            sync_object_storate_to_recreate_fsobject_and_fspresence(
+            sync_object_storage_to_recreate_fsobject_and_fspresence(
                 hoard_contents.env, hoard_contents.fsobjects, hoard.config())
 
             for root in all_remote_roots:
@@ -771,7 +772,7 @@ class HoardCommandContents:
                 roots[remote_uuid].current = roots[remote_uuid].staging
 
                 # fixme remove, just dumping
-                sync_object_storate_to_recreate_fsobject_and_fspresence(
+                sync_object_storage_to_recreate_fsobject_and_fspresence(
                     hoard_contents.env, hoard_contents.fsobjects, self.hoard.config())
 
                 repo_root = roots[remote_uuid]

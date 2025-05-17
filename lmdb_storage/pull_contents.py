@@ -62,7 +62,7 @@ def merge_contents(
 
 def commit_merged(hoard: Root, repo: Root, all_roots: List[Root], merged_ids: ByRoot[ObjectID], empty_folder_id):
     # set current for the repo being merged
-    repo.current = merged_ids.get_if_present("staging")
+    repo.current = repo.staging
 
     assert repo in all_roots, f"{repo} is missing from all_roots={all_roots}"
 

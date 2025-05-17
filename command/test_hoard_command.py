@@ -1,5 +1,7 @@
+import logging
 import os
 import pathlib
+import sys
 import tempfile
 from os.path import join
 from typing import Tuple, List, Dict
@@ -22,6 +24,10 @@ def populate_hoard(tmpdir: str):
 
 class TestHoardCommand(IsolatedAsyncioTestCase):
     def setUp(self):
+        # logging.basicConfig(level=logging.DEBUG)
+        # logging.getLogger().setLevel(logging.DEBUG)
+        # logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
+
         self.tmpdir = tempfile.TemporaryDirectory()
         populate_hoard(self.tmpdir.name)
 
