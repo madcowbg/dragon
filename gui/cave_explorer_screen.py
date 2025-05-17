@@ -19,10 +19,7 @@ from textual.widgets._tree import TreeNode
 from command.contents.command import execute_pull, init_pull_preferences, pull_prefs_to_restore_from_hoard, \
     clear_pending_file_ops
 from command.contents.comparisons import copy_local_staging_to_hoard, sync_fsobject_to_object_storage
-from command.contents.handle_pull import resolution_to_match_repo_and_hoard, calculate_actions, Action, \
-    MarkIsAvailableBehavior, AddToHoardAndCleanupSameBehavior, AddToHoardAndCleanupNewBehavior, AddNewFileBehavior, \
-    MarkToGetBehavior, MarkForCleanupBehavior, ResetLocalAsCurrentBehavior, RemoveLocalStatusBehavior, \
-    DeleteFileFromHoardBehavior, MoveFileBehavior
+from command.contents.handle_pull import Action
 from command.files.command import execute_files_push
 from command.hoard import Hoard
 from command.pathing import HoardPathing
@@ -132,28 +129,29 @@ PENDING_TO_PULL = 'Hoard vs Repo contents'
 
 
 def pull_op_to_str(act: Action):
-    if isinstance(act, MarkIsAvailableBehavior):
-        return "mark_avail", 25
-    elif isinstance(act, AddToHoardAndCleanupSameBehavior):
-        return "absorb", 5
-    elif isinstance(act, AddToHoardAndCleanupNewBehavior):
-        return "absorb", 5
-    elif isinstance(act, AddNewFileBehavior):
-        return "add", 10
-    elif isinstance(act, MarkToGetBehavior):
-        return "mark_get", 40
-    elif isinstance(act, MarkForCleanupBehavior):
-        return "mark_deleted", 92
-    elif isinstance(act, ResetLocalAsCurrentBehavior):
-        return "reset_to_local", 20
-    elif isinstance(act, RemoveLocalStatusBehavior):
-        return "unmark", 91
-    elif isinstance(act, DeleteFileFromHoardBehavior):
-        return "delete", 90
-    elif isinstance(act, MoveFileBehavior):
-        return "move", 30
-    else:
-        raise ValueError(f"Unsupported action: {act}")
+    raise NotImplementedError()
+    # if isinstance(act, MarkIsAvailableBehavior):
+    #     return "mark_avail", 25
+    # elif isinstance(act, AddToHoardAndCleanupSameBehavior):
+    #     return "absorb", 5
+    # elif isinstance(act, AddToHoardAndCleanupNewBehavior):
+    #     return "absorb", 5
+    # elif isinstance(act, AddNewFileBehavior):
+    #     return "add", 10
+    # elif isinstance(act, MarkToGetBehavior):
+    #     return "mark_get", 40
+    # elif isinstance(act, MarkForCleanupBehavior):
+    #     return "mark_deleted", 92
+    # elif isinstance(act, ResetLocalAsCurrentBehavior):
+    #     return "reset_to_local", 20
+    # elif isinstance(act, RemoveLocalStatusBehavior):
+    #     return "unmark", 91
+    # elif isinstance(act, DeleteFileFromHoardBehavior):
+    #     return "delete", 90
+    # elif isinstance(act, MoveFileBehavior):
+    #     return "move", 30
+    # else:
+    #     raise ValueError(f"Unsupported action: {act}")
 
 
 class HoardContentsPendingToPull(Tree[Action]):
@@ -181,6 +179,9 @@ class HoardContentsPendingToPull(Tree[Action]):
             hoard_config = self.hoard.config()
             pathing = HoardPathing(hoard_config, self.hoard.paths())
             repo = self.hoard.connect_to_repo(self.remote.uuid, True)
+
+            raise NotImplementedError("to be implemented with trees")
+
             with repo.open_contents(is_readonly=True) as current_contents:
                 async with self.hoard.open_contents(create_missing=False) as hoard_contents:
                     preferences = init_pull_preferences(
@@ -190,13 +191,13 @@ class HoardContentsPendingToPull(Tree[Action]):
                     uuid = current_contents.config.uuid
                     await sync_fsobject_to_object_storage(hoard_contents.env, hoard_contents.fsobjects, hoard_config)
 
-                    resolutions = await resolution_to_match_repo_and_hoard(
-                        uuid, hoard_contents, pathing, preferences,
-                        progress_reporting_it(self, id="hoard-contents-to-pull", max_frequency=10))
-
-                    with StringIO() as other_out:
-                        actions = list(calculate_actions(preferences, resolutions, pathing, hoard_config, other_out))
-                        logging.debug(other_out.getvalue())
+                    # resolutions = await resolution_to_match_repo_and_hoard(
+                    #     uuid, hoard_contents, pathing, preferences,
+                    #     progress_reporting_it(self, id="hoard-contents-to-pull", max_frequency=10))
+                    #
+                    # with StringIO() as other_out:
+                    #     actions = list(calculate_actions(preferences, resolutions, pathing, hoard_config, other_out))
+                    #     logging.debug(other_out.getvalue())
 
             self.op_tree = FolderTree[Action](actions, lambda action: action.file_being_acted_on.as_posix())
 
