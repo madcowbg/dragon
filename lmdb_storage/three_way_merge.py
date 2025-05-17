@@ -13,24 +13,26 @@ class MergePreferences:
     @abc.abstractmethod
     def combine_both_existing(
             self, path: List[str], original_roots: ByRoot[TreeObject | FileObject],
-            staging_original: FileObject, base_original: FileObject) -> ByRoot[ObjectID]:
+            staging_original: FileObject, base_original: FileObject, roots_to_merge: List[str]) -> ByRoot[
+        ObjectID]:
         pass
 
     @abc.abstractmethod
     def combine_base_only(
             self, path: List[str], repo_name: str, original_roots: ByRoot[TreeObject | FileObject],
-            base_original: FileObject) -> ByRoot[ObjectID]:
+            base_original: FileObject, roots_to_merge: List[str]) -> ByRoot[ObjectID]:
         return original_roots.new()
 
     @abc.abstractmethod
     def combine_staging_only(
             self, path: List[str], repo_name, original_roots: ByRoot[TreeObject | FileObject],
-            staging_original: FileObject) -> ByRoot[ObjectID]:
+            staging_original: FileObject, roots_to_merge: List[str]) -> ByRoot[ObjectID]:
         pass
 
     @abc.abstractmethod
     def merge_missing(
-            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject]) -> ByRoot[ObjectID]:
+            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject],
+            roots_to_merge: List[str]) -> ByRoot[ObjectID]:
         pass
 
 
@@ -46,7 +48,7 @@ class NaiveMergePreferences(MergePreferences):
 
     def combine_both_existing(
             self, path: List[str], original_roots: ByRoot[TreeObject | FileObject],
-            staging_original: FileObject, base_original: FileObject) -> ByRoot[ObjectID]:
+            staging_original: FileObject, base_original: FileObject, roots_to_merge: List[str]) -> ByRoot[ObjectID]:
         result: ByRoot[ObjectID] = original_roots.new()
         for merge_name in (self.where_to_apply_diffs(list(original_roots.assigned_keys()))):
             result[merge_name] = staging_original.file_id
@@ -54,13 +56,13 @@ class NaiveMergePreferences(MergePreferences):
 
     def combine_base_only(
             self, path: List[str], repo_name: str, original_roots: ByRoot[TreeObject | FileObject],
-            base_original: FileObject) -> ByRoot[ObjectID]:
+            base_original: FileObject, roots_to_merge) -> ByRoot[ObjectID]:
 
         return original_roots.new()
 
     def combine_staging_only(
             self, path: List[str], repo_name: str, original_roots: ByRoot[TreeObject | FileObject],
-            staging_original: FileObject) -> ByRoot[ObjectID]:
+            staging_original: FileObject, roots_to_merge: List[str]) -> ByRoot[ObjectID]:
         assert type(staging_original) is FileObject
 
         result: ByRoot[ObjectID] = original_roots.new()
@@ -69,7 +71,8 @@ class NaiveMergePreferences(MergePreferences):
         return result
 
     def merge_missing(
-            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject]) -> ByRoot[ObjectID]:
+            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject],
+            roots_to_merge: List[str]) -> ByRoot[ObjectID]:
         return original_roots.map(lambda obj: obj.id)
 
 
@@ -85,8 +88,8 @@ class ThreewayMerge(Merge[FileObject, ThreewayMergeState, ByRoot[ObjectID]]):
         return self.objects[object_id] if object_id is not None else None
 
     def initial_state(self, obj_ids: ByRoot[ObjectID]) -> ThreewayMergeState:
-        base_id = obj_ids.get_if_present(self.current)
-        staging_id = obj_ids.get_if_present(self.staging)
+        base_id = self.current_id
+        staging_id = self.staging_id
         return ThreewayMergeState([], self.object_or_none(base_id), self.object_or_none(staging_id))
 
     def drilldown_state(self, child_name: str, merge_state: ThreewayMergeState) -> ThreewayMergeState:
@@ -100,14 +103,14 @@ class ThreewayMerge(Merge[FileObject, ThreewayMergeState, ByRoot[ObjectID]]):
             self.object_or_none(staging_obj.children.get(child_name)) if isinstance(staging_obj, TreeObject) else None)
 
     def __init__(
-            self, objects: Objects[FileObject], current: str, staging: str, repo_name: str, others: List[str],
-            merge_prefs: MergePreferences):
+            self, objects: Objects[FileObject], current_id: ObjectID | None, staging_id: ObjectID | None,
+            repo_name: str, roots_to_merge: List[str], merge_prefs: MergePreferences):
         self.objects = objects
-        self.current = current
-        self.staging = staging
+        self.current_id = current_id
+        self.staging_id = staging_id
 
         self.repo_name = repo_name
-        self.others = others
+        self.roots_to_merge = roots_to_merge
 
         self.merge_prefs = merge_prefs
 
@@ -142,19 +145,22 @@ class ThreewayMerge(Merge[FileObject, ThreewayMergeState, ByRoot[ObjectID]]):
 
         if staging_original and base_original:
             # left and right both exist, apply difference to the other roots
-            return self.merge_prefs.combine_both_existing(state.path, original, staging_original, base_original)
+            return self.merge_prefs.combine_both_existing(
+                state.path, original, staging_original, base_original, self.roots_to_merge)
 
         elif base_original:
             # file is deleted in staging
-            return self.merge_prefs.combine_base_only(state.path, self.repo_name, original, base_original)
+            return self.merge_prefs.combine_base_only(
+                state.path, self.repo_name, original, base_original, self.roots_to_merge)
 
         elif staging_original:
             # is added in staging
-            return self.merge_prefs.combine_staging_only(state.path, self.repo_name, original, staging_original)
+            return self.merge_prefs.combine_staging_only(
+                state.path, self.repo_name, original, staging_original, self.roots_to_merge)
 
         else:
             # current and staging are not in original, retain what was already there
-            return self.merge_prefs.merge_missing(state.path, original)
+            return self.merge_prefs.merge_missing(state.path, original, self.roots_to_merge)
 
     def combine(self, state: ThreewayMergeState, merged: ByRoot[ObjectID], original: ByRoot[TreeObject | FileObject]) -> \
             ByRoot[ObjectID]:

@@ -42,7 +42,7 @@ def merge_contents(
 
     all_root_names = [r.name for r in all_repo_roots] + ["HOARD"]
     current_ids = ByRoot[ObjectID](
-        list(set(list(all_root_names) + ["current", "staging"])),
+        list(set(all_root_names + ["current", "staging"])),
         [(r.name, r.desired) for r in all_repo_roots] + [
             ("current", repo_current_id),
             ("staging", repo_staging_id),
@@ -53,8 +53,8 @@ def merge_contents(
     # execute merge
     with env.objects(write=True) as objects:
         merged_ids = ThreewayMerge(
-            objects, current="current", staging='staging', repo_name=repo_root.name,
-            others=all_root_names, merge_prefs=merge_prefs) \
+            objects, current_id=repo_current_id, staging_id=repo_staging_id, repo_name=repo_root.name,
+            roots_to_merge=all_root_names, merge_prefs=merge_prefs) \
             .merge_trees(current_ids)
 
     return merged_ids

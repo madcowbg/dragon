@@ -335,8 +335,8 @@ class PullMergePreferences(MergePreferences):
 
     def combine_both_existing(
             self, path: List[str], original_roots: ByRoot[TreeObject | FileObject],
-            staging_original: FileObject, base_original: FileObject) -> ByRoot[ObjectID]:
-        result: ByRoot[ObjectID] = original_roots.new()
+            staging_original: FileObject, base_original: FileObject, roots_to_merge: List[str]) -> ByRoot[ObjectID]:
+        original_roots = original_roots.subset(roots_to_merge)
 
         if staging_original.file_id == base_original.file_id:
             logging.error(f"Both staging and base staging for %s are identical, returns as-is.", path)
@@ -355,13 +355,16 @@ class PullMergePreferences(MergePreferences):
             logging.error("Ignoring changes to %s coming from an incoming repo!", path)
             return original_roots.map(lambda obj: obj.id)  # ignore changes coming from incoming
 
-        for merge_name in ["HOARD"] + list(original_roots.assigned_keys()):  # self.where_to_apply_diffs(path): FIXME!!!
-            result[merge_name] = staging_original.file_id
+        result: ByRoot[ObjectID] = ByRoot(roots_to_merge)
+        for merge_name in ["HOARD"] + list(original_roots.assigned_keys()):
+            if merge_name in roots_to_merge:
+                result[merge_name] = staging_original.file_id
         return result
 
     def combine_base_only(
             self, path: List[str], repo_name: str, original_roots: ByRoot[TreeObject | FileObject],
-            base_original: FileObject) -> ByRoot[ObjectID]:
+            base_original: FileObject, roots_to_merge: List[str]) -> ByRoot[ObjectID]:
+        original_roots = original_roots.subset(roots_to_merge)
 
         if self.remote_type == CaveType.BACKUP:  # fixme use PullPreferences
             # fixme lower
@@ -379,7 +382,8 @@ class PullMergePreferences(MergePreferences):
 
     def combine_staging_only(
             self, path: List[str], repo_name: str, original_roots: ByRoot[TreeObject | FileObject],
-            staging_original: FileObject) -> ByRoot[ObjectID]:
+            staging_original: FileObject, roots_to_merge: List[str]) -> ByRoot[ObjectID]:
+        original_roots = original_roots.subset(roots_to_merge)
 
         hoard_object = original_roots.get_if_present("HOARD")
         if self.remote_type == CaveType.BACKUP:
@@ -412,7 +416,9 @@ class PullMergePreferences(MergePreferences):
         return result
 
     def merge_missing(
-            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject]) -> ByRoot[ObjectID]:
+            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject],
+            roots_to_merge: List[str]) -> ByRoot[ObjectID]:
+        original_roots = original_roots.subset(roots_to_merge)
         return original_roots.map(lambda obj: obj.id)
 
 

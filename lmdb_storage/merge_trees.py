@@ -6,7 +6,7 @@ from lmdb_storage.tree_structure import Objects, TreeObject, ObjectID
 
 
 class ByRoot[V]:
-    def __init__(self, allowed_roots: List[str], roots_to_object: Iterable[Tuple[str, V | None]] = ()):
+    def __init__(self, allowed_roots: Collection[str], roots_to_object: Iterable[Tuple[str, V | None]] = ()):
         self.allowed_roots = allowed_roots
         self._roots_to_object = dict((k, v) for k, v in roots_to_object if v is not None)
         for child_name in self._roots_to_object:
@@ -59,6 +59,12 @@ class ByRoot[V]:
         return ByRoot[V](
             self.allowed_roots + other.allowed_roots,
             list(self._roots_to_object.items()) + list(other._roots_to_object.items()))
+
+    def subset_keys(self, subset_roots: Collection[str]) -> List[str]:
+        return [r for r in self.assigned_keys() if r in subset_roots]
+
+    def subset(self, subset_roots: Collection[str]) -> "ByRoot[V]":
+        return ByRoot[V](subset_roots, [(name, obj) for name, obj in self.items() if name in subset_roots])
 
 
 class ObjectsByRoot:
