@@ -342,11 +342,11 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
 
         root_ids = env.roots(write=False).all_live
         self.assertEqual([
-            b'89527b0fa576e127d04089d9cb5aab0e5619696d',
-            b'9fbdcfe094f258f954ba6f65c4a3641d25b32e06',
+            b'1ad9e0f92a8411689b1aee57f9ccf36c1f09a1ad',
+            b'3a0889e00c0c4ace24843be76d59b3baefb16d77',
+            b'8da76083b9eab9f49945d8f2487df38ab909b7df',
             b'a80f91bc48850a1fb3459bb76b9f6308d4d35710',
-            b'd995800c80add686a027bac8628ca610418c64b6',
-            b'f6a74030fa0a826b18e424d44f8aca9be8c657f3'], [binascii.hexlify(r) for r in root_ids])
+            b'f9bfc2be6cc201aa81b733b9d83c1030cc88bffe'], [binascii.hexlify(r) for r in root_ids])
 
         with env.objects(write=False) as objects:
             self.assertEqual([
@@ -354,7 +354,7 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
                 ('$ROOT/test.me.1', 2),
                 ('$ROOT/wat', 1),
                 ('$ROOT/wat/test.me.3', 2)],
-                dump_tree(objects, binascii.unhexlify(b'9fbdcfe094f258f954ba6f65c4a3641d25b32e06')))
+                dump_tree(objects, binascii.unhexlify(b'3a0889e00c0c4ace24843be76d59b3baefb16d77')))
 
         another_storage_path = f"{self.tmpdir}/test/other.lmdb"
         shutil.rmtree(another_storage_path, ignore_errors=True)
@@ -363,9 +363,9 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
         other_env = ObjectStorage(another_storage_path)
 
         roots_to_copy = [binascii.unhexlify(hex_id) for hex_id in (
-            b'89527b0fa576e127d04089d9cb5aab0e5619696d',
-            b'9fbdcfe094f258f954ba6f65c4a3641d25b32e06',
-            b'a80f91bc48850a1fb3459bb76b9f6308d4d35710',)]
+            b'1ad9e0f92a8411689b1aee57f9ccf36c1f09a1ad',
+            b'3a0889e00c0c4ace24843be76d59b3baefb16d77',
+            b'8da76083b9eab9f49945d8f2487df38ab909b7df',)]
 
         other_env.copy_trees_from(env, roots_to_copy)
 
@@ -375,12 +375,12 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
                 ('$ROOT/test.me.1', 2),
                 ('$ROOT/wat', 1),
                 ('$ROOT/wat/test.me.3', 2)],
-                dump_tree(objects, binascii.unhexlify(b'9fbdcfe094f258f954ba6f65c4a3641d25b32e06')))
+                dump_tree(objects, binascii.unhexlify(b'3a0889e00c0c4ace24843be76d59b3baefb16d77')))
 
         other_env.gc()  # note - we have not saved the roots, so this will clean it up
         with other_env.objects(write=False) as objects:
             try:
-                dump_tree(objects, binascii.unhexlify(b'9fbdcfe094f258f954ba6f65c4a3641d25b32e06'))
+                dump_tree(objects, binascii.unhexlify(b'3a0889e00c0c4ace24843be76d59b3baefb16d77'))
                 raise "should have thrown exception"
             except ValueError:
                 pass

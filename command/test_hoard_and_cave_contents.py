@@ -46,15 +46,15 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.pull(cave_cmd.current_uuid())
         self.assertEqual([
             'Pulling repo-in-local...',
-            'Before: Hoard [a80f91] <- repo [curr: a80f91, stg: b09bd5, des: a80f91]',
+            'Before: Hoard [a80f91] <- repo [curr: a80f91, stg: 72174f, des: a80f91]',
             'REPO_MARK_FILE_AVAILABLE /wat/test.me.different',
             'HOARD_FILE_ADDED /wat/test.me.different',
             'REPO_MARK_FILE_AVAILABLE /wat/test.me.once',
             'HOARD_FILE_ADDED /wat/test.me.once',
             'REPO_MARK_FILE_AVAILABLE /wat/test.me.twice',
             'HOARD_FILE_ADDED /wat/test.me.twice',
-            'updated repo-in-local from a80f91 to b09bd5',
-            'After: Hoard [b09bd5], repo [curr: b09bd5, stg: b09bd5, des: b09bd5]',
+            'updated repo-in-local from a80f91 to 72174f',
+            'After: Hoard [72174f], repo [curr: 72174f, stg: 72174f, des: 72174f]',
             "Sync'ed repo-in-local to hoard!",
             'DONE'], res.splitlines())
 

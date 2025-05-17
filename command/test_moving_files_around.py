@@ -24,103 +24,105 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.pull(all=True)
         self.assertEqual([
             'Pulling repo-partial-name...',
-            'Before: Hoard [a80f91] <- repo [curr: a80f91, stg: f6a740, des: a80f91]',
+            'Before: Hoard [a80f91] <- repo [curr: a80f91, stg: f9bfc2, des: a80f91]',
             'REPO_MARK_FILE_AVAILABLE /test.me.1',
             'HOARD_FILE_ADDED /test.me.1',
             'REPO_MARK_FILE_AVAILABLE /wat/test.me.2',
             'HOARD_FILE_ADDED /wat/test.me.2',
-            'updated repo-partial-name from a80f91 to f6a740',
-            'updated repo-full-name from a80f91 to f6a740',
-            'updated repo-backup-name from a80f91 to f6a740',
-            'After: Hoard [f6a740], repo [curr: f6a740, stg: f6a740, des: f6a740]',
+            'updated repo-partial-name from a80f91 to f9bfc2',
+            'updated repo-full-name from a80f91 to f9bfc2',
+            'updated repo-backup-name from a80f91 to f9bfc2',
+            'After: Hoard [f9bfc2], repo [curr: f9bfc2, stg: f9bfc2, des: f9bfc2]',
             "Sync'ed repo-partial-name to hoard!",
             'Pulling repo-full-name...',
-            'Before: Hoard [f6a740] <- repo [curr: a80f91, stg: d99580, des: f6a740]',
+            'Before: Hoard [f9bfc2] <- repo [curr: a80f91, stg: 1ad9e0, des: f9bfc2]',
             'REPO_MARK_FILE_AVAILABLE /test.me.1',
             'REPO_MARK_FILE_AVAILABLE /test.me.4',
             'HOARD_FILE_ADDED /test.me.4',
             'REPO_MARK_FILE_AVAILABLE /wat/test.me.2',
             'REPO_MARK_FILE_AVAILABLE /wat/test.me.3',
             'HOARD_FILE_ADDED /wat/test.me.3',
-            'updated repo-full-name from f6a740 to d99580',
-            'updated repo-backup-name from f6a740 to d99580',
-            'After: Hoard [d99580], repo [curr: d99580, stg: d99580, des: d99580]',
+            'updated repo-full-name from f9bfc2 to 1ad9e0',
+            'updated repo-backup-name from f9bfc2 to 1ad9e0',
+            'After: Hoard [1ad9e0], repo [curr: 1ad9e0, stg: 1ad9e0, des: 1ad9e0]',
             "Sync'ed repo-full-name to hoard!",
             'Pulling repo-backup-name...',
-            'Before: Hoard [d99580] <- repo [curr: a80f91, stg: 9fbdcf, des: d99580]',
+            'Before: Hoard [1ad9e0] <- repo [curr: a80f91, stg: 3a0889, des: 1ad9e0]',
             'REPO_MARK_FILE_AVAILABLE /test.me.1',
             'REPO_DESIRED_FILE_TO_GET /test.me.4',
             'REPO_DESIRED_FILE_TO_GET /wat/test.me.2',
             'REPO_MARK_FILE_AVAILABLE /wat/test.me.3',
-            'After: Hoard [d99580], repo [curr: 9fbdcf, stg: 9fbdcf, des: d99580]',
+            'After: Hoard [1ad9e0], repo [curr: 3a0889, stg: 3a0889, des: 1ad9e0]',
             "Sync'ed repo-backup-name to hoard!",
             'Pulling repo-incoming-name...',
-            'Before: Hoard [d99580] <- repo [curr: a80f91, stg: e9ce07, des: a80f91]',
+            'Before: Hoard [1ad9e0] <- repo [curr: a80f91, stg: 3d1726, des: a80f91]',
             'REPO_MARK_FILE_AVAILABLE /test.me.4',
             'REPO_MARK_FILE_AVAILABLE /test.me.5',
             'HOARD_FILE_ADDED /test.me.5',
             'REPO_MARK_FILE_AVAILABLE /wat/test.me.6',
             'HOARD_FILE_ADDED /wat/test.me.6',
-            'updated repo-full-name from d99580 to 89527b',
-            'updated repo-backup-name from d99580 to 89527b',
-            'After: Hoard [89527b], repo [curr: e9ce07, stg: e9ce07, des: a80f91]',
+            'updated repo-full-name from 1ad9e0 to 8da760',
+            'updated repo-backup-name from 1ad9e0 to 8da760',
+            'After: Hoard [8da760], repo [curr: 3d1726, stg: 3d1726, des: a80f91]',
             "Sync'ed repo-incoming-name to hoard!",
             'DONE'], res.splitlines())
 
         res = await partial_cave_cmd.refresh()
         self.assertEqual([
             'NO CHANGES',
-            'old: f6a74030fa0a826b18e424d44f8aca9be8c657f3',
-            'current: f6a74030fa0a826b18e424d44f8aca9be8c657f3',
+            'old: f9bfc2be6cc201aa81b733b9d83c1030cc88bffe',
+            'current: f9bfc2be6cc201aa81b733b9d83c1030cc88bffe',
             'Refresh done!'], res.splitlines())
 
         res = await full_cave_cmd.refresh()
         self.assertEqual([
             'NO CHANGES',
-            'old: d995800c80add686a027bac8628ca610418c64b6',
-            'current: d995800c80add686a027bac8628ca610418c64b6',
+            'old: 1ad9e0f92a8411689b1aee57f9ccf36c1f09a1ad',
+            'current: 1ad9e0f92a8411689b1aee57f9ccf36c1f09a1ad',
             'Refresh done!'], res.splitlines())
 
         res = await backup_cave_cmd.refresh()
-        self.assertEqual(['NO CHANGES',
-                          'old: 9fbdcfe094f258f954ba6f65c4a3641d25b32e06',
-                          'current: 9fbdcfe094f258f954ba6f65c4a3641d25b32e06',
-                          'Refresh done!'], res.splitlines())
+        self.assertEqual([
+            'NO CHANGES',
+            'old: 3a0889e00c0c4ace24843be76d59b3baefb16d77',
+            'current: 3a0889e00c0c4ace24843be76d59b3baefb16d77',
+            'Refresh done!'], res.splitlines())
 
         res = await incoming_cave_cmd.refresh()
-        self.assertEqual(['NO CHANGES',
-                          'old: e9ce073b9d61e12d35bbb0fa537581065083c886',
-                          'current: e9ce073b9d61e12d35bbb0fa537581065083c886',
-                          'Refresh done!'], res.splitlines())
+        self.assertEqual([
+            'NO CHANGES',
+            'old: 3d1726bd296f20d36cb9df60a0da4d4feae29248',
+            'current: 3d1726bd296f20d36cb9df60a0da4d4feae29248',
+            'Refresh done!'], res.splitlines())
 
         # should do nothing
         res = await hoard_cmd.contents.pull(all=True)
         self.assertEqual([
             'Pulling repo-partial-name...',
-            'Before: Hoard [89527b] <- repo [curr: f6a740, stg: f6a740, des: f6a740]',
-            'After: Hoard [89527b], repo [curr: f6a740, stg: f6a740, des: f6a740]',
+            'Before: Hoard [8da760] <- repo [curr: f9bfc2, stg: f9bfc2, des: f9bfc2]',
+            'After: Hoard [8da760], repo [curr: f9bfc2, stg: f9bfc2, des: f9bfc2]',
             "Sync'ed repo-partial-name to hoard!",
             'Pulling repo-full-name...',
-            'Before: Hoard [89527b] <- repo [curr: d99580, stg: d99580, des: 89527b]',
+            'Before: Hoard [8da760] <- repo [curr: 1ad9e0, stg: 1ad9e0, des: 8da760]',
             'REPO_DESIRED_FILE_TO_GET /test.me.5',
             'REPO_DESIRED_FILE_TO_GET /wat/test.me.6',
-            'After: Hoard [89527b], repo [curr: d99580, stg: d99580, des: 89527b]',
+            'After: Hoard [8da760], repo [curr: 1ad9e0, stg: 1ad9e0, des: 8da760]',
             "Sync'ed repo-full-name to hoard!",
             'Pulling repo-backup-name...',
-            'Before: Hoard [89527b] <- repo [curr: 9fbdcf, stg: 9fbdcf, des: 89527b]',
+            'Before: Hoard [8da760] <- repo [curr: 3a0889, stg: 3a0889, des: 8da760]',
             'REPO_DESIRED_FILE_TO_GET /test.me.4',
             'REPO_DESIRED_FILE_TO_GET /test.me.5',
             'REPO_DESIRED_FILE_TO_GET /wat/test.me.2',
             'REPO_DESIRED_FILE_TO_GET /wat/test.me.6',
-            'After: Hoard [89527b], repo [curr: 9fbdcf, stg: 9fbdcf, des: 89527b]',
+            'After: Hoard [8da760], repo [curr: 3a0889, stg: 3a0889, des: 8da760]',
             "Sync'ed repo-backup-name to hoard!",
             'Pulling repo-incoming-name...',
-            'Before: Hoard [89527b] <- repo [curr: 843a75, stg: e9ce07, des: a80f91]',
+            'Before: Hoard [8da760] <- repo [curr: 28c623, stg: 3d1726, des: a80f91]',
             'REPO_FILE_TO_DELETE /test.me.4',
             'REPO_FILE_TO_DELETE /test.me.5',
             'REPO_FILE_TO_DELETE /wat/test.me.3',
             'REPO_FILE_TO_DELETE /wat/test.me.6',
-            'After: Hoard [89527b], repo [curr: e9ce07, stg: e9ce07, des: a80f91]',
+            'After: Hoard [8da760], repo [curr: 3d1726, stg: 3d1726, des: a80f91]',
             "Sync'ed repo-incoming-name to hoard!",
             'DONE'], res.splitlines())
 
@@ -133,8 +135,8 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
         res = await full_cave_cmd.refresh()
         self.assertEqual([
             'MOVED wat/test.me.3 TO wat2/test.me.3',
-            'old: d995800c80add686a027bac8628ca610418c64b6',
-            'current: 74285a5ab9a1566b524560f0a873bb877148424f',
+            'old: 1ad9e0f92a8411689b1aee57f9ccf36c1f09a1ad',
+            'current: ba46648582193b0f2ab9a4894708a6106f7479ab',
             'Refresh done!'], res.splitlines())
 
         res = full_cave_cmd.status_index(show_files=True, show_dates=False)
@@ -144,7 +146,7 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
             'wat/test.me.2: present @ -1\n'
             'wat2/test.me.3: present @ -1\n'
             '--- SUMMARY ---\n'
-            'Result for local [74285a5ab9a1566b524560f0a873bb877148424f]:\n'
+            'Result for local [ba46648582193b0f2ab9a4894708a6106f7479ab]:\n'
             'Max size: 3.5TB\n'
             f'UUID: {full_cave_cmd.current_uuid()}\n'
             '  # files = 4 of size 35\n'), res)
@@ -152,16 +154,16 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
         self.assertEqual([
             'Pulling repo-full-name...',
-            'Before: Hoard [89527b] <- repo [curr: d99580, stg: 74285a, des: 89527b]',
+            'Before: Hoard [8da760] <- repo [curr: 1ad9e0, stg: ba4664, des: 8da760]',
             'REPO_DESIRED_FILE_TO_GET /test.me.5',
             'REPO_FILE_TO_DELETE /wat/test.me.3',
-            'HOARD_FILE_DELETED /wat/test.me.3',  # fixme maybe should be MOVED instead
+            'HOARD_FILE_DELETED /wat/test.me.3',
             'REPO_DESIRED_FILE_TO_GET /wat/test.me.6',
             'REPO_MARK_FILE_AVAILABLE /wat2/test.me.3',
             'HOARD_FILE_ADDED /wat2/test.me.3',
-            'updated repo-full-name from 89527b to 894baf',
-            'updated repo-backup-name from 89527b to 894baf',
-            'After: Hoard [894baf], repo [curr: 74285a, stg: 74285a, des: 894baf]',
+            'updated repo-full-name from 8da760 to d16f79',
+            'updated repo-backup-name from 8da760 to d16f79',
+            'After: Hoard [d16f79], repo [curr: ba4664, stg: ba4664, des: d16f79]',
             "Sync'ed repo-full-name to hoard!",
             'DONE'], res.splitlines())
 
@@ -169,25 +171,25 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
         res = await full_cave_cmd.refresh()
         self.assertEqual([
             'NO CHANGES',
-            'old: 74285a5ab9a1566b524560f0a873bb877148424f',
-            'current: 74285a5ab9a1566b524560f0a873bb877148424f',
+            'old: ba46648582193b0f2ab9a4894708a6106f7479ab',
+            'current: ba46648582193b0f2ab9a4894708a6106f7479ab',
             'Refresh done!'], res.splitlines())
 
         res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
         self.assertEqual([
             'Pulling repo-full-name...',
-            'Before: Hoard [894baf] <- repo [curr: 74285a, stg: 74285a, des: 894baf]',
+            'Before: Hoard [d16f79] <- repo [curr: ba4664, stg: ba4664, des: d16f79]',
             'REPO_DESIRED_FILE_TO_GET /test.me.5',
             'REPO_DESIRED_FILE_TO_GET /wat/test.me.6',
-            'After: Hoard [894baf], repo [curr: 74285a, stg: 74285a, des: 894baf]',
+            'After: Hoard [d16f79], repo [curr: ba4664, stg: ba4664, des: d16f79]',
             "Sync'ed repo-full-name to hoard!",
             'DONE'], res.splitlines())
 
         res = await hoard_cmd.contents.pending_pull(incoming_cave_cmd.current_uuid())
         self.assertEqual([
             'Status of repo-incoming-name:',
-            'Hoard root: 894baf9ffef6c3bdc358c61ad4c157b8903bd409:',
-            'Repo root: e9ce073b9d61e12d35bbb0fa537581065083c886:',
+            'Hoard root: d16f79c5de630091a8b88890d3659da01e0be07f:',
+            'Repo root: 3d1726bd296f20d36cb9df60a0da4d4feae29248:',
             'REPO_FILE_TO_DELETE /test.me.4',
             'REPO_FILE_TO_DELETE /test.me.5',
             'REPO_FILE_TO_DELETE /wat/test.me.3',
@@ -196,19 +198,19 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
         res = await incoming_cave_cmd.refresh()
         self.assertEqual([
             'NO CHANGES',
-            'old: e9ce073b9d61e12d35bbb0fa537581065083c886',
-            'current: e9ce073b9d61e12d35bbb0fa537581065083c886',
+            'old: 3d1726bd296f20d36cb9df60a0da4d4feae29248',
+            'current: 3d1726bd296f20d36cb9df60a0da4d4feae29248',
             'Refresh done!'], res.splitlines())
 
         res = await hoard_cmd.contents.pull(incoming_cave_cmd.current_uuid())
         self.assertEqual([
             'Pulling repo-incoming-name...',
-            'Before: Hoard [894baf] <- repo [curr: 843a75, stg: e9ce07, des: a80f91]',
+            'Before: Hoard [d16f79] <- repo [curr: 28c623, stg: 3d1726, des: a80f91]',
             'REPO_FILE_TO_DELETE /test.me.4',
             'REPO_FILE_TO_DELETE /test.me.5',
             'REPO_FILE_TO_DELETE /wat/test.me.3',
             'REPO_FILE_TO_DELETE /wat/test.me.6',
-            'After: Hoard [894baf], repo [curr: e9ce07, stg: e9ce07, des: a80f91]',
+            'After: Hoard [d16f79], repo [curr: 3d1726, stg: 3d1726, des: a80f91]',
             "Sync'ed repo-incoming-name to hoard!",
             'DONE'], res.splitlines())
 
@@ -221,59 +223,58 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
         res = await full_cave_cmd.refresh()
         self.assertEqual([
             'MOVED test.me.4 TO wat2/test.me.4',
-            'old: 74285a5ab9a1566b524560f0a873bb877148424f',
-            'current: 9f4d64f79603af68e200303ed6c46498fe69fc5c',
+            'old: ba46648582193b0f2ab9a4894708a6106f7479ab',
+            'current: 1ae17cebfa11804367069a737056b9d2c3b0fc06',
             'Refresh done!'], res.splitlines())
 
         res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
         self.assertEqual([
             'Pulling repo-full-name...',
-            'Before: Hoard [894baf] <- repo [curr: 74285a, stg: 9f4d64, des: 894baf]',
+            'Before: Hoard [d16f79] <- repo [curr: ba4664, stg: 1ae17c, des: d16f79]',
             'REPO_FILE_TO_DELETE /test.me.4',  # fixme should be CLEANUP_MOVED maybe
             'HOARD_FILE_DELETED /test.me.4',
             'REPO_DESIRED_FILE_TO_GET /test.me.5',
             'REPO_DESIRED_FILE_TO_GET /wat/test.me.6',
             'REPO_MARK_FILE_AVAILABLE /wat2/test.me.4',
             'HOARD_FILE_ADDED /wat2/test.me.4',
-            'updated repo-full-name from 894baf to 0f6ca5',
-            'updated repo-backup-name from 894baf to 0f6ca5',
-            'After: Hoard [0f6ca5], repo [curr: 9f4d64, stg: 9f4d64, des: 0f6ca5]',
+            'updated repo-full-name from d16f79 to ea749c',
+            'updated repo-backup-name from d16f79 to ea749c',
+            'After: Hoard [ea749c], repo [curr: 1ae17c, stg: 1ae17c, des: ea749c]',
             "Sync'ed repo-full-name to hoard!",
             'DONE'], res.splitlines())
 
         res = await hoard_cmd.contents.pending_pull(incoming_cave_cmd.current_uuid())
         self.assertEqual([
             'Status of repo-incoming-name:',
-            'Hoard root: 0f6ca590b141ab71406b9f2a09b9e1a78223cc8d:',
-            'Repo root: e9ce073b9d61e12d35bbb0fa537581065083c886:',
+            'Hoard root: ea749cf79b306a27fab649f8c8234e3a968c1529:',
+            'Repo root: 3d1726bd296f20d36cb9df60a0da4d4feae29248:',
             'REPO_FILE_TO_DELETE /test.me.4',
             'REPO_FILE_TO_DELETE /test.me.5',
             'REPO_FILE_TO_DELETE /wat/test.me.3',
-            'REPO_FILE_TO_DELETE /wat/test.me.6'
-        ], res.splitlines())
+            'REPO_FILE_TO_DELETE /wat/test.me.6'], res.splitlines())
 
         res = await incoming_cave_cmd.refresh()
         self.assertEqual([
             'NO CHANGES',
-            'old: e9ce073b9d61e12d35bbb0fa537581065083c886',
-            'current: e9ce073b9d61e12d35bbb0fa537581065083c886',
+            'old: 3d1726bd296f20d36cb9df60a0da4d4feae29248',
+            'current: 3d1726bd296f20d36cb9df60a0da4d4feae29248',
             'Refresh done!'], res.splitlines())
 
         res = await hoard_cmd.contents.pull(incoming_cave_cmd.current_uuid())
         self.assertEqual([
             'Pulling repo-incoming-name...',
-            'Before: Hoard [0f6ca5] <- repo [curr: 843a75, stg: e9ce07, des: a80f91]',
+            'Before: Hoard [ea749c] <- repo [curr: 28c623, stg: 3d1726, des: a80f91]',
             'REPO_FILE_TO_DELETE /test.me.4',
             'REPO_FILE_TO_DELETE /test.me.5',
             'REPO_FILE_TO_DELETE /wat/test.me.3',
             'REPO_FILE_TO_DELETE /wat/test.me.6',
-            'After: Hoard [0f6ca5], repo [curr: e9ce07, stg: e9ce07, des: a80f91]',
+            'After: Hoard [ea749c], repo [curr: 3d1726, stg: 3d1726, des: a80f91]',
             "Sync'ed repo-incoming-name to hoard!",
             'DONE'], res.splitlines())
 
         res = await hoard_cmd.contents.ls(skip_folders=True)
         self.assertEqual([
-            'Root: 0f6ca590b141ab71406b9f2a09b9e1a78223cc8d',
+            'Root: ea749cf79b306a27fab649f8c8234e3a968c1529',
             '/test.me.1 = a:3',
             '/test.me.4 = c:1',  # should be c:2 if moved
             '/test.me.5 = g:2 c:1',
@@ -354,23 +355,23 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
         res = await full_cave_cmd.refresh()
         self.assertEqual([
             'MOVED wat/test.me.3 TO wat2/test.me.3',
-            'old: d995800c80add686a027bac8628ca610418c64b6',
-            'current: 74285a5ab9a1566b524560f0a873bb877148424f',
+            'old: 1ad9e0f92a8411689b1aee57f9ccf36c1f09a1ad',
+            'current: ba46648582193b0f2ab9a4894708a6106f7479ab',
             'Refresh done!'], res.splitlines())
 
         res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
         self.assertEqual([
             'Pulling repo-full-name...',
-            'Before: Hoard [89527b] <- repo [curr: d99580, stg: 74285a, des: 89527b]',
+            'Before: Hoard [8da760] <- repo [curr: 1ad9e0, stg: ba4664, des: 8da760]',
             'REPO_DESIRED_FILE_TO_GET /test.me.5',
             'REPO_FILE_TO_DELETE /wat/test.me.3',
             'HOARD_FILE_DELETED /wat/test.me.3',
             'REPO_DESIRED_FILE_TO_GET /wat/test.me.6',
             'REPO_MARK_FILE_AVAILABLE /wat2/test.me.3',
             'HOARD_FILE_ADDED /wat2/test.me.3',
-            'updated repo-full-name from 89527b to 894baf',
-            'updated repo-backup-name from 89527b to 894baf',
-            'After: Hoard [894baf], repo [curr: 74285a, stg: 74285a, des: 894baf]',
+            'updated repo-full-name from 8da760 to d16f79',
+            'updated repo-backup-name from 8da760 to d16f79',
+            'After: Hoard [d16f79], repo [curr: ba4664, stg: ba4664, des: d16f79]',
             "Sync'ed repo-full-name to hoard!",
             'DONE'], res.splitlines())
 
@@ -399,23 +400,23 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
         res = await full_cave_cmd.refresh()
         self.assertEqual([
             'MOVED wat/test.me.3 TO wat2/test.me.3',
-            'old: d995800c80add686a027bac8628ca610418c64b6',
-            'current: 74285a5ab9a1566b524560f0a873bb877148424f',
+            'old: 1ad9e0f92a8411689b1aee57f9ccf36c1f09a1ad',
+            'current: ba46648582193b0f2ab9a4894708a6106f7479ab',
             'Refresh done!'], res.splitlines())
 
         res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
         self.assertEqual([
             'Pulling repo-full-name...',
-            'Before: Hoard [89527b] <- repo [curr: d99580, stg: 74285a, des: 89527b]',
+            'Before: Hoard [8da760] <- repo [curr: 1ad9e0, stg: ba4664, des: 8da760]',
             'REPO_DESIRED_FILE_TO_GET /test.me.5',
-            'REPO_FILE_TO_DELETE /wat/test.me.3',  # fixme maybe MOVE instead of add/delete
-            'HOARD_FILE_DELETED /wat/test.me.3',
+            'REPO_FILE_TO_DELETE /wat/test.me.3',
+            'HOARD_FILE_DELETED /wat/test.me.3',  # fixme maybe MOVE instead of add/delete
             'REPO_DESIRED_FILE_TO_GET /wat/test.me.6',
             'REPO_MARK_FILE_AVAILABLE /wat2/test.me.3',
             'HOARD_FILE_ADDED /wat2/test.me.3',
-            'updated repo-full-name from 89527b to 894baf',
-            'updated repo-backup-name from 89527b to 894baf',
-            'After: Hoard [894baf], repo [curr: 74285a, stg: 74285a, des: 894baf]',
+            'updated repo-full-name from 8da760 to d16f79',
+            'updated repo-backup-name from 8da760 to d16f79',
+            'After: Hoard [d16f79], repo [curr: ba4664, stg: ba4664, des: d16f79]',
             "Sync'ed repo-full-name to hoard!",
             'DONE'], res.splitlines())
 
@@ -427,23 +428,23 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
         res = await full_cave_cmd.refresh()
         self.assertEqual([
             'MOVED wat2/test.me.3 TO wat3/test.me.3',
-            'old: 74285a5ab9a1566b524560f0a873bb877148424f',
-            'current: dfd71dfc5fa36785b360536595c42d598149a795',
+            'old: ba46648582193b0f2ab9a4894708a6106f7479ab',
+            'current: fa1f813dc78eba785566f303591042e6d080dba4',
             'Refresh done!'], res.splitlines())
 
         res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
         self.assertEqual([
             'Pulling repo-full-name...',
-            'Before: Hoard [894baf] <- repo [curr: 74285a, stg: dfd71d, des: 894baf]',
+            'Before: Hoard [d16f79] <- repo [curr: ba4664, stg: fa1f81, des: d16f79]',
             'REPO_DESIRED_FILE_TO_GET /test.me.5',
             'REPO_DESIRED_FILE_TO_GET /wat/test.me.6',
             'REPO_FILE_TO_DELETE /wat2/test.me.3',
             'HOARD_FILE_DELETED /wat2/test.me.3',
             'REPO_MARK_FILE_AVAILABLE /wat3/test.me.3',
             'HOARD_FILE_ADDED /wat3/test.me.3',
-            'updated repo-full-name from 894baf to b2cf90',
-            'updated repo-backup-name from 894baf to b2cf90',
-            'After: Hoard [b2cf90], repo [curr: dfd71d, stg: dfd71d, des: b2cf90]',
+            'updated repo-full-name from d16f79 to e13afb',
+            'updated repo-backup-name from d16f79 to e13afb',
+            'After: Hoard [e13afb], repo [curr: fa1f81, stg: fa1f81, des: e13afb]',
             "Sync'ed repo-full-name to hoard!",
             'DONE'], res.splitlines())
 

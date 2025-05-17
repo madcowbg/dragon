@@ -65,15 +65,15 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
 
         root_ids = sorted(env.roots(write=False).all_live)
         self.assertEqual([
-            b'89527b0fa576e127d04089d9cb5aab0e5619696d',
-            b'9fbdcfe094f258f954ba6f65c4a3641d25b32e06',
+            b'1ad9e0f92a8411689b1aee57f9ccf36c1f09a1ad',
+            b'3a0889e00c0c4ace24843be76d59b3baefb16d77',
+            b'8da76083b9eab9f49945d8f2487df38ab909b7df',
             b'a80f91bc48850a1fb3459bb76b9f6308d4d35710',
-            b'd995800c80add686a027bac8628ca610418c64b6',
-            b'f6a74030fa0a826b18e424d44f8aca9be8c657f3'], [binascii.hexlify(r) for r in root_ids])
+            b'f9bfc2be6cc201aa81b733b9d83c1030cc88bffe'], [binascii.hexlify(r) for r in root_ids])
 
-        root_left_id = binascii.unhexlify(b'f6a74030fa0a826b18e424d44f8aca9be8c657f3')
-        root_right_id = binascii.unhexlify(b'9fbdcfe094f258f954ba6f65c4a3641d25b32e06')
-        root_third_id = binascii.unhexlify(b'89527b0fa576e127d04089d9cb5aab0e5619696d')
+        root_left_id = binascii.unhexlify(b'f9bfc2be6cc201aa81b733b9d83c1030cc88bffe')
+        root_right_id = binascii.unhexlify(b'3a0889e00c0c4ace24843be76d59b3baefb16d77')
+        root_third_id = binascii.unhexlify(b'1ad9e0f92a8411689b1aee57f9ccf36c1f09a1ad')
 
         with env.objects(write=True) as objects:
             diffs = [

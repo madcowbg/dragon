@@ -31,7 +31,7 @@ class TestDaemon(IsolatedAsyncioTestCase):
             'PRESENT_FILE wat/test.me.different',
             'PRESENT_FILE wat/test.me.once',
             'PRESENT_FILE wat/test.me.twice',
-            'current: b09bd5b9c68780abde8a55aa5c7a4a70d66e78b5',
+            'current: 72174f950289a454493d243bb72bdb76982e5f62',
             'old: None',
             'Refresh done!'}, set(res.splitlines()))
 
@@ -45,7 +45,7 @@ class TestDaemon(IsolatedAsyncioTestCase):
             'wat/test.me.once: present',
             'wat/test.me.twice: present',
             '--- SUMMARY ---',
-            'Result for local [b09bd5b9c68780abde8a55aa5c7a4a70d66e78b5]:',
+            'Result for local [72174f950289a454493d243bb72bdb76982e5f62]:',
             'Max size: 3.5TB',
             f'UUID: {cave_cmd.current_uuid()}',
             '  # files = 3 of size 19'], res.splitlines())
@@ -64,7 +64,7 @@ class TestDaemon(IsolatedAsyncioTestCase):
             'wat/test.me.once: present',
             'wat/test.me.twice: present',
             '--- SUMMARY ---',
-            'Result for local [e79131180afe6b77995c4070b192c2f4d93ab2b7]:',
+            'Result for local [063d269b3ac1a51fcc0dd838bf7c112f529dbece]:',
             'Max size: 3.5TB',
             f'UUID: {cave_cmd.current_uuid()}',
             '  # files = 4 of size 34'], res.splitlines())
@@ -83,7 +83,7 @@ class TestDaemon(IsolatedAsyncioTestCase):
             'wat/test.me.once: present',  # fixme should be deleted instead!
             'wat/test.me.twice: present',
             '--- SUMMARY ---',
-            'Result for local [e79131180afe6b77995c4070b192c2f4d93ab2b7]:',
+            'Result for local [063d269b3ac1a51fcc0dd838bf7c112f529dbece]:',
             'Max size: 3.5TB',
             f'UUID: {cave_cmd.current_uuid()}',
             '  # files = 4 of size 34'], res.splitlines())

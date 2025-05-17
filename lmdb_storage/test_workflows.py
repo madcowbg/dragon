@@ -101,11 +101,11 @@ class TestWorkflows(unittest.TestCase):
                 dump_tree(objects, current_hoard_id, show_fasthash=True))
 
         self.assertEqual([
-            ('HOARD', '691cd8'),
+            ('HOARD', '0038b3'),
             ('backup-uuid', 'a80f91'),
-            ('full-uuid', '691cd8'),
-            ('incoming-uuid', '9785d8'),
-            ('partial-uuid', '275c4d')],
+            ('full-uuid', '0038b3'),
+            ('incoming-uuid', '5435fb'),
+            ('partial-uuid', '0c4b36')],
             sorted((root.name, safe_hex(root.desired)[:6]) for root in roots.all))
 
         # remove a file from staging
@@ -118,11 +118,11 @@ class TestWorkflows(unittest.TestCase):
             merge_prefs=NaiveMergePreferences({"full-uuid"}))
 
         self.assertEqual([
-            ('HOARD', '264c54'),
+            ('HOARD', 'e1d05b'),
             ('backup-uuid', 'a80f91'),
-            ('full-uuid', '264c54'),
-            ('incoming-uuid', '8f9393'),
-            ('partial-uuid', '275c4d')],
+            ('full-uuid', 'e1d05b'),
+            ('incoming-uuid', '639323'),
+            ('partial-uuid', '0c4b36')],
             sorted((root.name, safe_hex(root.desired)[:6]) for root in roots.all))
 
         current_full_id = roots["full-uuid"].desired
