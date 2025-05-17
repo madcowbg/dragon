@@ -189,6 +189,7 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
         self.assertEqual([
             'Status of repo-incoming-name:',
             'Hoard root: d16f79c5de630091a8b88890d3659da01e0be07f:',
+            'Repo current=28c623 staging=3d1726 desired=a80f91',
             'Repo root: 3d1726bd296f20d36cb9df60a0da4d4feae29248:',
             'REPO_FILE_TO_DELETE /test.me.4',
             'REPO_FILE_TO_DELETE /test.me.5',
@@ -247,6 +248,7 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
         self.assertEqual([
             'Status of repo-incoming-name:',
             'Hoard root: ea749cf79b306a27fab649f8c8234e3a968c1529:',
+            'Repo current=28c623 staging=3d1726 desired=a80f91',
             'Repo root: 3d1726bd296f20d36cb9df60a0da4d4feae29248:',
             'REPO_FILE_TO_DELETE /test.me.4',
             'REPO_FILE_TO_DELETE /test.me.5',

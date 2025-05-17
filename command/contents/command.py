@@ -426,12 +426,14 @@ async def print_pending_to_pull(
         hoard_contents: HoardContents, content_prefs: ContentPrefs, current_contents: RepoContents, config: HoardConfig,
         preferences: PullPreferences, out):
     with StringIO() as other_out:
-        out.write(f"Hoard root: {safe_hex(hoard_contents.env.roots(False)['HOARD'].desired)}:\n")
-        out.write(f"Repo root: {safe_hex(current_contents.fsobjects.root_id)}:\n")
 
         roots = hoard_contents.env.roots(write=False)
         repo_root = roots[current_contents.uuid]
         hoard_root = roots["HOARD"]
+
+        out.write(f"Hoard root: {safe_hex(hoard_contents.env.roots(False)['HOARD'].desired)}:\n")
+        out.write(f"Repo current={safe_hex(repo_root.current)[:6]} staging={safe_hex(repo_root.staging)[:6]} desired={safe_hex(repo_root.desired)[:6]}\n")
+        out.write(f"Repo root: {safe_hex(current_contents.fsobjects.root_id)}:\n")
 
         merged_ids = merge_contents(
             hoard_contents.env, repo_root, [repo_root, hoard_root],

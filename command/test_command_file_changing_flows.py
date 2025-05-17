@@ -713,6 +713,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         self.assertEqual([
             'Status of repo-full-name:',
             'Hoard root: f9bfc2be6cc201aa81b733b9d83c1030cc88bffe:',
+            'Repo current=a80f91 staging=1ad9e0 desired=f9bfc2',
             'Repo root: 1ad9e0f92a8411689b1aee57f9ccf36c1f09a1ad:',
             'REPO_MARK_FILE_AVAILABLE /test.me.1',
             'REPO_MARK_FILE_AVAILABLE /test.me.4',
@@ -825,6 +826,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         self.assertEqual([
             'Status of repo-full-name:',
             'Hoard root: 1ad9e0f92a8411689b1aee57f9ccf36c1f09a1ad:',
+            'Repo current=1ad9e0 staging=01152a desired=1ad9e0',
             'Repo root: 01152ae75c4fbc81c40b8e9eba8ce23ab770630e:',
             'REPO_MARK_FILE_AVAILABLE /lets_get_it_started/test.me.2-butnew',
             'HOARD_FILE_ADDED /lets_get_it_started/test.me.2-butnew',
@@ -1151,6 +1153,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         self.assertEqual([
             'Status of repo-full-name:',
             'Hoard root: 1ad9e0f92a8411689b1aee57f9ccf36c1f09a1ad:',
+            'Repo current=1ad9e0 staging=01152a desired=1ad9e0',
             'Repo root: 01152ae75c4fbc81c40b8e9eba8ce23ab770630e:',
             'REPO_MARK_FILE_AVAILABLE /lets_get_it_started/test.me.2-butnew',
             'HOARD_FILE_ADDED /lets_get_it_started/test.me.2-butnew',
@@ -1659,6 +1662,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         self.assertEqual([
             'Status of repo-full-name:',
             'Hoard root: e48d88d5cde10ff5d84be87b3e79c20e77c05ba9:',
+            'Repo current=e48d88 staging=01152a desired=e48d88',
             'Repo root: 01152ae75c4fbc81c40b8e9eba8ce23ab770630e:',
             'REPO_MARK_FILE_AVAILABLE /lets_get_it_started/test.me.2-butnew',
             'HOARD_FILE_ADDED /lets_get_it_started/test.me.2-butnew',
@@ -1804,6 +1808,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         self.assertEqual([
             'Status of repo-full-name:',
             'Hoard root: 8da76083b9eab9f49945d8f2487df38ab909b7df:',
+            'Repo current=8da760 staging=20b513 desired=8da760',
             'Repo root: 20b513612f72da81150668cbae96dc90cd623cb9:',
             'REPO_DESIRED_FILE_CHANGED /test.me.4',
             'HOARD_FILE_CHANGED /test.me.4',
@@ -1896,6 +1901,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         self.assertEqual([
             'Status of repo-full-name:',
             'Hoard root: 8da76083b9eab9f49945d8f2487df38ab909b7df:',
+            'Repo current=8da760 staging=8da760 desired=8da760',
             'Repo root: 8da76083b9eab9f49945d8f2487df38ab909b7df:'], res.splitlines())
 
         res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())

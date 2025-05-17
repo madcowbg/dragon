@@ -81,6 +81,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         self.assertEqual([
             'Status of repo-in-local:',
             'Hoard root: a80f91bc48850a1fb3459bb76b9f6308d4d35710:',
+            'Repo current=a80f91 staging=72174f desired=a80f91',
             'Repo root: 72174f950289a454493d243bb72bdb76982e5f62:',
             'REPO_MARK_FILE_AVAILABLE /wat/test.me.different',
             'HOARD_FILE_ADDED /wat/test.me.different',
@@ -119,6 +120,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         self.assertEqual([
             'Status of repo-in-local:',
             'Hoard root: 72174f950289a454493d243bb72bdb76982e5f62:',
+            'Repo current=72174f staging=72174f desired=72174f',
             'Repo root: 72174f950289a454493d243bb72bdb76982e5f62:'], res.splitlines())
 
     def _assert_hoard_contents(
@@ -208,6 +210,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         self.assertEqual([
             'Status of repo-in-local-2:',
             'Hoard root: 72174f950289a454493d243bb72bdb76982e5f62:',
+            'Repo current=abf257 staging=966d51 desired=72174f',
             'Repo root: 1b736d16c16bdacf49df7cd5aa66e7b5479ad4b7:',
             'REPO_DESIRED_FILE_TO_GET /wat/test.me.different',
             'REPO_DESIRED_FILE_TO_GET /wat/test.me.once'], res.splitlines())
@@ -373,6 +376,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         self.assertEqual([
             'Status of cloned-repo:',
             'Hoard root: 72174f950289a454493d243bb72bdb76982e5f62:',
+            'Repo current=a80f91 staging=654b8b desired=72174f',
             'Repo root: a80f91bc48850a1fb3459bb76b9f6308d4d35710:',
             'REPO_DESIRED_FILE_TO_GET /wat/test.me.different',
             'REPO_DESIRED_FILE_TO_GET /wat/test.me.once',
@@ -400,6 +404,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         self.assertEqual([
             'Status of cloned-repo:',
             'Hoard root: 72174f950289a454493d243bb72bdb76982e5f62:',
+            'Repo current=72174f staging=72174f desired=72174f',
             'Repo root: ff1444e1c29844fddb93d7745ea1348ead80d0b6:'], res.splitlines())
 
         res = await hoard_cmd.files.push(repo="cloned-repo")
