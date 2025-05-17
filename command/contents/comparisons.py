@@ -1,127 +1,17 @@
 import binascii
 import logging
-from typing import Dict, AsyncGenerator, Iterable, Tuple
-
-from alive_progress import alive_it
 
 from command.fast_path import FastPosixPath
-from command.pathing import HoardPathing
 from config import HoardConfig
 from contents.hoard import HoardContents, HoardFSObjects
-from contents.hoard_props import HoardFileProps, HoardFileStatus
+from contents.hoard_props import HoardFileStatus
 from contents.repo import RepoContents, RepoFSObjects
-from contents.repo_props import FileDesc, RepoFileStatus
-from contents_diff import Diff, DiffType
+from contents.repo_props import FileDesc
 from lmdb_storage.file_object import FileObject
 from lmdb_storage.object_store import ObjectStorage
-from lmdb_storage.tree_iteration import zip_dfs, zip_trees_dfs
-from lmdb_storage.tree_structure import Objects, TreeObject, add_object
+from lmdb_storage.tree_iteration import zip_trees_dfs
+from lmdb_storage.tree_structure import TreeObject, add_object
 from util import safe_hex
-
-
-def is_same_file(current: FileDesc, hoard: HoardFileProps):
-    if current.size != hoard.size:
-        return False  # files differ by size
-
-    if current.fasthash != hoard.fasthash:
-        return False  # fast hash is different
-
-    return True  # files are the same
-
-
-def read_files(objects: Objects[FileObject], root_id: bytes, current_root_id: bytes | None) -> Iterable[
-    Tuple[FastPosixPath, Tuple[RepoFileStatus, FileDesc | None]]]:
-    with objects:
-        for fullpath, diff_type, left_id, right_id, should_skip in \
-                zip_dfs(objects, path="", left_id=current_root_id, right_id=root_id, drilldown_same=True):
-            # for fullpath, obj_type, obj_id, obj, _ in dfs(objects, "", root_id):
-            right_obj = objects[right_id] if right_id is not None else None
-            if isinstance(right_obj, FileObject):
-                yield (
-                    FastPosixPath(fullpath).relative_to("/"),
-                    (RepoFileStatus.PRESENT, FileDesc(right_obj.size, right_obj.fasthash, None)))
-            else:
-                left_obj = objects[left_id] if left_id is not None else None
-                if isinstance(left_obj, FileObject) and right_obj is None:
-                    yield (
-                        FastPosixPath(fullpath).relative_to("/"),
-                        (RepoFileStatus.DELETED, FileDesc(left_obj.size, left_obj.fasthash, None)))
-
-
-async def DEPRECATED_compare_local_to_hoard(
-        uuid: str, hoard: HoardContents, pathing: HoardPathing,
-        progress_tool=alive_it) \
-        -> AsyncGenerator[Diff]:
-    repo_staging_id = hoard.env.roots(False)[uuid].staging
-    repo_current_id = hoard.env.roots(False)[uuid].current
-    assert repo_staging_id is not None
-
-    logging.info("Load current objects")
-    all_local_with_any_status: Dict[FastPosixPath, Tuple[RepoFileStatus, FileDesc]] = dict(
-        (f.relative_to(pathing.mounted_at(uuid).relative_to("/")), p)
-        for f, p in read_files(hoard.objects, repo_staging_id, repo_current_id))
-
-    logging.info("Load hoard objects in folder")
-
-    hoard_current_id = hoard.env.roots(False)["HOARD"].desired
-
-    mounted_at = pathing.mounted_at(uuid).relative_to("/")
-    all_hoard_objs_in_folder: Dict[FastPosixPath, Tuple[RepoFileStatus, FileDesc]] = dict(
-        (FastPosixPath("/" + p.as_posix()), f) for p, f in read_files(hoard.objects, hoard_current_id, None)
-        if p.is_relative_to(mounted_at))
-
-    logging.info("Loaded all objects.")
-
-    for current_file, (status, props) in progress_tool(all_local_with_any_status.items(),
-                                                       title="Current files vs. Hoard"):
-        if status == RepoFileStatus.DELETED or status == RepoFileStatus.MOVED_FROM:
-            pass
-
-        assert isinstance(props, FileDesc)
-
-        curr_file_hoard_path = pathing.in_local(current_file, uuid).at_hoard()
-        hoard_props = hoard.fsobjects[curr_file_hoard_path.as_pure_path] \
-            if curr_file_hoard_path.as_pure_path in hoard.fsobjects else None
-        if hoard_props is None:
-            logging.info(f"local file not in hoard: {curr_file_hoard_path}")
-            added = False
-            yield Diff(DiffType.FileOnlyInLocal, current_file, curr_file_hoard_path.as_pure_path, props, None, added)
-        elif is_same_file(props, hoard_props):
-            logging.info(f"same in hoard {current_file}!")
-            yield Diff(DiffType.FileIsSame, current_file, curr_file_hoard_path.as_pure_path, props, hoard_props, None)
-        else:
-            logging.info(f"file changes {current_file}")
-            yield Diff(
-                DiffType.FileContentsDiffer, current_file, curr_file_hoard_path.as_pure_path, props, hoard_props, None)
-
-    hoard_file: FastPosixPath
-    for hoard_file, desc in progress_tool(
-            all_hoard_objs_in_folder.items(),
-            title="Hoard vs. Current files"):
-        props = hoard.fsobjects[hoard_file]
-        curr_path_in_local = pathing.in_hoard(hoard_file).at_local(uuid)
-        assert curr_path_in_local is not None  # hoard file is not in the mounted location
-        local_props: FileDesc | None
-        status, local_props = all_local_with_any_status.get(curr_path_in_local.as_pure_path,
-                                                            (RepoFileStatus.DELETED, None))
-
-        assert isinstance(props, HoardFileProps)
-
-        if local_props is None:
-            yield Diff(
-                DiffType.FileOnlyInHoardLocalUnknown, curr_path_in_local.as_pure_path, hoard_file, None, props, None)
-        elif status == RepoFileStatus.DELETED:
-            yield Diff(
-                DiffType.FileOnlyInHoardLocalDeleted, curr_path_in_local.as_pure_path, hoard_file, local_props, props,
-                None)
-        elif status == RepoFileStatus.MOVED_FROM:
-            yield Diff(
-                DiffType.FileOnlyInHoardLocalMoved, curr_path_in_local.as_pure_path, hoard_file, local_props, props,
-                None)
-        elif status in (RepoFileStatus.PRESENT, RepoFileStatus.MODIFIED):
-            pass  # file is there, which is handled above
-        else:
-            raise ValueError(f"Unrecognized state: {status}")
 
 
 async def sync_fsobject_to_object_storage(

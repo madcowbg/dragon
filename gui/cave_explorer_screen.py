@@ -1,3 +1,5 @@
+import abc
+import enum
 import logging
 import traceback
 from io import StringIO
@@ -16,22 +18,72 @@ from textual.widget import Widget
 from textual.widgets import Tree, Static, Header, Footer, Select, RichLog, Button, RadioSet, RadioButton, Input
 from textual.widgets._tree import TreeNode
 
+from command.content_prefs import ContentPrefs
 from command.contents.command import execute_pull, init_pull_preferences, pull_prefs_to_restore_from_hoard, \
     clear_pending_file_ops
 from command.contents.comparisons import copy_local_staging_to_hoard, sync_fsobject_to_object_storage
-from command.contents.handle_pull import Action
+from command.fast_path import FastPosixPath
 from command.files.command import execute_files_push
 from command.hoard import Hoard
 from command.pathing import HoardPathing
 from command.pending_file_ops import FileOp, get_pending_operations, CleanupFile, GetFile, CopyFile, MoveFile
 from config import HoardRemote, latency_order, ConnectionLatency, ConnectionSpeed, CaveType
+from contents.hoard import HoardContents
+from contents.hoard_props import HoardFileProps
+from contents.repo_props import FileDesc
 from exceptions import RepoOpeningFailed, WrongRepo, MissingRepoContents, MissingRepo
 from gui.app_config import config, _write_config
 from gui.confirm_action_screen import ConfirmActionScreen
 from gui.folder_tree import FolderNode, FolderTree, aggregate_on_nodes
 from gui.progress_reporting import StartProgressReporting, MarkProgressReporting, progress_reporting_it, \
     ProgressReporting, progress_reporting_bar
-from util import group_to_dict, format_count, format_size
+from util import group_to_dict, format_count, format_size, snake_case
+
+
+# fixme reimplement with trees
+class DiffType(enum.Enum):
+    FileOnlyInLocal = enum.auto()
+    FileIsSame = enum.auto()
+    FileContentsDiffer = enum.auto()
+    FileOnlyInHoardLocalDeleted = enum.auto()
+    FileOnlyInHoardLocalUnknown = enum.auto()
+    FileOnlyInHoardLocalMoved = enum.auto()
+
+
+# fixme reimplement with trees
+class Diff:
+    def __init__(
+            self, diff_type: DiffType, local_file: FastPosixPath,
+            curr_file_hoard_path: FastPosixPath, local_props: FileDesc | None, hoard_props: HoardFileProps | None,
+            is_added: bool | None):
+        self.diff_type = diff_type
+
+        assert not local_file.is_absolute()
+        assert curr_file_hoard_path.is_absolute()
+        self.local_file = local_file
+        self.hoard_file = curr_file_hoard_path
+        self.local_props = local_props
+        self.hoard_props = hoard_props
+
+        self.is_added = is_added
+
+
+# fixme reimplement with trees
+class Action(abc.ABC):
+    @classmethod
+    def action_type(cls):
+        return snake_case(cls.__name__)
+
+    diff: Diff
+
+    def __init__(self, diff: Diff):
+        self.diff = diff
+
+    @property
+    def file_being_acted_on(self): return self.diff.hoard_file
+
+    @abc.abstractmethod
+    def execute(self, local_uuid: str, content_prefs: ContentPrefs, hoard: HoardContents, out: StringIO) -> None: pass
 
 
 class HoardContentsPendingToSyncFile(Tree[FolderNode[FileOp]]):

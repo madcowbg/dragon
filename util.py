@@ -1,6 +1,7 @@
 import asyncio
 import binascii
 import os
+import re
 import threading
 from asyncio import TaskGroup, QueueShutDown
 from itertools import groupby
@@ -118,3 +119,7 @@ async def process_async(data: Iterable[T], func: Callable[[T], Coroutine], njobs
 
 def safe_hex(root_id: ObjectID | None) -> str:
     return binascii.hexlify(root_id).decode() if root_id else "None"
+
+
+def snake_case(string):
+    return re.sub(r'(?<=[a-z])(?=[A-Z])|[^a-zA-Z]', '_', string).strip('_').lower()

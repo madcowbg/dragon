@@ -9,8 +9,7 @@ from alive_progress import alive_bar, alive_it
 from command.content_prefs import ContentPrefs
 from command.contents.comparisons import copy_local_staging_to_hoard, \
     sync_fsobject_to_object_storage, sync_object_storate_to_recreate_fsobject_and_fspresence
-from command.contents.handle_pull import PullPreferences, PullIntention, \
-    _calculate_local_only, ResetLocalAsCurrentBehavior
+from command.contents.pull_preferences import PullPreferences, PullIntention
 from command.fast_path import FastPosixPath
 from command.hoard import Hoard
 from command.pathing import HoardPathing
@@ -20,7 +19,6 @@ from contents.hoard import HoardContents, HoardFile, HoardDir
 from contents.hoard_props import HoardFileStatus, HoardFileProps
 from contents.repo import RepoContents
 from contents.repo_props import FileDesc
-from contents_diff import DiffType, Diff
 from exceptions import MissingRepoContents
 from lmdb_storage.file_object import FileObject
 from lmdb_storage.merge_trees import ByRoot
@@ -53,42 +51,40 @@ def _file_stats(props: HoardFileProps) -> str:
 def _init_pull_preferences_partial(
         remote_uuid: str, assume_current: bool = False,
         force_fetch_local_missing: bool = False) -> PullPreferences:
-    return PullPreferences(
-        remote_uuid, on_same_file_is_present=PullIntention.ADD_TO_HOARD,
-        on_file_added_or_present=PullIntention.ADD_TO_HOARD,
-        on_file_is_different_and_modified=PullIntention.ADD_TO_HOARD,
-        on_file_is_different_and_added=PullIntention.ADD_TO_HOARD,
-        on_file_is_different_but_present=PullIntention.RESTORE_FROM_HOARD if not assume_current else PullIntention.ADD_TO_HOARD,
-        on_hoard_only_local_deleted=PullIntention.DELETE_FROM_HOARD if not force_fetch_local_missing else PullIntention.RESTORE_FROM_HOARD,
-        on_hoard_only_local_unknown=PullIntention.ACCEPT_FROM_HOARD,
-        on_hoard_only_local_moved=PullIntention.MOVE_IN_HOARD,
-        force_fetch_local_missing=force_fetch_local_missing)
+    return PullPreferences(remote_uuid, on_same_file_is_present=PullIntention.ADD_TO_HOARD,
+                           on_file_added_or_present=PullIntention.ADD_TO_HOARD,
+                           on_file_is_different_and_modified=PullIntention.ADD_TO_HOARD,
+                           on_file_is_different_and_added=PullIntention.ADD_TO_HOARD,
+                           on_file_is_different_but_present=PullIntention.RESTORE_FROM_HOARD if not assume_current else PullIntention.ADD_TO_HOARD,
+                           on_hoard_only_local_deleted=PullIntention.DELETE_FROM_HOARD if not force_fetch_local_missing else PullIntention.RESTORE_FROM_HOARD,
+                           on_hoard_only_local_unknown=PullIntention.ACCEPT_FROM_HOARD,
+                           on_hoard_only_local_moved=PullIntention.MOVE_IN_HOARD,
+                           force_fetch_local_missing=force_fetch_local_missing,
+                           force_reset_with_local_contents=False)
 
 
 def _init_pull_preferences_backup(remote_uuid: str) -> PullPreferences:
-    return PullPreferences(
-        remote_uuid, on_same_file_is_present=PullIntention.ADD_TO_HOARD,
-        on_file_added_or_present=PullIntention.IGNORE,
-        on_file_is_different_and_modified=PullIntention.RESTORE_FROM_HOARD,
-        on_file_is_different_and_added=PullIntention.RESTORE_FROM_HOARD,
-        on_file_is_different_but_present=PullIntention.RESTORE_FROM_HOARD,
-        on_hoard_only_local_deleted=PullIntention.RESTORE_FROM_HOARD,
-        on_hoard_only_local_unknown=PullIntention.RESTORE_FROM_HOARD,
-        on_hoard_only_local_moved=PullIntention.RESTORE_FROM_HOARD,
-        force_fetch_local_missing=False)
+    return PullPreferences(remote_uuid, on_same_file_is_present=PullIntention.ADD_TO_HOARD,
+                           on_file_added_or_present=PullIntention.IGNORE,
+                           on_file_is_different_and_modified=PullIntention.RESTORE_FROM_HOARD,
+                           on_file_is_different_and_added=PullIntention.RESTORE_FROM_HOARD,
+                           on_file_is_different_but_present=PullIntention.RESTORE_FROM_HOARD,
+                           on_hoard_only_local_deleted=PullIntention.RESTORE_FROM_HOARD,
+                           on_hoard_only_local_unknown=PullIntention.RESTORE_FROM_HOARD,
+                           on_hoard_only_local_moved=PullIntention.RESTORE_FROM_HOARD, force_fetch_local_missing=False,
+                           force_reset_with_local_contents=False)
 
 
 def _init_pull_preferences_incoming(remote_uuid: str) -> PullPreferences:
-    return PullPreferences(
-        remote_uuid, on_same_file_is_present=PullIntention.CLEANUP,
-        on_file_added_or_present=PullIntention.ADD_TO_HOARD_AND_CLEANUP,
-        on_file_is_different_and_modified=PullIntention.ADD_TO_HOARD_AND_CLEANUP,
-        on_file_is_different_and_added=PullIntention.ADD_TO_HOARD_AND_CLEANUP,
-        on_file_is_different_but_present=PullIntention.CLEANUP,
-        on_hoard_only_local_deleted=PullIntention.IGNORE,
-        on_hoard_only_local_unknown=PullIntention.IGNORE,
-        on_hoard_only_local_moved=PullIntention.IGNORE,
-        force_fetch_local_missing=False)
+    return PullPreferences(remote_uuid, on_same_file_is_present=PullIntention.CLEANUP,
+                           on_file_added_or_present=PullIntention.ADD_TO_HOARD_AND_CLEANUP,
+                           on_file_is_different_and_modified=PullIntention.ADD_TO_HOARD_AND_CLEANUP,
+                           on_file_is_different_and_added=PullIntention.ADD_TO_HOARD_AND_CLEANUP,
+                           on_file_is_different_but_present=PullIntention.CLEANUP,
+                           on_hoard_only_local_deleted=PullIntention.IGNORE,
+                           on_hoard_only_local_unknown=PullIntention.IGNORE,
+                           on_hoard_only_local_moved=PullIntention.IGNORE, force_fetch_local_missing=False,
+                           force_reset_with_local_contents=False)
 
 
 def augment_statuses(config, hoard, show_empty, statuses):
@@ -268,16 +264,15 @@ async def execute_print_differences(hoard: HoardContents, repo_uuid: str, ignore
 
 
 def pull_prefs_to_restore_from_hoard(remote_uuid):
-    return PullPreferences(
-        remote_uuid, on_same_file_is_present=PullIntention.ADD_TO_HOARD,
-        on_file_added_or_present=PullIntention.CLEANUP,
-        on_file_is_different_and_modified=PullIntention.RESTORE_FROM_HOARD,
-        on_file_is_different_and_added=PullIntention.RESTORE_FROM_HOARD,
-        on_file_is_different_but_present=PullIntention.RESTORE_FROM_HOARD,
-        on_hoard_only_local_deleted=PullIntention.RESTORE_FROM_HOARD,
-        on_hoard_only_local_unknown=PullIntention.RESTORE_FROM_HOARD,
-        on_hoard_only_local_moved=PullIntention.RESTORE_FROM_HOARD,
-        force_fetch_local_missing=False)
+    return PullPreferences(remote_uuid, on_same_file_is_present=PullIntention.ADD_TO_HOARD,
+                           on_file_added_or_present=PullIntention.CLEANUP,
+                           on_file_is_different_and_modified=PullIntention.RESTORE_FROM_HOARD,
+                           on_file_is_different_and_added=PullIntention.RESTORE_FROM_HOARD,
+                           on_file_is_different_but_present=PullIntention.RESTORE_FROM_HOARD,
+                           on_hoard_only_local_deleted=PullIntention.RESTORE_FROM_HOARD,
+                           on_hoard_only_local_unknown=PullIntention.RESTORE_FROM_HOARD,
+                           on_hoard_only_local_moved=PullIntention.RESTORE_FROM_HOARD, force_fetch_local_missing=False,
+                           force_reset_with_local_contents=False)
 
 
 async def clear_pending_file_ops(hoard: Hoard, repo_uuid: str, out: StringIO):
@@ -790,60 +785,6 @@ class HoardCommandContents:
 
             out.write("DONE")
             return out.getvalue()
-
-    async def reset_with_existing(self, repo: str):
-        config = self.hoard.config()
-        pathing = HoardPathing(config, self.hoard.paths())
-
-        repo_uuid = resolve_remote_uuid(config, repo)
-        remote = config.remotes[repo_uuid]
-
-        logging.info(f"Loading hoard contents...")
-        async with self.hoard.open_contents(create_missing=False).writeable() as hoard:
-            content_prefs = ContentPrefs(config, pathing, hoard, self.hoard.available_remotes())
-
-            with StringIO() as out:
-                out.write(f"{config.remotes[repo_uuid].name}:\n")
-
-                logging.info(f"Iterating over pending ops in {repo_uuid} to reset pending ops")
-                connected_repo = self.hoard.connect_to_repo(repo_uuid, True)
-                with connected_repo.open_contents(is_readonly=True) as current_contents:
-                    for local_file, local_props in alive_it(current_contents.fsobjects.existing()):
-                        assert isinstance(local_props, FileDesc)
-
-                        hoard_file = pathing.in_local(local_file, repo_uuid).at_hoard().as_pure_path
-                        if hoard_file not in hoard.fsobjects:
-                            logging.info(f"Local file {local_file} will be handled to hoard.")
-                            preferences = PullPreferences(
-                                remote.uuid,
-                                on_same_file_is_present=PullIntention.ADD_TO_HOARD,
-                                on_file_added_or_present=PullIntention.FAIL,
-                                on_file_is_different_and_modified=PullIntention.FAIL,
-                                on_file_is_different_and_added=PullIntention.FAIL,
-                                on_file_is_different_but_present=PullIntention.FAIL,
-                                on_hoard_only_local_deleted=PullIntention.FAIL,
-                                on_hoard_only_local_unknown=PullIntention.FAIL,
-                                on_hoard_only_local_moved=PullIntention.FAIL,
-                                force_fetch_local_missing=False)
-                            added = False
-                            diff = Diff(DiffType.FileOnlyInLocal, local_file, hoard_file, local_props, None, added)
-                            for b in _calculate_local_only(preferences.on_file_added_or_present, diff, out):
-                                b.execute(preferences.local_uuid, content_prefs, hoard, out)
-                            out.write(f"READD {hoard_file}\n")
-                        else:
-                            hoard_props = hoard.fsobjects[hoard_file]
-
-                            if hoard_props.get_status(repo_uuid) != HoardFileStatus.AVAILABLE:
-                                logging.info(
-                                    f"Local file {local_file} is not marked available, will reset its contents in repo")
-
-                                diff = Diff(
-                                    DiffType.FileContentsDiffer, local_file, hoard_file, local_props, hoard_props, None)
-                                ResetLocalAsCurrentBehavior(diff).execute(repo_uuid, None, hoard, None)
-                                out.write(f"RESET {hoard_file}\n")
-
-                out.write("DONE")
-                return out.getvalue()
 
     async def reset(self, repo: str):
         config = self.hoard.config()
