@@ -1,6 +1,5 @@
 import binascii
 import logging
-import sys
 
 from command.fast_path import FastPosixPath
 from config import HoardConfig
@@ -63,17 +62,16 @@ async def sync_fsobject_to_object_storage(
         if remote_current_id != root.current:
             if root.current is not None and remote_current_id != empty_dir:
                 if raise_exception:
-                    dump_tree_diffs(objects, remote_current_id, root)
                     raise ValueError(
-                        f"current tree wrong - {remote.name}: {safe_hex(remote_desired_id)} is not desired, desired={safe_hex(root.desired)}")
+                        f"current tree wrong - {remote.name}: old={safe_hex(root.current)} new={safe_hex(remote_current_id)}\n{dump_tree_diffs(env, root, remote_current_id)}")
                 logging.error(
                     f"Current tree is not correct: {remote.name}: {safe_hex(remote_current_id)} is not current, current={safe_hex(root.current)}")
             # assert root.current is None, f"{remote.name}: {safe_hex(remote_current_id)} is not current, current={safe_hex(root.current)}"
         if remote_desired_id != root.desired:
             if raise_exception and root.desired is not None and remote_desired_id != empty_dir:
-                dump_tree_diffs(objects, remote_current_id, root)
+                dump_tree_diffs(env, root, remote_current_id)
                 raise ValueError(
-                    f"desired tree wrong - {remote.name}: {safe_hex(remote_desired_id)} is not desired, desired={safe_hex(root.desired)}")
+                    f"desired tree wrong - {remote.name}: old={safe_hex(root.desired)} new={safe_hex(remote_desired_id)}\n{dump_tree_diffs(env, root, remote_current_id)}")
             # assert root.desired is None, f"{remote.name}: {safe_hex(remote_desired_id)} is not desired, desired={safe_hex(root.desired)}"
 
         root.current = remote_current_id
@@ -86,16 +84,15 @@ async def sync_fsobject_to_object_storage(
     return current_root_id
 
 
-def dump_tree_diffs(env, remote_current_id, root):
-    with env.objects(write=False) as objects:
+def dump_tree_diffs(env, root, remote_current_id) -> str:
+    with (env.objects(write=False) as objects):
         diffs = [
             f"{path}: {diff_type.value}"
             for path, diff_type, left_id, right_id, should_skip
             in zip_dfs(objects, "root", root.current, remote_current_id)]
-        sys.stdout.write(
-            "\n############ dumping diffs of trees ############\n"
-            + "\n".join(diffs)
-            + "\n############# end dumping tree ############\n\n")
+        return "\n############ dumping diffs of trees ############\n" + \
+            "\n".join(diffs) + \
+            "\n############# end dumping tree ############\n\n"
 
 
 def sync_object_storage_to_recreate_fsobject_and_fspresence(
