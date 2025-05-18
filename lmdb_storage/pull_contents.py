@@ -20,11 +20,7 @@ def pull_contents(env: ObjectStorage, repo_uuid: str, staging_id: ObjectID, merg
     merged_ids = merge_contents(env, roots[repo_uuid], repo_roots, merge_prefs)
 
     roots = env.roots(write=True)
-
-    with env.objects(write=True) as objects:
-        empty_folder_id = objects.mktree_from_tuples([])
-
-    commit_merged(roots['HOARD'], roots[repo_uuid], [roots[rn] for rn in repo_root_names], merged_ids, empty_folder_id)
+    commit_merged(roots['HOARD'], roots[repo_uuid], [roots[rn] for rn in repo_root_names], merged_ids)
 
     return merged_ids
 
@@ -60,7 +56,7 @@ def merge_contents(
     return merged_ids
 
 
-def commit_merged(hoard: Root, repo: Root, all_roots: List[Root], merged_ids: ByRoot[ObjectID], empty_folder_id):
+def commit_merged(hoard: Root, repo: Root, all_roots: List[Root], merged_ids: ByRoot[ObjectID]):
     # set current for the repo being merged
     repo.current = repo.staging
 
@@ -69,6 +65,4 @@ def commit_merged(hoard: Root, repo: Root, all_roots: List[Root], merged_ids: By
     # accept the changed IDs as desired
     hoard.desired = merged_ids.get_if_present("HOARD")
     for other_root in all_roots:
-        new_id = merged_ids.get_if_present(other_root.name)
-        # fixme this is kind of a hack, should not be used
-        other_root.desired = new_id if new_id is not None else empty_folder_id  # do not allow fully empty commits
+        other_root.desired = merged_ids.get_if_present(other_root.name)

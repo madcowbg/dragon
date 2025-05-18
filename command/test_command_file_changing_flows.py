@@ -31,7 +31,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
         self.assertEqual((
             'Pulling repo-full-name...\n'
-            'Before: Hoard [None] <- repo [curr: a80f91, stg: 1ad9e0, des: a80f91]\n'
+            'Before: Hoard [None] <- repo [curr: None, stg: 1ad9e0, des: None]\n'
             'REPO_MARK_FILE_AVAILABLE /test.me.1\n'
             'HOARD_FILE_ADDED /test.me.1\n'
             'REPO_MARK_FILE_AVAILABLE /test.me.4\n'
@@ -40,8 +40,8 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'HOARD_FILE_ADDED /wat/test.me.2\n'
             'REPO_MARK_FILE_AVAILABLE /wat/test.me.3\n'
             'HOARD_FILE_ADDED /wat/test.me.3\n'
-            'updated repo-full-name from a80f91 to 1ad9e0\n'
-            'updated repo-backup-name from a80f91 to 1ad9e0\n'
+            'updated repo-full-name from None to 1ad9e0\n'
+            'updated repo-backup-name from None to 1ad9e0\n'
             'After: Hoard [1ad9e0], repo [curr: 1ad9e0, stg: 1ad9e0, des: 1ad9e0]\n'
             "Sync'ed repo-full-name to hoard!\n"
             'DONE'), res)
@@ -61,10 +61,10 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.pull(partial_cave_cmd.current_uuid())
         self.assertEqual((
             'Pulling repo-partial-name...\n'
-            'Before: Hoard [1ad9e0] <- repo [curr: a80f91, stg: f9bfc2, des: a80f91]\n'
+            'Before: Hoard [1ad9e0] <- repo [curr: None, stg: f9bfc2, des: None]\n'
             'REPO_MARK_FILE_AVAILABLE /test.me.1\n'
             'REPO_MARK_FILE_AVAILABLE /wat/test.me.2\n'
-            'updated repo-partial-name from a80f91 to f9bfc2\n'
+            'updated repo-partial-name from None to f9bfc2\n'
             'After: Hoard [1ad9e0], repo [curr: f9bfc2, stg: f9bfc2, des: f9bfc2]\n'
             "Sync'ed repo-partial-name to hoard!\n"
             'DONE'), res)
@@ -86,9 +86,9 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.ls(show_remotes=True)
         self.assertEqual(
             'Root: 1ad9e0f92a8411689b1aee57f9ccf36c1f09a1ad\n'
-            'Remote repo-backup-name current=a80f91 staging=None desired=1ad9e0\n'
+            'Remote repo-backup-name current=None staging=None desired=1ad9e0\n'
             'Remote repo-full-name current=1ad9e0 staging=1ad9e0 desired=1ad9e0\n'
-            'Remote repo-incoming-name current=a80f91 staging=None desired=a80f91\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
             'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
             "/ => (repo-backup-name:.), (repo-full-name:.), (repo-incoming-name:.), (repo-partial-name:.)\n"
             "/test.me.1 = a:2 g:1\n"
@@ -106,14 +106,14 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.pull(partial_cave_cmd.current_uuid())
         self.assertEqual((
             'Pulling repo-partial-name...\n'
-            'Before: Hoard [None] <- repo [curr: a80f91, stg: f9bfc2, des: a80f91]\n'
+            'Before: Hoard [None] <- repo [curr: None, stg: f9bfc2, des: None]\n'
             'REPO_MARK_FILE_AVAILABLE /test.me.1\n'
             'HOARD_FILE_ADDED /test.me.1\n'
             'REPO_MARK_FILE_AVAILABLE /wat/test.me.2\n'
             'HOARD_FILE_ADDED /wat/test.me.2\n'
-            'updated repo-partial-name from a80f91 to f9bfc2\n'
-            'updated repo-full-name from a80f91 to f9bfc2\n'
-            'updated repo-backup-name from a80f91 to f9bfc2\n'
+            'updated repo-partial-name from None to f9bfc2\n'
+            'updated repo-full-name from None to f9bfc2\n'
+            'updated repo-backup-name from None to f9bfc2\n'
             'After: Hoard [f9bfc2], repo [curr: f9bfc2, stg: f9bfc2, des: f9bfc2]\n'
             "Sync'ed repo-partial-name to hoard!\n"
             'DONE'), res)
@@ -121,7 +121,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
         self.assertEqual((
             'Pulling repo-full-name...\n'
-            'Before: Hoard [f9bfc2] <- repo [curr: a80f91, stg: 1ad9e0, des: f9bfc2]\n'
+            'Before: Hoard [f9bfc2] <- repo [curr: None, stg: 1ad9e0, des: f9bfc2]\n'
             'REPO_MARK_FILE_AVAILABLE /test.me.1\n'
             'REPO_MARK_FILE_AVAILABLE /test.me.4\n'
             'HOARD_FILE_ADDED /test.me.4\n'
@@ -151,9 +151,9 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.ls(show_remotes=True)
         self.assertEqual((
             'Root: 1ad9e0f92a8411689b1aee57f9ccf36c1f09a1ad\n'
-            'Remote repo-backup-name current=a80f91 staging=None desired=1ad9e0\n'
+            'Remote repo-backup-name current=None staging=None desired=1ad9e0\n'
             'Remote repo-full-name current=1ad9e0 staging=1ad9e0 desired=1ad9e0\n'
-            'Remote repo-incoming-name current=a80f91 staging=None desired=a80f91\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
             'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
             '/ => (repo-backup-name:.), (repo-full-name:.), (repo-incoming-name:.), '
             '(repo-partial-name:.)\n'
@@ -207,9 +207,9 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.ls(show_remotes=True)
         self.assertEqual((
             'Root: b2effc3b7e6a77096f705c7d24e3909cd6f347e2\n'
-            'Remote repo-backup-name current=a80f91 staging=None desired=b2effc\n'
+            'Remote repo-backup-name current=None staging=None desired=b2effc\n'
             'Remote repo-full-name current=b2effc staging=b2effc desired=b2effc\n'
-            'Remote repo-incoming-name current=a80f91 staging=None desired=a80f91\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
             'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
             '/ => (repo-backup-name:.), (repo-full-name:.), (repo-incoming-name:.), '
             '(repo-partial-name:.)\n'
@@ -260,9 +260,9 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.ls(show_remotes=True)
         self.assertEqual((
             'Root: 7672cb5914a2bb1ae0ba43506eeb54f6fbeb5ad9\n'
-            'Remote repo-backup-name current=a80f91 staging=None desired=7672cb\n'
+            'Remote repo-backup-name current=None staging=None desired=7672cb\n'
             'Remote repo-full-name current=b2effc staging=b2effc desired=7672cb\n'
-            'Remote repo-incoming-name current=a80f91 staging=None desired=a80f91\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
             'Remote repo-partial-name current=499273 staging=499273 desired=499273\n'
             '/ => (repo-backup-name:.), (repo-full-name:.), (repo-incoming-name:.), '
             '(repo-partial-name:.)\n'
@@ -328,9 +328,9 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.ls(show_remotes=True)
         self.assertEqual((
             'Root: 1ad9e0f92a8411689b1aee57f9ccf36c1f09a1ad\n'
-            'Remote repo-backup-name current=a80f91 staging=None desired=1ad9e0\n'
+            'Remote repo-backup-name current=None staging=None desired=1ad9e0\n'
             'Remote repo-full-name current=1ad9e0 staging=1ad9e0 desired=1ad9e0\n'
-            'Remote repo-incoming-name current=a80f91 staging=None desired=a80f91\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
             'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
             '/ => (repo-backup-name:.), (repo-full-name:.), (repo-incoming-name:.), '
             '(repo-partial-name:.)\n'
@@ -358,7 +358,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'Root: 1ad9e0f92a8411689b1aee57f9ccf36c1f09a1ad\n'
             'Remote repo-backup-name current=d696be staging=None desired=1ad9e0\n'
             'Remote repo-full-name current=1ad9e0 staging=1ad9e0 desired=1ad9e0\n'
-            'Remote repo-incoming-name current=a80f91 staging=None desired=a80f91\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
             'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
             '/ => (repo-backup-name:.), (repo-full-name:.), (repo-incoming-name:.), '
             '(repo-partial-name:.)\n'
@@ -418,7 +418,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'Root: b2effc3b7e6a77096f705c7d24e3909cd6f347e2\n'
             'Remote repo-backup-name current=d696be staging=None desired=b2effc\n'
             'Remote repo-full-name current=b2effc staging=b2effc desired=b2effc\n'
-            'Remote repo-incoming-name current=a80f91 staging=None desired=a80f91\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
             'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
             '/ => (repo-backup-name:.), (repo-full-name:.), (repo-incoming-name:.), '
             '(repo-partial-name:.)\n'
@@ -444,7 +444,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'Root: 1ad9e0f92a8411689b1aee57f9ccf36c1f09a1ad\n'
             'Remote repo-backup-name current=1ad9e0 staging=None desired=1ad9e0\n'
             'Remote repo-full-name current=1ad9e0 staging=1ad9e0 desired=1ad9e0\n'
-            'Remote repo-incoming-name current=a80f91 staging=None desired=a80f91\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
             'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
             "/ => (repo-backup-name:.), (repo-full-name:.), (repo-incoming-name:.), (repo-partial-name:.)\n"
             "/test.me.1 = a:3\n"
@@ -494,7 +494,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'Root: 22e45e6a6041b705c05bedfef6c451457240ea1f\n'
             'Remote repo-backup-name current=1ad9e0 staging=None desired=22e45e\n'
             'Remote repo-full-name current=22e45e staging=22e45e desired=22e45e\n'
-            'Remote repo-incoming-name current=a80f91 staging=None desired=a80f91\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
             'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=57a93f\n'
             '/\n'
             '/test.me.1 = a:3\n'
@@ -556,7 +556,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'Root: 22e45e6a6041b705c05bedfef6c451457240ea1f\n'
             'Remote repo-backup-name current=22e45e staging=None desired=22e45e\n'
             'Remote repo-full-name current=22e45e staging=22e45e desired=22e45e\n'
-            'Remote repo-incoming-name current=a80f91 staging=None desired=a80f91\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
             'Remote repo-partial-name current=57a93f staging=f9bfc2 desired=57a93f\n'
             '/\n'
             '/test.me.1 = a:3\n'
@@ -601,12 +601,12 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.pull(new_content_cmd.current_uuid())
         self.assertEqual((
             'Pulling repo-new-contents-name...\n'
-            'Before: Hoard [f9bfc2] <- repo [curr: a80f91, stg: b66f52, des: a80f91]\n'
+            'Before: Hoard [f9bfc2] <- repo [curr: None, stg: b66f52, des: None]\n'
             'REPO_MARK_FILE_AVAILABLE /wat/one-new.file\n'
             'HOARD_FILE_ADDED /wat/one-new.file\n'
             'updated repo-full-name from f9bfc2 to 6f8ca1\n'
             'updated repo-backup-name from f9bfc2 to 6f8ca1\n'
-            'updated repo-new-contents-name from a80f91 to b66f52\n'
+            'updated repo-new-contents-name from None to b66f52\n'
             'After: Hoard [6f8ca1], repo [curr: b66f52, stg: b66f52, des: b66f52]\n'
             "Sync'ed repo-new-contents-name to hoard!\n"
             'DONE'), res)
@@ -615,7 +615,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
         self.assertEqual((
             'Pulling repo-full-name...\n'
-            'Before: Hoard [6f8ca1] <- repo [curr: a80f91, stg: 1ad9e0, des: 6f8ca1]\n'
+            'Before: Hoard [6f8ca1] <- repo [curr: None, stg: 1ad9e0, des: 6f8ca1]\n'
             'REPO_MARK_FILE_AVAILABLE /test.me.1\n'
             'REPO_MARK_FILE_AVAILABLE /test.me.4\n'
             'HOARD_FILE_ADDED /test.me.4\n'
@@ -739,15 +739,15 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.pull(partial_cave_cmd.current_uuid())
         self.assertEqual((
             'Pulling repo-partial-name...\n'
-            'Before: Hoard [None] <- repo [curr: a80f91, stg: f9bfc2, des: a80f91]\n'
+            'Before: Hoard [None] <- repo [curr: None, stg: f9bfc2, des: None]\n'
             'REPO_MARK_FILE_AVAILABLE /test.me.1\n'
             'HOARD_FILE_ADDED /test.me.1\n'
             'REPO_MARK_FILE_AVAILABLE /wat/test.me.2\n'
             'HOARD_FILE_ADDED /wat/test.me.2\n'
-            'updated repo-partial-name from a80f91 to f9bfc2\n'
-            'updated repo-full-name from a80f91 to f9bfc2\n'
-            'updated repo-backup-name from a80f91 to f9bfc2\n'
-            'updated repo-copy-name from a80f91 to f9bfc2\n'
+            'updated repo-partial-name from None to f9bfc2\n'
+            'updated repo-full-name from None to f9bfc2\n'
+            'updated repo-backup-name from None to f9bfc2\n'
+            'updated repo-copy-name from None to f9bfc2\n'
             'After: Hoard [f9bfc2], repo [curr: f9bfc2, stg: f9bfc2, des: f9bfc2]\n'
             "Sync'ed repo-partial-name to hoard!\n"
             'DONE'), res)
@@ -755,10 +755,10 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.differences(full_cave_cmd.current_uuid())
         self.assertEqual((
             'Root: f9bfc2be6cc201aa81b733b9d83c1030cc88bffe\n'
-            'Remote repo-backup-name current=a80f91 staging=None desired=f9bfc2\n'
-            'Remote repo-copy-name current=a80f91 staging=None desired=f9bfc2\n'
-            'Remote repo-full-name current=a80f91 staging=None desired=f9bfc2\n'
-            'Remote repo-incoming-name current=a80f91 staging=None desired=a80f91\n'
+            'Remote repo-backup-name current=None staging=None desired=f9bfc2\n'
+            'Remote repo-copy-name current=None staging=None desired=f9bfc2\n'
+            'Remote repo-full-name current=None staging=None desired=f9bfc2\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
             'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
             'Status of repo-full-name:\n'
             'PRESENT /test.me.4\n'
@@ -769,7 +769,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         self.assertEqual([
             'Status of repo-full-name:',
             'Hoard root: f9bfc2be6cc201aa81b733b9d83c1030cc88bffe:',
-            'Repo current=a80f91 staging=1ad9e0 desired=f9bfc2',
+            'Repo current=None staging=1ad9e0 desired=f9bfc2',
             'Repo root: 1ad9e0f92a8411689b1aee57f9ccf36c1f09a1ad:',
             'REPO_MARK_FILE_AVAILABLE /test.me.1',
             'REPO_MARK_FILE_AVAILABLE /test.me.4',
@@ -781,7 +781,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
         self.assertEqual((
             'Pulling repo-full-name...\n'
-            'Before: Hoard [f9bfc2] <- repo [curr: a80f91, stg: 1ad9e0, des: f9bfc2]\n'
+            'Before: Hoard [f9bfc2] <- repo [curr: None, stg: 1ad9e0, des: f9bfc2]\n'
             'REPO_MARK_FILE_AVAILABLE /test.me.1\n'
             'REPO_MARK_FILE_AVAILABLE /test.me.4\n'
             'HOARD_FILE_ADDED /test.me.4\n'
@@ -868,10 +868,10 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.differences(full_cave_cmd.current_uuid())
         self.assertEqual((
             'Root: 1ad9e0f92a8411689b1aee57f9ccf36c1f09a1ad\n'
-            'Remote repo-backup-name current=a80f91 staging=None desired=1ad9e0\n'
+            'Remote repo-backup-name current=None staging=None desired=1ad9e0\n'
             'Remote repo-copy-name current=1ad9e0 staging=None desired=1ad9e0\n'
             'Remote repo-full-name current=1ad9e0 staging=1ad9e0 desired=1ad9e0\n'
-            'Remote repo-incoming-name current=a80f91 staging=None desired=a80f91\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
             'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
             'Status of repo-full-name:\n'
             'PRESENT /lets_get_it_started/test.me.2-butnew\n'
@@ -1067,15 +1067,15 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.pull(partial_cave_cmd.current_uuid())
         self.assertEqual((
             'Pulling repo-partial-name...\n'
-            'Before: Hoard [None] <- repo [curr: a80f91, stg: f9bfc2, des: a80f91]\n'
+            'Before: Hoard [None] <- repo [curr: None, stg: f9bfc2, des: None]\n'
             'REPO_MARK_FILE_AVAILABLE /test.me.1\n'
             'HOARD_FILE_ADDED /test.me.1\n'
             'REPO_MARK_FILE_AVAILABLE /wat/test.me.2\n'
             'HOARD_FILE_ADDED /wat/test.me.2\n'
-            'updated repo-partial-name from a80f91 to f9bfc2\n'
-            'updated repo-full-name from a80f91 to f9bfc2\n'
-            'updated repo-backup-name from a80f91 to f9bfc2\n'
-            'updated repo-copy-name from a80f91 to f9bfc2\n'
+            'updated repo-partial-name from None to f9bfc2\n'
+            'updated repo-full-name from None to f9bfc2\n'
+            'updated repo-backup-name from None to f9bfc2\n'
+            'updated repo-copy-name from None to f9bfc2\n'
             'After: Hoard [f9bfc2], repo [curr: f9bfc2, stg: f9bfc2, des: f9bfc2]\n'
             "Sync'ed repo-partial-name to hoard!\n"
             'DONE'), res)
@@ -1083,10 +1083,10 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.differences(full_cave_cmd.current_uuid())
         self.assertEqual((
             'Root: f9bfc2be6cc201aa81b733b9d83c1030cc88bffe\n'
-            'Remote repo-backup-name current=a80f91 staging=None desired=f9bfc2\n'
-            'Remote repo-copy-name current=a80f91 staging=None desired=f9bfc2\n'
-            'Remote repo-full-name current=a80f91 staging=None desired=f9bfc2\n'
-            'Remote repo-incoming-name current=a80f91 staging=None desired=a80f91\n'
+            'Remote repo-backup-name current=None staging=None desired=f9bfc2\n'
+            'Remote repo-copy-name current=None staging=None desired=f9bfc2\n'
+            'Remote repo-full-name current=None staging=None desired=f9bfc2\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
             'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
             'Status of repo-full-name:\n'
             'PRESENT /test.me.4\n'
@@ -1096,7 +1096,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
         self.assertEqual((
             'Pulling repo-full-name...\n'
-            'Before: Hoard [f9bfc2] <- repo [curr: a80f91, stg: 1ad9e0, des: f9bfc2]\n'
+            'Before: Hoard [f9bfc2] <- repo [curr: None, stg: 1ad9e0, des: f9bfc2]\n'
             'REPO_MARK_FILE_AVAILABLE /test.me.1\n'
             'REPO_MARK_FILE_AVAILABLE /test.me.4\n'
             'HOARD_FILE_ADDED /test.me.4\n'
@@ -1113,7 +1113,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.pull(backup_cave_cmd.current_uuid())
         self.assertEqual((
             'Pulling repo-backup-name...\n'
-            'Before: Hoard [1ad9e0] <- repo [curr: a80f91, stg: 3a0889, des: 1ad9e0]\n'
+            'Before: Hoard [1ad9e0] <- repo [curr: None, stg: 3a0889, des: 1ad9e0]\n'
             'REPO_MARK_FILE_AVAILABLE /test.me.1\n'
             'REPO_DESIRED_FILE_TO_GET /test.me.4\n'
             'REPO_DESIRED_FILE_TO_GET /wat/test.me.2\n'
@@ -1208,7 +1208,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'Remote repo-backup-name current=1ad9e0 staging=3a0889 desired=1ad9e0\n'
             'Remote repo-copy-name current=1ad9e0 staging=None desired=1ad9e0\n'
             'Remote repo-full-name current=1ad9e0 staging=1ad9e0 desired=1ad9e0\n'
-            'Remote repo-incoming-name current=a80f91 staging=None desired=a80f91\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
             'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
             'Status of repo-full-name:\n'
             'PRESENT /lets_get_it_started/test.me.2-butnew\n'
@@ -1546,7 +1546,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
         self.assertEqual((
             'Pulling repo-full-name...\n'
-            'Before: Hoard [f9bfc2] <- repo [curr: a80f91, stg: 1ad9e0, des: f9bfc2]\n'
+            'Before: Hoard [f9bfc2] <- repo [curr: None, stg: 1ad9e0, des: f9bfc2]\n'
             'REPO_MARK_FILE_AVAILABLE /test.me.1\n'
             'REPO_MARK_FILE_AVAILABLE /test.me.4\n'
             'HOARD_FILE_ADDED /test.me.4\n'
@@ -1726,7 +1726,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'Remote repo-backup-name current=e48d88 staging=3a0889 desired=e48d88\n'
             'Remote repo-copy-name current=e48d88 staging=None desired=e48d88\n'
             'Remote repo-full-name current=e48d88 staging=e48d88 desired=e48d88\n'
-            'Remote repo-incoming-name current=a80f91 staging=None desired=a80f91\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
             'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=8c1a36\n'
             'Status of repo-full-name:\n'
             'PRESENT /lets_get_it_started/test.me.2-butnew\n'
@@ -1787,18 +1787,18 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.pull(all=True)
         self.assertEqual([
             'Pulling repo-partial-name...',
-            'Before: Hoard [None] <- repo [curr: a80f91, stg: f9bfc2, des: a80f91]',
+            'Before: Hoard [None] <- repo [curr: None, stg: f9bfc2, des: None]',
             'REPO_MARK_FILE_AVAILABLE /test.me.1',
             'HOARD_FILE_ADDED /test.me.1',
             'REPO_MARK_FILE_AVAILABLE /wat/test.me.2',
             'HOARD_FILE_ADDED /wat/test.me.2',
-            'updated repo-partial-name from a80f91 to f9bfc2',
-            'updated repo-full-name from a80f91 to f9bfc2',
-            'updated repo-backup-name from a80f91 to f9bfc2',
+            'updated repo-partial-name from None to f9bfc2',
+            'updated repo-full-name from None to f9bfc2',
+            'updated repo-backup-name from None to f9bfc2',
             'After: Hoard [f9bfc2], repo [curr: f9bfc2, stg: f9bfc2, des: f9bfc2]',
             "Sync'ed repo-partial-name to hoard!",
             'Pulling repo-full-name...',
-            'Before: Hoard [f9bfc2] <- repo [curr: a80f91, stg: 1ad9e0, des: f9bfc2]',
+            'Before: Hoard [f9bfc2] <- repo [curr: None, stg: 1ad9e0, des: f9bfc2]',
             'REPO_MARK_FILE_AVAILABLE /test.me.1',
             'REPO_MARK_FILE_AVAILABLE /test.me.4',
             'HOARD_FILE_ADDED /test.me.4',
@@ -1810,7 +1810,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'After: Hoard [1ad9e0], repo [curr: 1ad9e0, stg: 1ad9e0, des: 1ad9e0]',
             "Sync'ed repo-full-name to hoard!",
             'Pulling repo-backup-name...',
-            'Before: Hoard [1ad9e0] <- repo [curr: a80f91, stg: 3a0889, des: 1ad9e0]',
+            'Before: Hoard [1ad9e0] <- repo [curr: None, stg: 3a0889, des: 1ad9e0]',
             'REPO_MARK_FILE_AVAILABLE /test.me.1',
             'REPO_DESIRED_FILE_TO_GET /test.me.4',
             'REPO_DESIRED_FILE_TO_GET /wat/test.me.2',
@@ -1818,7 +1818,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'After: Hoard [1ad9e0], repo [curr: 3a0889, stg: 3a0889, des: 1ad9e0]',
             "Sync'ed repo-backup-name to hoard!",
             'Pulling repo-incoming-name...',
-            'Before: Hoard [1ad9e0] <- repo [curr: a80f91, stg: 3d1726, des: a80f91]',
+            'Before: Hoard [1ad9e0] <- repo [curr: None, stg: 3d1726, des: None]',
             'REPO_MARK_FILE_AVAILABLE /test.me.4',
             'REPO_MARK_FILE_AVAILABLE /test.me.5',
             'HOARD_FILE_ADDED /test.me.5',
@@ -1826,7 +1826,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'HOARD_FILE_ADDED /wat/test.me.6',
             'updated repo-full-name from 1ad9e0 to 8da760',
             'updated repo-backup-name from 1ad9e0 to 8da760',
-            'After: Hoard [8da760], repo [curr: 3d1726, stg: 3d1726, des: a80f91]',
+            'After: Hoard [8da760], repo [curr: 3d1726, stg: 3d1726, des: None]',
             "Sync'ed repo-incoming-name to hoard!",
             'DONE'], res.splitlines())
 
@@ -1903,7 +1903,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'Root: 8da76083b9eab9f49945d8f2487df38ab909b7df',
             'Remote repo-backup-name current=3a0889 staging=3a0889 desired=8da760',
             'Remote repo-full-name current=8da760 staging=20b513 desired=8da760',
-            'Remote repo-incoming-name current=3d1726 staging=3d1726 desired=a80f91',
+            'Remote repo-incoming-name current=3d1726 staging=3d1726 desired=None',
             'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2',
             '/',
             '/test.me.1 = a:3',
@@ -1960,7 +1960,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'Root: 8da76083b9eab9f49945d8f2487df38ab909b7df',
             'Remote repo-backup-name current=3a0889 staging=3a0889 desired=8da760',
             'Remote repo-full-name current=8da760 staging=20b513 desired=8da760',
-            'Remote repo-incoming-name current=3d1726 staging=3d1726 desired=a80f91',
+            'Remote repo-incoming-name current=3d1726 staging=3d1726 desired=None',
             'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2',
             '/',
             '/test.me.1 = a:3',

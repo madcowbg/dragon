@@ -83,12 +83,9 @@ class HoardCommand(object):
             async with self.hoard.open_contents(create_missing=True).writeable() as hoard:
                 hoard.config.set_max_size_fallback(remote_uuid, shutil.disk_usage(remote_path).total)
 
-                with hoard.objects as objects:
-                    empty_folder_id = objects.mktree_from_tuples([])
-
                 remote_root = hoard.env.roots(write=True)[remote_uuid]
-                remote_root.desired = empty_folder_id
-                remote_root.current = empty_folder_id
+                remote_root.desired = None
+                remote_root.current = None
 
         run_in_separate_loop(hack())
 

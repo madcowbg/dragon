@@ -102,17 +102,17 @@ class TestBackups(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.pull(all=True)
         self.assertEqual([
             'Pulling repo-partial-name...',
-            'Before: Hoard [None] <- repo [curr: a80f91, stg: 418ef1, des: a80f91]',
+            'Before: Hoard [None] <- repo [curr: None, stg: 418ef1, des: None]',
             'REPO_MARK_FILE_AVAILABLE /test.me.1',
             'HOARD_FILE_ADDED /test.me.1',
             'REPO_MARK_FILE_AVAILABLE /wat/test.me.2',
             'HOARD_FILE_ADDED /wat/test.me.2',
-            'updated repo-partial-name from a80f91 to 418ef1',
-            'updated repo-full-name from a80f91 to 418ef1',
+            'updated repo-partial-name from None to 418ef1',
+            'updated repo-full-name from None to 418ef1',
             'After: Hoard [418ef1], repo [curr: 418ef1, stg: 418ef1, des: 418ef1]',
             "Sync'ed repo-partial-name to hoard!",
             'Pulling repo-full-name...',
-            'Before: Hoard [418ef1] <- repo [curr: a80f91, stg: 94524f, des: 418ef1]',
+            'Before: Hoard [418ef1] <- repo [curr: None, stg: 94524f, des: 418ef1]',
             'REPO_MARK_FILE_AVAILABLE /test.me.1',
             'REPO_MARK_FILE_AVAILABLE /test.me.4',
             'HOARD_FILE_ADDED /test.me.4',
@@ -123,14 +123,14 @@ class TestBackups(IsolatedAsyncioTestCase):
             'After: Hoard [94524f], repo [curr: 94524f, stg: 94524f, des: 94524f]',
             "Sync'ed repo-full-name to hoard!",
             'Pulling repo-incoming-name...',
-            'Before: Hoard [94524f] <- repo [curr: a80f91, stg: a513af, des: a80f91]',
+            'Before: Hoard [94524f] <- repo [curr: None, stg: a513af, des: None]',
             'REPO_MARK_FILE_AVAILABLE /test.me.4',
             'REPO_MARK_FILE_AVAILABLE /test.me.5',
             'HOARD_FILE_ADDED /test.me.5',
             'REPO_MARK_FILE_AVAILABLE /wat/test.me.6',
             'HOARD_FILE_ADDED /wat/test.me.6',
             'updated repo-full-name from 94524f to c8405b',
-            'After: Hoard [c8405b], repo [curr: a513af, stg: a513af, des: a80f91]',
+            'After: Hoard [c8405b], repo [curr: a513af, stg: a513af, des: None]',
             "Sync'ed repo-incoming-name to hoard!",
             'DONE'], res.splitlines())
 
@@ -138,7 +138,7 @@ class TestBackups(IsolatedAsyncioTestCase):
         self.assertEqual(
             'Root: c8405b542a1e9b691f8e2be70d1bd387e54d530d\n'
             'Remote repo-full-name current=94524f staging=94524f desired=c8405b\n'
-            'Remote repo-incoming-name current=a513af staging=a513af desired=a80f91\n'
+            'Remote repo-incoming-name current=a513af staging=a513af desired=None\n'
             'Remote repo-partial-name current=418ef1 staging=418ef1 desired=418ef1\n'
             "/\n"
             "/test.me.1 = a:2\n"
@@ -188,7 +188,7 @@ class TestBackups(IsolatedAsyncioTestCase):
         self.assertEqual((
             'Root: c8405b542a1e9b691f8e2be70d1bd387e54d530d\n'
             'Remote repo-full-name current=c8405b staging=94524f desired=c8405b\n'
-            'Remote repo-incoming-name current=None staging=a513af desired=a80f91\n'
+            'Remote repo-incoming-name current=None staging=a513af desired=None\n'
             'Remote repo-partial-name current=418ef1 staging=418ef1 desired=418ef1\n'
             '/\n'
             '/test.me.1 = a:2\n'
@@ -224,19 +224,19 @@ class TestBackups(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.pull(all=True)
         self.assertEqual([
             'Pulling repo-partial-name...',
-            'Before: Hoard [None] <- repo [curr: a80f91, stg: 418ef1, des: a80f91]',
+            'Before: Hoard [None] <- repo [curr: None, stg: 418ef1, des: None]',
             'REPO_MARK_FILE_AVAILABLE /test.me.1',
             'HOARD_FILE_ADDED /test.me.1',
             'REPO_MARK_FILE_AVAILABLE /wat/test.me.2',
             'HOARD_FILE_ADDED /wat/test.me.2',
-            'updated repo-partial-name from a80f91 to 418ef1',
-            'updated repo-full-name from a80f91 to 418ef1',
-            'updated backup-1 from a80f91 to 6ef88c',
-            'updated backup-2 from a80f91 to cf736d',
+            'updated repo-partial-name from None to 418ef1',
+            'updated repo-full-name from None to 418ef1',
+            'updated backup-1 from None to 6ef88c',
+            'updated backup-2 from None to cf736d',
             'After: Hoard [418ef1], repo [curr: 418ef1, stg: 418ef1, des: 418ef1]',
             "Sync'ed repo-partial-name to hoard!",
             'Pulling repo-full-name...',
-            'Before: Hoard [418ef1] <- repo [curr: a80f91, stg: 94524f, des: 418ef1]',
+            'Before: Hoard [418ef1] <- repo [curr: None, stg: 94524f, des: 418ef1]',
             'REPO_MARK_FILE_AVAILABLE /test.me.1',
             'REPO_MARK_FILE_AVAILABLE /test.me.4',
             'HOARD_FILE_ADDED /test.me.4',
@@ -244,12 +244,12 @@ class TestBackups(IsolatedAsyncioTestCase):
             'REPO_MARK_FILE_AVAILABLE /wat/test.me.3',
             'HOARD_FILE_ADDED /wat/test.me.3',
             'updated repo-full-name from 418ef1 to 94524f',
-            'updated backup-3 from a80f91 to cf33f9',
-            'updated backup-4 from a80f91 to b7d919',
+            'updated backup-3 from None to cf33f9',
+            'updated backup-4 from None to b7d919',
             'After: Hoard [94524f], repo [curr: 94524f, stg: 94524f, des: 94524f]',
             "Sync'ed repo-full-name to hoard!",
             'Pulling repo-incoming-name...',
-            'Before: Hoard [94524f] <- repo [curr: a80f91, stg: a513af, des: a80f91]',
+            'Before: Hoard [94524f] <- repo [curr: None, stg: a513af, des: None]',
             'REPO_MARK_FILE_AVAILABLE /test.me.4',
             'REPO_MARK_FILE_AVAILABLE /test.me.5',
             'HOARD_FILE_ADDED /test.me.5',
@@ -258,10 +258,10 @@ class TestBackups(IsolatedAsyncioTestCase):
             'updated repo-full-name from 94524f to c8405b',
             'updated backup-1 from 6ef88c to 9b5eb2',
             'updated backup-2 from cf736d to 261ad1',
-            'After: Hoard [c8405b], repo [curr: a513af, stg: a513af, des: a80f91]',
+            'After: Hoard [c8405b], repo [curr: a513af, stg: a513af, des: None]',
             "Sync'ed repo-incoming-name to hoard!",
             'Pulling backup-1...',
-            'Before: Hoard [c8405b] <- repo [curr: a80f91, stg: 1388f4, des: 9b5eb2]',
+            'Before: Hoard [c8405b] <- repo [curr: None, stg: 1388f4, des: 9b5eb2]',
             'REPO_MARK_FILE_AVAILABLE /test.me.1',
             'REPO_MARK_FILE_AVAILABLE /wat/test.me.3',
             'REPO_DESIRED_FILE_TO_GET /wat/test.me.6',
@@ -269,7 +269,7 @@ class TestBackups(IsolatedAsyncioTestCase):
             'After: Hoard [c8405b], repo [curr: 1388f4, stg: 1388f4, des: 4bff8f]',
             "Sync'ed backup-1 to hoard!",
             'Pulling backup-2...',
-            'Before: Hoard [c8405b] <- repo [curr: a80f91, stg: 6ef88c, des: 261ad1]',
+            'Before: Hoard [c8405b] <- repo [curr: None, stg: 6ef88c, des: 261ad1]',
             'REPO_MARK_FILE_AVAILABLE /test.me.1',
             'REPO_DESIRED_FILE_TO_GET /test.me.5',
             'REPO_DESIRED_FILE_TO_GET /wat/test.me.2',
@@ -277,12 +277,12 @@ class TestBackups(IsolatedAsyncioTestCase):
             'After: Hoard [c8405b], repo [curr: 6ef88c, stg: 6ef88c, des: ea34fb]',
             "Sync'ed backup-2 to hoard!",
             'Pulling backup-3...',
-            'Before: Hoard [c8405b] <- repo [curr: a80f91, stg: fe2e3c, des: cf33f9]',
+            'Before: Hoard [c8405b] <- repo [curr: None, stg: fe2e3c, des: cf33f9]',
             'REPO_DESIRED_FILE_TO_GET /test.me.4',
             'After: Hoard [c8405b], repo [curr: fe2e3c, stg: fe2e3c, des: cf33f9]',
             "Sync'ed backup-3 to hoard!",
             'Pulling backup-4...',
-            'Before: Hoard [c8405b] <- repo [curr: a80f91, stg: a80f91, des: b7d919]',
+            'Before: Hoard [c8405b] <- repo [curr: None, stg: a80f91, des: b7d919]',
             'REPO_DESIRED_FILE_TO_GET /wat/test.me.3',
             'After: Hoard [c8405b], repo [curr: a80f91, stg: a80f91, des: b7d919]',
             "Sync'ed backup-4 to hoard!",
@@ -454,25 +454,25 @@ class TestBackups(IsolatedAsyncioTestCase):
             'Skipping update as past epoch 1 is not after hoard epoch 1\n'
             'Skipping update as past epoch 1 is not after hoard epoch 1\n'
             'Pulling backup-1...\n'
-            'Before: Hoard [c8405b] <- repo [curr: a80f91, stg: 1388f4, des: a80f91]\n'
+            'Before: Hoard [c8405b] <- repo [curr: None, stg: 1388f4, des: None]\n'
             'REPO_MARK_FILE_AVAILABLE /test.me.1\n'
             'REPO_MARK_FILE_AVAILABLE /wat/test.me.3\n'
-            'updated backup-1 from a80f91 to 1388f4\n'
+            'updated backup-1 from None to 1388f4\n'
             'After: Hoard [c8405b], repo [curr: 1388f4, stg: 1388f4, des: 1388f4]\n'
             "Sync'ed backup-1 to hoard!\n"
             'Pulling backup-2...\n'
-            'Before: Hoard [c8405b] <- repo [curr: a80f91, stg: 6ef88c, des: a80f91]\n'
+            'Before: Hoard [c8405b] <- repo [curr: None, stg: 6ef88c, des: None]\n'
             'REPO_MARK_FILE_AVAILABLE /test.me.1\n'
-            'updated backup-2 from a80f91 to 6ef88c\n'
+            'updated backup-2 from None to 6ef88c\n'
             'After: Hoard [c8405b], repo [curr: 6ef88c, stg: 6ef88c, des: 6ef88c]\n'
             "Sync'ed backup-2 to hoard!\n"
             'Pulling backup-3...\n'
-            'Before: Hoard [c8405b] <- repo [curr: a80f91, stg: fe2e3c, des: a80f91]\n'
-            'After: Hoard [c8405b], repo [curr: fe2e3c, stg: fe2e3c, des: a80f91]\n'
+            'Before: Hoard [c8405b] <- repo [curr: None, stg: fe2e3c, des: None]\n'
+            'After: Hoard [c8405b], repo [curr: fe2e3c, stg: fe2e3c, des: None]\n'
             "Sync'ed backup-3 to hoard!\n"
             'Pulling backup-4...\n'
-            'Before: Hoard [c8405b] <- repo [curr: a80f91, stg: a80f91, des: a80f91]\n'
-            'After: Hoard [c8405b], repo [curr: a80f91, stg: a80f91, des: a80f91]\n'
+            'Before: Hoard [c8405b] <- repo [curr: None, stg: a80f91, des: None]\n'
+            'After: Hoard [c8405b], repo [curr: a80f91, stg: a80f91, des: None]\n'
             "Sync'ed backup-4 to hoard!\n"
             'DONE'), res)
 
@@ -652,16 +652,16 @@ class TestBackups(IsolatedAsyncioTestCase):
             'Skipping update as past epoch 1 is not after hoard epoch 1',
             'Skipping update as past epoch 1 is not after hoard epoch 1',
             'Pulling backup-1...',
-            'Before: Hoard [c8405b] <- repo [curr: a80f91, stg: 1388f4, des: a80f91]',
+            'Before: Hoard [c8405b] <- repo [curr: None, stg: 1388f4, des: None]',
             'REPO_MARK_FILE_AVAILABLE /test.me.1',
             'REPO_MARK_FILE_AVAILABLE /wat/test.me.3',
-            'updated backup-1 from a80f91 to 1388f4',
+            'updated backup-1 from None to 1388f4',
             'After: Hoard [c8405b], repo [curr: 1388f4, stg: 1388f4, des: 1388f4]',
             "Sync'ed backup-1 to hoard!",
             'Pulling backup-2...',
-            'Before: Hoard [c8405b] <- repo [curr: a80f91, stg: 6ef88c, des: a80f91]',
+            'Before: Hoard [c8405b] <- repo [curr: None, stg: 6ef88c, des: None]',
             'REPO_MARK_FILE_AVAILABLE /test.me.1',
-            'updated backup-2 from a80f91 to 6ef88c',
+            'updated backup-2 from None to 6ef88c',
             'After: Hoard [c8405b], repo [curr: 6ef88c, stg: 6ef88c, des: 6ef88c]',
             "Sync'ed backup-2 to hoard!",
             'DONE'], res.splitlines())

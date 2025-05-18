@@ -102,7 +102,7 @@ class TestWorkflows(unittest.TestCase):
 
         self.assertEqual([
             ('HOARD', '0038b3'),
-            ('backup-uuid', 'a80f91'),
+            ('backup-uuid', 'None'),
             ('full-uuid', '0038b3'),
             ('incoming-uuid', '5435fb'),
             ('partial-uuid', '0c4b36')],
@@ -119,7 +119,7 @@ class TestWorkflows(unittest.TestCase):
 
         self.assertEqual([
             ('HOARD', 'e1d05b'),
-            ('backup-uuid', 'a80f91'),
+            ('backup-uuid', 'None'),
             ('full-uuid', 'e1d05b'),
             ('incoming-uuid', '639323'),
             ('partial-uuid', '0c4b36')],
@@ -163,7 +163,7 @@ class TestWorkflows(unittest.TestCase):
                 ('$ROOT/wat/test.me.7', 2, '46e7da788d1c605a2293d580eeceeefd')],
                 dump_tree(objects, current_hoard_id, show_fasthash=True))
 
-            self.assertEqual([('$ROOT', 1)], dump_tree(objects, current_backup_id, show_fasthash=True))
+            self.assertEqual([], dump_tree(objects, current_backup_id, show_fasthash=True))
 
         # adding the backup too
         pull_contents(

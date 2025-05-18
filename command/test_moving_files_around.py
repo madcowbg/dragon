@@ -24,18 +24,18 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.pull(all=True)
         self.assertEqual([
             'Pulling repo-partial-name...',
-            'Before: Hoard [None] <- repo [curr: a80f91, stg: f9bfc2, des: a80f91]',
+            'Before: Hoard [None] <- repo [curr: None, stg: f9bfc2, des: None]',
             'REPO_MARK_FILE_AVAILABLE /test.me.1',
             'HOARD_FILE_ADDED /test.me.1',
             'REPO_MARK_FILE_AVAILABLE /wat/test.me.2',
             'HOARD_FILE_ADDED /wat/test.me.2',
-            'updated repo-partial-name from a80f91 to f9bfc2',
-            'updated repo-full-name from a80f91 to f9bfc2',
-            'updated repo-backup-name from a80f91 to f9bfc2',
+            'updated repo-partial-name from None to f9bfc2',
+            'updated repo-full-name from None to f9bfc2',
+            'updated repo-backup-name from None to f9bfc2',
             'After: Hoard [f9bfc2], repo [curr: f9bfc2, stg: f9bfc2, des: f9bfc2]',
             "Sync'ed repo-partial-name to hoard!",
             'Pulling repo-full-name...',
-            'Before: Hoard [f9bfc2] <- repo [curr: a80f91, stg: 1ad9e0, des: f9bfc2]',
+            'Before: Hoard [f9bfc2] <- repo [curr: None, stg: 1ad9e0, des: f9bfc2]',
             'REPO_MARK_FILE_AVAILABLE /test.me.1',
             'REPO_MARK_FILE_AVAILABLE /test.me.4',
             'HOARD_FILE_ADDED /test.me.4',
@@ -47,7 +47,7 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
             'After: Hoard [1ad9e0], repo [curr: 1ad9e0, stg: 1ad9e0, des: 1ad9e0]',
             "Sync'ed repo-full-name to hoard!",
             'Pulling repo-backup-name...',
-            'Before: Hoard [1ad9e0] <- repo [curr: a80f91, stg: 3a0889, des: 1ad9e0]',
+            'Before: Hoard [1ad9e0] <- repo [curr: None, stg: 3a0889, des: 1ad9e0]',
             'REPO_MARK_FILE_AVAILABLE /test.me.1',
             'REPO_DESIRED_FILE_TO_GET /test.me.4',
             'REPO_DESIRED_FILE_TO_GET /wat/test.me.2',
@@ -55,7 +55,7 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
             'After: Hoard [1ad9e0], repo [curr: 3a0889, stg: 3a0889, des: 1ad9e0]',
             "Sync'ed repo-backup-name to hoard!",
             'Pulling repo-incoming-name...',
-            'Before: Hoard [1ad9e0] <- repo [curr: a80f91, stg: 3d1726, des: a80f91]',
+            'Before: Hoard [1ad9e0] <- repo [curr: None, stg: 3d1726, des: None]',
             'REPO_MARK_FILE_AVAILABLE /test.me.4',
             'REPO_MARK_FILE_AVAILABLE /test.me.5',
             'HOARD_FILE_ADDED /test.me.5',
@@ -63,7 +63,7 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
             'HOARD_FILE_ADDED /wat/test.me.6',
             'updated repo-full-name from 1ad9e0 to 8da760',
             'updated repo-backup-name from 1ad9e0 to 8da760',
-            'After: Hoard [8da760], repo [curr: 3d1726, stg: 3d1726, des: a80f91]',
+            'After: Hoard [8da760], repo [curr: 3d1726, stg: 3d1726, des: None]',
             "Sync'ed repo-incoming-name to hoard!",
             'DONE'], res.splitlines())
 
@@ -117,12 +117,12 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
             'After: Hoard [8da760], repo [curr: 3a0889, stg: 3a0889, des: 8da760]',
             "Sync'ed repo-backup-name to hoard!",
             'Pulling repo-incoming-name...',
-            'Before: Hoard [8da760] <- repo [curr: 3d1726, stg: 3d1726, des: a80f91]',
+            'Before: Hoard [8da760] <- repo [curr: 3d1726, stg: 3d1726, des: None]',
             'REPO_FILE_TO_DELETE /test.me.4',
             'REPO_FILE_TO_DELETE /test.me.5',
             'REPO_FILE_TO_DELETE /wat/test.me.3',
             'REPO_FILE_TO_DELETE /wat/test.me.6',
-            'After: Hoard [8da760], repo [curr: 3d1726, stg: 3d1726, des: a80f91]',
+            'After: Hoard [8da760], repo [curr: 3d1726, stg: 3d1726, des: None]',
             "Sync'ed repo-incoming-name to hoard!",
             'DONE'], res.splitlines())
 
@@ -189,7 +189,7 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
         self.assertEqual([
             'Status of repo-incoming-name:',
             'Hoard root: d16f79c5de630091a8b88890d3659da01e0be07f:',
-            'Repo current=3d1726 staging=3d1726 desired=a80f91',
+            'Repo current=3d1726 staging=3d1726 desired=None',
             'Repo root: 3d1726bd296f20d36cb9df60a0da4d4feae29248:',
             'REPO_FILE_TO_DELETE /test.me.4',
             'REPO_FILE_TO_DELETE /test.me.5',
@@ -206,12 +206,12 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.pull(incoming_cave_cmd.current_uuid())
         self.assertEqual([
             'Pulling repo-incoming-name...',
-            'Before: Hoard [d16f79] <- repo [curr: 3d1726, stg: 3d1726, des: a80f91]',
+            'Before: Hoard [d16f79] <- repo [curr: 3d1726, stg: 3d1726, des: None]',
             'REPO_FILE_TO_DELETE /test.me.4',
             'REPO_FILE_TO_DELETE /test.me.5',
             'REPO_FILE_TO_DELETE /wat/test.me.3',
             'REPO_FILE_TO_DELETE /wat/test.me.6',
-            'After: Hoard [d16f79], repo [curr: 3d1726, stg: 3d1726, des: a80f91]',
+            'After: Hoard [d16f79], repo [curr: 3d1726, stg: 3d1726, des: None]',
             "Sync'ed repo-incoming-name to hoard!",
             'DONE'], res.splitlines())
 
@@ -248,7 +248,7 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
         self.assertEqual([
             'Status of repo-incoming-name:',
             'Hoard root: ea749cf79b306a27fab649f8c8234e3a968c1529:',
-            'Repo current=3d1726 staging=3d1726 desired=a80f91',
+            'Repo current=3d1726 staging=3d1726 desired=None',
             'Repo root: 3d1726bd296f20d36cb9df60a0da4d4feae29248:',
             'REPO_FILE_TO_DELETE /test.me.4',
             'REPO_FILE_TO_DELETE /test.me.5',
@@ -265,12 +265,12 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.pull(incoming_cave_cmd.current_uuid())
         self.assertEqual([
             'Pulling repo-incoming-name...',
-            'Before: Hoard [ea749c] <- repo [curr: 3d1726, stg: 3d1726, des: a80f91]',
+            'Before: Hoard [ea749c] <- repo [curr: 3d1726, stg: 3d1726, des: None]',
             'REPO_FILE_TO_DELETE /test.me.4',
             'REPO_FILE_TO_DELETE /test.me.5',
             'REPO_FILE_TO_DELETE /wat/test.me.3',
             'REPO_FILE_TO_DELETE /wat/test.me.6',
-            'After: Hoard [ea749c], repo [curr: 3d1726, stg: 3d1726, des: a80f91]',
+            'After: Hoard [ea749c], repo [curr: 3d1726, stg: 3d1726, des: None]',
             "Sync'ed repo-incoming-name to hoard!",
             'DONE'], res.splitlines())
 
@@ -279,7 +279,7 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
             'Root: ea749cf79b306a27fab649f8c8234e3a968c1529',
             'Remote repo-backup-name current=3a0889 staging=3a0889 desired=ea749c',
             'Remote repo-full-name current=1ae17c staging=1ae17c desired=ea749c',
-            'Remote repo-incoming-name current=3d1726 staging=3d1726 desired=a80f91',
+            'Remote repo-incoming-name current=3d1726 staging=3d1726 desired=None',
             'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2',
             '/test.me.1 = a:3',
             '/test.me.4 = c:1',

@@ -162,10 +162,7 @@ async def execute_pull(
             # print what actually changed for the hoard and the repo todo consider printing other repo changes?
             print_differences(hoard_contents, hoard_root, repo_root, merged_ids, out)
 
-            with hoard_contents.objects as objects:
-                empty_folder_id = objects.mktree_from_tuples([])
-
-            commit_merged(hoard_root, repo_root, all_remote_roots, merged_ids, empty_folder_id)
+            commit_merged(hoard_root, repo_root, all_remote_roots, merged_ids)
 
             # fixme remove, just dumping
             sync_object_storage_to_recreate_fsobject_and_fspresence(
