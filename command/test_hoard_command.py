@@ -951,17 +951,21 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             res.strip())
 
         res = await hoard_cmd.move_mounts(from_path="/", to_path="/move-all-inside")
-        self.assertEqual(
-            "Moving files and folders:\n"
-            "/first-point/test.me.1=>/move-all-inside/first-point/test.me.1\n"
-            "/first-point/wat/test.me.2=>/move-all-inside/first-point/wat/test.me.2\n"
-            "Moving 1 repos:\n"
-            "[repo-partial-name] /first-point => /move-all-inside/first-point\n"
-            "DONE", res)
+        self.assertEqual((
+            'Moving files and folders:\n'
+            'repo-partial-name.current: cfe6f4 => f38587\n'
+            'repo-partial-name.staging: cfe6f4 => f38587\n'
+            'repo-partial-name.desired: cfe6f4 => f38587\n'
+            'HOARD.desired: cfe6f4 => f38587\n'
+            '/first-point/test.me.1=>/move-all-inside/first-point/test.me.1\n'
+            '/first-point/wat/test.me.2=>/move-all-inside/first-point/wat/test.me.2\n'
+            'Moving 1 repos:\n'
+            '[repo-partial-name] /first-point => /move-all-inside/first-point\n'
+            'DONE'), res)
 
         res = await hoard_cmd.contents.ls(show_remotes=True)
         self.assertEqual(
-            'Root: cfe6f4f9842fe5cd83051d49aa307bc40ed10084\n'
+            'Root: f3858768bf4e1794b1a4dbffb40acd9d8044bab3\n'
             "/\n"
             "/move-all-inside\n"
             "/move-all-inside/first-point => (repo-partial-name:.)\n"
@@ -982,17 +986,21 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         self.assertEqual("No repos to move!", res.strip())
 
         res = await hoard_cmd.move_mounts(from_path="/move-all-inside/first-point", to_path="/moved-data")
-        self.assertEqual(
-            "Moving files and folders:\n"
-            "/move-all-inside/first-point/test.me.1=>/moved-data/test.me.1\n"
-            "/move-all-inside/first-point/wat/test.me.2=>/moved-data/wat/test.me.2\n"
-            "Moving 1 repos:\n"
-            "[repo-partial-name] /move-all-inside/first-point => /moved-data\n"
-            "DONE", res)
+        self.assertEqual((
+            'Moving files and folders:\n'
+            'repo-partial-name.current: f38587 => b65582\n'
+            'repo-partial-name.staging: f38587 => b65582\n'
+            'repo-partial-name.desired: f38587 => b65582\n'
+            'HOARD.desired: f38587 => b65582\n'
+            '/move-all-inside/first-point/test.me.1=>/moved-data/test.me.1\n'
+            '/move-all-inside/first-point/wat/test.me.2=>/moved-data/wat/test.me.2\n'
+            'Moving 1 repos:\n'
+            '[repo-partial-name] /move-all-inside/first-point => /moved-data\n'
+            'DONE'), res)
 
         res = await hoard_cmd.contents.ls(show_remotes=True)
         self.assertEqual(
-            'Root: cfe6f4f9842fe5cd83051d49aa307bc40ed10084\n'
+            'Root: b6558267774b76f40b7801ed1ed1ec84526c544c\n'
             "/\n"
             "/moved-data => (repo-partial-name:.)\n"
             "/moved-data/test.me.1 = a:1\n"
@@ -1003,6 +1011,10 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         res = await hoard_cmd.move_mounts(from_path="/moved-data", to_path="/")
         self.assertEqual(
             "Moving files and folders:\n"
+            'repo-partial-name.current: b65582 => f9bfc2\n'
+            'repo-partial-name.staging: b65582 => f9bfc2\n'
+            'repo-partial-name.desired: b65582 => f9bfc2\n'
+            'HOARD.desired: b65582 => f9bfc2\n'
             "/moved-data/test.me.1=>/test.me.1\n"
             "/moved-data/wat/test.me.2=>/wat/test.me.2\n"
             "Moving 1 repos:\n"
@@ -1011,7 +1023,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.ls(show_remotes=True)
         self.assertEqual(
-            'Root: cfe6f4f9842fe5cd83051d49aa307bc40ed10084\n'
+            'Root: f9bfc2be6cc201aa81b733b9d83c1030cc88bffe\n'
             "/ => (repo-partial-name:.)\n"
             "/test.me.1 = a:1\n"
             "/wat => (repo-partial-name:wat)\n"
@@ -1049,6 +1061,10 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         res = await hoard_cmd.move_mounts(from_path="/first-point", to_path="/moved-data")
         self.assertEqual(
             "Moving files and folders:\n"
+            'repo-partial-name.current: cfe6f4 => b65582\n'
+            'repo-partial-name.staging: cfe6f4 => b65582\n'
+            'repo-partial-name.desired: cfe6f4 => b65582\n'
+            'HOARD.desired: cfe6f4 => b65582\n'
             "/first-point/test.me.1=>/moved-data/test.me.1\n"
             "/first-point/wat/test.me.2=>/moved-data/wat/test.me.2\n"
             "Moving 1 repos:\n"
@@ -1062,7 +1078,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.ls(show_remotes=True)
         self.assertEqual(
-            'Root: cfe6f4f9842fe5cd83051d49aa307bc40ed10084\n'
+            'Root: b6558267774b76f40b7801ed1ed1ec84526c544c\n'
             "/\n"
             "/moved-data => (repo-partial-name:.)\n"
             "/moved-data/test.me.1 = a:1\n"
@@ -1081,7 +1097,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.ls(show_remotes=True)
         self.assertEqual(
-            'Root: cfe6f4f9842fe5cd83051d49aa307bc40ed10084\n'
+            'Root: b6558267774b76f40b7801ed1ed1ec84526c544c\n'
             "/\n"
             "/moved-data => (repo-partial-name:.)\n"
             "/moved-data/test.me.1 = a:1\n"
