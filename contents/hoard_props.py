@@ -4,7 +4,6 @@ from typing import Dict, List
 from command.fast_path import FastPosixPath
 from lmdb_storage.tree_operations import get_child
 from lmdb_storage.tree_structure import ObjectID
-from util import FIRST_VALUE
 
 
 class HoardFileStatus(enum.Enum):
@@ -49,7 +48,10 @@ class HoardFileProps:
 
         roots = self.parent.env.roots(write=False)
         # fixme make dynamic
-        self.remote_roots = [(uuid, roots[uuid].current, roots[uuid].desired) for uuid in self.parent.config.remote_uuids()]
+        self.remote_names = dict((r.uuid, r.name) for r in parent.hoard_config.remotes.all())
+        self.remote_roots = sorted(
+            [(uuid, roots[uuid].current, roots[uuid].desired) for uuid in self.parent.config.remote_uuids()],
+            key=lambda ucd: self.remote_names[ucd[0]])
         self.hoard_root_id = roots["HOARD"].desired
 
     @property
@@ -71,39 +73,16 @@ class HoardFileProps:
         return result
 
     def by_status(self, selected_status: HoardFileStatus) -> List[str]:
-        return [u[0] for u in self.parent.conn.execute(
-            "SELECT uuid FROM fspresence WHERE fsobject_id = ? AND status = ?",
-            (self.fsobject_id, selected_status.value))]
-
         return [uuid for uuid, status in self.presence.items() if status == selected_status]
 
     def by_statuses(self, *selected_statuses: HoardFileStatus) -> List[str]:
-        return [u[0] for u in self.parent.conn.execute(
-            f"SELECT uuid FROM fspresence "
-            f"WHERE fsobject_id = ? AND status in ({', '.join('?' * len(selected_statuses))})",
-            (self.fsobject_id, *[s.value for s in selected_statuses]))]
+        return [uuid for uuid, status in self.presence.items() if status in selected_statuses]
 
     def get_status(self, repo_uuid: str) -> HoardFileStatus:
-        current = self.parent.conn.execute(
-            "SELECT status FROM fspresence WHERE fsobject_id = ? and uuid=?",
-            (self.fsobject_id, repo_uuid)
-        ).fetchone()
-        return HoardFileStatus(current[0]) if current is not None else HoardFileStatus.UNKNOWN
+        return self.presence.get(repo_uuid, HoardFileStatus.UNKNOWN)
 
     def repos_having_status(self, *statuses: HoardFileStatus) -> List[str]:
-        curr = self.parent.conn.cursor()
-        curr.row_factory = FIRST_VALUE
-
-        return curr.execute(
-            f"SELECT uuid FROM fspresence "
-            f"WHERE fsobject_id = ? AND status IN ({', '.join('?' * len(statuses))})",
-            (self.fsobject_id, *(s.value for s in statuses))).fetchall()
+        return self.by_statuses(*statuses)
 
     def get_move_file(self, repo_uuid: str) -> str:
-        curr = self.parent.conn.cursor()
-        curr.row_factory = FIRST_VALUE
-
-        return curr.execute(
-            f"SELECT move_from FROM fspresence "
-            f"WHERE fsobject_id = ? AND uuid = ? ",
-            (self.fsobject_id, repo_uuid)).fetchone()
+        raise NotImplementedError()
