@@ -49,12 +49,6 @@ class HoardFileProps:
         ).fetchone()
         return HoardFileStatus(current[0]) if current is not None else HoardFileStatus.UNKNOWN
 
-    def remove_status(self, remote_uuid: str):
-        self.parent.conn.execute(
-            "DELETE FROM fspresence "
-            "WHERE fsobject_id = ? AND uuid=?",
-            (self.fsobject_id, remote_uuid))
-
     def repos_having_status(self, *statuses: HoardFileStatus) -> List[str]:
         curr = self.parent.conn.cursor()
         curr.row_factory = FIRST_VALUE
