@@ -169,8 +169,8 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
         left_uuid = full_cave_cmd.current_uuid()
         right_uuid = partial_cave_cmd.current_uuid()
 
-        left_id = env.roots(write=False)[left_uuid].current
-        right_id = env.roots(write=False)[right_uuid].current
+        left_id = env.roots(write=False)[left_uuid].staging
+        right_id = env.roots(write=False)[right_uuid].staging
 
         with env.objects(write=True) as objects:
             left_id = add_file_object(objects, left_id, "newdir/new.file".split("/"), FileObject.create("dasda", 1))
@@ -189,13 +189,9 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
                 ('', 'right_missing'),
                 ('/newdir', 'right_missing'),
                 ('/newdir/new.file', 'right_missing'),
-                ('/test.me.1', 'right_missing'),
-                ('/test.me.4', 'right_missing'),
                 ('/wat', 'right_missing'),
                 ('/wat/lat', 'right_missing'),
-                ('/wat/lat/new.file', 'right_missing'),
-                ('/wat/test.me.2', 'right_missing'),
-                ('/wat/test.me.3', 'right_missing')], diffs)
+                ('/wat/lat/new.file', 'right_missing')], diffs)
 
             diffs = [
                 (path, diff_type.value)
@@ -204,13 +200,9 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
             self.assertEqual([
                 ('', 'different'),
                 ('/newdir', 'same'),
-                ('/test.me.1', 'same'),
-                ('/test.me.4', 'same'),
-                ('/wat', 'different'),
+                ('/wat', 'right_missing'),
                 ('/wat/lat', 'right_missing'),
-                ('/wat/lat/new.file', 'right_missing'),
-                ('/wat/test.me.2', 'same'),
-                ('/wat/test.me.3', 'same')], diffs)
+                ('/wat/lat/new.file', 'right_missing')], diffs)
 
             diffs = [
                 (path, diff_type.value)
@@ -220,26 +212,18 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
                 ('', 'different'),
                 ('/newdir', 'same'),
                 ('/newdir/new.file', 'same'),
-                ('/test.me.1', 'same'),
-                ('/test.me.4', 'same'),
-                ('/wat', 'different'),
+                ('/wat', 'right_missing'),
                 ('/wat/lat', 'right_missing'),
-                ('/wat/lat/new.file', 'right_missing'),
-                ('/wat/test.me.2', 'same'),
-                ('/wat/test.me.3', 'same')], diffs)
+                ('/wat/lat/new.file', 'right_missing')], diffs)
 
             diffs = dump_diffs(objects, left_id, right_id)
             self.assertEqual([
                 ('', 'different'),
                 ('/newdir', 'right_missing'),
                 ('/newdir/new.file', 'right_missing'),
-                ('/test.me.1', 'same'),
-                ('/test.me.4', 'right_missing'),
                 ('/wat', 'different'),
                 ('/wat/lat', 'right_missing'),
                 ('/wat/lat/new.file', 'right_missing'),
-                ('/wat/test.me.2', 'same'),
-                ('/wat/test.me.3', 'right_missing'),
                 ('/wat/zat', 'left_missing'),
                 ('/wat/zat/new.file', 'left_missing')], diffs)
 
@@ -251,13 +235,9 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
                 ('', 'different'),
                 ('/newdir', 'left_missing'),
                 ('/newdir/new.file', 'left_missing'),
-                ('/test.me.1', 'same'),
-                ('/test.me.4', 'left_missing'),
                 ('/wat', 'different'),
                 ('/wat/lat', 'left_missing'),
                 ('/wat/lat/new.file', 'left_missing'),
-                ('/wat/test.me.2', 'same'),
-                ('/wat/test.me.3', 'left_missing'),
                 ('/wat/zat', 'right_missing'),
                 ('/wat/zat/new.file', 'right_missing')], diffs)
 
