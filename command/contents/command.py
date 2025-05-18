@@ -27,6 +27,7 @@ from lmdb_storage.roots import Root, Roots
 from lmdb_storage.three_way_merge import MergePreferences
 from lmdb_storage.tree_iteration import zip_trees_dfs
 from lmdb_storage.tree_structure import Objects, ObjectID, TreeObject
+from lmdb_storage.tree_operations import get_child, graft_in_tree
 from resolve_uuid import resolve_remote_uuid
 from util import format_size, custom_isabs, safe_hex
 
@@ -426,13 +427,13 @@ async def print_pending_to_pull(
         hoard_contents: HoardContents, content_prefs: ContentPrefs, current_contents: RepoContents, config: HoardConfig,
         preferences: PullPreferences, out):
     with StringIO() as other_out:
-
         roots = hoard_contents.env.roots(write=False)
         repo_root = roots[current_contents.uuid]
         hoard_root = roots["HOARD"]
 
         out.write(f"Hoard root: {safe_hex(hoard_contents.env.roots(False)['HOARD'].desired)}:\n")
-        out.write(f"Repo current={safe_hex(repo_root.current)[:6]} staging={safe_hex(repo_root.staging)[:6]} desired={safe_hex(repo_root.desired)[:6]}\n")
+        out.write(
+            f"Repo current={safe_hex(repo_root.current)[:6]} staging={safe_hex(repo_root.staging)[:6]} desired={safe_hex(repo_root.desired)[:6]}\n")
         out.write(f"Repo root: {safe_hex(current_contents.fsobjects.root_id)}:\n")
 
         merged_ids = merge_contents(
@@ -820,23 +821,43 @@ async def execute_get(
         hoard: HoardContents, pathing: HoardPathing, repo_uuid: str, path_in_hoard: FastPosixPath,
         out: TextIO) -> None:
     assert path_in_hoard.is_absolute()
-    considered = 0
-    print(f"Iterating over {len(hoard.fsobjects)} files and folders...")
-    for hoard_file, hoard_props in alive_it([s async for s in hoard.fsobjects.in_folder_non_deleted(path_in_hoard)]):
-        assert isinstance(hoard_props, HoardFileProps)
 
-        local_file = pathing.in_hoard(hoard_file).at_local(repo_uuid)
-        assert local_file is not None  # is not addressable here at all
+    roots = hoard.env.roots(True)
+    repo_root = roots[repo_uuid]
+    hoard_root = roots["HOARD"]
 
-        considered += 1
+    old_desired_id = repo_root.desired
+    hoard_root_id = hoard_root.desired
+    with hoard.objects as objects:
+        path_in_tree = path_in_hoard._rem
+        new_desired_id = graft_in_tree(objects, old_desired_id, path_in_tree, hoard_root_id)
 
-        if hoard_props.get_status(repo_uuid) not in STATUSES_ALREADY_ENABLED:
-            logging.info(f"enabling file {hoard_file} on {repo_uuid}")
-            hoard_props.mark_to_get([repo_uuid])
-            out.write(f"+{hoard_file}\n")
+        considered = dump_changed_files_info(objects, path_in_tree, old_desired_id, new_desired_id, out)
+
+    repo_root.desired = new_desired_id
+
+    # fixme remove, just dumping
+    sync_object_storage_to_recreate_fsobject_and_fspresence(hoard.env, hoard.fsobjects, pathing._config)
 
     out.write(f"Considered {considered} files.\n")
     out.write("DONE")
+
+
+def dump_changed_files_info(objects, path_in_tree: List[str], old_desired_root_id, new_desired_root_id, out):
+    old_desired_id = get_child(objects, path_in_tree, old_desired_root_id)
+    new_desired_id = get_child(objects, path_in_tree, new_desired_root_id)
+
+    considered = 0
+    for file_path, (old_id, new_id), _ in zip_trees_dfs(
+            objects, '/' + '/'.join(path_in_tree), [old_desired_id, new_desired_id], True):
+        if new_id is not None:
+            new_obj = objects[new_id]
+            if isinstance(new_obj, FileObject):
+                considered += 1
+
+                if old_id != new_id:
+                    out.write(f"+{file_path}\n")
+    return considered
 
 
 async def _execute_drop(

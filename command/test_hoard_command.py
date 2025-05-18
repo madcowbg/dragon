@@ -889,6 +889,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         res = await hoard_cmd.files.push("repo-cloned-wat")
         self.assertEqual(
             f"repo-cloned-wat:\n"
+            '+ inner/another.file\n'
             "+ test.me.2\n"
             "+ test.me.3\n"
             f"repo-cloned-wat:\n"
