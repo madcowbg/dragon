@@ -6,11 +6,12 @@ from typing import Tuple, Iterable
 import rtoml
 
 from command.fast_path import FastPosixPath
-from contents.repo_props import FileDesc, RepoFileStatus
+from contents.repo_props import FileDesc
 from exceptions import MissingRepoContents
 from lmdb_storage.file_object import FileObject
 from lmdb_storage.object_store import ObjectStorage
 from lmdb_storage.roots import Roots
+from lmdb_storage.tree_calculation import TreeCalculator, RecursiveSumCalculator
 from lmdb_storage.tree_iteration import dfs
 from lmdb_storage.tree_structure import Objects, ObjectID, ObjectType, add_file_object, remove_file_object
 from util import FIRST_VALUE
@@ -22,19 +23,18 @@ class RepoFSObjects:
             self.objects = objects
             self.root_id = roots["REPO"].current
 
+            self.count_aggregator = TreeCalculator[int](RecursiveSumCalculator(lambda file_obj: 1))
+            self.size_aggregator = TreeCalculator[int](RecursiveSumCalculator(lambda file_obj: file_obj.size))
+
         @property
         def num_files(self) -> int:
             with self.objects as objects:
-                return sum(
-                    1 for _, obj_type, _, _, _ in dfs(objects, "", self.root_id)
-                    if obj_type == ObjectType.BLOB)
+                return self.count_aggregator[self.root_id, objects]
 
         @property
         def total_size(self) -> int:
             with self.objects as objects:
-                return sum(
-                    obj.size for _, obj_type, _, obj, _ in dfs(objects, "", self.root_id)
-                    if obj_type == ObjectType.BLOB)
+                return self.size_aggregator[self.root_id, objects]
 
     def __init__(self, objects: Objects[FileObject], roots: Roots, config: "RepoContentsConfig"):
         self.objects = objects

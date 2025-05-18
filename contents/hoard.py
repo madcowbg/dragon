@@ -6,7 +6,7 @@ from datetime import datetime
 from functools import cached_property
 from sqlite3 import Connection
 from types import NoneType
-from typing import Dict, Any, Optional, Tuple, Generator, Iterable, List, Set, AsyncGenerator
+from typing import Dict, Any, Optional, Tuple, Generator, Iterable, List, AsyncGenerator
 
 import rtoml
 
