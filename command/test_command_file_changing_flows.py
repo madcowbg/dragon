@@ -31,7 +31,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
         self.assertEqual((
             'Pulling repo-full-name...\n'
-            'Before: Hoard [a80f91] <- repo [curr: a80f91, stg: 1ad9e0, des: a80f91]\n'
+            'Before: Hoard [None] <- repo [curr: a80f91, stg: 1ad9e0, des: a80f91]\n'
             'REPO_MARK_FILE_AVAILABLE /test.me.1\n'
             'HOARD_FILE_ADDED /test.me.1\n'
             'REPO_MARK_FILE_AVAILABLE /test.me.4\n'
@@ -106,7 +106,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.pull(partial_cave_cmd.current_uuid())
         self.assertEqual((
             'Pulling repo-partial-name...\n'
-            'Before: Hoard [a80f91] <- repo [curr: a80f91, stg: f9bfc2, des: a80f91]\n'
+            'Before: Hoard [None] <- repo [curr: a80f91, stg: f9bfc2, des: a80f91]\n'
             'REPO_MARK_FILE_AVAILABLE /test.me.1\n'
             'HOARD_FILE_ADDED /test.me.1\n'
             'REPO_MARK_FILE_AVAILABLE /wat/test.me.2\n'
@@ -739,7 +739,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.pull(partial_cave_cmd.current_uuid())
         self.assertEqual((
             'Pulling repo-partial-name...\n'
-            'Before: Hoard [a80f91] <- repo [curr: a80f91, stg: f9bfc2, des: a80f91]\n'
+            'Before: Hoard [None] <- repo [curr: a80f91, stg: f9bfc2, des: a80f91]\n'
             'REPO_MARK_FILE_AVAILABLE /test.me.1\n'
             'HOARD_FILE_ADDED /test.me.1\n'
             'REPO_MARK_FILE_AVAILABLE /wat/test.me.2\n'
@@ -1067,7 +1067,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.pull(partial_cave_cmd.current_uuid())
         self.assertEqual((
             'Pulling repo-partial-name...\n'
-            'Before: Hoard [a80f91] <- repo [curr: a80f91, stg: f9bfc2, des: a80f91]\n'
+            'Before: Hoard [None] <- repo [curr: a80f91, stg: f9bfc2, des: a80f91]\n'
             'REPO_MARK_FILE_AVAILABLE /test.me.1\n'
             'HOARD_FILE_ADDED /test.me.1\n'
             'REPO_MARK_FILE_AVAILABLE /wat/test.me.2\n'
@@ -1787,7 +1787,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.pull(all=True)
         self.assertEqual([
             'Pulling repo-partial-name...',
-            'Before: Hoard [a80f91] <- repo [curr: a80f91, stg: f9bfc2, des: a80f91]',
+            'Before: Hoard [None] <- repo [curr: a80f91, stg: f9bfc2, des: a80f91]',
             'REPO_MARK_FILE_AVAILABLE /test.me.1',
             'HOARD_FILE_ADDED /test.me.1',
             'REPO_MARK_FILE_AVAILABLE /wat/test.me.2',

@@ -102,7 +102,7 @@ class TestBackups(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.pull(all=True)
         self.assertEqual([
             'Pulling repo-partial-name...',
-            'Before: Hoard [a80f91] <- repo [curr: a80f91, stg: 418ef1, des: a80f91]',
+            'Before: Hoard [None] <- repo [curr: a80f91, stg: 418ef1, des: a80f91]',
             'REPO_MARK_FILE_AVAILABLE /test.me.1',
             'HOARD_FILE_ADDED /test.me.1',
             'REPO_MARK_FILE_AVAILABLE /wat/test.me.2',
@@ -224,7 +224,7 @@ class TestBackups(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.pull(all=True)
         self.assertEqual([
             'Pulling repo-partial-name...',
-            'Before: Hoard [a80f91] <- repo [curr: a80f91, stg: 418ef1, des: a80f91]',
+            'Before: Hoard [None] <- repo [curr: a80f91, stg: 418ef1, des: a80f91]',
             'REPO_MARK_FILE_AVAILABLE /test.me.1',
             'HOARD_FILE_ADDED /test.me.1',
             'REPO_MARK_FILE_AVAILABLE /wat/test.me.2',

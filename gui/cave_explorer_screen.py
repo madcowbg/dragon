@@ -21,7 +21,7 @@ from textual.widgets._tree import TreeNode
 from command.content_prefs import ContentPrefs
 from command.contents.command import execute_pull, init_pull_preferences, pull_prefs_to_restore_from_hoard, \
     clear_pending_file_ops
-from command.contents.comparisons import copy_local_staging_to_hoard, sync_fsobject_to_object_storage
+from command.contents.comparisons import copy_local_staging_to_hoard
 from command.fast_path import FastPosixPath
 from command.files.command import execute_files_push
 from command.hoard import Hoard
@@ -241,7 +241,6 @@ class HoardContentsPendingToPull(Tree[Action]):
 
                     copy_local_staging_to_hoard(hoard_contents, current_contents, self.hoard.config())
                     uuid = current_contents.config.uuid
-                    await sync_fsobject_to_object_storage(hoard_contents.env, hoard_contents.fsobjects, hoard_config)
 
                     # resolutions = await resolution_to_match_repo_and_hoard(
                     #     uuid, hoard_contents, pathing, preferences,

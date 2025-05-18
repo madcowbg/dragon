@@ -8,7 +8,7 @@ from alive_progress import alive_bar, alive_it
 
 from command.content_prefs import ContentPrefs
 from command.contents.comparisons import copy_local_staging_to_hoard, \
-    sync_fsobject_to_object_storage, sync_object_storage_to_recreate_fsobject_and_fspresence
+    sync_object_storage_to_recreate_fsobject_and_fspresence
 from command.contents.pull_preferences import PullPreferences, PullIntention
 from command.fast_path import FastPosixPath
 from command.hoard import Hoard
@@ -138,10 +138,6 @@ async def execute_pull(
             uuid = current_contents.config.uuid
 
             out.write(f"Pulling {config.remotes[uuid].name}...\n")
-
-            await sync_fsobject_to_object_storage(
-                hoard_contents.env, hoard_contents.fsobjects, current_contents.fsobjects,
-                hoard.config())  # fixme remove
 
             # fixme remove, just dumping
             sync_object_storage_to_recreate_fsobject_and_fspresence(
@@ -539,9 +535,6 @@ class HoardCommandContents:
                     content_prefs = ContentPrefs(config, pathing, hoard_contents, self.hoard.available_remotes())
 
                     copy_local_staging_to_hoard(hoard_contents, current_contents, self.hoard.config())
-                    # fixme temporary
-                    await sync_fsobject_to_object_storage(
-                        hoard_contents.env, hoard_contents.fsobjects, current_contents.fsobjects, self.hoard.config())
 
                     await print_pending_to_pull(hoard_contents, content_prefs, current_contents, config, preferences,
                                                 out)
@@ -565,8 +558,6 @@ class HoardCommandContents:
                     out.write(f"Status of {self.hoard.config().remotes[remote_uuid].name}:\n")
 
                     copy_local_staging_to_hoard(hoard, current_contents, self.hoard.config())
-                    await sync_fsobject_to_object_storage(
-                        hoard.env, hoard.fsobjects, current_contents.fsobjects, self.hoard.config())
 
                     await execute_print_differences(hoard, current_contents.uuid, ignore_missing, out)
                     return out.getvalue()
@@ -797,6 +788,7 @@ def dump_remotes(hoard_config, hoard, out):
         out.write(
             f"Remote {remote.name} current={safe_hex(repo_root.current)[:6]} "
             f"staging={safe_hex(repo_root.staging)[:6]} desired={safe_hex(repo_root.desired)[:6]}\n")
+
 
 async def _execute_get(
         hoard: HoardContents, pathing: HoardPathing, repo_uuid: str, path_in_local: FastPosixPath) -> str:

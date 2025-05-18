@@ -81,7 +81,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.pending_pull("repo-in-local")
         self.assertEqual([
             'Status of repo-in-local:',
-            'Hoard root: a80f91bc48850a1fb3459bb76b9f6308d4d35710:',
+            'Hoard root: None:',
             'Repo current=a80f91 staging=72174f desired=a80f91',
             'Repo root: 72174f950289a454493d243bb72bdb76982e5f62:',
             'REPO_MARK_FILE_AVAILABLE /wat/test.me.different',
@@ -94,7 +94,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.pull("repo-in-local")
         self.assertEqual((
             'Pulling repo-in-local...\n'
-            'Before: Hoard [a80f91] <- repo [curr: a80f91, stg: 72174f, des: a80f91]\n'
+            'Before: Hoard [None] <- repo [curr: a80f91, stg: 72174f, des: a80f91]\n'
             'REPO_MARK_FILE_AVAILABLE /wat/test.me.different\n'
             'HOARD_FILE_ADDED /wat/test.me.different\n'
             'REPO_MARK_FILE_AVAILABLE /wat/test.me.once\n'
@@ -510,7 +510,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.pull("repo-partial-name")
         self.assertEqual((
             'Pulling repo-partial-name...\n'
-            'Before: Hoard [a80f91] <- repo [curr: a80f91, stg: f9bfc2, des: a80f91]\n'
+            'Before: Hoard [None] <- repo [curr: a80f91, stg: f9bfc2, des: a80f91]\n'
             'REPO_MARK_FILE_AVAILABLE /test.me.1\n'
             'HOARD_FILE_ADDED /test.me.1\n'
             'REPO_MARK_FILE_AVAILABLE /wat/test.me.2\n'
@@ -749,7 +749,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.pull(all=True)
         self.assertEqual((
             'Pulling repo-partial-name...\n'
-            'Before: Hoard [a80f91] <- repo [curr: a80f91, stg: f9bfc2, des: a80f91]\n'
+            'Before: Hoard [None] <- repo [curr: a80f91, stg: f9bfc2, des: a80f91]\n'
             'REPO_MARK_FILE_AVAILABLE /test.me.1\n'
             'HOARD_FILE_ADDED /test.me.1\n'
             'REPO_MARK_FILE_AVAILABLE /wat/test.me.2\n'
@@ -913,7 +913,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.pull("repo-full-name")
         self.assertEqual((
             'Pulling repo-full-name...\n'
-            'Before: Hoard [a80f91] <- repo [curr: a80f91, stg: d48f4e, des: a80f91]\n'
+            'Before: Hoard [None] <- repo [curr: a80f91, stg: d48f4e, des: a80f91]\n'
             'REPO_MARK_FILE_AVAILABLE /test.me.1\n'
             'HOARD_FILE_ADDED /test.me.1\n'
             'REPO_MARK_FILE_AVAILABLE /test.me.4\n'
@@ -1009,7 +1009,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.pull("repo-partial-name")
         self.assertEqual((
             'Pulling repo-partial-name...\n'
-            'Before: Hoard [a80f91] <- repo [curr: a80f91, stg: cfe6f4, des: a80f91]\n'
+            'Before: Hoard [None] <- repo [curr: a80f91, stg: cfe6f4, des: a80f91]\n'
             'REPO_MARK_FILE_AVAILABLE /first-point/test.me.1\n'
             'HOARD_FILE_ADDED /first-point/test.me.1\n'
             'REPO_MARK_FILE_AVAILABLE /first-point/wat/test.me.2\n'
@@ -1144,7 +1144,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.pull("repo-partial-name")
         self.assertEqual((
             'Pulling repo-partial-name...\n'
-            'Before: Hoard [a80f91] <- repo [curr: a80f91, stg: f9bfc2, des: a80f91]\n'
+            'Before: Hoard [None] <- repo [curr: a80f91, stg: f9bfc2, des: a80f91]\n'
             'REPO_MARK_FILE_AVAILABLE /test.me.1\n'
             'HOARD_FILE_ADDED /test.me.1\n'
             'REPO_MARK_FILE_AVAILABLE /wat/test.me.2\n'
@@ -1292,7 +1292,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.pull(partial_cave_cmd.current_uuid())
         self.assertEqual((
             'Pulling repo-partial-name...\n'
-            'Before: Hoard [a80f91] <- repo [curr: a80f91, stg: f9bfc2, des: a80f91]\n'
+            'Before: Hoard [None] <- repo [curr: a80f91, stg: f9bfc2, des: a80f91]\n'
             'REPO_MARK_FILE_AVAILABLE /test.me.1\n'
             'HOARD_FILE_ADDED /test.me.1\n'
             'REPO_MARK_FILE_AVAILABLE /wat/test.me.2\n'

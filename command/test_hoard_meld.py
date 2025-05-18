@@ -27,7 +27,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.pull("repo-full-name")
         self.assertEqual((
             'Pulling repo-full-name...\n'
-            'Before: Hoard [a80f91] <- repo [curr: a80f91, stg: 1ad9e0, des: a80f91]\n'
+            'Before: Hoard [None] <- repo [curr: a80f91, stg: 1ad9e0, des: a80f91]\n'
             'REPO_MARK_FILE_AVAILABLE /test.me.1\n'
             'HOARD_FILE_ADDED /test.me.1\n'
             'REPO_MARK_FILE_AVAILABLE /test.me.4\n'
