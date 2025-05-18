@@ -105,7 +105,7 @@ class HoardContentsConfig:
 
 
 class HoardTree:
-    def __init__(self, objects: "HoardFSObjects"):
+    def __init__(self, objects: "ReadonlyHoardFSObjects"):
         self.root = HoardDir(None, "", self)
         self.objects = objects
 
@@ -196,23 +196,6 @@ class ReadonlyHoardFSObjects:
     @cached_property
     async def tree(self) -> HoardTree:
         return HoardTree(self)
-
-    @property
-    def num_files(self) -> int:
-        curr = self.parent.conn.cursor()
-        curr.row_factory = FIRST_VALUE
-        return curr.execute("SELECT count(1) FROM fsobject WHERE isdir=FALSE").fetchone()
-
-    @property
-    def total_size(self) -> int:
-        curr = self.parent.conn.cursor()
-        curr.row_factory = FIRST_VALUE
-        return curr.execute("SELECT sum(size) FROM fsobject WHERE isdir=FALSE").fetchone()
-
-    def __len__(self) -> int:
-        curr = self.parent.conn.cursor()
-        curr.row_factory = FIRST_VALUE
-        return curr.execute("SELECT count(1) FROM fsobject WHERE isdir = FALSE").fetchone()
 
     def _read_as_path_to_props(self, cursor, row) -> Tuple[FastPosixPath, HoardFileProps]:
         fullpath, fsobject_id, isdir, size, fasthash = row
