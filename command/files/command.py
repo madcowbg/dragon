@@ -98,6 +98,10 @@ async def execute_files_push(config: HoardConfig, hoard: Hoard, repo_uuids: List
 
             await _fetch_files_in_repo(content_prefs, hoard_contents, repo_uuid, pathing, out, progress_bar)
 
+        # fixme remove, just dumping
+        sync_object_storage_to_recreate_fsobject_and_fspresence(
+            hoard_contents.env, hoard_contents.fsobjects, hoard.config())
+
         logging.info("Finding files that need copy - will not cleanup them!")
         content_prefs = ContentPrefs(config, pathing, hoard_contents, hoard.available_remotes())
         logging.info(f"Found {len(content_prefs.files_to_copy)} hashes to copy, won't cleanup them.")

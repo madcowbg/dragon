@@ -34,9 +34,6 @@ async def _fetch_files_in_repo(
             success, fullpath = await _restore_from_another_repo(
                 hoard_filepath, repo_uuid, hoard_props, pathing._config, pathing._paths)
             if success:
-                if True:
-                    hoard_props.mark_available(repo_uuid)
-
                 add_to_current_tree(hoard, repo_uuid, hoard_file, hoard_props)
 
                 return f"+ {local_filepath}\n"
@@ -70,9 +67,6 @@ async def _fetch_files_in_repo(
                             repo_uuid, local_filepath, hoard_props,
                             hoard, candidates_to_copy, pathing)
                         if success:
-                            if True:
-                                hoard_props.mark_available(repo_uuid)
-
                             add_to_current_tree(hoard, repo_uuid, hoard_file, hoard_props)
                             return f"c+ {local_filepath}\n"
                         else:
@@ -94,8 +88,6 @@ async def _fetch_files_in_repo(
 
                             dest = shutil.move(local_filepath_from, local_filepath)
                             if dest is not None:
-                                if True:
-                                    hoard_props.mark_available(repo_uuid)
                                 add_to_current_tree(hoard, repo_uuid, hoard_file, hoard_props)
                                 return f"MOVED {to_be_moved_from} to {hoard_file}\n"
                             else:
@@ -134,8 +126,6 @@ async def _cleanup_files_in_repo(
             local_path = pathing.in_hoard(hoard_file).at_local(repo_uuid)
             if content_prefs.can_cleanup(hoard_file, hoard_props, repo_uuid, out):
                 logging.info("file doesn't need to be copied anymore, cleaning")
-                if True:
-                    hoard_props.remove_status(repo_uuid)
                 remove_from_current_tree(hoard, repo_uuid, hoard_file)
 
                 logging.info(f"deleting {local_path.on_device_path()}...")
