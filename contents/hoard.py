@@ -411,7 +411,7 @@ class HoardFSObjects(ReadonlyHoardFSObjects):
     def __init__(self, parent: "HoardContents"):
         super().__init__(parent)
 
-    def add_or_replace_file(self, filepath: FastPosixPath, props: FileDesc) -> HoardFileProps:
+    def HACK_set_file_information(self, filepath: FastPosixPath, props: FileDesc, presence: Dict[str, HoardFileStatus]):
         assert filepath.is_absolute()
         curr = self.parent.conn.cursor()
         curr.row_factory = FIRST_VALUE
@@ -427,7 +427,10 @@ class HoardFSObjects(ReadonlyHoardFSObjects):
         fsobject_id: int = curr.execute(
             "SELECT fsobject_id FROM fsobject WHERE fullpath = ?", (filepath.as_posix(),)).fetchone()
         curr.execute("DELETE FROM fspresence WHERE fsobject_id = ?", (fsobject_id,))
-        return HoardFileProps(self.parent, fsobject_id, props.size, props.fasthash)
+
+        hoard_file_props = HoardFileProps(self.parent, fsobject_id, props.size, props.fasthash)
+        for uuid, status in presence.items():
+            hoard_file_props.set_status([uuid], status)
 
 
 class Query:
@@ -628,8 +631,7 @@ def init_hoard_db_tables(curr):
                                   CASE
                                       WHEN LENGTH(new.fullpath) == 0 THEN NULL
                                       ELSE rtrim(rtrim(new.fullpath, replace(new.fullpath, '/', '')), '/') END,
-                                  new.isdir
-                           WHERE NOT EXISTS (SELECT 1
+                                  new.isdir WHERE NOT EXISTS (SELECT 1
                                              FROM folder_structure
                                              WHERE folder_structure.fullpath = new.fullpath);
 
@@ -648,8 +650,9 @@ def init_hoard_db_tables(curr):
                            INTO folder_structure(fullpath, parent, isdir)
                            VALUES (new.parent, CASE
                                                    WHEN LENGTH(new.parent) = 0 THEN NULL
-                                                   ELSE rtrim(rtrim(new.parent, replace(new.parent, '/', '')), '/') END,
-                                   TRUE);
+                                                   ELSE rtrim(rtrim(new.parent, replace(new.parent, '/', '')), '/')
+                       END,
+                       TRUE);
                        END;
 
                        CREATE TRIGGER remove_obsolete__folder_structure_on_fsobject_can_delete

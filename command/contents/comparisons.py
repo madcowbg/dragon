@@ -1,9 +1,11 @@
 import binascii
 import logging
+from typing import Dict
 
 from command.fast_path import FastPosixPath
 from config import HoardConfig
 from contents.hoard import HoardContents, HoardFSObjects
+from contents.hoard_props import HoardFileStatus
 from contents.repo import RepoContents
 from contents.repo_props import FileDesc
 from lmdb_storage.file_object import FileObject
@@ -39,14 +41,13 @@ def sync_object_storage_to_recreate_fsobject_and_fspresence(
                 file_object = objects[only_current_file_id]
 
                 # create an obsolete file
-                hoard_props = fsobjects.add_or_replace_file(
+                fsobjects.HACK_set_file_information(
                     FastPosixPath(path),
-                    FileDesc(file_object.size, file_object.fasthash, None))
-
-                # mark to cleanup all current but not desired
-                for remote, sub_id_in_remote_current in zip(remotes, sub_ids[:len(remotes)]):
-                    if sub_id_in_remote_current is not None:
-                        hoard_props.mark_for_cleanup([remote.uuid])
+                    FileDesc(file_object.size, file_object.fasthash, None),
+                    dict(
+                        (remote.uuid, HoardFileStatus.CLEANUP)
+                        for remote, sub_id_in_remote_current in zip(remotes, sub_ids[:len(remotes)])
+                        if sub_id_in_remote_current is not None))
 
                 continue
 
@@ -57,14 +58,11 @@ def sync_object_storage_to_recreate_fsobject_and_fspresence(
             only_desired_file_id = next(iter(existing_desired_ids))
             file_object = objects[only_desired_file_id]
             assert isinstance(file_object, FileObject)
-            # fixme add md5
-            hoard_props = fsobjects.add_or_replace_file(
-                FastPosixPath(path),
-                FileDesc(file_object.size, file_object.fasthash, None))
 
             hoard_sub_id = sub_ids[-1]
             should_exist = hoard_sub_id is not None
 
+            status: Dict[str, HoardFileStatus] = dict()
             for remote, sub_id_in_remote_current, sub_id_in_remote_desired \
                     in zip(remotes, sub_ids[:len(remotes)], sub_ids[len(remotes):-1]):  # skip the last, is the hoard
 
@@ -72,22 +70,27 @@ def sync_object_storage_to_recreate_fsobject_and_fspresence(
                 assert sub_id_in_remote_desired is None or sub_id_in_remote_desired == only_desired_file_id, \
                     f"bad - file is not the same?! {only_desired_file_id} != {sub_id_in_remote_desired}"
 
-                if sub_id_in_remote_current is not None:  # file is in current
+                if not should_exist:
+                    status[remote.uuid] = HoardFileStatus.CLEANUP
+                elif sub_id_in_remote_current is not None:  # file is in current
                     if sub_id_in_remote_desired is not None:
                         if sub_id_in_remote_desired == sub_id_in_remote_current:
-                            hoard_props.mark_available(remote.uuid)
+                            status[remote.uuid] = HoardFileStatus.AVAILABLE
                         else:
-                            hoard_props.mark_to_get([remote.uuid])
+                            status[remote.uuid] = HoardFileStatus.GET
                     else:
-                        hoard_props.mark_for_cleanup([remote.uuid])
+                        status[remote.uuid] = HoardFileStatus.CLEANUP
+
                 else:
                     if sub_id_in_remote_desired is not None:
-                        hoard_props.mark_to_get([remote.uuid])
+                        status[remote.uuid] = HoardFileStatus.GET
                     else:
                         pass  # file not desired and not current
 
-                if not should_exist:
-                    hoard_props.mark_to_delete_everywhere()
+            fsobjects.HACK_set_file_information(
+                FastPosixPath(path),
+                FileDesc(file_object.size, file_object.fasthash, None),  # fixme add md5
+                status)
 
 
 def copy_local_staging_to_hoard(hoard: HoardContents, local: RepoContents, config: HoardConfig) -> None:
