@@ -1185,7 +1185,6 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             '+ wat/test.me.2\n'
             'repo-backup-name:\n'
             'd wat/test.me.3\n'
-            'remove dangling /wat/test.me.3\n'
             'DONE', res.strip())
 
         self.assertEqual([

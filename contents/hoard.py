@@ -471,62 +471,6 @@ class HoardFSObjects(ReadonlyHoardFSObjects):
         curr.execute("DELETE FROM fspresence WHERE fsobject_id = ?", (fsobject_id,))
         curr.execute("DELETE FROM fsobject WHERE fsobject_id = ?", (fsobject_id,))
 
-    def move_via_mounts(self, orig_path: FastPosixPath, new_path: FastPosixPath, props: HoardFileProps):
-        assert orig_path.is_absolute()
-        assert new_path.is_absolute()
-        assert orig_path != new_path
-        assert isinstance(props, HoardFileProps)
-
-        # delete whatever new_path had
-        self.delete(new_path)
-
-        curr = self.parent.conn.cursor()
-        curr.row_factory = FIRST_VALUE
-
-        assert isinstance(props, HoardFileProps)
-        # add fsobject entry
-        curr.execute(
-            "INSERT INTO fsobject(fullpath, isdir, size, fasthash, last_epoch_updated) VALUES (?, FALSE, ?, ?, ?)",
-            (new_path.as_posix(), props.size, props.fasthash, self.parent.config.hoard_epoch))
-
-        # add old presence
-        new_path_id: int = curr.execute(
-            "SELECT fsobject_id FROM fsobject WHERE fullpath = ?",
-            (new_path.as_posix(),)).fetchone()
-        curr.executemany(
-            "INSERT INTO fspresence(fsobject_id, uuid, status) VALUES (?, ?, ?)",
-            [(new_path_id, uuid, status.value) for uuid, status in props.presence.items()])
-
-        self.delete(orig_path)
-
-    def copy(self, from_fullpath: FastPosixPath, to_fullpath: FastPosixPath):
-        assert from_fullpath.is_absolute()
-        assert to_fullpath.is_absolute()
-        assert from_fullpath != to_fullpath
-
-        self.delete(to_fullpath)
-
-        curr = self.parent.conn.cursor()
-        curr.row_factory = FIRST_VALUE
-
-        props = self[FastPosixPath(from_fullpath)]
-        assert isinstance(props, HoardFileProps)
-        # add fsobject entry
-        curr.execute(
-            "INSERT INTO fsobject(fullpath, isdir, size, fasthash, last_epoch_updated) VALUES (?, FALSE, ?, ?, ?)",
-            (to_fullpath.as_posix(), props.size, props.fasthash, self.parent.config.hoard_epoch))
-
-        # add presence tp request
-        new_path_id: int = curr.execute(
-            "SELECT fsobject_id FROM fsobject WHERE fullpath = ?",
-            (to_fullpath.as_posix(),)).fetchone()
-
-        previously_added_repos = props.repos_having_status(
-            HoardFileStatus.COPY, HoardFileStatus.GET, HoardFileStatus.AVAILABLE)
-        curr.executemany(
-            "INSERT INTO fspresence(fsobject_id, uuid, status) VALUES (?, ?, ?)",
-            [(new_path_id, uuid, HoardFileStatus.COPY.value) for uuid in previously_added_repos])
-
 
 class Query:
     def __init__(self, conn: Connection):

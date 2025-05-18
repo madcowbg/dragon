@@ -299,7 +299,6 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
             "NEEDS_MORE_COPIES (0) ['repo-backup-name', 'repo-full-name'] test.me.5",
             'd wat/test.me.3',
             "NEEDS_MORE_COPIES (0) ['repo-backup-name', 'repo-full-name'] wat/test.me.6",
-            'remove dangling /test.me.4',
             'DONE'], res.splitlines())
 
         res = await hoard_cmd.files.push(backup_cave_cmd.current_uuid())
@@ -313,8 +312,6 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
             'repo-backup-name:',
             # 'd test.me.4',
             'd wat/test.me.3',
-            # 'remove dangling /test.me.4',
-            'remove dangling /wat/test.me.3',
             'DONE'], res.splitlines())
 
         res = await hoard_cmd.files.push(incoming_cave_cmd.current_uuid())
@@ -473,5 +470,4 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
             'repo-backup-name:',
             'd wat/test.me.3',
             # 'd wat2/test.me.3',  # fixme should be cleaned up, actually
-            # 'remove dangling /wat2/test.me.3',
             'DONE'], res.splitlines())

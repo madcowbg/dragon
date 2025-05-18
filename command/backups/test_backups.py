@@ -379,7 +379,6 @@ class TestBackups(IsolatedAsyncioTestCase):
             'backup-3:',
             'd test.me.obsolete',
             'backup-4:',
-            'remove dangling /test.me.obsolete',
             'DONE'], res.splitlines())
 
         res = await hoard_cmd.backups.health()

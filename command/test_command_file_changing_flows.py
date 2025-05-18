@@ -535,7 +535,6 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             f"repo-partial-name:\n"
             f"repo-partial-name:\n"
             "d wat/test.me.2\n"
-            "remove dangling /wat/test.me.2\n"
             "DONE", res)
 
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
@@ -976,7 +975,6 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'repo-copy-name:\n'
             'd test.me.4\n'
             'd wat/test.me.2\n'
-            'remove dangling /test.me.4\n'
             'DONE'), res)
 
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
@@ -1370,7 +1368,6 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             "repo-backup-name:\n"
             "d test.me.4\n"
             "d wat/test.me.2\n"
-            "remove dangling /test.me.4\n"
             "DONE", res)
 
         res = await backup_cave_cmd.refresh()
@@ -1481,7 +1478,6 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'repo-partial-name:\n'
             'repo-partial-name:\n'
             'd wat/test.me.2\n'
-            'remove dangling /wat/test.me.2\n'
             'DONE'), res)
 
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
@@ -1696,7 +1692,6 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             "+ wat/test.me.3\n"
             "repo-copy-name:\n"
             # "d test.me.4\n"  # fixme should remove
-            # "remove dangling /test.me.4\n"
             "DONE", res)
 
         res = await full_cave_cmd.refresh()
@@ -1943,7 +1938,6 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             '+ wat/test.me.6',
             'repo-full-name:',
             'd test.me.6-moved',
-            'remove dangling /test.me.6-moved',
             'DONE'], res.splitlines())
 
         self.assertDictEqual({

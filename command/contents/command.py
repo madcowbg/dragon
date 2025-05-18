@@ -180,8 +180,6 @@ async def execute_pull(
             hoard_contents.config.mark_up_to_date(
                 remote_uuid, current_contents.config.epoch, current_contents.config.updated)
 
-        clean_dangling_files(hoard_contents, out)
-
     out.write(f"Sync'ed {config.remotes[remote_uuid].name} to hoard!\n")
 
 
@@ -896,13 +894,3 @@ async def execute_drop(
 
 
 STATUSES_ALREADY_ENABLED = [HoardFileStatus.AVAILABLE, HoardFileStatus.GET]
-
-
-def clean_dangling_files(hoard: HoardContents, out: StringIO):  # fixme do this when status is modified, not after
-    logging.info("Cleaning dangling files from hoard...")
-
-    for dangling_path, props in hoard.fsobjects.dangling_files:
-        assert len(props.presence) == 0
-        logging.warning(f"Removing dangling path {dangling_path} from hoard!")
-        hoard.fsobjects.delete(dangling_path)
-        out.write(f"remove dangling {dangling_path}\n")

@@ -6,7 +6,7 @@ from typing import Optional, List, Dict
 from alive_progress import alive_bar
 
 from command.content_prefs import ContentPrefs
-from command.contents.command import clean_dangling_files
+from command.contents.comparisons import sync_object_storage_to_recreate_fsobject_and_fspresence
 from command.files.file_operations import _fetch_files_in_repo, _cleanup_files_in_repo
 
 from command.hoard import Hoard
@@ -103,4 +103,7 @@ async def execute_files_push(config: HoardConfig, hoard: Hoard, repo_uuids: List
             out.write(f"{config.remotes[repo_uuid].name}:\n")
 
             await _cleanup_files_in_repo(content_prefs, hoard_contents, repo_uuid, pathing, out, progress_bar)
-        clean_dangling_files(hoard_contents, out)
+
+        # fixme remove, just dumping
+        sync_object_storage_to_recreate_fsobject_and_fspresence(
+            hoard_contents.env, hoard_contents.fsobjects, hoard.config())
