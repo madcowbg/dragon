@@ -561,6 +561,7 @@ class HoardCommandContents:
 
                 with StringIO() as out:
                     out.write(f"Root: {safe_hex(hoard.env.roots(False)['HOARD'].desired)}\n")
+                    dump_remotes(self.hoard.config(), hoard, out)
                     out.write(f"Status of {self.hoard.config().remotes[remote_uuid].name}:\n")
 
                     copy_local_staging_to_hoard(hoard, current_contents, self.hoard.config())
@@ -651,6 +652,8 @@ class HoardCommandContents:
             logging.info(f"Listing files...")
             with StringIO() as out:
                 out.write(f"Root: {safe_hex(hoard.env.roots(False)['HOARD'].desired)}\n")
+                dump_remotes(self.hoard.config(), hoard, out)
+
                 file: Optional[HoardFile]
                 folder: Optional[HoardDir]
                 for folder, file in (await hoard.fsobjects.tree).walk(selected_path, depth=depth):
@@ -807,6 +810,15 @@ class HoardCommandContents:
             out.write("DONE")
             return out.getvalue()
 
+
+def dump_remotes(hoard_config, hoard, out):
+    remotes = hoard_config.remotes.all()
+    for remote in sorted(remotes, key=lambda r: r.name):
+        repo_root = hoard.env.roots(write=False)[remote.uuid]
+
+        out.write(
+            f"Remote {remote.name} current={safe_hex(repo_root.current)[:6]} "
+            f"staging={safe_hex(repo_root.staging)[:6]} desired={safe_hex(repo_root.desired)[:6]}\n")
 
 async def _execute_get(
         hoard: HoardContents, pathing: HoardPathing, repo_uuid: str, path_in_local: FastPosixPath) -> str:

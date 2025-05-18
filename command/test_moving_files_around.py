@@ -277,13 +277,17 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.ls(skip_folders=True)
         self.assertEqual([
             'Root: ea749cf79b306a27fab649f8c8234e3a968c1529',
+            'Remote repo-backup-name current=3a0889 staging=3a0889 desired=ea749c',
+            'Remote repo-full-name current=1ae17c staging=1ae17c desired=ea749c',
+            'Remote repo-incoming-name current=3d1726 staging=3d1726 desired=a80f91',
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2',
             '/test.me.1 = a:3',
-            '/test.me.4 = c:1',  # should be c:2 if moved
+            '/test.me.4 = c:1',
             '/test.me.5 = g:2 c:1',
             '/wat/test.me.2 = a:2 g:1',
             '/wat/test.me.3 = c:2',
             '/wat/test.me.6 = g:2 c:1',
-            '/wat2/test.me.3 = a:1 g:1',  # should be no g:1 if moved
+            '/wat2/test.me.3 = a:1 g:1',
             '/wat2/test.me.4 = a:1 g:1',
             'DONE'], res.splitlines())
 

@@ -137,6 +137,9 @@ class TestBackups(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.ls()
         self.assertEqual(
             'Root: c8405b542a1e9b691f8e2be70d1bd387e54d530d\n'
+            'Remote repo-full-name current=94524f staging=94524f desired=c8405b\n'
+            'Remote repo-incoming-name current=a513af staging=a513af desired=a80f91\n'
+            'Remote repo-partial-name current=418ef1 staging=418ef1 desired=418ef1\n'
             "/\n"
             "/test.me.1 = a:2\n"
             "/test.me.4 = a:1 c:1\n"
@@ -182,17 +185,20 @@ class TestBackups(IsolatedAsyncioTestCase):
             "DONE", res)
 
         res = await hoard_cmd.contents.ls()
-        self.assertEqual(
+        self.assertEqual((
             'Root: c8405b542a1e9b691f8e2be70d1bd387e54d530d\n'
-            "/\n"
-            "/test.me.1 = a:2\n"
-            "/test.me.4 = a:1\n"
-            "/test.me.5 = a:1\n"
-            "/wat\n"
-            "/wat/test.me.2 = a:2\n"
-            "/wat/test.me.3 = a:1\n"
-            "/wat/test.me.6 = a:1\n"
-            "DONE", res)
+            'Remote repo-full-name current=94524f staging=94524f desired=c8405b\n'
+            'Remote repo-incoming-name current=a513af staging=a513af desired=a80f91\n'
+            'Remote repo-partial-name current=418ef1 staging=418ef1 desired=418ef1\n'
+            '/\n'
+            '/test.me.1 = a:2\n'
+            '/test.me.4 = a:1\n'
+            '/test.me.5 = a:1\n'
+            '/wat\n'
+            '/wat/test.me.2 = a:2\n'
+            '/wat/test.me.3 = a:1\n'
+            '/wat/test.me.6 = a:1\n'
+            'DONE'), res)
 
     async def test_create_with_simple_backup_from_start(self):
         hoard_cmd, partial_cave_cmd, full_cave_cmd, incoming_cave_cmd = await init_complex_hoard(self.tmpdir.name)

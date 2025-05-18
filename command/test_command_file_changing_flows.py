@@ -86,6 +86,10 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.ls(show_remotes=True)
         self.assertEqual(
             'Root: 1ad9e0f92a8411689b1aee57f9ccf36c1f09a1ad\n'
+            'Remote repo-backup-name current=a80f91 staging=None desired=1ad9e0\n'
+            'Remote repo-full-name current=1ad9e0 staging=1ad9e0 desired=1ad9e0\n'
+            'Remote repo-incoming-name current=a80f91 staging=None desired=a80f91\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
             "/ => (repo-backup-name:.), (repo-full-name:.), (repo-incoming-name:.), (repo-partial-name:.)\n"
             "/test.me.1 = a:2 g:1\n"
             "/test.me.4 = a:1 g:1\n"
@@ -145,15 +149,21 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             res)
 
         res = await hoard_cmd.contents.ls(show_remotes=True)
-        self.assertEqual(
+        self.assertEqual((
             'Root: 1ad9e0f92a8411689b1aee57f9ccf36c1f09a1ad\n'
-            "/ => (repo-backup-name:.), (repo-full-name:.), (repo-incoming-name:.), (repo-partial-name:.)\n"
-            "/test.me.1 = a:2 g:1\n"
-            "/test.me.4 = a:1 g:1\n"
-            "/wat => (repo-backup-name:wat), (repo-full-name:wat), (repo-incoming-name:wat), (repo-partial-name:wat)\n"
-            "/wat/test.me.2 = a:2 g:1\n"
-            "/wat/test.me.3 = a:1 g:1\n"
-            "DONE", res)
+            'Remote repo-backup-name current=a80f91 staging=None desired=1ad9e0\n'
+            'Remote repo-full-name current=1ad9e0 staging=1ad9e0 desired=1ad9e0\n'
+            'Remote repo-incoming-name current=a80f91 staging=None desired=a80f91\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
+            '/ => (repo-backup-name:.), (repo-full-name:.), (repo-incoming-name:.), '
+            '(repo-partial-name:.)\n'
+            '/test.me.1 = a:2 g:1\n'
+            '/test.me.4 = a:1 g:1\n'
+            '/wat => (repo-backup-name:wat), (repo-full-name:wat), '
+            '(repo-incoming-name:wat), (repo-partial-name:wat)\n'
+            '/wat/test.me.2 = a:2 g:1\n'
+            '/wat/test.me.3 = a:1 g:1\n'
+            'DONE'), res)
 
         # delete file before it is backed up
         assert os.path.isfile(join(self.tmpdir.name, 'repo-full/wat/test.me.3'))
@@ -195,15 +205,21 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             res)
 
         res = await hoard_cmd.contents.ls(show_remotes=True)
-        self.assertEqual(
+        self.assertEqual((
             'Root: b2effc3b7e6a77096f705c7d24e3909cd6f347e2\n'
-            "/ => (repo-backup-name:.), (repo-full-name:.), (repo-incoming-name:.), (repo-partial-name:.)\n"
-            "/test.me.1 = a:2 g:1\n"
-            "/test.me.4 = a:1 g:1\n"
-            "/wat => (repo-backup-name:wat), (repo-full-name:wat), (repo-incoming-name:wat), (repo-partial-name:wat)\n"
-            "/wat/test.me.2 = a:2 g:1\n"
-            "/wat/test.me.z = a:1 g:1\n"
-            "DONE", res)
+            'Remote repo-backup-name current=a80f91 staging=None desired=b2effc\n'
+            'Remote repo-full-name current=b2effc staging=b2effc desired=b2effc\n'
+            'Remote repo-incoming-name current=a80f91 staging=None desired=a80f91\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
+            '/ => (repo-backup-name:.), (repo-full-name:.), (repo-incoming-name:.), '
+            '(repo-partial-name:.)\n'
+            '/test.me.1 = a:2 g:1\n'
+            '/test.me.4 = a:1 g:1\n'
+            '/wat => (repo-backup-name:wat), (repo-full-name:wat), '
+            '(repo-incoming-name:wat), (repo-partial-name:wat)\n'
+            '/wat/test.me.2 = a:2 g:1\n'
+            '/wat/test.me.z = a:1 g:1\n'
+            'DONE'), res)
 
         # new file in partial
         pfw('repo-partial/test.me.5', "adsfgasd")
@@ -242,16 +258,22 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             res)
 
         res = await hoard_cmd.contents.ls(show_remotes=True)
-        self.assertEqual(
+        self.assertEqual((
             'Root: 7672cb5914a2bb1ae0ba43506eeb54f6fbeb5ad9\n'
-            "/ => (repo-backup-name:.), (repo-full-name:.), (repo-incoming-name:.), (repo-partial-name:.)\n"
-            "/test.me.1 = a:2 g:1\n"
-            "/test.me.4 = a:1 g:1\n"
-            "/test.me.5 = a:1 g:2\n"
-            "/wat => (repo-backup-name:wat), (repo-full-name:wat), (repo-incoming-name:wat), (repo-partial-name:wat)\n"
-            "/wat/test.me.2 = a:2 g:1\n"
-            "/wat/test.me.z = a:1 g:1\n"
-            "DONE", res)
+            'Remote repo-backup-name current=a80f91 staging=None desired=7672cb\n'
+            'Remote repo-full-name current=b2effc staging=b2effc desired=7672cb\n'
+            'Remote repo-incoming-name current=a80f91 staging=None desired=a80f91\n'
+            'Remote repo-partial-name current=499273 staging=499273 desired=499273\n'
+            '/ => (repo-backup-name:.), (repo-full-name:.), (repo-incoming-name:.), '
+            '(repo-partial-name:.)\n'
+            '/test.me.1 = a:2 g:1\n'
+            '/test.me.4 = a:1 g:1\n'
+            '/test.me.5 = a:1 g:2\n'
+            '/wat => (repo-backup-name:wat), (repo-full-name:wat), '
+            '(repo-incoming-name:wat), (repo-partial-name:wat)\n'
+            '/wat/test.me.2 = a:2 g:1\n'
+            '/wat/test.me.z = a:1 g:1\n'
+            'DONE'), res)
 
         res = await hoard_cmd.contents.get("repo-partial-name", "/wat")
         self.assertEqual("Path /wat must be relative, but is absolute.", res)
@@ -304,15 +326,21 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
 
         # still shows the file is presumed there
         res = await hoard_cmd.contents.ls(show_remotes=True)
-        self.assertEqual(
+        self.assertEqual((
             'Root: 1ad9e0f92a8411689b1aee57f9ccf36c1f09a1ad\n'
-            "/ => (repo-backup-name:.), (repo-full-name:.), (repo-incoming-name:.), (repo-partial-name:.)\n"
-            "/test.me.1 = a:2 g:1\n"
-            "/test.me.4 = a:1 g:1\n"
-            "/wat => (repo-backup-name:wat), (repo-full-name:wat), (repo-incoming-name:wat), (repo-partial-name:wat)\n"
-            "/wat/test.me.2 = a:2 g:1\n"
-            "/wat/test.me.3 = a:1 g:1\n"
-            "DONE", res)
+            'Remote repo-backup-name current=a80f91 staging=None desired=1ad9e0\n'
+            'Remote repo-full-name current=1ad9e0 staging=1ad9e0 desired=1ad9e0\n'
+            'Remote repo-incoming-name current=a80f91 staging=None desired=a80f91\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
+            '/ => (repo-backup-name:.), (repo-full-name:.), (repo-incoming-name:.), '
+            '(repo-partial-name:.)\n'
+            '/test.me.1 = a:2 g:1\n'
+            '/test.me.4 = a:1 g:1\n'
+            '/wat => (repo-backup-name:wat), (repo-full-name:wat), '
+            '(repo-incoming-name:wat), (repo-partial-name:wat)\n'
+            '/wat/test.me.2 = a:2 g:1\n'
+            '/wat/test.me.3 = a:1 g:1\n'
+            'DONE'), res)
 
         # try to fetch - will have some errors
         res = await hoard_cmd.files.push("repo-backup-name")
@@ -326,15 +354,21 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             f"DONE", res)
 
         res = await hoard_cmd.contents.ls(show_remotes=True)
-        self.assertEqual(
+        self.assertEqual((
             'Root: 1ad9e0f92a8411689b1aee57f9ccf36c1f09a1ad\n'
-            "/ => (repo-backup-name:.), (repo-full-name:.), (repo-incoming-name:.), (repo-partial-name:.)\n"
-            "/test.me.1 = a:3\n"
-            "/test.me.4 = a:2\n"
-            "/wat => (repo-backup-name:wat), (repo-full-name:wat), (repo-incoming-name:wat), (repo-partial-name:wat)\n"
-            "/wat/test.me.2 = a:3\n"
-            "/wat/test.me.3 = a:1 g:1\n"
-            "DONE", res)
+            'Remote repo-backup-name current=a80f91 staging=None desired=1ad9e0\n'
+            'Remote repo-full-name current=1ad9e0 staging=1ad9e0 desired=1ad9e0\n'
+            'Remote repo-incoming-name current=a80f91 staging=None desired=a80f91\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
+            '/ => (repo-backup-name:.), (repo-full-name:.), (repo-incoming-name:.), '
+            '(repo-partial-name:.)\n'
+            '/test.me.1 = a:3\n'
+            '/test.me.4 = a:2\n'
+            '/wat => (repo-backup-name:wat), (repo-full-name:wat), '
+            '(repo-incoming-name:wat), (repo-partial-name:wat)\n'
+            '/wat/test.me.2 = a:3\n'
+            '/wat/test.me.3 = a:1 g:1\n'
+            'DONE'), res)
 
         # try to fetch - errors will remain
         res = await hoard_cmd.files.push("repo-backup-name")
@@ -380,15 +414,21 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             res)
 
         res = await hoard_cmd.contents.ls(show_remotes=True)
-        self.assertEqual(
+        self.assertEqual((
             'Root: b2effc3b7e6a77096f705c7d24e3909cd6f347e2\n'
-            "/ => (repo-backup-name:.), (repo-full-name:.), (repo-incoming-name:.), (repo-partial-name:.)\n"
-            "/test.me.1 = a:3\n"
-            "/test.me.4 = a:2\n"
-            "/wat => (repo-backup-name:wat), (repo-full-name:wat), (repo-incoming-name:wat), (repo-partial-name:wat)\n"
-            "/wat/test.me.2 = a:3\n"
-            "/wat/test.me.z = a:1 g:1\n"
-            "DONE", res)
+            'Remote repo-backup-name current=d696be staging=None desired=b2effc\n'
+            'Remote repo-full-name current=b2effc staging=b2effc desired=b2effc\n'
+            'Remote repo-incoming-name current=a80f91 staging=None desired=a80f91\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
+            '/ => (repo-backup-name:.), (repo-full-name:.), (repo-incoming-name:.), '
+            '(repo-partial-name:.)\n'
+            '/test.me.1 = a:3\n'
+            '/test.me.4 = a:2\n'
+            '/wat => (repo-backup-name:wat), (repo-full-name:wat), '
+            '(repo-incoming-name:wat), (repo-partial-name:wat)\n'
+            '/wat/test.me.2 = a:3\n'
+            '/wat/test.me.z = a:1 g:1\n'
+            'DONE'), res)
 
     async def test_file_is_deleted_after_copied(self):
         hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = \
@@ -402,6 +442,10 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.ls(show_remotes=True)
         self.assertEqual(
             'Root: 1ad9e0f92a8411689b1aee57f9ccf36c1f09a1ad\n'
+            'Remote repo-backup-name current=a80f91 staging=None desired=1ad9e0\n'
+            'Remote repo-full-name current=1ad9e0 staging=1ad9e0 desired=1ad9e0\n'
+            'Remote repo-incoming-name current=a80f91 staging=None desired=a80f91\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
             "/ => (repo-backup-name:.), (repo-full-name:.), (repo-incoming-name:.), (repo-partial-name:.)\n"
             "/test.me.1 = a:3\n"
             "/test.me.4 = a:2\n"
@@ -446,15 +490,19 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             "|repo-partial-name        |        14|         6|         8|\n", res)
 
         res = await hoard_cmd.contents.ls()
-        self.assertEqual(
+        self.assertEqual((
             'Root: 22e45e6a6041b705c05bedfef6c451457240ea1f\n'
-            "/\n"
-            "/test.me.1 = a:3\n"
-            "/test.me.4 = a:2\n"
-            "/wat\n"
-            "/wat/test.me.2 = c:2"
-            "\n/wat/test.me.3 = a:2\n"
-            "DONE", res)
+            'Remote repo-backup-name current=1ad9e0 staging=None desired=22e45e\n'
+            'Remote repo-full-name current=22e45e staging=22e45e desired=22e45e\n'
+            'Remote repo-incoming-name current=a80f91 staging=None desired=a80f91\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=57a93f\n'
+            '/\n'
+            '/test.me.1 = a:3\n'
+            '/test.me.4 = a:2\n'
+            '/wat\n'
+            '/wat/test.me.2 = c:2\n'
+            '/wat/test.me.3 = a:2\n'
+            'DONE'), res)
 
         res = await hoard_cmd.files.push("repo-backup-name")
         self.assertEqual(
@@ -504,14 +552,18 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             "|repo-partial-name        |         6|         6|\n", res)
 
         res = await hoard_cmd.contents.ls()
-        self.assertEqual(
+        self.assertEqual((
             'Root: 22e45e6a6041b705c05bedfef6c451457240ea1f\n'
-            "/\n"
-            "/test.me.1 = a:3\n"
-            "/test.me.4 = a:2\n"
-            "/wat\n"
-            "/wat/test.me.3 = a:2\n"
-            "DONE", res)
+            'Remote repo-backup-name current=1ad9e0 staging=None desired=22e45e\n'
+            'Remote repo-full-name current=22e45e staging=22e45e desired=22e45e\n'
+            'Remote repo-incoming-name current=a80f91 staging=None desired=a80f91\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=57a93f\n'
+            '/\n'
+            '/test.me.1 = a:3\n'
+            '/test.me.4 = a:2\n'
+            '/wat\n'
+            '/wat/test.me.3 = a:2\n'
+            'DONE'), res)
 
     async def test_add_fetch_new_repo_after_content_is_in(self):
         hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = \
@@ -703,6 +755,11 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.differences(full_cave_cmd.current_uuid())
         self.assertEqual((
             'Root: f9bfc2be6cc201aa81b733b9d83c1030cc88bffe\n'
+            'Remote repo-backup-name current=a80f91 staging=None desired=f9bfc2\n'
+            'Remote repo-copy-name current=a80f91 staging=None desired=f9bfc2\n'
+            'Remote repo-full-name current=a80f91 staging=None desired=f9bfc2\n'
+            'Remote repo-incoming-name current=a80f91 staging=None desired=a80f91\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
             'Status of repo-full-name:\n'
             'PRESENT /test.me.4\n'
             'PRESENT /wat/test.me.3\n'
@@ -811,6 +868,11 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.differences(full_cave_cmd.current_uuid())
         self.assertEqual((
             'Root: 1ad9e0f92a8411689b1aee57f9ccf36c1f09a1ad\n'
+            'Remote repo-backup-name current=a80f91 staging=None desired=1ad9e0\n'
+            'Remote repo-copy-name current=a80f91 staging=None desired=1ad9e0\n'
+            'Remote repo-full-name current=1ad9e0 staging=1ad9e0 desired=1ad9e0\n'
+            'Remote repo-incoming-name current=a80f91 staging=None desired=a80f91\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
             'Status of repo-full-name:\n'
             'PRESENT /lets_get_it_started/test.me.2-butnew\n'
             'PRESENT /lets_get_it_started/test.me.2-butsecond\n'
@@ -1021,6 +1083,11 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.differences(full_cave_cmd.current_uuid())
         self.assertEqual((
             'Root: f9bfc2be6cc201aa81b733b9d83c1030cc88bffe\n'
+            'Remote repo-backup-name current=a80f91 staging=None desired=f9bfc2\n'
+            'Remote repo-copy-name current=a80f91 staging=None desired=f9bfc2\n'
+            'Remote repo-full-name current=a80f91 staging=None desired=f9bfc2\n'
+            'Remote repo-incoming-name current=a80f91 staging=None desired=a80f91\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
             'Status of repo-full-name:\n'
             'PRESENT /test.me.4\n'
             'PRESENT /wat/test.me.3\n'
@@ -1138,6 +1205,11 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.differences(full_cave_cmd.current_uuid())
         self.assertEqual((
             'Root: 1ad9e0f92a8411689b1aee57f9ccf36c1f09a1ad\n'
+            'Remote repo-backup-name current=3a0889 staging=3a0889 desired=1ad9e0\n'
+            'Remote repo-copy-name current=a80f91 staging=None desired=1ad9e0\n'
+            'Remote repo-full-name current=1ad9e0 staging=1ad9e0 desired=1ad9e0\n'
+            'Remote repo-incoming-name current=a80f91 staging=None desired=a80f91\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
             'Status of repo-full-name:\n'
             'PRESENT /lets_get_it_started/test.me.2-butnew\n'
             'PRESENT /lets_get_it_started/test.me.2-butsecond\n'
@@ -1651,6 +1723,11 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.differences(full_cave_cmd.current_uuid())
         self.assertEqual((
             'Root: e48d88d5cde10ff5d84be87b3e79c20e77c05ba9\n'
+            'Remote repo-backup-name current=3a0889 staging=3a0889 desired=e48d88\n'
+            'Remote repo-copy-name current=a80f91 staging=None desired=e48d88\n'
+            'Remote repo-full-name current=e48d88 staging=e48d88 desired=e48d88\n'
+            'Remote repo-incoming-name current=a80f91 staging=None desired=a80f91\n'
+            'Remote repo-partial-name current=d92ed6 staging=f9bfc2 desired=8c1a36\n'
             'Status of repo-full-name:\n'
             'PRESENT /lets_get_it_started/test.me.2-butnew\n'
             'PRESENT /lets_get_it_started/test.me.2-butsecond\n'
@@ -1824,6 +1901,10 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.ls(show_remotes=False)
         self.assertEqual([
             'Root: 8da76083b9eab9f49945d8f2487df38ab909b7df',
+            'Remote repo-backup-name current=3a0889 staging=3a0889 desired=8da760',
+            'Remote repo-full-name current=8da760 staging=20b513 desired=8da760',
+            'Remote repo-incoming-name current=28c623 staging=3d1726 desired=a80f91',
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2',
             '/',
             '/test.me.1 = a:3',
             '/test.me.4 = a:1 g:1 c:1',
@@ -1877,6 +1958,10 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.ls(show_remotes=False)
         self.assertEqual([
             'Root: 8da76083b9eab9f49945d8f2487df38ab909b7df',
+            'Remote repo-backup-name current=3a0889 staging=3a0889 desired=8da760',
+            'Remote repo-full-name current=20b513 staging=20b513 desired=8da760',
+            'Remote repo-incoming-name current=28c623 staging=3d1726 desired=a80f91',
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2',
             '/',
             '/test.me.1 = a:3',
             '/test.me.4 = a:1 g:1 c:1',
