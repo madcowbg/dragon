@@ -20,7 +20,9 @@ def compute_status(
         hoard_sub_id: ObjectID | None, sub_id_in_remote_current: ObjectID | None,
         sub_id_in_remote_desired: ObjectID | None) -> HoardFileStatus | None:
     if hoard_sub_id is None:  # is a deleted file
-        return HoardFileStatus.CLEANUP
+        if sub_id_in_remote_desired is not None or sub_id_in_remote_current is not None:
+            return HoardFileStatus.CLEANUP
+        return None
     elif sub_id_in_remote_current is not None:  # file is in current
         if sub_id_in_remote_desired is not None:
             if sub_id_in_remote_desired == sub_id_in_remote_current:
