@@ -44,7 +44,7 @@ class Hoard:
             raise ValueError(
                 f"Hoard contents file {hoard_contents_filename} is not available,"
                 f" but --create-missing = False")
-        return ReadonlyHoardContentsConn(pathlib.Path(self.hoardpath))
+        return ReadonlyHoardContentsConn(pathlib.Path(self.hoardpath), self.config(create=False))
 
     def available_remotes(self) -> List[str]:
         return [

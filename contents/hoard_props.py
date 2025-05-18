@@ -73,6 +73,8 @@ class HoardFileProps:
             "SELECT uuid FROM fspresence WHERE fsobject_id = ? AND status = ?",
             (self.fsobject_id, selected_status.value))]
 
+        return [uuid for uuid, status in self.presence.items() if status == selected_status]
+
     def by_statuses(self, *selected_statuses: HoardFileStatus) -> List[str]:
         return [u[0] for u in self.parent.conn.execute(
             f"SELECT uuid FROM fspresence "

@@ -11,6 +11,7 @@ from typing import Dict, Any, Optional, Tuple, Generator, Iterable, List, AsyncG
 import rtoml
 
 from command.fast_path import FastPosixPath
+from config import HoardConfig
 from contents.hoard_props import HoardFileStatus, HoardFileProps
 from contents.repo import RepoContentsConfig
 from contents.repo_props import FileDesc
@@ -333,7 +334,7 @@ class ReadonlyHoardFSObjects:
                 "WHERE fspresence.uuid = ? and fspresence.status in (?, ?, ?) AND isdir = FALSE ",
                 (repo_uuid, *STATUSES_TO_FETCH)):
             assert not isdir
-            yield fullpath, HoardFileProps(self.parent, fullpath, fsobject_id, size, fasthash)
+            yield fullpath, HoardFileProps(self.parent, FastPosixPath(fullpath), fsobject_id, size, fasthash)
 
     def to_cleanup(self, repo_uuid: str) -> Generator[Tuple[FastPosixPath, HoardFileProps], None, None]:
         for fsobject_id, fullpath, isdir, size, fasthash in self.parent.conn.execute(
@@ -482,11 +483,12 @@ STATUSES_THAT_USE_SIZE = [
 
 
 class ReadonlyHoardContentsConn:
-    def __init__(self, folder: pathlib.Path):
+    def __init__(self, folder: pathlib.Path, config: HoardConfig):
         self.folder = folder
+        self.config = config
 
     async def __aenter__(self) -> "HoardContents":
-        self.contents = HoardContents(self.folder, True)
+        self.contents = HoardContents(self.folder, True, self.config)
         return self.contents
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
@@ -494,11 +496,12 @@ class ReadonlyHoardContentsConn:
         return None
 
     def writeable(self):
-        return HoardContentsConn(self.folder)
+        return HoardContentsConn(self.folder, self.config)
 
 
 class HoardContentsConn:
-    def __init__(self, folder: pathlib.Path):
+    def __init__(self, folder: pathlib.Path, config: HoardConfig):
+        self.config = config
         config_filename = os.path.join(folder, HOARD_CONTENTS_FILENAME)
 
         if not os.path.isfile(config_filename):
@@ -520,7 +523,7 @@ class HoardContentsConn:
         self.folder = folder
 
     async def __aenter__(self) -> "HoardContents":
-        self.contents = HoardContents(self.folder, False)
+        self.contents = HoardContents(self.folder, False, self.config)
         return self.contents
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
@@ -533,12 +536,13 @@ class HoardContents:
     config: HoardContentsConfig
     fsobjects: HoardFSObjects
 
-    def __init__(self, folder: pathlib.Path, is_readonly: bool):
+    def __init__(self, folder: pathlib.Path, is_readonly: bool, hoard_config: HoardConfig):
         sqlite_db_path = os.path.join(folder, HOARD_CONTENTS_FILENAME)
         self.conn = sqlite3_standard(
             f"file:{sqlite_db_path}{'?mode=ro' if is_readonly else ''}",
             uri=True)
 
+        self.hoard_config: HoardConfig = hoard_config
         self.config = HoardContentsConfig(folder.joinpath(HOARD_CONTENTS_TOML), is_readonly)
         self.fsobjects = HoardFSObjects(self) if not is_readonly else ReadonlyHoardFSObjects(self)
 
