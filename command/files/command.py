@@ -6,6 +6,7 @@ from typing import Optional, List, Dict
 from alive_progress import alive_bar
 
 from command.content_prefs import ContentPrefs
+from command.contents.command import dump_remotes
 from command.contents.comparisons import sync_object_storage_to_recreate_fsobject_and_fspresence
 from command.files.file_operations import _fetch_files_in_repo, _cleanup_files_in_repo
 
@@ -84,6 +85,9 @@ class HoardCommandFiles:
 async def execute_files_push(config: HoardConfig, hoard: Hoard, repo_uuids: List[str], out: StringIO, progress_bar):
     pathing = HoardPathing(config, hoard.paths())
     async with hoard.open_contents(False).writeable() as hoard_contents:
+        out.write(f"Before push:\n")
+        dump_remotes(config, hoard_contents, out)
+
         content_prefs = ContentPrefs(config, pathing, hoard_contents, hoard.available_remotes())
         logging.info("try getting all requested files, per repo")
 
@@ -107,3 +111,6 @@ async def execute_files_push(config: HoardConfig, hoard: Hoard, repo_uuids: List
         # fixme remove, just dumping
         sync_object_storage_to_recreate_fsobject_and_fspresence(
             hoard_contents.env, hoard_contents.fsobjects, hoard.config())
+
+        out.write(f"After:\n")
+        dump_remotes(config, hoard_contents, out)

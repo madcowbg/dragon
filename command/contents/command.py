@@ -775,7 +775,7 @@ class HoardCommandContents:
             return out.getvalue()
 
 
-def dump_remotes(hoard_config, hoard, out):
+def dump_remotes(hoard_config: HoardConfig, hoard: HoardContents, out: TextIO):
     remotes = hoard_config.remotes.all()
     for remote in sorted(remotes, key=lambda r: r.name):
         repo_root = hoard.env.roots(write=False)[remote.uuid]

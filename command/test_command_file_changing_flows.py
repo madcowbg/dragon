@@ -299,17 +299,141 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             res)
 
         res = await hoard_cmd.files.push("repo-partial-name")
-        self.assertEqual(
-            f"repo-partial-name:\n"
-            "+ wat/test.me.z\n"
-            f"repo-partial-name:\n"
-            "DONE", res)
+        self.assertEqual((
+            'Before push:\n'
+            'Remote repo-backup-name current=None staging=None desired=7672cb\n'
+            'Remote repo-full-name current=b2effc staging=b2effc desired=7672cb\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=499273 staging=499273 desired=238de4\n'
+            'repo-partial-name:\n'
+            '+ wat/test.me.z\n'
+            'repo-partial-name:\n'
+            'After:\n'
+            'Remote repo-backup-name current=None staging=None desired=7672cb\n'
+            'Remote repo-full-name current=b2effc staging=b2effc desired=7672cb\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=238de4 staging=499273 desired=238de4\n'
+            'DONE'), res)
 
         res = await hoard_cmd.files.push("repo-partial-name")
-        self.assertEqual(
-            f"repo-partial-name:\n"
-            f"repo-partial-name:\n"
-            "DONE", res)
+        self.assertEqual((
+            'Before push:\n'
+            'Remote repo-backup-name current=None staging=None desired=7672cb\n'
+            'Remote repo-full-name current=b2effc staging=b2effc desired=7672cb\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=238de4 staging=499273 desired=238de4\n'
+            'repo-partial-name:\n'
+            'repo-partial-name:\n'
+            'After:\n'
+            'Remote repo-backup-name current=None staging=None desired=7672cb\n'
+            'Remote repo-full-name current=b2effc staging=b2effc desired=7672cb\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=238de4 staging=499273 desired=238de4\n'
+            'DONE'), res)
+
+        res = await hoard_cmd.contents.drop("repo-partial-name", "wat")
+        self.assertEqual((
+            'DROP /wat/test.me.2\n'
+            'DROP /wat/test.me.z\n'
+            "Considered 2 files, 2 marked for cleanup, 0 won't be downloaded, 0 are "
+            'skipped.\n'
+            'DONE'), res)
+
+        res = await hoard_cmd.contents.pending_pull("repo-partial-name")
+        self.assertEqual((
+            'Status of repo-partial-name:\n'
+            'Hoard root: 7672cb5914a2bb1ae0ba43506eeb54f6fbeb5ad9:\n'
+            'Repo current=238de4 staging=499273 desired=238de4\n'
+            'Repo root: 499273be7613adfbfa809a42a7d2b6e9be0245e6:\n'
+            'REPO_FILE_TO_DELETE /wat/test.me.z\n'
+            'HOARD_FILE_DELETED /wat/test.me.z\n'), res)
+
+        res = await hoard_cmd.files.pending("repo-partial-name")
+        self.assertEqual((
+            'repo-partial-name:\n'
+            'TO_CLEANUP (is in 1) /wat/test.me.2\n'
+            'TO_CLEANUP (is in 1) /wat/test.me.z\n'
+            'DONE'), res)
+
+        res = await hoard_cmd.files.push("repo-partial-name")
+        self.assertEqual((
+            'Before push:\n'
+            'Remote repo-backup-name current=None staging=None desired=7672cb\n'
+            'Remote repo-full-name current=b2effc staging=b2effc desired=7672cb\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=238de4 staging=499273 desired=238de4\n'
+            'repo-partial-name:\n'
+            'repo-partial-name:\n'
+            "NEEDS_MORE_COPIES (1) ['repo-backup-name'] wat/test.me.2\n"
+            "NEEDS_MORE_COPIES (1) ['repo-backup-name'] wat/test.me.z\n"
+            'After:\n'
+            'Remote repo-backup-name current=None staging=None desired=7672cb\n'
+            'Remote repo-full-name current=b2effc staging=b2effc desired=7672cb\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=238de4 staging=499273 desired=238de4\n'
+            'DONE'), res)
+
+        res = await hoard_cmd.files.push("repo-backup-name")
+        self.assertEqual((
+            'Before push:\n'
+            'Remote repo-backup-name current=None staging=None desired=7672cb\n'
+            'Remote repo-full-name current=b2effc staging=b2effc desired=7672cb\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=238de4 staging=499273 desired=238de4\n'
+            'repo-backup-name:\n'
+            '+ test.me.1\n'
+            '+ test.me.4\n'
+            '+ test.me.5\n'
+            '+ wat/test.me.2\n'
+            '+ wat/test.me.z\n'
+            'repo-backup-name:\n'
+            'After:\n'
+            'Remote repo-backup-name current=7672cb staging=None desired=7672cb\n'
+            'Remote repo-full-name current=b2effc staging=b2effc desired=7672cb\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=238de4 staging=499273 desired=238de4\n'
+            'DONE'), res)
+
+        res = await hoard_cmd.files.push("repo-partial-name")
+        self.assertEqual((
+            'Before push:\n'
+            'Remote repo-backup-name current=7672cb staging=None desired=7672cb\n'
+            'Remote repo-full-name current=b2effc staging=b2effc desired=7672cb\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=238de4 staging=499273 desired=238de4\n'
+            'repo-partial-name:\n'
+            'repo-partial-name:\n'
+            'After:\n'
+            'Remote repo-backup-name current=7672cb staging=None desired=7672cb\n'
+            'Remote repo-full-name current=b2effc staging=b2effc desired=7672cb\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=238de4 staging=499273 desired=238de4\n'
+            'DONE'), res)
+
+        self.assertEqual([
+            'repo-partial/test.me.1',
+            'repo-partial/test.me.5',
+            'repo-partial/wat/test.me.2',
+            'repo-partial/wat/test.me.z'], dump_file_list(tmpdir=self.tmpdir.name, path="repo-partial"))
+
+        res = await partial_cave_cmd.refresh()
+        self.assertEqual((
+            'PRESENT_FILE wat/test.me.z\n'
+            'old: 499273be7613adfbfa809a42a7d2b6e9be0245e6\n'
+            'current: 238de45a9b336129c54373c235578a75621170d9\n'
+            'Refresh done!'), res)
+
+        res = partial_cave_cmd.status_index(show_files=True, show_dates=False)
+        self.assertEqual((
+            'test.me.1: present @ -1\n'
+            'test.me.5: present @ -1\n'
+            'wat/test.me.2: present @ -1\n'
+            'wat/test.me.z: present @ -1\n'
+            '--- SUMMARY ---\n'
+            'Result for local [238de45a9b336129c54373c235578a75621170d9]:\n'
+            'Max size: 3.5TB\n'
+            f'UUID: {partial_cave_cmd.current_uuid()}\n'
+            '  # files = 4 of size 42\n'), res)
 
     async def test_file_is_deleted_before_copied(self):
         hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = \
