@@ -430,7 +430,10 @@ class HoardFSObjects(ReadonlyHoardFSObjects):
 
         hoard_file_props = HoardFileProps(self.parent, fsobject_id, props.size, props.fasthash)
         for uuid, status in presence.items():
-            hoard_file_props.set_status([uuid], status)
+            assert status != HoardFileStatus.MOVE
+            hoard_file_props.parent.conn.execute(
+                "INSERT OR REPLACE INTO fspresence (fsobject_id, uuid, status, move_from) VALUES (?, ?, ?, NULL)",
+                (hoard_file_props.fsobject_id, uuid, status.value))
 
 
 class Query:
