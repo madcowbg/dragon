@@ -428,12 +428,11 @@ class HoardFSObjects(ReadonlyHoardFSObjects):
             "SELECT fsobject_id FROM fsobject WHERE fullpath = ?", (filepath.as_posix(),)).fetchone()
         curr.execute("DELETE FROM fspresence WHERE fsobject_id = ?", (fsobject_id,))
 
-        hoard_file_props = HoardFileProps(self.parent, fsobject_id, props.size, props.fasthash)
         for uuid, status in presence.items():
             assert status != HoardFileStatus.MOVE
-            hoard_file_props.parent.conn.execute(
+            self.parent.conn.execute(
                 "INSERT OR REPLACE INTO fspresence (fsobject_id, uuid, status, move_from) VALUES (?, ?, ?, NULL)",
-                (hoard_file_props.fsobject_id, uuid, status.value))
+                (fsobject_id, uuid, status.value))
 
 
 class Query:
