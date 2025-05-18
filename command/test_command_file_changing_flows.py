@@ -335,8 +335,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         self.assertEqual((
             'DROP /wat/test.me.2\n'
             'DROP /wat/test.me.z\n'
-            "Considered 2 files, 2 marked for cleanup, 0 won't be downloaded, 0 are "
-            'skipped.\n'
+            '2 marked for cleanup.\n'
             'DONE'), res)
 
         res = await hoard_cmd.contents.pending_pull("repo-partial-name")

@@ -424,10 +424,10 @@ class TestBackups(IsolatedAsyncioTestCase):
             'DONE'], res.splitlines())
 
         res = await hoard_cmd.contents.drop(repo="backup-2", path="wat")
-        self.assertEqual(
-            ['DROP /wat/test.me.2',
-             "Considered 3 files, 1 marked for cleanup, 0 won't be downloaded, 2 are skipped.",
-             'DONE'], res.splitlines())
+        self.assertEqual([
+            'DROP /wat/test.me.2',
+            '1 marked for cleanup.',
+            'DONE'], res.splitlines())
 
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual([
@@ -571,7 +571,7 @@ class TestBackups(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.drop(repo="backup-1", path="wat")
         self.assertEqual(
             'DROP /wat/test.me.3\n'
-            "Considered 3 files, 1 marked for cleanup, 0 won't be downloaded, 2 are skipped.\n"
+            '1 marked for cleanup.\n'
             'DONE', res)
 
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)

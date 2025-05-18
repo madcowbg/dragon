@@ -852,6 +852,8 @@ async def execute_drop(
         out: TextIO) -> Tuple[int, int, int]:
     assert path_in_hoard.is_absolute()
 
+    old_desired_id = hoard.env.roots(write=False)[repo_uuid].desired
+
     considered = 0
     cleaned_up, wont_get, skipped = 0, 0, 0
 
@@ -860,40 +862,38 @@ async def execute_drop(
     for hoard_file, hoard_props in alive_it([s async for s in hoard.fsobjects.in_folder(path_in_hoard)]):
         assert isinstance(hoard_props, HoardFileProps)
 
-        local_file = pathing.in_hoard(hoard_file).at_local(repo_uuid)
-        assert local_file is not None  # is not addressable here at all
-
         remove_from_desired_tree(hoard, repo_uuid, hoard_file)
 
-        considered += 1
+    new_desired_id = hoard.env.roots(write=False)[repo_uuid].desired
 
-        goal_status = hoard_props.get_status(repo_uuid)
-        if goal_status == HoardFileStatus.AVAILABLE:
-            logging.info(f"File {hoard_file} is available, mapping for removal from {repo_uuid}.")
+    with hoard.env.objects(write=False) as objects:
+        cleaned_up = dump_dropped_files_info(
+            objects, path_in_hoard._rem, old_desired_id, new_desired_id, out)
 
-            hoard_props.mark_for_cleanup([repo_uuid])
-            out.write(f"DROP {hoard_file.as_posix()}\n")
-
-            cleaned_up += 1
-        elif goal_status == HoardFileStatus.GET or goal_status == HoardFileStatus.COPY:
-            logging.info(f"File {hoard_file} is already not in repo, removing status.")
-
-            hoard_props.remove_status(repo_uuid)
-            out.write(f"WONT_GET {hoard_file.as_posix()}\n")
-
-            wont_get += 1
-        elif goal_status == HoardFileStatus.CLEANUP or goal_status == HoardFileStatus.UNKNOWN:
-            logging.info(f"Skipping {hoard_file} as it is already missing.")
-            skipped += 1
-        else:
-            raise ValueError(f"Unexpected status for {hoard_file}: {goal_status}")
+    # fixme remove, just dumping
+    sync_object_storage_to_recreate_fsobject_and_fspresence(hoard.env, hoard.fsobjects, pathing._config)
 
     out.write(
-        f"Considered {considered} files, {cleaned_up} marked for cleanup, "
-        f"{wont_get} won't be downloaded, {skipped} are skipped.\n")
+        f"{cleaned_up} marked for cleanup.\n")
     out.write("DONE")
 
     return cleaned_up, wont_get, skipped
+
+
+def dump_dropped_files_info(objects, path_in_tree: List[str], old_desired_root_id, new_desired_root_id, out):
+    old_desired_id = get_child(objects, path_in_tree, old_desired_root_id)
+    new_desired_id = get_child(objects, path_in_tree, new_desired_root_id)
+
+    cleaned_up = 0
+    for file_path, (old_id, new_id), _ in zip_trees_dfs(
+            objects, '/' + '/'.join(path_in_tree), [old_desired_id, new_desired_id], True):
+        if old_id is not None:
+            old_obj = objects[old_id]
+            if isinstance(old_obj, FileObject):
+                assert new_id is None
+                cleaned_up += 1
+                out.write(f"DROP {file_path}\n")
+    return cleaned_up
 
 
 STATUSES_ALREADY_ENABLED = [HoardFileStatus.AVAILABLE, HoardFileStatus.GET]
