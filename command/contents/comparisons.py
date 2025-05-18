@@ -16,13 +16,13 @@ from util import safe_hex
 
 async def sync_fsobject_to_object_storage(
         env: ObjectStorage, fsobjects: HoardFSObjects, repo_objects: RepoFSObjects, hoard_config: HoardConfig):
-    # if env.roots(write=True)["HOARD"].desired is None:
-    #     # fixme ugly hack to ensure unit tests do not change
-    #     with env.objects(write=True) as objects:
-    #         empty_dir = objects.mktree_from_tuples([])
-    #     env.roots(write=True)["HOARD"].desired = empty_dir
-    #
-    # return
+    if env.roots(write=True)["HOARD"].desired is None:
+        # fixme ugly hack to ensure unit tests do not change
+        with env.objects(write=True) as objects:
+            empty_dir = objects.mktree_from_tuples([])
+        env.roots(write=True)["HOARD"].desired = empty_dir
+
+    return
     raise_exception = False
 
     old_root_id = env.roots(False)["HOARD"].desired
@@ -75,7 +75,7 @@ async def sync_fsobject_to_object_storage(
             # assert root.desired is None, f"{remote.name}: {safe_hex(remote_desired_id)} is not desired, desired={safe_hex(root.desired)}"
 
         # fixme fully delete root.current = remote_current_id
-        root.desired = remote_desired_id
+        # root.desired = remote_desired_id
 
     env.roots(write=True)["HOARD"].desired = current_root_id
     print(
