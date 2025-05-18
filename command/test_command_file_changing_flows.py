@@ -343,8 +343,9 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         self.assertEqual((
             'Status of repo-partial-name:\n'
             'Hoard root: 7672cb5914a2bb1ae0ba43506eeb54f6fbeb5ad9:\n'
-            'Repo current=238de4 staging=499273 desired=238de4\n'
+            'Repo current=238de4 staging=499273 desired=4ca939\n'
             'Repo root: 499273be7613adfbfa809a42a7d2b6e9be0245e6:\n'
+            'REPO_FILE_TO_DELETE /wat/test.me.2\n'
             'REPO_FILE_TO_DELETE /wat/test.me.z\n'
             'HOARD_FILE_DELETED /wat/test.me.z\n'), res)
 
@@ -361,7 +362,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'Remote repo-backup-name current=None staging=None desired=7672cb\n'
             'Remote repo-full-name current=b2effc staging=b2effc desired=7672cb\n'
             'Remote repo-incoming-name current=None staging=None desired=None\n'
-            'Remote repo-partial-name current=238de4 staging=499273 desired=238de4\n'
+            'Remote repo-partial-name current=238de4 staging=499273 desired=4ca939\n'
             'repo-partial-name:\n'
             'repo-partial-name:\n'
             "NEEDS_MORE_COPIES (1) ['repo-backup-name'] wat/test.me.2\n"
@@ -370,7 +371,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'Remote repo-backup-name current=None staging=None desired=7672cb\n'
             'Remote repo-full-name current=b2effc staging=b2effc desired=7672cb\n'
             'Remote repo-incoming-name current=None staging=None desired=None\n'
-            'Remote repo-partial-name current=238de4 staging=499273 desired=238de4\n'
+            'Remote repo-partial-name current=238de4 staging=499273 desired=4ca939\n'
             'DONE'), res)
 
         res = await hoard_cmd.files.push("repo-backup-name")
@@ -379,7 +380,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'Remote repo-backup-name current=None staging=None desired=7672cb\n'
             'Remote repo-full-name current=b2effc staging=b2effc desired=7672cb\n'
             'Remote repo-incoming-name current=None staging=None desired=None\n'
-            'Remote repo-partial-name current=238de4 staging=499273 desired=238de4\n'
+            'Remote repo-partial-name current=238de4 staging=499273 desired=4ca939\n'
             'repo-backup-name:\n'
             '+ test.me.1\n'
             '+ test.me.4\n'
@@ -391,7 +392,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'Remote repo-backup-name current=7672cb staging=None desired=7672cb\n'
             'Remote repo-full-name current=b2effc staging=b2effc desired=7672cb\n'
             'Remote repo-incoming-name current=None staging=None desired=None\n'
-            'Remote repo-partial-name current=238de4 staging=499273 desired=238de4\n'
+            'Remote repo-partial-name current=238de4 staging=499273 desired=4ca939\n'
             'DONE'), res)
 
         res = await hoard_cmd.files.push("repo-partial-name")
@@ -400,40 +401,39 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'Remote repo-backup-name current=7672cb staging=None desired=7672cb\n'
             'Remote repo-full-name current=b2effc staging=b2effc desired=7672cb\n'
             'Remote repo-incoming-name current=None staging=None desired=None\n'
-            'Remote repo-partial-name current=238de4 staging=499273 desired=238de4\n'
+            'Remote repo-partial-name current=238de4 staging=499273 desired=4ca939\n'
             'repo-partial-name:\n'
             'repo-partial-name:\n'
+            'd wat/test.me.2\n'
+            'd wat/test.me.z\n'
             'After:\n'
             'Remote repo-backup-name current=7672cb staging=None desired=7672cb\n'
             'Remote repo-full-name current=b2effc staging=b2effc desired=7672cb\n'
             'Remote repo-incoming-name current=None staging=None desired=None\n'
-            'Remote repo-partial-name current=238de4 staging=499273 desired=238de4\n'
+            'Remote repo-partial-name current=4ca939 staging=499273 desired=4ca939\n'
             'DONE'), res)
 
         self.assertEqual([
             'repo-partial/test.me.1',
-            'repo-partial/test.me.5',
-            'repo-partial/wat/test.me.2',
-            'repo-partial/wat/test.me.z'], dump_file_list(tmpdir=self.tmpdir.name, path="repo-partial"))
+            'repo-partial/test.me.5'], dump_file_list(tmpdir=self.tmpdir.name, path="repo-partial"))
 
         res = await partial_cave_cmd.refresh()
         self.assertEqual((
-            'PRESENT_FILE wat/test.me.z\n'
+            'DELETED_NO_COPY wat/test.me.2\n'
             'old: 499273be7613adfbfa809a42a7d2b6e9be0245e6\n'
-            'current: 238de45a9b336129c54373c235578a75621170d9\n'
+            'current: 4ca9394ae5678164976a1691dadc8c278a3df2c6\n'
             'Refresh done!'), res)
 
         res = partial_cave_cmd.status_index(show_files=True, show_dates=False)
         self.assertEqual((
             'test.me.1: present @ -1\n'
             'test.me.5: present @ -1\n'
-            'wat/test.me.2: present @ -1\n'
-            'wat/test.me.z: present @ -1\n'
             '--- SUMMARY ---\n'
-            'Result for local [238de45a9b336129c54373c235578a75621170d9]:\n'
+            'Result for local [4ca9394ae5678164976a1691dadc8c278a3df2c6]:\n'
             'Max size: 3.5TB\n'
             f'UUID: {partial_cave_cmd.current_uuid()}\n'
-            '  # files = 4 of size 42\n'), res)
+            '  # files = 2 of size 14\n')
+            , res)
 
     async def test_file_is_deleted_before_copied(self):
         hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = \
@@ -468,14 +468,24 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
 
         # try to fetch - will have some errors
         res = await hoard_cmd.files.push("repo-backup-name")
-        self.assertEqual(
-            f"repo-backup-name:\n"
-            f"+ test.me.1\n"
-            f"+ test.me.4\n"
-            f"+ wat/test.me.2\n"
-            f"E wat/test.me.3\n"
-            f"repo-backup-name:\n"
-            f"DONE", res)
+        self.assertEqual((
+            'Before push:\n'
+            'Remote repo-backup-name current=None staging=None desired=1ad9e0\n'
+            'Remote repo-full-name current=1ad9e0 staging=1ad9e0 desired=1ad9e0\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
+            'repo-backup-name:\n'
+            '+ test.me.1\n'
+            '+ test.me.4\n'
+            '+ wat/test.me.2\n'
+            'E wat/test.me.3\n'
+            'repo-backup-name:\n'
+            'After:\n'
+            'Remote repo-backup-name current=d696be staging=None desired=1ad9e0\n'
+            'Remote repo-full-name current=1ad9e0 staging=1ad9e0 desired=1ad9e0\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
+            'DONE'), res)
 
         res = await hoard_cmd.contents.ls(show_remotes=True)
         self.assertEqual((
@@ -496,11 +506,21 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
 
         # try to fetch - errors will remain
         res = await hoard_cmd.files.push("repo-backup-name")
-        self.assertEqual(
-            f"repo-backup-name:\n"
-            f"E wat/test.me.3\n"
-            f"repo-backup-name:\n"
-            "DONE", res)
+        self.assertEqual((
+            'Before push:\n'
+            'Remote repo-backup-name current=d696be staging=None desired=1ad9e0\n'
+            'Remote repo-full-name current=1ad9e0 staging=1ad9e0 desired=1ad9e0\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
+            'repo-backup-name:\n'
+            'E wat/test.me.3\n'
+            'repo-backup-name:\n'
+            'After:\n'
+            'Remote repo-backup-name current=d696be staging=None desired=1ad9e0\n'
+            'Remote repo-full-name current=1ad9e0 staging=1ad9e0 desired=1ad9e0\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
+            'DONE'), res)
 
         # do refresh and pull to detect deleted file and its state
         res = await full_cave_cmd.refresh(show_details=False)
@@ -629,11 +649,21 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'DONE'), res)
 
         res = await hoard_cmd.files.push("repo-backup-name")
-        self.assertEqual(
-            f"repo-backup-name:\n"
-            f"repo-backup-name:\n"
-            "d wat/test.me.2\n"
-            "DONE", res)
+        self.assertEqual((
+            'Before push:\n'
+            'Remote repo-backup-name current=1ad9e0 staging=None desired=22e45e\n'
+            'Remote repo-full-name current=22e45e staging=22e45e desired=22e45e\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=57a93f\n'
+            'repo-backup-name:\n'
+            'repo-backup-name:\n'
+            'd wat/test.me.2\n'
+            'After:\n'
+            'Remote repo-backup-name current=22e45e staging=None desired=22e45e\n'
+            'Remote repo-full-name current=22e45e staging=22e45e desired=22e45e\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=57a93f\n'
+            'DONE'), res)
 
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual(
@@ -649,17 +679,37 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             "|repo-partial-name        |        14|         6|         8|\n", res)
 
         res = await hoard_cmd.files.push("repo-full-name")
-        self.assertEqual(
-            f"repo-full-name:\n"
-            f"repo-full-name:\n"
-            "DONE", res)
+        self.assertEqual((
+            'Before push:\n'
+            'Remote repo-backup-name current=22e45e staging=None desired=22e45e\n'
+            'Remote repo-full-name current=22e45e staging=22e45e desired=22e45e\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=57a93f\n'
+            'repo-full-name:\n'
+            'repo-full-name:\n'
+            'After:\n'
+            'Remote repo-backup-name current=22e45e staging=None desired=22e45e\n'
+            'Remote repo-full-name current=22e45e staging=22e45e desired=22e45e\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=57a93f\n'
+            'DONE'), res)
 
         res = await hoard_cmd.files.push("repo-partial-name")
-        self.assertEqual(
-            f"repo-partial-name:\n"
-            f"repo-partial-name:\n"
-            "d wat/test.me.2\n"
-            "DONE", res)
+        self.assertEqual((
+            'Before push:\n'
+            'Remote repo-backup-name current=22e45e staging=None desired=22e45e\n'
+            'Remote repo-full-name current=22e45e staging=22e45e desired=22e45e\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=57a93f\n'
+            'repo-partial-name:\n'
+            'repo-partial-name:\n'
+            'd wat/test.me.2\n'
+            'After:\n'
+            'Remote repo-backup-name current=22e45e staging=None desired=22e45e\n'
+            'Remote repo-full-name current=22e45e staging=22e45e desired=22e45e\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=57a93f staging=f9bfc2 desired=57a93f\n'
+            'DONE'), res)
 
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual(
@@ -808,12 +858,24 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'DONE'), res)
 
         res = await hoard_cmd.files.push(repo="repo-new-contents-name")
-        self.assertEqual(
-            f"repo-new-contents-name:\n"
-            f"+ test.me.2\n"
-            f"+ test.me.3\n"
-            f"repo-new-contents-name:\n"
-            f"DONE", res)
+        self.assertEqual((
+            'Before push:\n'
+            'Remote repo-backup-name current=None staging=None desired=d934e1\n'
+            'Remote repo-full-name current=1ad9e0 staging=1ad9e0 desired=d934e1\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-new-contents-name current=b66f52 staging=b66f52 desired=adcdce\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
+            'repo-new-contents-name:\n'
+            '+ test.me.2\n'
+            '+ test.me.3\n'
+            'repo-new-contents-name:\n'
+            'After:\n'
+            'Remote repo-backup-name current=None staging=None desired=d934e1\n'
+            'Remote repo-full-name current=1ad9e0 staging=1ad9e0 desired=d934e1\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-new-contents-name current=adcdce staging=b66f52 desired=adcdce\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
+            'DONE'), res)
 
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual(
@@ -832,11 +894,23 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             res)
 
         res = await hoard_cmd.files.push(repo=full_cave_cmd.current_uuid())
-        self.assertEqual(
-            f"repo-full-name:\n"
-            f"+ wat/one-new.file\n"
-            f"repo-full-name:\n"
-            f"DONE", res)
+        self.assertEqual((
+            'Before push:\n'
+            'Remote repo-backup-name current=None staging=None desired=d934e1\n'
+            'Remote repo-full-name current=1ad9e0 staging=1ad9e0 desired=d934e1\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-new-contents-name current=adcdce staging=b66f52 desired=adcdce\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
+            'repo-full-name:\n'
+            '+ wat/one-new.file\n'
+            'repo-full-name:\n'
+            'After:\n'
+            'Remote repo-backup-name current=None staging=None desired=d934e1\n'
+            'Remote repo-full-name current=d934e1 staging=1ad9e0 desired=d934e1\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-new-contents-name current=adcdce staging=b66f52 desired=adcdce\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
+            'DONE'), res)
 
         self.assertDictEqual(
             dump_file_list(self.tmpdir.name + "/repo-full/wat", "", data=True),
@@ -935,14 +1009,26 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             res)
 
         res = await hoard_cmd.files.push(copy_cave_cmd.current_uuid())
-        self.assertEqual(
-            "repo-copy-name:\n"
-            "+ test.me.1\n"
-            "+ test.me.4\n"
-            "+ wat/test.me.2\n"
-            "+ wat/test.me.3\n"
-            "repo-copy-name:\n"
-            "DONE", res)
+        self.assertEqual((
+            'Before push:\n'
+            'Remote repo-backup-name current=None staging=None desired=1ad9e0\n'
+            'Remote repo-copy-name current=None staging=None desired=1ad9e0\n'
+            'Remote repo-full-name current=1ad9e0 staging=1ad9e0 desired=1ad9e0\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
+            'repo-copy-name:\n'
+            '+ test.me.1\n'
+            '+ test.me.4\n'
+            '+ wat/test.me.2\n'
+            '+ wat/test.me.3\n'
+            'repo-copy-name:\n'
+            'After:\n'
+            'Remote repo-backup-name current=None staging=None desired=1ad9e0\n'
+            'Remote repo-copy-name current=1ad9e0 staging=None desired=1ad9e0\n'
+            'Remote repo-full-name current=1ad9e0 staging=1ad9e0 desired=1ad9e0\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
+            'DONE'), res)
 
         res = await full_cave_cmd.refresh()
         self.assertEqual((
@@ -1070,10 +1156,22 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             '|repo-partial-name        |        13|          |         5|         8|\n'), res)
 
         res = await hoard_cmd.files.push(full_cave_cmd.current_uuid())
-        self.assertEqual(
+        self.assertEqual((
+            'Before push:\n'
+            'Remote repo-backup-name current=None staging=None desired=01152a\n'
+            'Remote repo-copy-name current=1ad9e0 staging=None desired=01152a\n'
+            'Remote repo-full-name current=01152a staging=01152a desired=01152a\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=fc111c\n'
             'repo-full-name:\n'
             'repo-full-name:\n'
-            'DONE', res)
+            'After:\n'
+            'Remote repo-backup-name current=None staging=None desired=01152a\n'
+            'Remote repo-copy-name current=1ad9e0 staging=None desired=01152a\n'
+            'Remote repo-full-name current=01152a staging=01152a desired=01152a\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=fc111c\n'
+            'DONE'), res)
 
         res = await hoard_cmd.files.pending(copy_cave_cmd.current_uuid())
         self.assertEqual(
@@ -1090,6 +1188,12 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.files.push(copy_cave_cmd.current_uuid())
         self.assertEqual((
+            'Before push:\n'
+            'Remote repo-backup-name current=None staging=None desired=01152a\n'
+            'Remote repo-copy-name current=1ad9e0 staging=None desired=01152a\n'
+            'Remote repo-full-name current=01152a staging=01152a desired=01152a\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=fc111c\n'
             'repo-copy-name:\n'
             '+ lets_get_it_started/test.me.2-butnew\n'
             '+ lets_get_it_started/test.me.2-butsecond\n'
@@ -1099,6 +1203,12 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'repo-copy-name:\n'
             'd test.me.4\n'
             'd wat/test.me.2\n'
+            'After:\n'
+            'Remote repo-backup-name current=None staging=None desired=01152a\n'
+            'Remote repo-copy-name current=01152a staging=None desired=01152a\n'
+            'Remote repo-full-name current=01152a staging=01152a desired=01152a\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=fc111c\n'
             'DONE'), res)
 
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
@@ -1132,7 +1242,22 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'DONE', res)
 
         res = await hoard_cmd.files.push(copy_cave_cmd.current_uuid())
-        self.assertEqual("repo-copy-name:\nrepo-copy-name:\nDONE", res)
+        self.assertEqual((
+            'Before push:\n'
+            'Remote repo-backup-name current=None staging=None desired=01152a\n'
+            'Remote repo-copy-name current=01152a staging=None desired=01152a\n'
+            'Remote repo-full-name current=01152a staging=01152a desired=01152a\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=fc111c\n'
+            'repo-copy-name:\n'
+            'repo-copy-name:\n'
+            'After:\n'
+            'Remote repo-backup-name current=None staging=None desired=01152a\n'
+            'Remote repo-copy-name current=01152a staging=None desired=01152a\n'
+            'Remote repo-full-name current=01152a staging=01152a desired=01152a\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=fc111c\n'
+            'DONE'), res)
 
         res = await copy_cave_cmd.refresh()
         self.assertEqual((
@@ -1245,12 +1370,24 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'DONE'), res)
 
         res = await hoard_cmd.files.push(backup_cave_cmd.current_uuid())
-        self.assertEqual(
-            "repo-backup-name:\n"
-            "+ test.me.4\n"
-            "+ wat/test.me.2\n"
-            "repo-backup-name:\n"
-            "DONE", res)
+        self.assertEqual((
+            'Before push:\n'
+            'Remote repo-backup-name current=3a0889 staging=3a0889 desired=1ad9e0\n'
+            'Remote repo-copy-name current=None staging=None desired=1ad9e0\n'
+            'Remote repo-full-name current=1ad9e0 staging=1ad9e0 desired=1ad9e0\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
+            'repo-backup-name:\n'
+            '+ test.me.4\n'
+            '+ wat/test.me.2\n'
+            'repo-backup-name:\n'
+            'After:\n'
+            'Remote repo-backup-name current=1ad9e0 staging=3a0889 desired=1ad9e0\n'
+            'Remote repo-copy-name current=None staging=None desired=1ad9e0\n'
+            'Remote repo-full-name current=1ad9e0 staging=1ad9e0 desired=1ad9e0\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
+            'DONE'), res)
 
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual(
@@ -1269,14 +1406,26 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             res)
 
         res = await hoard_cmd.files.push(copy_cave_cmd.current_uuid())
-        self.assertEqual(
-            "repo-copy-name:\n"
-            "+ test.me.1\n"
-            "+ test.me.4\n"
-            "+ wat/test.me.2\n"
-            "+ wat/test.me.3\n"
-            "repo-copy-name:\n"
-            "DONE", res)
+        self.assertEqual((
+            'Before push:\n'
+            'Remote repo-backup-name current=1ad9e0 staging=3a0889 desired=1ad9e0\n'
+            'Remote repo-copy-name current=None staging=None desired=1ad9e0\n'
+            'Remote repo-full-name current=1ad9e0 staging=1ad9e0 desired=1ad9e0\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
+            'repo-copy-name:\n'
+            '+ test.me.1\n'
+            '+ test.me.4\n'
+            '+ wat/test.me.2\n'
+            '+ wat/test.me.3\n'
+            'repo-copy-name:\n'
+            'After:\n'
+            'Remote repo-backup-name current=1ad9e0 staging=3a0889 desired=1ad9e0\n'
+            'Remote repo-copy-name current=1ad9e0 staging=None desired=1ad9e0\n'
+            'Remote repo-full-name current=1ad9e0 staging=1ad9e0 desired=1ad9e0\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
+            'DONE'), res)
 
         res = await full_cave_cmd.refresh()
         self.assertEqual((
@@ -1406,10 +1555,22 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             res)
 
         res = await hoard_cmd.files.push(full_cave_cmd.current_uuid())
-        self.assertEqual(
+        self.assertEqual((
+            'Before push:\n'
+            'Remote repo-backup-name current=1ad9e0 staging=3a0889 desired=01152a\n'
+            'Remote repo-copy-name current=1ad9e0 staging=None desired=01152a\n'
+            'Remote repo-full-name current=01152a staging=01152a desired=01152a\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=fc111c\n'
             'repo-full-name:\n'
             'repo-full-name:\n'
-            'DONE', res)
+            'After:\n'
+            'Remote repo-backup-name current=1ad9e0 staging=3a0889 desired=01152a\n'
+            'Remote repo-copy-name current=1ad9e0 staging=None desired=01152a\n'
+            'Remote repo-full-name current=01152a staging=01152a desired=01152a\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=fc111c\n'
+            'DONE'), res)
 
         res = await hoard_cmd.files.pending(copy_cave_cmd.current_uuid())
         self.assertEqual((
@@ -1425,17 +1586,29 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'DONE'), res)
 
         res = await hoard_cmd.files.push(copy_cave_cmd.current_uuid())
-        self.assertEqual(
-            "repo-copy-name:\n"
-            "+ lets_get_it_started/test.me.2-butnew\n"
-            "+ lets_get_it_started/test.me.2-butsecond\n"
+        self.assertEqual((
+            'Before push:\n'
+            'Remote repo-backup-name current=1ad9e0 staging=3a0889 desired=01152a\n'
+            'Remote repo-copy-name current=1ad9e0 staging=None desired=01152a\n'
+            'Remote repo-full-name current=01152a staging=01152a desired=01152a\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=fc111c\n'
+            'repo-copy-name:\n'
+            '+ lets_get_it_started/test.me.2-butnew\n'
+            '+ lets_get_it_started/test.me.2-butsecond\n'
             '+ lets_get_it_started/test.me.4-renamed\n'  # fixme should be MOVED
             '+ test.me.1\n'
-            "+ test.me.added\n"
-            "repo-copy-name:\n"
-            "d test.me.4\n"
-            "d wat/test.me.2\n"
-            "DONE", res)
+            '+ test.me.added\n'
+            'repo-copy-name:\n'
+            'd test.me.4\n'
+            'd wat/test.me.2\n'
+            'After:\n'
+            'Remote repo-backup-name current=1ad9e0 staging=3a0889 desired=01152a\n'
+            'Remote repo-copy-name current=01152a staging=None desired=01152a\n'
+            'Remote repo-full-name current=01152a staging=01152a desired=01152a\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=fc111c\n'
+            'DONE'), res)
 
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual((
@@ -1467,7 +1640,22 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'DONE'), res)
 
         res = await hoard_cmd.files.push(copy_cave_cmd.current_uuid())
-        self.assertEqual("repo-copy-name:\nrepo-copy-name:\nDONE", res)
+        self.assertEqual((
+            'Before push:\n'
+            'Remote repo-backup-name current=1ad9e0 staging=3a0889 desired=01152a\n'
+            'Remote repo-copy-name current=01152a staging=None desired=01152a\n'
+            'Remote repo-full-name current=01152a staging=01152a desired=01152a\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=fc111c\n'
+            'repo-copy-name:\n'
+            'repo-copy-name:\n'
+            'After:\n'
+            'Remote repo-backup-name current=1ad9e0 staging=3a0889 desired=01152a\n'
+            'Remote repo-copy-name current=01152a staging=None desired=01152a\n'
+            'Remote repo-full-name current=01152a staging=01152a desired=01152a\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=fc111c\n'
+            'DONE'), res)
 
         res = await copy_cave_cmd.refresh()
         self.assertEqual((
@@ -1482,17 +1670,29 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'Refresh done!'), res)
 
         res = await hoard_cmd.files.push(backup_cave_cmd.current_uuid())
-        self.assertEqual(
-            "repo-backup-name:\n"
-            "+ lets_get_it_started/test.me.2-butnew\n"
-            "+ lets_get_it_started/test.me.2-butsecond\n"
+        self.assertEqual((
+            'Before push:\n'
+            'Remote repo-backup-name current=1ad9e0 staging=3a0889 desired=01152a\n'
+            'Remote repo-copy-name current=01152a staging=None desired=01152a\n'
+            'Remote repo-full-name current=01152a staging=01152a desired=01152a\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=fc111c\n'
+            'repo-backup-name:\n'
+            '+ lets_get_it_started/test.me.2-butnew\n'
+            '+ lets_get_it_started/test.me.2-butsecond\n'
             '+ lets_get_it_started/test.me.4-renamed\n'  # fixme moved
             '+ test.me.1\n'
-            "+ test.me.added\n"
-            "repo-backup-name:\n"
-            "d test.me.4\n"
-            "d wat/test.me.2\n"
-            "DONE", res)
+            '+ test.me.added\n'
+            'repo-backup-name:\n'
+            'd test.me.4\n'
+            'd wat/test.me.2\n'
+            'After:\n'
+            'Remote repo-backup-name current=01152a staging=3a0889 desired=01152a\n'
+            'Remote repo-copy-name current=01152a staging=None desired=01152a\n'
+            'Remote repo-full-name current=01152a staging=01152a desired=01152a\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=fc111c\n'
+            'DONE'), res)
 
         res = await backup_cave_cmd.refresh()
         self.assertEqual((
@@ -1599,9 +1799,21 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.files.push(partial_cave_cmd.current_uuid())
         self.assertEqual((
+            'Before push:\n'
+            'Remote repo-backup-name current=01152a staging=3a0889 desired=1d6997\n'
+            'Remote repo-copy-name current=01152a staging=01152a desired=1d6997\n'
+            'Remote repo-full-name current=01152a staging=01152a desired=1d6997\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=563f87 staging=563f87 desired=7d1569\n'
             'repo-partial-name:\n'
             'repo-partial-name:\n'
             'd wat/test.me.2\n'
+            'After:\n'
+            'Remote repo-backup-name current=01152a staging=3a0889 desired=1d6997\n'
+            'Remote repo-copy-name current=01152a staging=01152a desired=1d6997\n'
+            'Remote repo-full-name current=01152a staging=01152a desired=1d6997\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=7d1569 staging=563f87 desired=7d1569\n'
             'DONE'), res)
 
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
@@ -1681,14 +1893,26 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'DONE'), res)
 
         res = await hoard_cmd.files.push(backup_cave_cmd.current_uuid())
-        self.assertEqual(
-            "repo-backup-name:\n"
-            "+ test.me.1\n"
-            "+ test.me.4\n"
-            "+ wat/test.me.2\n"
-            "+ wat/test.me.3\n"
-            "repo-backup-name:\n"
-            "DONE", res)
+        self.assertEqual((
+            'Before push:\n'
+            'Remote repo-backup-name current=None staging=None desired=1ad9e0\n'
+            'Remote repo-copy-name current=None staging=None desired=1ad9e0\n'
+            'Remote repo-full-name current=1ad9e0 staging=1ad9e0 desired=1ad9e0\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
+            'repo-backup-name:\n'
+            '+ test.me.1\n'
+            '+ test.me.4\n'
+            '+ wat/test.me.2\n'
+            '+ wat/test.me.3\n'
+            'repo-backup-name:\n'
+            'After:\n'
+            'Remote repo-backup-name current=1ad9e0 staging=None desired=1ad9e0\n'
+            'Remote repo-copy-name current=None staging=None desired=1ad9e0\n'
+            'Remote repo-full-name current=1ad9e0 staging=1ad9e0 desired=1ad9e0\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
+            'DONE'), res)
 
         # modify contents
         pathlib.Path(join(self.tmpdir.name, 'repo-full/lets_get_it_started')).mkdir(parents=True)
@@ -1783,12 +2007,24 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.files.push(backup_cave_cmd.current_uuid())
         self.assertEqual((
+            'Before push:\n'
+            'Remote repo-backup-name current=3a0889 staging=3a0889 desired=e48d88\n'
+            'Remote repo-copy-name current=None staging=None desired=e48d88\n'
+            'Remote repo-full-name current=e48d88 staging=e48d88 desired=e48d88\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=8c1a36\n'
             'repo-backup-name:\n'
             '+ lets_get_it_started/test.me.4-renamed\n'
             '+ test.me.1\n'
             '+ test.me.added\n'
             '+ wat/test.me.2\n'
             'repo-backup-name:\n'
+            'After:\n'
+            'Remote repo-backup-name current=e48d88 staging=3a0889 desired=e48d88\n'
+            'Remote repo-copy-name current=None staging=None desired=e48d88\n'
+            'Remote repo-full-name current=e48d88 staging=e48d88 desired=e48d88\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=8c1a36\n'
             'DONE'), res)
 
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
@@ -1807,16 +2043,28 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             '|repo-partial-name        |        13|         8|         5|\n'), res)
 
         res = await hoard_cmd.files.push(copy_cave_cmd.current_uuid())
-        self.assertEqual(
-            "repo-copy-name:\n"
-            "+ lets_get_it_started/test.me.4-renamed\n"
-            "+ test.me.1\n"
-            "+ test.me.added\n"
-            "+ wat/test.me.2\n"
-            "+ wat/test.me.3\n"
-            "repo-copy-name:\n"
+        self.assertEqual((
+            'Before push:\n'
+            'Remote repo-backup-name current=e48d88 staging=3a0889 desired=e48d88\n'
+            'Remote repo-copy-name current=None staging=None desired=e48d88\n'
+            'Remote repo-full-name current=e48d88 staging=e48d88 desired=e48d88\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=8c1a36\n'
+            'repo-copy-name:\n'
+            '+ lets_get_it_started/test.me.4-renamed\n'
+            '+ test.me.1\n'
+            '+ test.me.added\n'
+            '+ wat/test.me.2\n'
+            '+ wat/test.me.3\n'
+            'repo-copy-name:\n'
             # "d test.me.4\n"  # fixme should remove
-            "DONE", res)
+            'After:\n'
+            'Remote repo-backup-name current=e48d88 staging=3a0889 desired=e48d88\n'
+            'Remote repo-copy-name current=e48d88 staging=None desired=e48d88\n'
+            'Remote repo-full-name current=e48d88 staging=e48d88 desired=e48d88\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=8c1a36\n'
+            'DONE'), res)
 
         res = await full_cave_cmd.refresh()
         self.assertEqual((
@@ -1951,10 +2199,20 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.files.push(full_cave_cmd.current_uuid())
         self.assertEqual([
+            'Before push:',
+            'Remote repo-backup-name current=3a0889 staging=3a0889 desired=8da760',
+            'Remote repo-full-name current=1ad9e0 staging=1ad9e0 desired=8da760',
+            'Remote repo-incoming-name current=3d1726 staging=3d1726 desired=None',
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2',
             'repo-full-name:',
             '+ test.me.5',
             '+ wat/test.me.6',
             'repo-full-name:',
+            'After:',
+            'Remote repo-backup-name current=3a0889 staging=3a0889 desired=8da760',
+            'Remote repo-full-name current=8da760 staging=1ad9e0 desired=8da760',
+            'Remote repo-incoming-name current=3d1726 staging=3d1726 desired=None',
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2',
             'DONE'], res.splitlines())
 
         self.assertDictEqual({
@@ -2056,12 +2314,22 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.files.push(full_cave_cmd.current_uuid())
         self.assertEqual([
+            'Before push:',
+            'Remote repo-backup-name current=3a0889 staging=3a0889 desired=8da760',
+            'Remote repo-full-name current=20b513 staging=20b513 desired=8da760',
+            'Remote repo-incoming-name current=3d1726 staging=3d1726 desired=None',
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2',
             'repo-full-name:',
             '+ test.me.4',
             '+ wat/test.me.2',
             '+ wat/test.me.6',
             'repo-full-name:',
             'd test.me.6-moved',
+            'After:',
+            'Remote repo-backup-name current=3a0889 staging=3a0889 desired=8da760',
+            'Remote repo-full-name current=8da760 staging=20b513 desired=8da760',
+            'Remote repo-incoming-name current=3d1726 staging=3d1726 desired=None',
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2',
             'DONE'], res.splitlines())
 
         self.assertDictEqual({

@@ -4,7 +4,7 @@ from io import StringIO
 from typing import List, Dict, Any, Optional, Callable, Awaitable, Tuple, TextIO
 
 import humanize
-from alive_progress import alive_bar, alive_it
+from alive_progress import alive_it
 
 from command.content_prefs import ContentPrefs
 from command.contents.comparisons import copy_local_staging_to_hoard, \
@@ -14,6 +14,7 @@ from command.fast_path import FastPosixPath
 from command.hoard import Hoard
 from command.pathing import HoardPathing
 from command.pending_file_ops import GetFile, CopyFile, CleanupFile, get_pending_operations
+from command.tree_operations import remove_from_desired_tree
 from config import CaveType, HoardRemote, HoardConfig, HoardRemotes
 from contents.hoard import HoardContents, HoardFile, HoardDir
 from contents.hoard_props import HoardFileStatus, HoardFileProps
@@ -26,8 +27,8 @@ from lmdb_storage.pull_contents import merge_contents, commit_merged
 from lmdb_storage.roots import Root, Roots
 from lmdb_storage.three_way_merge import MergePreferences
 from lmdb_storage.tree_iteration import zip_trees_dfs
-from lmdb_storage.tree_structure import Objects, ObjectID, TreeObject
 from lmdb_storage.tree_operations import get_child, graft_in_tree
+from lmdb_storage.tree_structure import Objects, ObjectID, TreeObject
 from resolve_uuid import resolve_remote_uuid
 from util import format_size, custom_isabs, safe_hex
 
@@ -861,6 +862,8 @@ async def execute_drop(
 
         local_file = pathing.in_hoard(hoard_file).at_local(repo_uuid)
         assert local_file is not None  # is not addressable here at all
+
+        remove_from_desired_tree(hoard, repo_uuid, hoard_file)
 
         considered += 1
 

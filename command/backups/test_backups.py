@@ -164,20 +164,28 @@ class TestBackups(IsolatedAsyncioTestCase):
         await incoming_cave_cmd.refresh(show_details=False)
 
         res = await hoard_cmd.files.push(all=True)
-        self.assertEqual(
-            f"repo-partial-name:\n"
-            f"repo-full-name:\n"
-            "+ test.me.5\n"
-            "+ wat/test.me.6\n"
-            f"repo-incoming-name:\n"
-            f"repo-partial-name:\n"
-            f"repo-full-name:\n"
-            f"repo-incoming-name:\n"
-            "d test.me.4\n"
-            "d test.me.5\n"
-            "d wat/test.me.3\n"
-            "d wat/test.me.6\n"
-            "DONE", res)
+        self.assertEqual((
+            'Before push:\n'
+            'Remote repo-full-name current=94524f staging=94524f desired=c8405b\n'
+            'Remote repo-incoming-name current=a513af staging=a513af desired=None\n'
+            'Remote repo-partial-name current=418ef1 staging=418ef1 desired=418ef1\n'
+            'repo-partial-name:\n'
+            'repo-full-name:\n'
+            '+ test.me.5\n'
+            '+ wat/test.me.6\n'
+            'repo-incoming-name:\n'
+            'repo-partial-name:\n'
+            'repo-full-name:\n'
+            'repo-incoming-name:\n'
+            'd test.me.4\n'
+            'd test.me.5\n'
+            'd wat/test.me.3\n'
+            'd wat/test.me.6\n'
+            'After:\n'
+            'Remote repo-full-name current=c8405b staging=94524f desired=c8405b\n'
+            'Remote repo-incoming-name current=None staging=a513af desired=None\n'
+            'Remote repo-partial-name current=418ef1 staging=418ef1 desired=418ef1\n'
+            'DONE'), res)
 
         res = await hoard_cmd.files.pending(repo=incoming_cave_cmd.current_uuid())
         self.assertEqual(
@@ -353,6 +361,14 @@ class TestBackups(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.files.push(all=True)
         self.assertEqual([
+            'Before push:',
+            'Remote backup-1 current=1388f4 staging=1388f4 desired=4bff8f',
+            'Remote backup-2 current=6ef88c staging=6ef88c desired=ea34fb',
+            'Remote backup-3 current=fe2e3c staging=fe2e3c desired=cf33f9',
+            'Remote backup-4 current=a80f91 staging=a80f91 desired=b7d919',
+            'Remote repo-full-name current=94524f staging=94524f desired=c8405b',
+            'Remote repo-incoming-name current=a513af staging=a513af desired=None',
+            'Remote repo-partial-name current=418ef1 staging=418ef1 desired=418ef1',
             'repo-partial-name:',
             'repo-full-name:',
             '+ test.me.5',
@@ -379,6 +395,14 @@ class TestBackups(IsolatedAsyncioTestCase):
             'backup-3:',
             'd test.me.obsolete',
             'backup-4:',
+            'After:',
+            'Remote backup-1 current=4bff8f staging=1388f4 desired=4bff8f',
+            'Remote backup-2 current=ea34fb staging=6ef88c desired=ea34fb',
+            'Remote backup-3 current=cf33f9 staging=fe2e3c desired=cf33f9',
+            'Remote backup-4 current=b7d919 staging=a80f91 desired=b7d919',
+            'Remote repo-full-name current=c8405b staging=94524f desired=c8405b',
+            'Remote repo-incoming-name current=None staging=a513af desired=None',
+            'Remote repo-partial-name current=418ef1 staging=418ef1 desired=418ef1',
             'DONE'], res.splitlines())
 
         res = await hoard_cmd.backups.health()
