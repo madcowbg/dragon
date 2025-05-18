@@ -5,7 +5,7 @@ from typing import Dict
 from command.fast_path import FastPosixPath
 from config import HoardConfig
 from contents.hoard import HoardContents, HoardFSObjects
-from contents.hoard_props import HoardFileStatus
+from contents.hoard_props import HoardFileStatus, compute_status
 from contents.repo import RepoContents
 from contents.repo_props import FileDesc
 from lmdb_storage.file_object import FileObject
@@ -78,27 +78,6 @@ def sync_object_storage_to_recreate_fsobject_and_fspresence(
                 FastPosixPath(path),
                 FileDesc(file_object.size, file_object.fasthash, None),  # fixme add md5
                 status)
-
-
-def compute_status(
-        hoard_sub_id: ObjectID | None, sub_id_in_remote_current: ObjectID | None,
-        sub_id_in_remote_desired: ObjectID | None) -> HoardFileStatus | None:
-    if hoard_sub_id is None:  # is a deleted file
-        return HoardFileStatus.CLEANUP
-    elif sub_id_in_remote_current is not None:  # file is in current
-        if sub_id_in_remote_desired is not None:
-            if sub_id_in_remote_desired == sub_id_in_remote_current:
-                return HoardFileStatus.AVAILABLE
-            else:
-                return HoardFileStatus.GET
-        else:
-            return HoardFileStatus.CLEANUP
-
-    else:
-        if sub_id_in_remote_desired is not None:
-            return HoardFileStatus.GET
-        else:
-            return None  # file not desired and not current
 
 
 def copy_local_staging_to_hoard(hoard: HoardContents, local: RepoContents, config: HoardConfig) -> None:

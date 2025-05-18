@@ -44,6 +44,9 @@ class HoardContentsConfig:
         self.doc["updated"] = datetime.now().isoformat()
         self.write()
 
+    def remote_uuids(self) -> List[str]:
+        return list(self.doc.get("remotes", dict()).keys())
+
     def _remote_config(self, remote_uuid: str) -> Dict[str, Any]:
         if "remotes" not in self.doc:
             self.doc["remotes"] = {}
@@ -200,7 +203,7 @@ class ReadonlyHoardFSObjects:
     def _read_as_path_to_props(self, cursor, row) -> Tuple[FastPosixPath, HoardFileProps]:
         fullpath, fsobject_id, isdir, size, fasthash = row
         assert isdir == False
-        return FastPosixPath(fullpath), HoardFileProps(self.parent, fsobject_id, size, fasthash)
+        return FastPosixPath(fullpath), HoardFileProps(self.parent, FastPosixPath(fullpath), fsobject_id, size, fasthash)
 
     def __getitem__(self, file_path: FastPosixPath) -> HoardFileProps:
         assert file_path.is_absolute()
@@ -330,7 +333,7 @@ class ReadonlyHoardFSObjects:
                 "WHERE fspresence.uuid = ? and fspresence.status in (?, ?, ?) AND isdir = FALSE ",
                 (repo_uuid, *STATUSES_TO_FETCH)):
             assert not isdir
-            yield fullpath, HoardFileProps(self.parent, fsobject_id, size, fasthash)
+            yield fullpath, HoardFileProps(self.parent, fullpath, fsobject_id, size, fasthash)
 
     def to_cleanup(self, repo_uuid: str) -> Generator[Tuple[FastPosixPath, HoardFileProps], None, None]:
         for fsobject_id, fullpath, isdir, size, fasthash in self.parent.conn.execute(
@@ -339,7 +342,7 @@ class ReadonlyHoardFSObjects:
                 "WHERE fspresence.uuid = ? AND fspresence.status = ? AND isdir = FALSE ",
                 (repo_uuid, HoardFileStatus.CLEANUP.value)):
             assert not isdir
-            yield FastPosixPath(fullpath), HoardFileProps(self.parent, fsobject_id, size, fasthash)
+            yield FastPosixPath(fullpath), HoardFileProps(self.parent, FastPosixPath(fullpath), fsobject_id, size, fasthash)
 
     def where_to_move(self, remote: str, hoard_file: FastPosixPath) -> List[str]:
         assert hoard_file.is_absolute()
