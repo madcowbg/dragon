@@ -532,19 +532,18 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             remote_path=join(self.tmpdir.name, "new-contents"), name="repo-new-contents-name",
             mount_point="/wat", type=CaveType.PARTIAL, fetch_new=True)
 
-        res = await hoard_cmd.contents.status()
-        self.assertEqual(
+        res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
+        self.assertEqual((
             'Root: f9bfc2be6cc201aa81b733b9d83c1030cc88bffe\n'
-            "|Num Files                |             updated|     max|total     |available |get       |\n"
-            "|repo-backup-name         |               never|   3.5TB|         2|          |         2|\n"
-            "|repo-full-name           |               never|   3.5TB|         2|          |         2|\n"
-            "|repo-partial-name        |                 now|   3.5TB|         2|         2|          |\n"
-            "\n"
-            "|Size                     |             updated|     max|total     |available |get       |\n"
-            "|repo-backup-name         |               never|   3.5TB|        14|          |        14|\n"
-            "|repo-full-name           |               never|   3.5TB|        14|          |        14|\n"
-            "|repo-partial-name        |                 now|   3.5TB|        14|        14|          |\n"
-            "", res)
+            '|Num Files                |total     |available |get       |\n'
+            '|repo-backup-name         |         2|          |         2|\n'
+            '|repo-full-name           |         2|          |         2|\n'
+            '|repo-partial-name        |         2|         2|          |\n'
+            '\n'
+            '|Size                     |total     |available |get       |\n'
+            '|repo-backup-name         |        14|          |        14|\n'
+            '|repo-full-name           |        14|          |        14|\n'
+            '|repo-partial-name        |        14|        14|          |\n'), res)
 
         # refresh new contents file
         res = await hoard_cmd.contents.pull(new_content_cmd.current_uuid())
