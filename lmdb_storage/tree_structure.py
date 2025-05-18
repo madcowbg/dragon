@@ -233,7 +233,7 @@ def add_file_object[F](objects: Objects[F], tree_id: ObjectID | None, filepath: 
     return add_object(objects, tree_id, filepath, file.file_id)
 
 
-def add_object[F](objects: Objects[F], tree_id: ObjectID | None, path: ObjPath, obj_id: ObjectID) -> ObjectID:
+def add_object[F](objects: Objects[F], tree_id: ObjectID | None, path: ObjPath, obj_id: ObjectID) -> ObjectID | None:
     if len(path) == 0:  # is here
         return obj_id
 
@@ -242,7 +242,16 @@ def add_object[F](objects: Objects[F], tree_id: ObjectID | None, path: ObjPath, 
 
     sub_name = path[0]
     assert sub_name != ''
-    tree_obj.children[sub_name] = add_object(objects, tree_obj.children.get(sub_name, None), path[1:], obj_id)
+    new_child_id = add_object(objects, tree_obj.children.get(sub_name, None), path[1:], obj_id)
+
+    if new_child_id is None:
+        if sub_name in tree_obj.children:
+            del tree_obj.children[sub_name]
+    else:
+        tree_obj.children[sub_name] = new_child_id
+
+    if len(tree_obj.children) == 0:
+        return None
 
     new_tree_id = tree_obj.id
     if new_tree_id != tree_id:

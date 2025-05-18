@@ -73,7 +73,7 @@ class Root:
 
     @staging.setter
     def staging(self, root_id: bytes):
-        assert type(root_id) is bytes
+        assert type(root_id) is bytes or root_id is None
         with self.roots.storage.objects(write=False) as objects:
             assert root_id is None or objects[root_id] is not None
 

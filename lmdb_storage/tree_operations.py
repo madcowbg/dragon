@@ -74,3 +74,7 @@ def package_existing_as_tree_object(objects: Objects, child_name: str, new_child
         new_obj = TreeObject({child_name: new_child_id})
         objects[new_obj.id] = new_obj
         return new_obj.id
+
+
+def remove_child(objects: Objects, path: List[str], root_id: ObjectID | None) -> ObjectID | None:
+    return graft_in_tree(objects, root_id, path, None)
