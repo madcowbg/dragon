@@ -676,28 +676,6 @@ class HoardCommandContents:
                 out.write("DONE")
                 return out.getvalue()
 
-    async def copy(self, from_path: str, to_path: str):
-        assert custom_isabs(from_path), f"From path {from_path} must be absolute path."
-        assert custom_isabs(to_path), f"To path {to_path} must be absolute path."
-
-        print(f"Marking files for copy {from_path} to {to_path}...")
-        async with self.hoard.open_contents(create_missing=False).writeable() as hoard:
-            with StringIO() as out:
-                with alive_bar(len(hoard.fsobjects)) as bar:
-                    for hoard_path, _ in hoard.fsobjects:
-                        if not hoard_path.is_relative_to(from_path):
-                            print(f"Skip copying {hoard_path} as is not in {from_path}...")
-                            continue
-                        # file or dir is to be copied
-                        relpath = hoard_path.relative_to(from_path)
-                        to_fullpath = FastPosixPath(to_path).joinpath(relpath)
-                        logging.info(f"Copying {hoard_path} to {to_fullpath}")
-
-                        hoard.fsobjects.copy(hoard_path, to_fullpath)
-                        out.write(f"c+ {to_fullpath.as_posix()}\n")
-                out.write("DONE")
-                return out.getvalue()
-
     async def drop(self, repo: str, path: str):
         return await self._run_op(repo, path, _execute_drop, is_readonly=False)
 

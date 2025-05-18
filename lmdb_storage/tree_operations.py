@@ -26,12 +26,9 @@ def graft_in_tree(
     if len(path) == 0:  # we are here...
         return donor_root_id
 
-    if donor_root_id is None:
-        return None  # after some drilling down we are at a missing value, so return it as missing
-
     child_name = path[0]
 
-    donor_child_obj = objects[donor_root_id]
+    donor_child_obj = objects[donor_root_id] if donor_root_id is not None else None
     donor_child_id = donor_child_obj.children.get(child_name) if isinstance(donor_child_obj, TreeObject) else None
 
     old_obj = objects[old_root_id] if old_root_id is not None else None

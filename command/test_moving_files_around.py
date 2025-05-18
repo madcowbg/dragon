@@ -117,7 +117,7 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
             'After: Hoard [8da760], repo [curr: 3a0889, stg: 3a0889, des: 8da760]',
             "Sync'ed repo-backup-name to hoard!",
             'Pulling repo-incoming-name...',
-            'Before: Hoard [8da760] <- repo [curr: 28c623, stg: 3d1726, des: a80f91]',
+            'Before: Hoard [8da760] <- repo [curr: 3d1726, stg: 3d1726, des: a80f91]',
             'REPO_FILE_TO_DELETE /test.me.4',
             'REPO_FILE_TO_DELETE /test.me.5',
             'REPO_FILE_TO_DELETE /wat/test.me.3',
@@ -189,7 +189,7 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
         self.assertEqual([
             'Status of repo-incoming-name:',
             'Hoard root: d16f79c5de630091a8b88890d3659da01e0be07f:',
-            'Repo current=28c623 staging=3d1726 desired=a80f91',
+            'Repo current=3d1726 staging=3d1726 desired=a80f91',
             'Repo root: 3d1726bd296f20d36cb9df60a0da4d4feae29248:',
             'REPO_FILE_TO_DELETE /test.me.4',
             'REPO_FILE_TO_DELETE /test.me.5',
@@ -206,7 +206,7 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.pull(incoming_cave_cmd.current_uuid())
         self.assertEqual([
             'Pulling repo-incoming-name...',
-            'Before: Hoard [d16f79] <- repo [curr: 28c623, stg: 3d1726, des: a80f91]',
+            'Before: Hoard [d16f79] <- repo [curr: 3d1726, stg: 3d1726, des: a80f91]',
             'REPO_FILE_TO_DELETE /test.me.4',
             'REPO_FILE_TO_DELETE /test.me.5',
             'REPO_FILE_TO_DELETE /wat/test.me.3',
@@ -248,7 +248,7 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
         self.assertEqual([
             'Status of repo-incoming-name:',
             'Hoard root: ea749cf79b306a27fab649f8c8234e3a968c1529:',
-            'Repo current=28c623 staging=3d1726 desired=a80f91',
+            'Repo current=3d1726 staging=3d1726 desired=a80f91',
             'Repo root: 3d1726bd296f20d36cb9df60a0da4d4feae29248:',
             'REPO_FILE_TO_DELETE /test.me.4',
             'REPO_FILE_TO_DELETE /test.me.5',
@@ -265,7 +265,7 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.pull(incoming_cave_cmd.current_uuid())
         self.assertEqual([
             'Pulling repo-incoming-name...',
-            'Before: Hoard [ea749c] <- repo [curr: 28c623, stg: 3d1726, des: a80f91]',
+            'Before: Hoard [ea749c] <- repo [curr: 3d1726, stg: 3d1726, des: a80f91]',
             'REPO_FILE_TO_DELETE /test.me.4',
             'REPO_FILE_TO_DELETE /test.me.5',
             'REPO_FILE_TO_DELETE /wat/test.me.3',

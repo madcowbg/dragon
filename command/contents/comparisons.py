@@ -74,7 +74,7 @@ async def sync_fsobject_to_object_storage(
                     f"desired tree wrong - {remote.name}: old={safe_hex(root.desired)} new={safe_hex(remote_desired_id)}\n{dump_tree_diffs(env, root, remote_current_id)}")
             # assert root.desired is None, f"{remote.name}: {safe_hex(remote_desired_id)} is not desired, desired={safe_hex(root.desired)}"
 
-        root.current = remote_current_id
+        # fixme fully delete root.current = remote_current_id
         root.desired = remote_desired_id
 
     env.roots(write=True)["HOARD"].desired = current_root_id

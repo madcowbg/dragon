@@ -187,8 +187,8 @@ class TestBackups(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.ls()
         self.assertEqual((
             'Root: c8405b542a1e9b691f8e2be70d1bd387e54d530d\n'
-            'Remote repo-full-name current=94524f staging=94524f desired=c8405b\n'
-            'Remote repo-incoming-name current=a513af staging=a513af desired=a80f91\n'
+            'Remote repo-full-name current=c8405b staging=94524f desired=c8405b\n'
+            'Remote repo-incoming-name current=None staging=a513af desired=a80f91\n'
             'Remote repo-partial-name current=418ef1 staging=418ef1 desired=418ef1\n'
             '/\n'
             '/test.me.1 = a:2\n'
