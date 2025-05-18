@@ -11,7 +11,7 @@ from contents.repo_props import FileDesc
 from lmdb_storage.file_object import FileObject
 from lmdb_storage.object_store import ObjectStorage
 from lmdb_storage.tree_iteration import zip_trees_dfs
-from lmdb_storage.tree_structure import TreeObject, add_object
+from lmdb_storage.tree_structure import TreeObject, add_object, ObjectID
 
 
 def sync_object_storage_to_recreate_fsobject_and_fspresence(
@@ -60,7 +60,6 @@ def sync_object_storage_to_recreate_fsobject_and_fspresence(
             assert isinstance(file_object, FileObject)
 
             hoard_sub_id = sub_ids[-1]
-            should_exist = hoard_sub_id is not None
 
             status: Dict[str, HoardFileStatus] = dict()
             for remote, sub_id_in_remote_current, sub_id_in_remote_desired \
@@ -70,27 +69,36 @@ def sync_object_storage_to_recreate_fsobject_and_fspresence(
                 assert sub_id_in_remote_desired is None or sub_id_in_remote_desired == only_desired_file_id, \
                     f"bad - file is not the same?! {only_desired_file_id} != {sub_id_in_remote_desired}"
 
-                if not should_exist:
-                    status[remote.uuid] = HoardFileStatus.CLEANUP
-                elif sub_id_in_remote_current is not None:  # file is in current
-                    if sub_id_in_remote_desired is not None:
-                        if sub_id_in_remote_desired == sub_id_in_remote_current:
-                            status[remote.uuid] = HoardFileStatus.AVAILABLE
-                        else:
-                            status[remote.uuid] = HoardFileStatus.GET
-                    else:
-                        status[remote.uuid] = HoardFileStatus.CLEANUP
-
-                else:
-                    if sub_id_in_remote_desired is not None:
-                        status[remote.uuid] = HoardFileStatus.GET
-                    else:
-                        pass  # file not desired and not current
+                remote_uuid = remote.uuid
+                computed_status = compute_status(hoard_sub_id, sub_id_in_remote_current, sub_id_in_remote_desired)
+                if computed_status is not None:
+                    status[remote.uuid] = computed_status
 
             fsobjects.HACK_set_file_information(
                 FastPosixPath(path),
                 FileDesc(file_object.size, file_object.fasthash, None),  # fixme add md5
                 status)
+
+
+def compute_status(
+        hoard_sub_id: ObjectID | None, sub_id_in_remote_current: ObjectID | None,
+        sub_id_in_remote_desired: ObjectID | None) -> HoardFileStatus | None:
+    if hoard_sub_id is None:  # is a deleted file
+        return HoardFileStatus.CLEANUP
+    elif sub_id_in_remote_current is not None:  # file is in current
+        if sub_id_in_remote_desired is not None:
+            if sub_id_in_remote_desired == sub_id_in_remote_current:
+                return HoardFileStatus.AVAILABLE
+            else:
+                return HoardFileStatus.GET
+        else:
+            return HoardFileStatus.CLEANUP
+
+    else:
+        if sub_id_in_remote_desired is not None:
+            return HoardFileStatus.GET
+        else:
+            return None  # file not desired and not current
 
 
 def copy_local_staging_to_hoard(hoard: HoardContents, local: RepoContents, config: HoardConfig) -> None:
