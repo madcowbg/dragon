@@ -92,11 +92,6 @@ class HoardFileProps:
             f"WHERE fsobject_id = ? AND status IN ({', '.join('?' * len(statuses))})",
             (self.fsobject_id, *(s.value for s in statuses))).fetchall()
 
-    def set_to_move_from_local(self, repo_uuid: str, old_hoard_file: str):
-        self.parent.conn.execute(
-            "INSERT OR REPLACE INTO fspresence (fsobject_id, uuid, status, move_from) VALUES (?, ?, ?, ?)",
-            (self.fsobject_id, repo_uuid, HoardFileStatus.MOVE.value, old_hoard_file))
-
     def get_move_file(self, repo_uuid: str) -> str:
         curr = self.parent.conn.cursor()
         curr.row_factory = FIRST_VALUE

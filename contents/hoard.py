@@ -244,15 +244,6 @@ class ReadonlyHoardFSObjects:
         yield from curr.execute(
             "SELECT fullpath, fsobject_id, isdir, size, fasthash FROM fsobject WHERE isdir = FALSE ")
 
-    @property
-    def dangling_files(self) -> Iterable[Tuple[FastPosixPath, HoardFileProps]]:
-        curr = self.parent.conn.cursor()
-        curr.row_factory = self._read_as_path_to_props
-        yield from curr.execute(
-            "SELECT fullpath, fsobject_id, isdir, size, fasthash FROM fsobject "
-            "WHERE isdir = FALSE AND "
-            "  NOT EXISTS (SELECT 1 FROM fspresence WHERE fspresence.fsobject_id = fsobject.fsobject_id)")
-
     def with_pending(self, repo_uuid: str) -> Iterable[Tuple[FastPosixPath, HoardFileProps]]:
         curr = self.parent.conn.cursor()
         curr.row_factory = self._read_as_path_to_props
@@ -323,11 +314,6 @@ class ReadonlyHoardFSObjects:
                 "      AND status != ?)",
                 (f"{folder_with_trailing}%", folder, HoardFileStatus.CLEANUP.value)):
             yield fp
-
-    def str_to_props(self) -> Iterable[Tuple[str, bool]]:
-        curr = self.parent.conn.cursor()
-
-        return curr.execute("SELECT fullpath, isdir FROM fsobject ").fetchall()
 
     def status_by_uuid(self, folder_path: FastPosixPath | None) -> Dict[str, Dict[str, Dict[str, Any]]]:
         if folder_path is not None:
@@ -459,17 +445,6 @@ class HoardFSObjects(ReadonlyHoardFSObjects):
             "SELECT fsobject_id FROM fsobject WHERE fullpath = ?", (filepath.as_posix(),)).fetchone()
         curr.execute("DELETE FROM fspresence WHERE fsobject_id = ?", (fsobject_id,))
         return HoardFileProps(self.parent, fsobject_id, props.size, props.fasthash)
-
-    def delete(self, curr_path: FastPosixPath):
-        assert curr_path.is_absolute()
-
-        curr = self._first_value_curr()
-        fsobject_id: Optional[int] = curr.execute(
-            "SELECT fsobject_id FROM fsobject WHERE fullpath = ?", (curr_path.as_posix(),)).fetchone()
-        if fsobject_id is None:
-            return
-        curr.execute("DELETE FROM fspresence WHERE fsobject_id = ?", (fsobject_id,))
-        curr.execute("DELETE FROM fsobject WHERE fsobject_id = ?", (fsobject_id,))
 
 
 class Query:
