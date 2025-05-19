@@ -1,9 +1,9 @@
 from typing import List
 
-from lmdb_storage.merge_trees import ByRoot
+from lmdb_storage.operations.util import ByRoot
 from lmdb_storage.object_store import ObjectStorage
 from lmdb_storage.roots import Root
-from lmdb_storage.three_way_merge import ThreewayMerge, MergePreferences, NaiveMergePreferences
+from lmdb_storage.operations.three_way_merge import ThreewayMerge, MergePreferences, NaiveMergePreferences
 from lmdb_storage.tree_structure import ObjectID
 
 
@@ -51,7 +51,7 @@ def merge_contents(
         merged_ids = ThreewayMerge(
             objects, current_id=repo_current_id, staging_id=repo_staging_id, repo_name=repo_root.name,
             roots_to_merge=all_root_names, merge_prefs=merge_prefs) \
-            .merge_trees(current_ids)
+            .execute(current_ids)
 
     return merged_ids
 

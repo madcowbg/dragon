@@ -18,7 +18,7 @@ from propcache import cached_property
 #  Type.TREE, Dict[obj name to object_id]
 
 type ObjectID = bytes
-
+type MaybeObjectID = Union[ObjectID, None]
 
 class ObjectType(enum.Enum):
     TREE = 1

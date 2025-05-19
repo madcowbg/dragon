@@ -13,7 +13,6 @@ from command.contents.pull_preferences import PullPreferences, PullIntention
 from command.fast_path import FastPosixPath
 from command.hoard import Hoard
 from command.pathing import HoardPathing
-from command.pending_file_ops import GetFile, CopyFile, CleanupFile, get_pending_operations
 from command.tree_operations import remove_from_desired_tree
 from config import CaveType, HoardRemote, HoardConfig, HoardRemotes
 from contents.hoard import HoardContents, HoardFile, HoardDir
@@ -22,10 +21,10 @@ from contents.repo import RepoContents
 from contents.repo_props import FileDesc
 from exceptions import MissingRepoContents
 from lmdb_storage.file_object import FileObject
-from lmdb_storage.merge_trees import ByRoot
+from lmdb_storage.operations.util import ByRoot
 from lmdb_storage.pull_contents import merge_contents, commit_merged
 from lmdb_storage.roots import Root, Roots
-from lmdb_storage.three_way_merge import MergePreferences
+from lmdb_storage.operations.three_way_merge import MergePreferences
 from lmdb_storage.tree_iteration import zip_trees_dfs
 from lmdb_storage.tree_operations import get_child, graft_in_tree
 from lmdb_storage.tree_structure import Objects, ObjectID, TreeObject

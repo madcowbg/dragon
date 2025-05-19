@@ -1,10 +1,11 @@
 import abc
 import dataclasses
 from types import NoneType
-from typing import List, Collection, Tuple
+from typing import List, Collection
 
 from lmdb_storage.file_object import FileObject
-from lmdb_storage.merge_trees import Merge, ByRoot, MergeResult, SeparateRootsMergeResult
+from lmdb_storage.operations.types import Transformation
+from lmdb_storage.operations.util import ByRoot, MergeResult, SeparateRootsMergeResult
 from lmdb_storage.tree_structure import Objects, TreeObject, ObjectID
 
 
@@ -83,7 +84,7 @@ class ThreewayMergeState:
     staging: FileObject | TreeObject | None
 
 
-class ThreewayMerge(Merge[FileObject, ThreewayMergeState, ByRoot[ObjectID]]):
+class ThreewayMerge(Transformation[FileObject, ThreewayMergeState, ByRoot[ObjectID]]):
     def object_or_none(self, object_id: ObjectID) -> FileObject | TreeObject | None:
         return self.objects[object_id] if object_id is not None else None
 
@@ -116,11 +117,11 @@ class ThreewayMerge(Merge[FileObject, ThreewayMergeState, ByRoot[ObjectID]]):
 
         self.allowed_roots = None  # fixme pass as argument maybe
 
-    def merge_trees(self, obj_ids: ByRoot[ObjectID]) -> ByRoot[ObjectID]:
+    def execute(self, obj_ids: ByRoot[ObjectID]) -> ByRoot[ObjectID]:
         assert self.allowed_roots is None
         self.allowed_roots = obj_ids.allowed_roots
         try:
-            return super().merge_trees(obj_ids)
+            return super().execute(obj_ids)
         finally:
             self.allowed_roots = None
 

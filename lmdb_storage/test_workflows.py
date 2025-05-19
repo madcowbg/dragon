@@ -5,7 +5,7 @@ from tempfile import TemporaryDirectory
 from lmdb_storage.pull_contents import pull_contents
 from lmdb_storage.test_experiment_lmdb import dump_tree
 from lmdb_storage.test_merge_trees import populate_trees
-from lmdb_storage.three_way_merge import NaiveMergePreferences
+from lmdb_storage.operations.three_way_merge import NaiveMergePreferences
 from lmdb_storage.tree_structure import remove_file_object
 from util import safe_hex
 

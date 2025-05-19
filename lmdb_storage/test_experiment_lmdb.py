@@ -3,7 +3,8 @@ import logging
 import pathlib
 import shutil
 import unittest
-from typing import List, Iterable
+from io import StringIO
+from typing import List, Iterable, TextIO
 from unittest.async_case import IsolatedAsyncioTestCase
 
 import msgpack
@@ -13,9 +14,11 @@ from command.test_command_file_changing_flows import populate
 from command.test_hoard_command import populate_repotypes, init_complex_hoard
 from contents.hoard_props import HoardFileStatus
 from lmdb_storage.object_store import ObjectStorage
+from lmdb_storage.operations.types import Procedure
+from lmdb_storage.operations.util import ByRoot, ObjectsByRoot
 from lmdb_storage.tree_iteration import dfs, zip_dfs
 from lmdb_storage.tree_structure import ExpandableTreeObject, add_file_object, Objects, remove_file_object, ObjectType, \
-    ObjectID
+    ObjectID, TreeObject, MaybeObjectID
 from lmdb_storage.file_object import FileObject
 from sql_util import sqlite3_standard
 from util import FIRST_VALUE
@@ -307,6 +310,14 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
                 ('$ROOT/wat/is', 1),
                 ('$ROOT/wat/is/dis.isit', 2)], dump_tree(objects, tree_id))
 
+            self.assertEqual(
+                'Root\n'
+                '┖wat\n'
+                '┃┖is\n'
+                '┃┃┖dis.isit\n'
+                '┃┖da\n'
+                '┃┃┖another.isit', PrettyPrint.as_str(objects, tree_id))
+
             tree_id = remove_file_object(objects, tree_id, "wat/is/dis.isit".split("/"))
             self.assertEqual([
                 ('$ROOT', 1),
@@ -314,6 +325,13 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
                 ('$ROOT/wat/da', 1),
                 ('$ROOT/wat/da/another.isit', 2),
                 ('$ROOT/wat/is', 1)], dump_tree(objects, tree_id))
+
+            self.assertEqual(
+                'Root\n'
+                '┖wat\n'
+                '┃┖is\n'
+                '┃┖da\n'
+                '┃┃┖another.isit', PrettyPrint.as_str(objects, tree_id))
 
         objs.gc()
 
@@ -364,6 +382,27 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
                 raise "should have thrown exception"
             except ValueError:
                 pass
+
+
+class PrettyPrint(Procedure[FileObject]):
+    def __init__(self, objects: Objects[FileObject]):
+        self.objects = objects
+        self.out: List[str] = []
+
+    def run_on_level(self, state: List[str], original: ByRoot[TreeObject | FileObject]):
+        if len(state) == 0:
+            self.out.append("Root")
+        else:
+            self.out.append("┃" * (len(state) - 1) + "┖" + state[-1])
+
+    def should_drill_down_more(self, state: List[str], trees: ByRoot[TreeObject], files: ByRoot[FileObject]) -> bool:
+        return True
+
+    @staticmethod
+    def as_str(objects: Objects[FileObject], root_id: MaybeObjectID) -> str:
+        pp = PrettyPrint(objects)
+        pp.execute(ObjectsByRoot.singleton("root", root_id))
+        return "\n".join(reversed(pp.out))
 
 
 if __name__ == '__main__':
