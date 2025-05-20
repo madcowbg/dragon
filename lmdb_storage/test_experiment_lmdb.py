@@ -63,45 +63,7 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
 
         await hoard_cmd.contents.pull(all=True)
 
-        env = ObjectStorage(self.obj_storage_path)
-        path = rf"{hoard_cmd.hoard.hoardpath}\hoard.contents"
-        is_readonly = True
-
-        with sqlite3_standard(f"file:{path}{'?mode=ro' if is_readonly else ''}", uri=True) as conn:
-            def create_file_tuple(cursor, row):
-                fullpath, fasthash, size = row
-                return fullpath, FileObject.create(fasthash, size)
-
-            curr = conn.cursor()
-            curr.row_factory = create_file_tuple
-
-            all_data = list(alive_it(
-                curr.execute("SELECT fullpath, fasthash, size FROM fsobject ORDER BY fullpath"),
-                title="loading from sqlite"))
-
-            with env.objects(write=True) as objects:
-                root_id = objects.mktree_from_tuples(all_data)
-
-            env.roots(write=True)["HOARD"].desired = root_id
-
-            all_repos = _list_uuids(conn)
-            logging.info("# repos: {}".format(len(all_repos)))
-
-            for uuid in all_repos:
-                per_uuid_data = curr.execute(
-                    "SELECT fullpath, fasthash, size FROM fsobject "
-                    "WHERE EXISTS ("
-                    "  SELECT 1 FROM fspresence "
-                    "  WHERE fsobject.fsobject_id == fspresence.fsobject_id AND uuid = ? AND status = ?)"
-                    "ORDER BY fullpath",
-                    (uuid, HoardFileStatus.AVAILABLE.value))
-
-                uuid_data = list(alive_it(per_uuid_data, title=f"Loading for uuid {uuid}"))
-
-                with env.objects(write=True) as objects:
-                    uuid_root_id = objects.mktree_from_tuples(uuid_data)
-
-                env.roots(write=True)[uuid].current = uuid_root_id
+        shutil.copytree(rf"{hoard_cmd.hoard.hoardpath}\hoard.contents.lmdb", self.obj_storage_path, dirs_exist_ok=True)
 
     def test_fully_load_lmdb(self):
         env = ObjectStorage(self.obj_storage_path)  # , map_size=(1 << 30) // 4)
@@ -192,9 +154,13 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
                 ('', 'right_missing'),
                 ('/newdir', 'right_missing'),
                 ('/newdir/new.file', 'right_missing'),
+                ('/test.me.1', 'right_missing'),
+                ('/test.me.4', 'right_missing'),
                 ('/wat', 'right_missing'),
                 ('/wat/lat', 'right_missing'),
-                ('/wat/lat/new.file', 'right_missing')], diffs)
+                ('/wat/lat/new.file', 'right_missing'),
+                ('/wat/test.me.2', 'right_missing'),
+                ('/wat/test.me.3', 'right_missing')], diffs)
 
             diffs = [
                 (path, diff_type.value)
@@ -203,9 +169,13 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
             self.assertEqual([
                 ('', 'different'),
                 ('/newdir', 'same'),
-                ('/wat', 'right_missing'),
+                ('/test.me.1', 'same'),
+                ('/test.me.4', 'same'),
+                ('/wat', 'different'),
                 ('/wat/lat', 'right_missing'),
-                ('/wat/lat/new.file', 'right_missing')], diffs)
+                ('/wat/lat/new.file', 'right_missing'),
+                ('/wat/test.me.2', 'same'),
+                ('/wat/test.me.3', 'same')], diffs)
 
             diffs = [
                 (path, diff_type.value)
@@ -215,18 +185,26 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
                 ('', 'different'),
                 ('/newdir', 'same'),
                 ('/newdir/new.file', 'same'),
-                ('/wat', 'right_missing'),
+                ('/test.me.1', 'same'),
+                ('/test.me.4', 'same'),
+                ('/wat', 'different'),
                 ('/wat/lat', 'right_missing'),
-                ('/wat/lat/new.file', 'right_missing')], diffs)
+                ('/wat/lat/new.file', 'right_missing'),
+                ('/wat/test.me.2', 'same'),
+                ('/wat/test.me.3', 'same')], diffs)
 
             diffs = dump_diffs(objects, left_id, right_id)
             self.assertEqual([
                 ('', 'different'),
                 ('/newdir', 'right_missing'),
                 ('/newdir/new.file', 'right_missing'),
+                ('/test.me.1', 'same'),
+                ('/test.me.4', 'right_missing'),
                 ('/wat', 'different'),
                 ('/wat/lat', 'right_missing'),
                 ('/wat/lat/new.file', 'right_missing'),
+                ('/wat/test.me.2', 'same'),
+                ('/wat/test.me.3', 'right_missing'),
                 ('/wat/zat', 'left_missing'),
                 ('/wat/zat/new.file', 'left_missing')], diffs)
 
@@ -238,9 +216,13 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
                 ('', 'different'),
                 ('/newdir', 'left_missing'),
                 ('/newdir/new.file', 'left_missing'),
+                ('/test.me.1', 'same'),
+                ('/test.me.4', 'left_missing'),
                 ('/wat', 'different'),
                 ('/wat/lat', 'left_missing'),
                 ('/wat/lat/new.file', 'left_missing'),
+                ('/wat/test.me.2', 'same'),
+                ('/wat/test.me.3', 'left_missing'),
                 ('/wat/zat', 'right_missing'),
                 ('/wat/zat/new.file', 'right_missing')], diffs)
 
@@ -348,9 +330,16 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
         root_ids = env.roots(write=False).all_live
         self.assertEqual([
             b'1ad9e0f92a8411689b1aee57f9ccf36c1f09a1ad',
+            b'1ad9e0f92a8411689b1aee57f9ccf36c1f09a1ad',
+            b'1ad9e0f92a8411689b1aee57f9ccf36c1f09a1ad',
             b'3a0889e00c0c4ace24843be76d59b3baefb16d77',
+            b'3a0889e00c0c4ace24843be76d59b3baefb16d77',
+            b'3a0889e00c0c4ace24843be76d59b3baefb16d77',
+            b'3d1726bd296f20d36cb9df60a0da4d4feae29248',
+            b'3d1726bd296f20d36cb9df60a0da4d4feae29248',
             b'8da76083b9eab9f49945d8f2487df38ab909b7df',
-            b'a80f91bc48850a1fb3459bb76b9f6308d4d35710',
+            b'f9bfc2be6cc201aa81b733b9d83c1030cc88bffe',
+            b'f9bfc2be6cc201aa81b733b9d83c1030cc88bffe',
             b'f9bfc2be6cc201aa81b733b9d83c1030cc88bffe'], [binascii.hexlify(r) for r in root_ids])
 
         with env.objects(write=False) as objects:
@@ -428,7 +417,8 @@ class PrettyPrintGenerator(TreeGenerator[FileObject, str]):
 
     @staticmethod
     def as_str(objects: Objects[FileObject], root_id: MaybeObjectID) -> str:
-        return "\n".join(reversed(list(PrettyPrintGenerator(objects).execute(ObjectsByRoot.singleton("root", root_id)))))
+        return "\n".join(
+            reversed(list(PrettyPrintGenerator(objects).execute(ObjectsByRoot.singleton("root", root_id)))))
 
 
 if __name__ == '__main__':

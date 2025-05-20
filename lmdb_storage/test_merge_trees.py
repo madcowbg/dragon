@@ -73,9 +73,16 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
         root_ids = sorted(env.roots(write=False).all_live)
         self.assertEqual([
             b'1ad9e0f92a8411689b1aee57f9ccf36c1f09a1ad',
+            b'1ad9e0f92a8411689b1aee57f9ccf36c1f09a1ad',
+            b'1ad9e0f92a8411689b1aee57f9ccf36c1f09a1ad',
             b'3a0889e00c0c4ace24843be76d59b3baefb16d77',
+            b'3a0889e00c0c4ace24843be76d59b3baefb16d77',
+            b'3a0889e00c0c4ace24843be76d59b3baefb16d77',
+            b'3d1726bd296f20d36cb9df60a0da4d4feae29248',
+            b'3d1726bd296f20d36cb9df60a0da4d4feae29248',
             b'8da76083b9eab9f49945d8f2487df38ab909b7df',
-            b'a80f91bc48850a1fb3459bb76b9f6308d4d35710',
+            b'f9bfc2be6cc201aa81b733b9d83c1030cc88bffe',
+            b'f9bfc2be6cc201aa81b733b9d83c1030cc88bffe',
             b'f9bfc2be6cc201aa81b733b9d83c1030cc88bffe'], [binascii.hexlify(r) for r in root_ids])
 
         root_left_id = binascii.unhexlify(b'f9bfc2be6cc201aa81b733b9d83c1030cc88bffe')
