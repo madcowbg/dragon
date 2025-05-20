@@ -21,7 +21,8 @@ from lmdb_storage.operations.types import Procedure, TreeGenerator
 from lmdb_storage.operations.util import ByRoot
 from lmdb_storage.roots import Root
 from lmdb_storage.tree_iteration import zip_trees_dfs
-from lmdb_storage.tree_structure import TreeObject, Objects
+from lmdb_storage.tree_operations import get_child
+from lmdb_storage.tree_structure import TreeObject, Objects, MaybeObjectID
 from sql_util import SubfolderFilter, NoFilter, sqlite3_standard
 from util import FIRST_VALUE, custom_isabs
 
@@ -222,15 +223,7 @@ class HoardFilesIterator(TreeGenerator[FileObject, Tuple[str, HoardFileProps]]):
 
     @staticmethod
     def all(parent: "HoardContents") -> Iterable[Tuple[FastPosixPath, HoardFileProps]]:
-        roots = parent.env.roots(write=False)
-        hoard_root = roots["HOARD"].desired
-        all_roots = roots.all_roots
-
-        with roots:
-            root_data = [r.load_from_storage for r in all_roots]
-        root_ids = sum(
-            [[data.current, data.desired] for data in root_data],  # fixme should only iterate over desired files
-            [])
+        hoard_root, root_ids = find_roots(parent)
 
         obj_ids = ByRoot(
             [str(i) for i in range(len(root_ids))] + ["HOARD"],
@@ -238,6 +231,36 @@ class HoardFilesIterator(TreeGenerator[FileObject, Tuple[str, HoardFileProps]]):
 
         with parent.env.objects(write=False) as objects:
             yield from list(HoardFilesIterator(objects, parent).execute(obj_ids=obj_ids))
+
+
+def find_roots(parent: "HoardContents") -> (MaybeObjectID, List[MaybeObjectID]):
+    roots = parent.env.roots(write=False)
+    hoard_root = roots["HOARD"].desired
+    all_roots = roots.all_roots
+    with roots:
+        root_data = [r.load_from_storage for r in all_roots]
+    root_ids = sum(
+        [[data.current, data.desired] for data in root_data],  # fixme should only iterate over desired files
+        [])
+    return hoard_root, root_ids
+
+
+def hoard_file_props_from_tree(parent, file_path: FastPosixPath) -> HoardFileProps:
+    hoard_root, root_ids = find_roots(parent)
+    with parent.env.objects(write=False) as objects:
+        hoard_child_id = get_child(objects, file_path._rem, hoard_root)
+        file_obj = objects[hoard_child_id] if hoard_child_id is not None else None
+        if file_obj is not None:
+            return HoardFileProps(parent, file_path, file_obj.size, file_obj.fasthash)
+
+        # fixme this is the legacy case where we iterate over current but not desired files. remove!
+        for root_id in root_ids:
+            root_child_id = get_child(objects, file_path._rem, root_id)
+            file_obj = objects[root_child_id] if root_child_id is not None else None
+            if isinstance(file_obj, FileObject):
+                return HoardFileProps(parent, file_path, file_obj.size, file_obj.fasthash)
+
+        raise ValueError("Should not have tried getting a nonexistent file!")
 
 
 class ReadonlyHoardFSObjects:
@@ -255,14 +278,7 @@ class ReadonlyHoardFSObjects:
 
     def __getitem__(self, file_path: FastPosixPath) -> HoardFileProps:
         assert file_path.is_absolute()
-
-        curr = self.parent.conn.cursor()
-        curr.row_factory = self._read_as_path_to_props
-        return curr.execute(
-            "SELECT fullpath, fsobject_id, isdir, size, fasthash "
-            "FROM fsobject "
-            "WHERE fsobject.fullpath = ? AND isdir = FALSE ",
-            (file_path.as_posix(),)).fetchone()[1]
+        return hoard_file_props_from_tree(self.parent, file_path)
 
     def by_fasthash(self, fasthash: str) -> Iterable[Tuple[FastPosixPath, HoardFileProps]]:
         curr = self.parent.conn.cursor()
