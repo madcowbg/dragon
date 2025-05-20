@@ -1,5 +1,5 @@
 import abc
-from typing import List
+from typing import List, Iterable
 
 from lmdb_storage.file_object import FileObject
 from lmdb_storage.operations.util import ByRoot, MergeResult
@@ -77,21 +77,47 @@ class Procedure[F](Transformation[F, List[str], None]):
     @abc.abstractmethod
     def run_on_level(self, state: List[str], original: ByRoot[TreeObject | FileObject]): pass
 
-    @abc.abstractmethod
-    def should_drill_down_more(
-            self, state: List[str], trees: ByRoot[TreeObject], files: ByRoot[FileObject]) -> bool: pass
-
     def combine(self, state: List[str], merged: None, original: ByRoot[TreeObject | FileObject]) -> None:
         self.run_on_level(state, original)
-
-    def should_drill_down(self, state: List[str], trees: ByRoot[TreeObject], files: ByRoot[FileObject]) -> bool:
-        return self.should_drill_down_more(state, trees, files)
 
     def create_merge_result(self) -> MergeResult[F, None]:
         return _empty_merge_result
 
     def combine_non_drilldown(self, state: List[str], original: ByRoot[TreeObject | FileObject]) -> None:
         self.run_on_level(state, original)
+
+    def initial_state(self, obj_ids: ByRoot[ObjectID]) -> List[str]:
+        return []
+
+    def drilldown_state(self, child_name: str, merge_state: List[str]) -> List[str]:
+        return merge_state + [child_name]
+
+
+class GeneratorMergeResult[F, R](MergeResult[F, Iterable[R]]):
+    def __init__(self):
+        self._child_res_list = list()
+
+    def add_for_child(self, child_name: str, merged_child_by_roots: Iterable[R]) -> None:
+        self._child_res_list.append(merged_child_by_roots)
+
+    def get_value(self) -> Iterable[R]:
+        for child_res in self._child_res_list:
+            yield from child_res
+
+
+class TreeGenerator[F, R](Transformation[F, List[str], Iterable[R]]):
+    @abc.abstractmethod
+    def compute_on_level(self, path: List[str], original: ByRoot[TreeObject | FileObject]) -> Iterable[R]: pass
+
+    def combine(self, state: List[str], merged: Iterable[R], original: ByRoot[TreeObject | FileObject]) -> Iterable[R]:
+        yield from merged
+        yield from self.compute_on_level(state, original)
+
+    def create_merge_result(self) -> MergeResult[F, Iterable[R]]:
+        return GeneratorMergeResult()
+
+    def combine_non_drilldown(self, state: List[str], original: ByRoot[TreeObject | FileObject]) -> Iterable[R]:
+        yield from self.compute_on_level(state, original)
 
     def initial_state(self, obj_ids: ByRoot[ObjectID]) -> List[str]:
         return []

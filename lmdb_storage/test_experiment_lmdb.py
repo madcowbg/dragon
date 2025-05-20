@@ -14,7 +14,7 @@ from command.test_command_file_changing_flows import populate
 from command.test_hoard_command import populate_repotypes, init_complex_hoard
 from contents.hoard_props import HoardFileStatus
 from lmdb_storage.object_store import ObjectStorage
-from lmdb_storage.operations.types import Procedure
+from lmdb_storage.operations.types import Procedure, TreeGenerator
 from lmdb_storage.operations.util import ByRoot, ObjectsByRoot
 from lmdb_storage.tree_iteration import dfs, zip_dfs
 from lmdb_storage.tree_structure import ExpandableTreeObject, add_file_object, Objects, remove_file_object, ObjectType, \
@@ -316,7 +316,7 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
                 '┃┖is\n'
                 '┃┃┖dis.isit\n'
                 '┃┖da\n'
-                '┃┃┖another.isit', PrettyPrint.as_str(objects, tree_id))
+                '┃┃┖another.isit', PrettyPrintProcedure.as_str(objects, tree_id))
 
             tree_id = remove_file_object(objects, tree_id, "wat/is/dis.isit".split("/"))
             self.assertEqual([
@@ -331,7 +331,14 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
                 '┖wat\n'
                 '┃┖is\n'
                 '┃┖da\n'
-                '┃┃┖another.isit', PrettyPrint.as_str(objects, tree_id))
+                '┃┃┖another.isit', PrettyPrintProcedure.as_str(objects, tree_id))
+
+            self.assertEqual(
+                'Root\n'
+                '┖wat\n'
+                '┃┖is\n'
+                '┃┖da\n'
+                '┃┃┖another.isit', PrettyPrintGenerator.as_str(objects, tree_id))
 
         objs.gc()
 
@@ -384,7 +391,7 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
                 pass
 
 
-class PrettyPrint(Procedure[FileObject]):
+class PrettyPrintProcedure(Procedure[FileObject]):
     def __init__(self, objects: Objects[FileObject]):
         self.objects = objects
         self.out: List[str] = []
@@ -395,14 +402,33 @@ class PrettyPrint(Procedure[FileObject]):
         else:
             self.out.append("┃" * (len(state) - 1) + "┖" + state[-1])
 
-    def should_drill_down_more(self, state: List[str], trees: ByRoot[TreeObject], files: ByRoot[FileObject]) -> bool:
+    def should_drill_down(self, state: List[str], trees: ByRoot[TreeObject], files: ByRoot[FileObject]) -> bool:
         return True
 
     @staticmethod
     def as_str(objects: Objects[FileObject], root_id: MaybeObjectID) -> str:
-        pp = PrettyPrint(objects)
+        pp = PrettyPrintProcedure(objects)
         pp.execute(ObjectsByRoot.singleton("root", root_id))
         return "\n".join(reversed(pp.out))
+
+
+class PrettyPrintGenerator(TreeGenerator[FileObject, str]):
+    def compute_on_level(self, state: List[str], original: ByRoot[TreeObject | FileObject]) -> Iterable[str]:
+        if len(state) == 0:
+            yield "Root"
+        else:
+            yield "┃" * (len(state) - 1) + "┖" + state[-1]
+
+    def should_drill_down(self, state: List[str], trees: ByRoot[TreeObject], files: ByRoot[FileObject]) -> bool:
+        return True
+
+    def __init__(self, objects: Objects[FileObject]):
+        self.objects = objects
+        self.out: List[str] = []
+
+    @staticmethod
+    def as_str(objects: Objects[FileObject], root_id: MaybeObjectID) -> str:
+        return "\n".join(reversed(list(PrettyPrintGenerator(objects).execute(ObjectsByRoot.singleton("root", root_id)))))
 
 
 if __name__ == '__main__':
