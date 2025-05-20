@@ -212,16 +212,15 @@ class HoardCommandBackups:
 
                         out.write(f"Unassigning from {remote.name}:\n")
 
-                        async with self.hoard.open_contents(False).writeable() as hoard_contents:
-                            for hoard_file, hoard_props in hoard_contents.fsobjects.to_get_in_repo(remote.uuid):
-                                assert hoard_props.get_status(remote.uuid) == HoardFileStatus.GET
+                        for hoard_file, hoard_props in hoard.fsobjects.to_get_in_repo(remote.uuid):
+                            assert hoard_props.get_status(remote.uuid) == HoardFileStatus.GET
 
-                                remove_from_desired_tree(hoard_contents, remote.uuid, hoard_file.simple)
+                            remove_from_desired_tree(hoard, remote.uuid, hoard_file.simple)
 
-                                out.write(f"WONT_GET {hoard_file.as_posix()}\n")
+                            out.write(f"WONT_GET {hoard_file.as_posix()}\n")
 
-                            # fixme remove, just dumping
-                            sync_object_storage_to_recreate_fsobject_and_fspresence(
-                                hoard_contents.env, hoard.fsobjects, pathing._config)
+                        # fixme remove, just dumping
+                        sync_object_storage_to_recreate_fsobject_and_fspresence(
+                            hoard.env, hoard.fsobjects, pathing._config)
 
                 return out.getvalue()

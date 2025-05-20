@@ -1,4 +1,5 @@
 import logging
+import sys
 from typing import Collection
 
 import lmdb
@@ -16,6 +17,8 @@ class InconsistentObjectStorage(BaseException):
 
 class ObjectStorage:
     def __init__(self, path: str, *, map_size: int | None = None, max_dbs=5):
+        self._path = path
+        logging.info(f"### LMDB OPEN {path}\n")
         self.env = lmdb.open(path, max_dbs=max_dbs, map_size=map_size, readonly=False)
 
     def gc(self):
@@ -60,6 +63,10 @@ class ObjectStorage:
 
     def roots(self, write: bool) -> Roots:
         return Roots(self, write)
+
+    def close(self):
+        logging.info(f"### LMDB CLOSE {self._path} {self.env.info()}\n")
+        self.env.close()
 
 
 def find_all_live[F](objects: Objects[F], root_ids: Collection[ObjectID]) -> Collection[ObjectID]:

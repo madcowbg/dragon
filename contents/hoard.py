@@ -376,17 +376,12 @@ class ReadonlyHoardFSObjects:
         return curr
 
     def used_size(self, repo_uuid: str) -> int:
-        used_size = self.parent.conn.execute(
-            "SELECT SUM(fsobject.size) "
-            "FROM fsobject "
-            "WHERE isdir = FALSE AND EXISTS ("
-            "  SELECT 1 FROM fspresence "
-            "  WHERE fspresence.fsobject_id = fsobject.fsobject_id AND "
-            "    uuid = ? AND "
-            f"    status in ({', '.join(['?'] * len(STATUSES_THAT_USE_SIZE))}))",
-            (repo_uuid, *STATUSES_THAT_USE_SIZE)) \
-            .fetchone()[0]
-        return used_size if used_size is not None else 0
+        # fixme replace with size aggregator
+        used_size = 0
+        for path, props in HoardFilesIterator.all(self.parent):
+            if props.get_status(repo_uuid).value in STATUSES_THAT_USE_SIZE:
+                used_size += props.size
+        return used_size
 
     def stats_in_folder(self, folder_path: FastPosixPath) -> Tuple[int, int]:
         assert folder_path.is_absolute()
@@ -561,6 +556,7 @@ class HoardContents:
 
         self.env.gc()
         self.validate_desired()
+        self.env.close()
         self.env = None
 
         if writeable:
