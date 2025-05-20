@@ -332,28 +332,28 @@ class ReadonlyHoardFSObjects:
                     yield path, props
 
     def status_by_uuid(self, folder_path: FastPosixPath | None) -> Dict[str, Dict[str, Dict[str, Any]]]:
-        if folder_path is not None:
-            subfolder_filter = SubfolderFilter('fsobject.fullpath', folder_path)
-        else:
-            subfolder_filter = NoFilter()
+        simple_folder_trailing_slash = folder_path.simple + "/" if folder_path is not None else "/"
 
+        # fixme this could be done faster by directly drilling down to the folder with size aggregator
         stats: Dict[str, Dict[str, Dict[str, Any]]] = dict()
-        for uuid, nfiles, size in self.parent.conn.execute(
-                "SELECT fspresence.uuid, count(fspresence.fsobject_id) as nfiles, sum(size) as total_size "
-                "FROM fsobject JOIN fspresence ON fsobject.fsobject_id=fspresence.fsobject_id "
-                f"WHERE isdir = FALSE AND {subfolder_filter.where_clause} "
-                "GROUP BY fspresence.uuid",
-                subfolder_filter.params):
-            stats[uuid] = {
-                "total": {"nfiles": nfiles, "size": size}}
+        for path, props in HoardFilesIterator.all(self.parent):
+            if path.simple.startswith(simple_folder_trailing_slash):
+                for uuid, _ in props.presence.items():
+                    if uuid not in stats:
+                        stats[uuid] = {"total": {"nfiles": 0, "size": 0}}
+                    stats[uuid]["total"]["nfiles"] += 1
+                    stats[uuid]["total"]["size"] += props.size
 
-        for uuid, status, nfiles, size in self.parent.conn.execute(
-                "SELECT fspresence.uuid, fspresence.status, count(fspresence.fsobject_id) as nfiles, sum(size) as total_size "
-                "FROM fsobject JOIN fspresence ON fsobject.fsobject_id=fspresence.fsobject_id "
-                f"WHERE isdir = FALSE AND {subfolder_filter.where_clause} "
-                "GROUP BY fspresence.uuid, fspresence.status",
-                subfolder_filter.params):
-            stats[uuid][status] = {"nfiles": nfiles, "size": size}
+        for path, props in HoardFilesIterator.all(self.parent):
+            if path.simple.startswith(simple_folder_trailing_slash):
+                for uuid, status in props.presence.items():
+                    if uuid not in stats:
+                        stats[uuid] = dict()
+                    if status.value not in stats[uuid]:
+                        stats[uuid][status.value] = {"nfiles": 0, "size": 0}
+                    stats[uuid][status.value]["nfiles"] += 1
+                    stats[uuid][status.value]["size"] += props.size
+
         return stats
 
     def to_fetch(self, repo_uuid: str) -> Generator[Tuple[str, HoardFileProps], None, None]:
@@ -370,11 +370,6 @@ class ReadonlyHoardFSObjects:
         assert file_path.is_absolute()
         raise NotImplementedError()
 
-    def _first_value_curr(self):
-        curr = self.parent.conn.cursor()
-        curr.row_factory = FIRST_VALUE
-        return curr
-
     def used_size(self, repo_uuid: str) -> int:
         # fixme replace with size aggregator
         used_size = 0
@@ -387,10 +382,14 @@ class ReadonlyHoardFSObjects:
         assert folder_path.is_absolute()
         subfolder_filter = SubfolderFilter('fullpath', folder_path)
 
-        return self.parent.conn.execute(
-            "SELECT COUNT(1), IFNULL(SUM(fsobject.size), 0) FROM fsobject "
-            f"WHERE isdir = FALSE AND {subfolder_filter.where_clause}",  # fast search using the index
-            subfolder_filter.params).fetchone()
+        count, size = 0, 0
+        # fixme replace with size aggregator
+        used_size = 0
+        for path, props in HoardFilesIterator.all(self.parent):
+            if path.simple.startswith(folder_path.simple + "/"):
+                used_size += props.size
+                count += 1
+        return count, size
 
     @cached_property
     def query(self) -> "Query":
