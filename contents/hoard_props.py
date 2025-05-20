@@ -1,9 +1,12 @@
 import enum
+from functools import cached_property
 from typing import Dict, List
 
 from command.fast_path import FastPosixPath
+from lmdb_storage.file_object import FileObject
+from lmdb_storage.operations.util import ByRoot
 from lmdb_storage.tree_operations import get_child
-from lmdb_storage.tree_structure import ObjectID
+from lmdb_storage.tree_structure import ObjectID, MaybeObjectID
 
 
 class HoardFileStatus(enum.Enum):
@@ -39,20 +42,30 @@ def compute_status(
 
 
 class HoardFileProps:
-    def __init__(self, parent: "HoardContents", path: FastPosixPath, size: int, fasthash: str):
+    def __init__(self, parent: "HoardContents", path: FastPosixPath, size: int, fasthash: str, *, by_root: ByRoot[FileObject] | None=None, file_id: MaybeObjectID = None):
         self.parent = parent
         self._path = path
+        self._maybe_by_root = by_root
+        self._maybe_file_id = file_id
 
         self.size = size
         self.fasthash = fasthash
 
+    @cached_property  # fixme make dynamic
+    def remote_names(self) -> Dict[str, str]:
+        return dict((r.uuid, r.name) for r in self.parent.hoard_config.remotes.all())
+
+    @cached_property  # fixme make dynamic
+    def remote_roots(self):
         roots = self.parent.env.roots(write=False)
-        # fixme make dynamic
-        self.remote_names = dict((r.uuid, r.name) for r in parent.hoard_config.remotes.all())
-        self.remote_roots = sorted(
+        return sorted(
             [(uuid, roots[uuid].current, roots[uuid].desired) for uuid in self.parent.config.remote_uuids()],
             key=lambda ucd: self.remote_names[ucd[0]])
-        self.hoard_root_id = roots["HOARD"].desired
+
+    @cached_property  # fixme make dynamic
+    def hoard_root_id(self):
+        roots = self.parent.env.roots(write=False)
+        return roots["HOARD"].desired
 
     @property
     def available_at(self) -> List[str]:
@@ -60,6 +73,19 @@ class HoardFileProps:
 
     @property
     def presence(self) -> Dict[str, HoardFileStatus]:
+        if self._maybe_by_root is not None: # fast path
+            result = dict()
+            for uuid in self.remote_names.keys():
+                hoard_id = self._maybe_by_root.get_if_present("HOARD")
+                current_id = self._maybe_by_root.get_if_present("current@" + uuid)
+                desired_id = self._maybe_by_root.get_if_present("desired@" + uuid)
+
+                computed_status = compute_status(hoard_id, current_id, desired_id)
+                if computed_status is not None:
+                    result[uuid] = computed_status
+
+            return result
+
         result = dict()
         with self.parent.env.objects(write=False) as objects:
             hoard_id = get_child(objects, self._path._rem, self.hoard_root_id)

@@ -213,7 +213,7 @@ class HoardFilesIterator(TreeGenerator[FileObject, Tuple[str, HoardFileProps]]):
             logging.debug("Skipping path %s as it is not a FileObject", path)
             return
 
-        yield path, HoardFileProps(self.parent, path, file_obj.size, file_obj.fasthash)
+        yield path, HoardFileProps(self.parent, path, file_obj.size, file_obj.fasthash, by_root=original, file_id=file_obj.id)
 
     def should_drill_down(self, path: List[str], trees: ByRoot[TreeObject], files: ByRoot[FileObject]) -> bool:
         return True
@@ -223,21 +223,21 @@ class HoardFilesIterator(TreeGenerator[FileObject, Tuple[str, HoardFileProps]]):
         hoard_root, root_ids = find_roots(parent)
 
         obj_ids = ByRoot(
-            [str(i) for i in range(len(root_ids))] + ["HOARD"],
-            [(str(i), root_id) for i, root_id in enumerate(root_ids)] + [("HOARD", hoard_root)])
+            [name for name, _ in root_ids] + ["HOARD"],
+            root_ids + [("HOARD", hoard_root)])
 
         with parent.env.objects(write=False) as objects:
             yield from list(HoardFilesIterator(objects, parent).execute(obj_ids=obj_ids))
 
 
-def find_roots(parent: "HoardContents") -> (MaybeObjectID, List[MaybeObjectID]):
+def find_roots(parent: "HoardContents") -> (MaybeObjectID, List[Tuple[str, MaybeObjectID]]):
     roots = parent.env.roots(write=False)
     hoard_root = roots["HOARD"].desired
     all_roots = roots.all_roots
     with roots:
-        root_data = [r.load_from_storage for r in all_roots]
+        root_data = [(r.name, r.load_from_storage) for r in all_roots]
     root_ids = sum(
-        [[data.current, data.desired] for data in root_data],  # fixme should only iterate over desired files
+        [[("current@" + name, data.current), ("desired@" + name, data.desired)] for name, data in root_data],  # fixme should only iterate over desired files
         [])
     return hoard_root, root_ids
 
@@ -251,7 +251,7 @@ def hoard_file_props_from_tree(parent, file_path: FastPosixPath) -> HoardFilePro
             return HoardFileProps(parent, file_path, file_obj.size, file_obj.fasthash)
 
         # fixme this is the legacy case where we iterate over current but not desired files. remove!
-        for root_id in root_ids:
+        for _, root_id in root_ids:
             root_child_id = get_child(objects, file_path._rem, root_id)
             file_obj = objects[root_child_id] if root_child_id is not None else None
             if isinstance(file_obj, FileObject):
@@ -372,16 +372,14 @@ class ReadonlyHoardFSObjects:
 
     def stats_in_folder(self, folder_path: FastPosixPath) -> Tuple[int, int]:
         assert folder_path.is_absolute()
-        subfolder_filter = SubfolderFilter('fullpath', folder_path)
 
-        count, size = 0, 0
+        count, used_size = 0, 0
         # fixme replace with size aggregator
-        used_size = 0
         for path, props in HoardFilesIterator.all(self.parent):
             if path.simple.startswith(folder_path.simple + "/"):
                 used_size += props.size
                 count += 1
-        return count, size
+        return count, used_size
 
     @cached_property
     def query(self) -> "Query":

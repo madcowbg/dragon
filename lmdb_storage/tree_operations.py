@@ -5,20 +5,19 @@ from lmdb_storage.tree_structure import Objects, ObjectID, TreeObject
 
 
 def get_child(objects: Objects, path: List[str], root_id: ObjectID | None) -> ObjectID | None:
-    if len(path) == 0:
-        return root_id
+    idx = 0
 
-    if root_id is None:
-        return None
+    curr_id = root_id
+    while curr_id is not None and idx < len(path):
+        obj = objects[curr_id]
+        if isinstance(obj, TreeObject):
+            curr_id = obj.children.get(path[idx])
+            idx += 1
+        else:
+            assert isinstance(obj, FileObject)
+            return None
 
-    obj = objects[root_id]
-    if isinstance(obj, TreeObject):
-        child_id = obj.children.get(path[0])
-        return get_child(objects, path[1:], child_id)
-    else:
-        assert isinstance(obj, FileObject)
-        return None
-
+    return curr_id
 
 def graft_in_tree(
         objects: Objects, old_root_id: ObjectID | None, path: List[str],
