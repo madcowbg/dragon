@@ -268,11 +268,6 @@ class ReadonlyHoardFSObjects:
     async def tree(self) -> HoardTree:
         return HoardTree(self)
 
-    def _read_as_path_to_props(self, cursor, row) -> Tuple[FastPosixPath, HoardFileProps]:
-        fullpath, fsobject_id, isdir, size, fasthash = row
-        assert isdir == False
-        return FastPosixPath(fullpath), HoardFileProps(self.parent, FastPosixPath(fullpath), size, fasthash)
-
     def __getitem__(self, file_path: FastPosixPath) -> HoardFileProps:
         assert file_path.is_absolute()
         return hoard_file_props_from_tree(self.parent, file_path)
@@ -427,14 +422,14 @@ class Query:
 
     def count_non_deleted(self, folder_name: FastPosixPath) -> int:
         count = 0
-        for path, stats in self.file_stats:
+        for path, stats in self.file_stats.items():
             if path.startswith(folder_name.simple + "/") and not stats["is_deleted"]:
                 count += 1
         return count
 
     def num_without_source(self, folder_name: FastPosixPath) -> int:
         count = 0
-        for path, stats in self.file_stats:
+        for path, stats in self.file_stats.items():
             if path.startswith(folder_name.simple + "/") and stats["num_sources"] == 0:
                 count += 1
         return count
