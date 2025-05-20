@@ -206,7 +206,6 @@ class ContentPrefs:
             self, hoard_file: FastPosixPath, hoard_props: HoardFileProps, repo_uuid: str, out: StringIO) -> bool:
         to_be_got = hoard_props.by_status(HoardFileStatus.GET)
         is_available = hoard_props.by_status(HoardFileStatus.AVAILABLE)
-        to_be_moved_to = self.hoard.fsobjects.where_to_move(repo_uuid, hoard_file)
 
         local_file_to_delete = self.pathing.in_hoard(hoard_file).at_local(repo_uuid).as_pure_path.as_posix()
 
@@ -222,11 +221,6 @@ class ContentPrefs:
                 f"has {len(is_available)} < {required_min_copies} - will retain here.")
             names_to_get = list(sorted(self.config.remotes[uuid].name for uuid in to_be_got))
             out.write(f"NEEDS_MORE_COPIES ({len(is_available)}) {names_to_get} {local_file_to_delete}\n")
-            return False
-
-        if len(to_be_moved_to) > 0:
-            logging.info(f"file needs to be moved to {to_be_moved_to}, retaining")
-            out.write(f"NEED_TO_BE_MOVED {local_file_to_delete}\n")
             return False
 
         return True

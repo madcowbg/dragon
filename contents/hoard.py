@@ -366,16 +366,6 @@ class ReadonlyHoardFSObjects:
             if props.get_status(repo_uuid) == HoardFileStatus.CLEANUP:
                 yield path, props
 
-    def where_to_move(self, remote: str, hoard_file: FastPosixPath) -> List[str]:
-        assert hoard_file.is_absolute()
-        curr = self.parent.conn.cursor()
-        curr.row_factory = FIRST_VALUE
-        return curr.execute(
-            f"SELECT fsobject.fullpath "
-            f"FROM fspresence JOIN fsobject on fspresence.fsobject_id = fsobject.fsobject_id "
-            f"WHERE status = ? AND move_from = ? AND uuid = ? AND isdir = FALSE ",
-            (HoardFileStatus.MOVE.value, hoard_file.as_posix(), remote)).fetchall()
-
     def __contains__(self, file_path: FastPosixPath) -> bool:
         assert file_path.is_absolute()
 
