@@ -6,8 +6,6 @@ from unittest import IsolatedAsyncioTestCase
 from command.hoard import Hoard
 from command.repo import ProspectiveRepo
 from command.test_hoard_command import populate_hoard
-from contents.hoard_props import HoardFileProps
-from contents.repo_props import RepoFileProps
 from dragon import TotalCommand
 
 
@@ -47,9 +45,16 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull(cave_cmd.current_uuid())
         self.assertEqual([
-            'ADD_NEW_TO_HOARD /wat/test.me.different',
-            'ADD_NEW_TO_HOARD /wat/test.me.once',
-            'ADD_NEW_TO_HOARD /wat/test.me.twice',
+            'Pulling repo-in-local...',
+            'Before: Hoard [None] <- repo [curr: None, stg: 72174f, des: None]',
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.different',
+            'HOARD_FILE_ADDED /wat/test.me.different',
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.once',
+            'HOARD_FILE_ADDED /wat/test.me.once',
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.twice',
+            'HOARD_FILE_ADDED /wat/test.me.twice',
+            'updated repo-in-local from None to 72174f',
+            'After: Hoard [72174f], repo [curr: 72174f, stg: 72174f, des: 72174f]',
             "Sync'ed repo-in-local to hoard!",
             'DONE'], res.splitlines())
 

@@ -75,13 +75,15 @@ class FileAvailabilityPerRepoDataTable(DataTable):
     def action_queue_cleanup(self, repo_uuid: str):
         self.notify(f"Cleaning {self.hoard_file.fullname} from {repo_uuid}.")
 
-        self.hoard_file.props.mark_for_cleanup([repo_uuid])
+        raise NotImplementedError()
+        # self.hoard_file.props.mark_for_cleanup([repo_uuid])
         self.post_message(FileAvailabilityPerRepoDataTable.FileStatusModified(self.hoard_file))
 
     def action_queue_get(self, repo_uuid: str):
         self.notify(f"Scheduling to get {self.hoard_file.fullname} from {repo_uuid}.")
 
-        self.hoard_file.props.mark_to_get([repo_uuid])
+        raise NotImplementedError()
+        # self.hoard_file.props.mark_to_get([repo_uuid])
         self.post_message(FileAvailabilityPerRepoDataTable.FileStatusModified(self.hoard_file))
 
 
@@ -150,7 +152,7 @@ class DirAvailabilityDataTable(DataTable):
         hoard_precise_path = FastPosixPath(self.hoard_dir.fullname)
         if await self.app.push_screen_wait(
                 ConfirmActionScreen(
-                    f"Are you sure you want to GET all files in: \n" # fixme show pending ops
+                    f"Are you sure you want to GET all files in: \n"  # fixme show pending ops
                     f"{hoard_precise_path.as_posix()}\n"
                     f"in repo\n"
                     f"{self.hoard_config.remotes[repo_uuid].name}({repo_uuid})?")):

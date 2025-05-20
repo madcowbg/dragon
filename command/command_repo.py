@@ -1,3 +1,4 @@
+import binascii
 import logging
 import pathlib
 from io import StringIO
@@ -5,14 +6,14 @@ from command.fast_path import FastPosixPath
 from typing import List, Optional
 
 from command.comparison_repo import FileDeleted, FileMoved, FileAdded, FileModified, FileIsSame, find_repo_changes, \
-    _apply_repo_change_to_contents
+    FilesystemState, compute_changes_from_diffs
 from command.hoard_ignore import HoardIgnore, DEFAULT_IGNORE_GLOBS
 from command.repo import ProspectiveRepo
 from contents.repo_props import RepoFileStatus
 from daemon.daemon import run_daemon
 from exceptions import MissingRepo, MissingRepoContents
 from resolve_uuid import load_config, resolve_remote_uuid, load_paths
-from util import format_size, format_percent
+from util import format_size, format_percent, safe_hex
 
 
 class RepoCommand(object):
@@ -59,7 +60,7 @@ class RepoCommand(object):
             contents = connected_repo.create_contents(current_uuid)
 
         logging.info(f"Refreshing uuid {current_uuid}{', is first refresh' if first_refresh else ''}")
-        add_new_with_status = RepoFileStatus.ADDED if not first_refresh else RepoFileStatus.PRESENT
+        add_new_with_status = RepoFileStatus.PRESENT
 
         hoard_ignore = HoardIgnore(DEFAULT_IGNORE_GLOBS)
 
@@ -69,16 +70,37 @@ class RepoCommand(object):
 
             logging.info(f"Bumped epoch to {contents.config.epoch}")
 
+            logging.info("Reading filesystem state...")
+            state = FilesystemState(contents)
+            await state.read_state_from_filesystem(contents, hoard_ignore, self.repo.path)
+
             with StringIO() as out:
-                async for change in find_repo_changes(self.repo.path, contents, hoard_ignore, add_new_with_status):
-                    _apply_repo_change_to_contents(change, contents, show_details, out)
+                if show_details:
+                    async for change in compute_changes_from_diffs(state.diffs(), self.repo.path, add_new_with_status):
+                        if isinstance(change, FileIsSame):
+                            pass
+                        elif isinstance(change, FileDeleted):
+                            out.write(f"{change.details} {change.missing_relpath}\n")
+                        elif isinstance(change, FileMoved):
+                            out.write(f"MOVED {change.missing_relpath.as_posix()} TO {change.moved_to_relpath.as_posix()}\n")
+                        elif isinstance(change, FileAdded):
+                            out.write(f"{change.requested_status.value.upper()}_FILE {change.relpath.as_posix()}\n")
+                        elif isinstance(change, FileModified):
+                            out.write(f"MODIFIED_FILE {change.relpath.as_posix()}\n")
+                        else:
+                            raise TypeError(f"Unexpected change type {type(change)}")
+
+                if len(out.getvalue()) == 0 and show_details:
+                    out.write("NO CHANGES\n")
+
+                out.write(f"old: {safe_hex(contents.fsobjects.root_id)}\n")
+                # save modified as root
+                contents.fsobjects.roots["REPO"].current = state.state_root_id
+                out.write(f"current: {safe_hex(contents.fsobjects.root_id)}\n")
 
                 logging.info("Ends updating, setting is_dirty to FALSE")
                 contents.config.end_updating()
                 assert not contents.config.is_dirty
-
-                if len(out.getvalue()) == 0 and show_details:
-                    out.write("NO CHANGES\n")
 
                 out.write(f"Refresh done!")
                 return out.getvalue()
@@ -93,12 +115,12 @@ class RepoCommand(object):
             with StringIO() as out:
                 if show_files:
                     for file_or_dir, props in contents.fsobjects.all_status():
-                        out.write(f"{file_or_dir.as_posix()}: {props.last_status.value}{'' if not show_epoch else f' @ {props.last_update_epoch}'}\n")
+                        out.write(f"{file_or_dir.as_posix()}: {props.last_status.value}{'' if not show_epoch else f' @ -1'}\n")
                     out.write("--- SUMMARY ---\n")
 
                 stats = contents.fsobjects.stats_existing
                 out.writelines([
-                    f"Result for local\n",
+                    f"Result for local [{safe_hex(contents.fsobjects.root_id)}]:\n",
                     f"Max size: {format_size(contents.config.max_size)}\n"
                     f"UUID: {remote_uuid}\n",
                     f"Last updated on {contents.config.updated}\n" if show_dates else "",
@@ -127,7 +149,7 @@ class RepoCommand(object):
 
         with contents:
             print("Calculating diffs between repo and filesystem...")
-            async for change in find_repo_changes(self.repo.path, contents, hoard_ignore, RepoFileStatus.ADDED):
+            async for change in find_repo_changes(self.repo.path, contents, hoard_ignore, RepoFileStatus.PRESENT):
                 if isinstance(change, FileIsSame):
                     files_same.append(change.relpath)
                 elif isinstance(change, FileDeleted):
@@ -148,7 +170,7 @@ class RepoCommand(object):
             with StringIO() as out:
                 stats = contents.fsobjects.stats_existing
                 out.write(
-                    f"{current_uuid}:\n"
+                    f"{current_uuid} [{safe_hex(contents.fsobjects.root_id)}]:\n"
                     f"files:\n"
                     f"    same: {len(files_same)} ({format_percent(len(files_same) / files_current)})\n"
                     f"     mod: {len(files_mod)} ({format_percent(len(files_mod) / files_current)})\n"

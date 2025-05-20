@@ -8,6 +8,8 @@ import command.fast_path
 from command.content_prefs import BackupSet, MIN_REPO_PERC_FREE
 from command.hoard import Hoard
 from command.pathing import HoardPathing
+from command.tree_operations import add_to_desired_tree, \
+    remove_from_desired_tree
 from config import HoardRemote
 from contents.hoard_props import HoardFileStatus, HoardFileProps
 from resolve_uuid import resolve_remote_uuid
@@ -96,7 +98,9 @@ class HoardCommandBackups:
                         repos_to_clean_from = backup_set.repos_to_clean(hoard_file, hoard_props, hoard_props.size)
 
                         logging.info(f"Cleaning up {hoard_file} from {[r.uuid for r in repos_to_clean_from]}")
-                        hoard_props.set_status([repo.uuid for repo in repos_to_clean_from], HoardFileStatus.CLEANUP)
+
+                        for repo in repos_to_clean_from:
+                            remove_from_desired_tree(hoard, repo.uuid, hoard_file)
 
                         for repo in repos_to_clean_from:
                             removed_cnt[repo] = removed_cnt.get(repo, 0) + 1
@@ -104,6 +108,7 @@ class HoardCommandBackups:
 
                     for repo, cnt in sorted(removed_cnt.items(), key=lambda rc: rc[0].name):
                         out.write(f" {repo.name} LOST {cnt} files ({format_size(removed_size[repo])})\n")
+
                 out.write("DONE")
                 return out.getvalue()
 
@@ -140,7 +145,9 @@ class HoardCommandBackups:
                             continue
 
                         logging.info(f"Backing up {hoard_file} to {[r.uuid for r in new_repos_to_backup_to]}")
-                        hoard_props.mark_to_get([repo.uuid for repo in new_repos_to_backup_to])
+                        for repo in new_repos_to_backup_to:
+                            add_to_desired_tree(hoard, repo.uuid, hoard_file.simple, hoard_props)
+
                         for repo in new_repos_to_backup_to:
                             added_cnt[repo] = added_cnt.get(repo, 0) + 1
                             added_size[repo] = added_size.get(repo, 0) + hoard_props.size
@@ -155,6 +162,7 @@ class HoardCommandBackups:
 
                     for repo, cnt in sorted(added_cnt.items(), key=lambda rc: rc[0].name):
                         out.write(f" {repo.name} <- {cnt} files ({format_size(added_size[repo])})\n")
+
                 out.write("DONE")
                 return out.getvalue()
 
@@ -197,10 +205,11 @@ class HoardCommandBackups:
 
                         out.write(f"Unassigning from {remote.name}:\n")
 
-                        async with self.hoard.open_contents(False).writeable() as hoard_contents:
-                            for hoard_file, hoard_props in hoard_contents.fsobjects.to_get_in_repo(remote.uuid):
-                                assert hoard_props.get_status(remote.uuid) == HoardFileStatus.GET
+                        for hoard_file, hoard_props in hoard.fsobjects.to_get_in_repo(remote.uuid):
+                            assert hoard_props.get_status(remote.uuid) == HoardFileStatus.GET
 
-                                hoard_props.remove_status(remote.uuid)
-                                out.write(f"WONT_GET {hoard_file.as_posix()}\n")
+                            remove_from_desired_tree(hoard, remote.uuid, hoard_file.simple)
+
+                            out.write(f"WONT_GET {hoard_file.as_posix()}\n")
+
                 return out.getvalue()

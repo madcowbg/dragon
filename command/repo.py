@@ -93,7 +93,7 @@ class ConnectedRepo(OfflineRepo):
 
     @property
     def has_contents(self):
-        return os.path.isfile(join(_config_folder(self.path), f"{self.current_uuid}.contents")) \
+        return os.path.exists(join(_config_folder(self.path), f"{self.current_uuid}.contents.lmdb")) \
             and os.path.isfile(join(_config_folder(self.path), f"{self.current_uuid}.toml"))
 
     def create_contents(self, create_for_uuid: str) -> RepoContents:
@@ -102,7 +102,7 @@ class ConnectedRepo(OfflineRepo):
 
     def remove_contents(self):
         if self.has_contents:
-            os.remove(join(_config_folder(self.path), f"{self.current_uuid}.contents"))
+            os.rmdir(join(_config_folder(self.path), f"{self.current_uuid}.contents.lmdb"))
             os.remove(join(_config_folder(self.path), f"{self.current_uuid}.toml"))
 
         assert not self.has_contents

@@ -5,13 +5,14 @@ import sys
 import traceback
 from io import StringIO
 from os import PathLike
-from typing import List, Dict, Optional
+from typing import List, Optional
 
 import aioshutil
 
 from command.content_prefs import ContentPrefs
 from command.fast_path import FastPosixPath
 from command.pathing import HoardPathing
+from command.tree_operations import add_to_current_tree, remove_from_current_tree
 from config import HoardConfig, HoardPaths
 from contents.hoard import HoardContents
 from contents.hoard_props import HoardFileProps, HoardFileStatus
@@ -33,7 +34,8 @@ async def _fetch_files_in_repo(
             success, fullpath = await _restore_from_another_repo(
                 hoard_filepath, repo_uuid, hoard_props, pathing._config, pathing._paths)
             if success:
-                hoard_props.mark_available(repo_uuid)
+                add_to_current_tree(hoard, repo_uuid, hoard_file, hoard_props)
+
                 return f"+ {local_filepath}\n"
             else:
                 logging.error("error restoring file!")
@@ -65,7 +67,7 @@ async def _fetch_files_in_repo(
                             repo_uuid, local_filepath, hoard_props,
                             hoard, candidates_to_copy, pathing)
                         if success:
-                            hoard_props.mark_available(repo_uuid)
+                            add_to_current_tree(hoard, repo_uuid, hoard_file, hoard_props)
                             return f"c+ {local_filepath}\n"
                         else:
                             logging.error("error restoring file from local copy!")
@@ -86,7 +88,7 @@ async def _fetch_files_in_repo(
 
                             dest = shutil.move(local_filepath_from, local_filepath)
                             if dest is not None:
-                                hoard_props.mark_available(repo_uuid)
+                                add_to_current_tree(hoard, repo_uuid, hoard_file, hoard_props)
                                 return f"MOVED {to_be_moved_from} to {hoard_file}\n"
                             else:
                                 return f"ERROR_MOVING {to_be_moved_from} to {hoard_file}\n"
@@ -124,7 +126,7 @@ async def _cleanup_files_in_repo(
             local_path = pathing.in_hoard(hoard_file).at_local(repo_uuid)
             if content_prefs.can_cleanup(hoard_file, hoard_props, repo_uuid, out):
                 logging.info("file doesn't need to be copied anymore, cleaning")
-                hoard_props.remove_status(repo_uuid)
+                remove_from_current_tree(hoard, repo_uuid, hoard_file)
 
                 logging.info(f"deleting {local_path.on_device_path()}...")
 
@@ -222,4 +224,5 @@ async def _restore_from_copy(
             logging.info(f"Restore FAILED.")
 
     logging.info("Trying to fully restore instead of move as a last resort.")
-    return _restore_from_another_repo(local_filepath.at_hoard(), repo_uuid, hoard_props, pathing._config, pathing._paths)
+    return _restore_from_another_repo(
+        local_filepath.at_hoard(), repo_uuid, hoard_props, pathing._config, pathing._paths)

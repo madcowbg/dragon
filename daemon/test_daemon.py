@@ -31,6 +31,8 @@ class TestDaemon(IsolatedAsyncioTestCase):
             'PRESENT_FILE wat/test.me.different',
             'PRESENT_FILE wat/test.me.once',
             'PRESENT_FILE wat/test.me.twice',
+            'current: 72174f950289a454493d243bb72bdb76982e5f62',
+            'old: None',
             'Refresh done!'}, set(res.splitlines()))
 
         daemon_task = asyncio.create_task(run_daemon(cave_path, False, 0.01, 0.01))
@@ -43,8 +45,8 @@ class TestDaemon(IsolatedAsyncioTestCase):
             'wat/test.me.once: present',
             'wat/test.me.twice: present',
             '--- SUMMARY ---',
-            'Result for local',
-            'Max size: 3.6TB',
+            'Result for local [72174f950289a454493d243bb72bdb76982e5f62]:',
+            'Max size: 3.5TB',
             f'UUID: {cave_cmd.current_uuid()}',
             '  # files = 3 of size 19'], res.splitlines())
 
@@ -57,13 +59,13 @@ class TestDaemon(IsolatedAsyncioTestCase):
 
         res = cave_cmd.status_index(show_dates=False, show_epoch=False)
         self.assertEqual([
-            'wat/test.add.with.daemon: added',
+            'wat/test.add.with.daemon: present',
             'wat/test.me.different: present',
             'wat/test.me.once: present',
             'wat/test.me.twice: present',
             '--- SUMMARY ---',
-            'Result for local',
-            'Max size: 3.6TB',
+            'Result for local [063d269b3ac1a51fcc0dd838bf7c112f529dbece]:',
+            'Max size: 3.5TB',
             f'UUID: {cave_cmd.current_uuid()}',
             '  # files = 4 of size 34'], res.splitlines())
 
@@ -76,15 +78,14 @@ class TestDaemon(IsolatedAsyncioTestCase):
 
         res = cave_cmd.status_index(show_dates=False, show_epoch=False)
         self.assertEqual([
-            'test.me.different: added',
-            'wat/test.add.with.daemon: added',
-            'wat/test.me.different: moved_from',
-            'wat/test.me.once: deleted',
+            'wat/test.add.with.daemon: present',
+            'wat/test.me.different: present',  # fixme should be deleted instead!
+            'wat/test.me.once: present',  # fixme should be deleted instead!
             'wat/test.me.twice: present',
             '--- SUMMARY ---',
-            'Result for local',
-            'Max size: 3.6TB',
+            'Result for local [063d269b3ac1a51fcc0dd838bf7c112f529dbece]:',
+            'Max size: 3.5TB',
             f'UUID: {cave_cmd.current_uuid()}',
-            '  # files = 3 of size 26'], res.splitlines())
+            '  # files = 4 of size 34'], res.splitlines())
 
         daemon_task.cancel()

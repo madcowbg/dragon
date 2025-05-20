@@ -1,5 +1,7 @@
+import logging
 import os
 import pathlib
+import sys
 import tempfile
 from os.path import join
 from typing import Tuple, List, Dict
@@ -22,6 +24,10 @@ def populate_hoard(tmpdir: str):
 
 class TestHoardCommand(IsolatedAsyncioTestCase):
     def setUp(self):
+        # logging.basicConfig(level=logging.DEBUG)
+        # logging.getLogger().setLevel(logging.DEBUG)
+        # logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
+
         self.tmpdir = tempfile.TemporaryDirectory()
         populate_hoard(self.tmpdir.name)
 
@@ -62,27 +68,43 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         repo_uuid = cave_cmd.current_uuid()
 
         res = await hoard_cmd.contents.differences("repo-in-local")
-        self.assertEqual(
-            f"Status of repo-in-local:\n"
-            f"PRESENT /wat/test.me.different\n"
-            f"PRESENT /wat/test.me.once\n"
-            f"PRESENT /wat/test.me.twice\n"
-            f"DONE",
+        self.assertEqual((
+            'Root: None\n'
+            'Remote repo-in-local current=None staging=None desired=None\n'
+            'Status of repo-in-local:\n'
+            'PRESENT /wat/test.me.different\n'
+            'PRESENT /wat/test.me.once\n'
+            'PRESENT /wat/test.me.twice\n'
+            'DONE'),
             res.strip())
 
         res = await hoard_cmd.contents.pending_pull("repo-in-local")
         self.assertEqual([
             'Status of repo-in-local:',
-            'ADD_NEW_FILE_BEHAVIOR /wat/test.me.different',
-            'ADD_NEW_FILE_BEHAVIOR /wat/test.me.once',
-            'ADD_NEW_FILE_BEHAVIOR /wat/test.me.twice'], res.splitlines())
+            'Hoard root: None:',
+            'Repo current=None staging=72174f desired=None',
+            'Repo root: 72174f950289a454493d243bb72bdb76982e5f62:',
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.different',
+            'HOARD_FILE_ADDED /wat/test.me.different',
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.once',
+            'HOARD_FILE_ADDED /wat/test.me.once',
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.twice',
+            'HOARD_FILE_ADDED /wat/test.me.twice'], res.splitlines())
 
         res = await hoard_cmd.contents.pull("repo-in-local")
-        self.assertEqual(
-            "ADD_NEW_TO_HOARD /wat/test.me.different\n"
-            "ADD_NEW_TO_HOARD /wat/test.me.once\n"
-            "ADD_NEW_TO_HOARD /wat/test.me.twice\n"
-            "Sync'ed repo-in-local to hoard!\nDONE", res.strip())
+        self.assertEqual((
+            'Pulling repo-in-local...\n'
+            'Before: Hoard [None] <- repo [curr: None, stg: 72174f, des: None]\n'
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.different\n'
+            'HOARD_FILE_ADDED /wat/test.me.different\n'
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.once\n'
+            'HOARD_FILE_ADDED /wat/test.me.once\n'
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.twice\n'
+            'HOARD_FILE_ADDED /wat/test.me.twice\n'
+            'updated repo-in-local from None to 72174f\n'
+            'After: Hoard [72174f], repo [curr: 72174f, stg: 72174f, des: 72174f]\n'
+            "Sync'ed repo-in-local to hoard!\n"
+            'DONE'), res.strip())
 
         async with hoard_cmd.hoard.open_contents(False) as hoard_contents:
             self._assert_hoard_contents(
@@ -93,10 +115,18 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
                     ('/wat/test.me.twice', 6, 1, '1881f6f9784fb08bf6690e9763b76ac3')])
 
         res = await hoard_cmd.contents.differences("repo-in-local")
-        self.assertEqual(f"Status of repo-in-local:\nDONE", res.strip())
+        self.assertEqual((
+            'Root: 72174f950289a454493d243bb72bdb76982e5f62\n'
+            'Remote repo-in-local current=72174f staging=72174f desired=72174f\n'
+            'Status of repo-in-local:\n'
+            'DONE'), res.strip())
 
         res = await hoard_cmd.contents.pending_pull("repo-in-local")
-        self.assertEqual(['Status of repo-in-local:'], res.splitlines())
+        self.assertEqual([
+            'Status of repo-in-local:',
+            'Hoard root: 72174f950289a454493d243bb72bdb76982e5f62:',
+            'Repo current=72174f staging=72174f desired=72174f',
+            'Repo root: 72174f950289a454493d243bb72bdb76982e5f62:'], res.splitlines())
 
     def _assert_hoard_contents(
             self, hoard_contents: HoardContents, files_exp: List[Tuple[str, int, int, str]]):
@@ -138,8 +168,15 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         self.assertEqual("Skipping update as past epoch 1 is not after hoard epoch 1\nDONE", res)
 
         res = await hoard_cmd.contents.pull("repo-in-local-2")
-        self.assertEqual(
-            "=/wat/test.me.twice\nALREADY_MARKED_GET /wat/test.me.different\nSync'ed repo-in-local-2 to hoard!\nDONE",
+        self.assertEqual((
+            'Pulling repo-in-local-2...\n'
+            'Before: Hoard [72174f] <- repo [curr: None, stg: 966d51, des: 72174f]\n'
+            'REPO_DESIRED_FILE_TO_GET /wat/test.me.different\n'
+            'REPO_DESIRED_FILE_TO_GET /wat/test.me.once\n'
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.twice\n'
+            'After: Hoard [72174f], repo [curr: 966d51, stg: 966d51, des: 72174f]\n'
+            "Sync'ed repo-in-local-2 to hoard!\n"
+            'DONE'),
             res.strip())
 
         async with hoard_cmd.hoard.open_contents(False) as hc:
@@ -151,7 +188,12 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
                     ('/wat/test.me.twice', 6, 2, '1881f6f9784fb08bf6690e9763b76ac3')])
 
         res = await hoard_cmd.contents.pull("repo-in-local", ignore_epoch=True)
-        self.assertEqual("Sync'ed repo-in-local to hoard!\nDONE", res)
+        self.assertEqual((
+            'Pulling repo-in-local...\n'
+            'Before: Hoard [72174f] <- repo [curr: 72174f, stg: 72174f, des: 72174f]\n'
+            'After: Hoard [72174f], repo [curr: 72174f, stg: 72174f, des: 72174f]\n'
+            "Sync'ed repo-in-local to hoard!\n"
+            'DONE'), res)
 
         async with hoard_cmd.hoard.open_contents(False) as hc:
             self._assert_hoard_contents(
@@ -162,17 +204,31 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
                     ('/wat/test.me.twice', 6, 2, '1881f6f9784fb08bf6690e9763b76ac3')])
 
         res = await hoard_cmd.contents.differences("repo-in-local-2")
-        self.assertEqual(
-            f"Status of repo-in-local-2:\n"
-            f"MODIFIED /wat/test.me.different\n"
-            f"MISSING /wat/test.me.once\n"
-            f"DONE", res.strip())
+        self.assertEqual((
+            'Root: 72174f950289a454493d243bb72bdb76982e5f62\n'
+            'Remote repo-in-local current=72174f staging=72174f desired=72174f\n'
+            'Remote repo-in-local-2 current=966d51 staging=966d51 desired=72174f\n'
+            'Status of repo-in-local-2:\n'
+            'MODIFIED /wat/test.me.different\n'
+            'MISSING /wat/test.me.once\n'
+            'DONE'), res.strip())
 
         res = await hoard_cmd.contents.pending_pull("repo-in-local-2")
-        self.assertEqual(['Status of repo-in-local-2:'], res.splitlines())
+        self.assertEqual([
+            'Status of repo-in-local-2:',
+            'Hoard root: 72174f950289a454493d243bb72bdb76982e5f62:',
+            'Repo current=966d51 staging=966d51 desired=72174f',
+            'Repo root: 1b736d16c16bdacf49df7cd5aa66e7b5479ad4b7:',
+            'REPO_DESIRED_FILE_CHANGED /wat/test.me.different',
+            'REPO_DESIRED_FILE_TO_GET /wat/test.me.once'], res.splitlines())
 
         res = await hoard_cmd.contents.differences("repo-in-local")
-        self.assertEqual(f"Status of repo-in-local:\nDONE", res.strip())
+        self.assertEqual((
+            'Root: 72174f950289a454493d243bb72bdb76982e5f62\n'
+            'Remote repo-in-local current=72174f staging=72174f desired=72174f\n'
+            'Remote repo-in-local-2 current=966d51 staging=966d51 desired=72174f\n'
+            'Status of repo-in-local:\n'
+            'DONE'), res.strip())
 
         res = hoard_cmd.remotes(hide_paths=True)
         self.assertEqual(
@@ -194,6 +250,23 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             "  1 copies: 2 files\n"
             "  2 copies: 1 files\nDONE", res)
 
+        res = await cave_cmd2.refresh()
+        self.assertEqual((
+            'NO CHANGES\n'
+            'old: 1b736d16c16bdacf49df7cd5aa66e7b5479ad4b7\n'
+            'current: 1b736d16c16bdacf49df7cd5aa66e7b5479ad4b7\n'
+            'Refresh done!'), res)
+
+        res = await hoard_cmd.contents.pull("repo-in-local-2")
+        self.assertEqual([
+            'Pulling repo-in-local-2...',
+            'Before: Hoard [72174f] <- repo [curr: 966d51, stg: 966d51, des: 72174f]',
+            'REPO_DESIRED_FILE_CHANGED /wat/test.me.different',
+            'REPO_DESIRED_FILE_TO_GET /wat/test.me.once',
+            'After: Hoard [72174f], repo [curr: 966d51, stg: 966d51, des: 72174f]',
+            "Sync'ed repo-in-local-2 to hoard!",
+            'DONE'], res.splitlines())
+
     async def test_changing_data(self):
         cave_cmd = TotalCommand(path=join(self.tmpdir.name, "repo")).cave
         cave_cmd.init()
@@ -206,8 +279,11 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         repo_uuid = cave_cmd.current_uuid()
         await hoard_cmd.contents.pull("repo-in-local")
 
-        self.assertEqual(
-            f"Status of repo-in-local:\nDONE",
+        self.assertEqual((
+            'Root: 72174f950289a454493d243bb72bdb76982e5f62\n'
+            'Remote repo-in-local current=72174f staging=72174f desired=72174f\n'
+            'Status of repo-in-local:\n'
+            'DONE'),
             (await hoard_cmd.contents.differences("repo-in-local")).strip())
 
         os.mkdir(join(self.tmpdir.name, "repo", "newdir"))
@@ -216,7 +292,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
 
         res = await cave_cmd.status()
         self.assertEqual(
-            f"{cave_cmd.current_uuid()}:\n"
+            f"{cave_cmd.current_uuid()} [72174f950289a454493d243bb72bdb76982e5f62]:\n"
             "files:\n"
             "    same: 2 (66.7%)\n"
             "     mod: 0 (0.0%)\n"
@@ -230,7 +306,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         pathlib.Path(join(self.tmpdir.name, "repo/wat/test.me.once")).touch()
         res = await cave_cmd.status()
         self.assertEqual(
-            f"{cave_cmd.current_uuid()}:\n"
+            f"{cave_cmd.current_uuid()} [72174f950289a454493d243bb72bdb76982e5f62]:\n"
             "files:\n"
             "    same: 2 (66.7%)\n"
             "     mod: 0 (0.0%)\n"
@@ -241,28 +317,42 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             " deleted: 1 (33.3%)\n", res)
 
         # as is not refreshed, no change in status
-        self.assertEqual(
-            f"Status of repo-in-local:\nDONE",
+        self.assertEqual((
+            'Root: 72174f950289a454493d243bb72bdb76982e5f62\n'
+            'Remote repo-in-local current=72174f staging=72174f desired=72174f\n'
+            'Status of repo-in-local:\n'
+            'DONE'),
             (await hoard_cmd.contents.differences("repo-in-local")).strip())
 
         await cave_cmd.refresh(show_details=False)
-        self.assertEqual(
-            f"Status of repo-in-local:\n"
-            f"ADDED /newdir/newfile.is\n"
-            f"DELETED /wat/test.me.different\n"
-            f"DONE",
+        self.assertEqual((
+            'Root: 72174f950289a454493d243bb72bdb76982e5f62\n'
+            'Remote repo-in-local current=72174f staging=72174f desired=72174f\n'
+            'Status of repo-in-local:\n'
+            'PRESENT /newdir/newfile.is\n'
+            'DELETED /wat/test.me.different\n'
+            'DONE'),
             (await hoard_cmd.contents.differences("repo-in-local")).strip())
 
         res = await hoard_cmd.contents.pull("repo-in-local")
-        self.assertEqual(
-            "ADD_NEW_TO_HOARD /newdir/newfile.is\n"
-            "DELETE_FROM_HOARD /wat/test.me.different\n"
-            "remove dangling /wat/test.me.different\n"
-            "Sync'ed repo-in-local to hoard!\nDONE", res)
+        self.assertEqual((
+            'Pulling repo-in-local...\n'
+            'Before: Hoard [72174f] <- repo [curr: 72174f, stg: 4504c1, des: 72174f]\n'
+            'REPO_MARK_FILE_AVAILABLE /newdir/newfile.is\n'
+            'HOARD_FILE_ADDED /newdir/newfile.is\n'
+            'REPO_FILE_TO_DELETE /wat/test.me.different\n'
+            'HOARD_FILE_DELETED /wat/test.me.different\n'
+            'updated repo-in-local from 72174f to 4504c1\n'
+            'After: Hoard [4504c1], repo [curr: 4504c1, stg: 4504c1, des: 4504c1]\n'
+            "Sync'ed repo-in-local to hoard!\n"
+            'DONE'), res)
 
-        self.assertEqual(
-            f"Status of repo-in-local:\n"
-            f"DONE", (await hoard_cmd.contents.differences("repo-in-local")).strip())
+        self.assertEqual((
+            'Root: 4504c1f3941271cfc96da6bcf8d5f4198c2f4132\n'
+            'Remote repo-in-local current=4504c1 staging=4504c1 desired=4504c1\n'
+            'Status of repo-in-local:\n'
+            'DONE'),
+            (await hoard_cmd.contents.differences("repo-in-local")).strip())
 
     async def test_clone(self):
         hoard_cmd = TotalCommand(path=join(self.tmpdir.name, "hoard")).hoard
@@ -285,7 +375,11 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             "DONE", res)
 
         res = await hoard_cmd.contents.differences(new_uuid)
-        self.assertEqual(f"Status of cloned-repo:\nDONE", res)
+        self.assertEqual((
+            'Root: None\n'
+            'Remote cloned-repo current=None staging=None desired=None\n'
+            'Status of cloned-repo:\n'
+            'DONE'), res)
 
     async def test_populate_one_repo_from_other_repo(self):
         hoard_cmd = TotalCommand(path=join(self.tmpdir.name, "hoard")).hoard
@@ -307,45 +401,84 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         # status should be still empty hoard
         new_uuid = resolve_remote_uuid(hoard_cmd.hoard.config(), "cloned-repo")
         res = await hoard_cmd.contents.differences(new_uuid)
-        self.assertEqual(f"Status of cloned-repo:\nDONE", res)
+        self.assertEqual((
+            'Root: None\n'
+            'Remote cloned-repo current=None staging=None desired=None\n'
+            'Remote repo-in-local current=None staging=None desired=None\n'
+            'Status of cloned-repo:\n'
+            'DONE'), res)
 
         await hoard_cmd.contents.pull("repo-in-local")
 
         # after population by other repo, it is now lacking files
         res = await hoard_cmd.contents.differences(new_uuid)
-        self.assertEqual(
-            f"Status of cloned-repo:\n"
-            "MISSING /wat/test.me.different\n"
-            "MISSING /wat/test.me.once\n"
-            "MISSING /wat/test.me.twice\n"
-            f"DONE", res)
+        self.assertEqual((
+            'Root: 72174f950289a454493d243bb72bdb76982e5f62\n'
+            'Remote cloned-repo current=None staging=654b8b desired=72174f\n'
+            'Remote repo-in-local current=72174f staging=72174f desired=72174f\n'
+            'Status of cloned-repo:\n'
+            'MISSING /wat/test.me.different\n'
+            'MISSING /wat/test.me.once\n'
+            'MISSING /wat/test.me.twice\n'
+            'DONE'), res)
 
         res = await hoard_cmd.contents.pending_pull(new_uuid)
-        self.assertEqual(['Status of cloned-repo:'], res.splitlines())
+        self.assertEqual([
+            'Status of cloned-repo:',
+            'Hoard root: 72174f950289a454493d243bb72bdb76982e5f62:',
+            'Repo current=None staging=654b8b desired=72174f',
+            'Repo root: a80f91bc48850a1fb3459bb76b9f6308d4d35710:',
+            'REPO_DESIRED_FILE_TO_GET /wat/test.me.different',
+            'REPO_DESIRED_FILE_TO_GET /wat/test.me.once',
+            'REPO_DESIRED_FILE_TO_GET /wat/test.me.twice'], res.splitlines())
 
         res = await hoard_cmd.files.push(repo="cloned-repo")
-        self.assertEqual(
-            f"cloned-repo:\n"
-            "+ test.me.different\n"
-            "+ test.me.once\n"
-            "+ test.me.twice\n"
-            f"cloned-repo:\n"
-            "DONE", res.strip())
+        self.assertEqual((
+            'Before push:\n'
+            'Remote cloned-repo current=None staging=654b8b desired=72174f\n'
+            'Remote repo-in-local current=72174f staging=72174f desired=72174f\n'
+            'cloned-repo:\n'
+            '+ test.me.different\n'
+            '+ test.me.once\n'
+            '+ test.me.twice\n'
+            'cloned-repo:\n'
+            'After:\n'
+            'Remote cloned-repo current=72174f staging=654b8b desired=72174f\n'
+            'Remote repo-in-local current=72174f staging=72174f desired=72174f\n'
+            'DONE'), res.strip())
 
         res = await cloned_cave_cmd.refresh(show_details=False)
-        self.assertEqual("Refresh done!", res)
+        self.assertEqual((
+            'old: a80f91bc48850a1fb3459bb76b9f6308d4d35710\n'
+            'current: ff1444e1c29844fddb93d7745ea1348ead80d0b6\n'
+            'Refresh done!'), res)
 
         res = await hoard_cmd.contents.differences(new_uuid)
-        self.assertEqual(f"Status of cloned-repo:\nDONE", res.strip())
+        self.assertEqual((
+            'Root: 72174f950289a454493d243bb72bdb76982e5f62\n'
+            'Remote cloned-repo current=72174f staging=654b8b desired=72174f\n'
+            'Remote repo-in-local current=72174f staging=72174f desired=72174f\n'
+            'Status of cloned-repo:\n'
+            'DONE'), res.strip())
 
         res = await hoard_cmd.contents.pending_pull(new_uuid)
-        self.assertEqual(['Status of cloned-repo:'], res.splitlines())
+        self.assertEqual([
+            'Status of cloned-repo:',
+            'Hoard root: 72174f950289a454493d243bb72bdb76982e5f62:',
+            'Repo current=72174f staging=72174f desired=72174f',
+            'Repo root: ff1444e1c29844fddb93d7745ea1348ead80d0b6:'], res.splitlines())
 
         res = await hoard_cmd.files.push(repo="cloned-repo")
-        self.assertEqual(
-            f"cloned-repo:\n"
-            f"cloned-repo:\n"
-            "DONE", res.strip())
+        self.assertEqual((
+            'Before push:\n'
+            'Remote cloned-repo current=72174f staging=72174f desired=72174f\n'
+            'Remote repo-in-local current=72174f staging=72174f desired=72174f\n'
+            'cloned-repo:\n'
+            'cloned-repo:\n'
+            'After:\n'
+            'Remote cloned-repo current=72174f staging=72174f desired=72174f\n'
+            'Remote repo-in-local current=72174f staging=72174f desired=72174f\n'
+            'DONE'), res.strip())
 
         self.assertEqual([
             'cloned-repo/test.me.different',
@@ -375,84 +508,161 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             self.tmpdir.name)
 
         res = await hoard_cmd.contents.differences("repo-partial-name")
-        self.assertEqual(
-            f"Status of repo-partial-name:\n"
-            f"PRESENT /test.me.1\n"
-            f"PRESENT /wat/test.me.2\n"
-            "DONE", res.strip())
+        self.assertEqual((
+            'Root: None\n'
+            'Remote repo-backup-name current=None staging=None desired=None\n'
+            'Remote repo-full-name current=None staging=None desired=None\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=None staging=None desired=None\n'
+            'Status of repo-partial-name:\n'
+            'PRESENT /test.me.1\n'
+            'PRESENT /wat/test.me.2\n'
+            'DONE'), res.strip())
 
         res = await hoard_cmd.contents.pull("repo-partial-name")
-        self.assertEqual(
-            "ADD_NEW_TO_HOARD /test.me.1\n"
-            "ADD_NEW_TO_HOARD /wat/test.me.2\n"
-            "Sync'ed repo-partial-name to hoard!\nDONE", res.strip())
+        self.assertEqual((
+            'Pulling repo-partial-name...\n'
+            'Before: Hoard [None] <- repo [curr: None, stg: f9bfc2, des: None]\n'
+            'REPO_MARK_FILE_AVAILABLE /test.me.1\n'
+            'HOARD_FILE_ADDED /test.me.1\n'
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.2\n'
+            'HOARD_FILE_ADDED /wat/test.me.2\n'
+            'updated repo-partial-name from None to f9bfc2\n'
+            'updated repo-full-name from None to f9bfc2\n'
+            'updated repo-backup-name from None to f9bfc2\n'
+            'After: Hoard [f9bfc2], repo [curr: f9bfc2, stg: f9bfc2, des: f9bfc2]\n'
+            "Sync'ed repo-partial-name to hoard!\n"
+            'DONE'), res.strip())
 
         res = await hoard_cmd.contents.ls(skip_folders=True)
-        self.assertEqual(
-            "/test.me.1 = a:1 g:2\n"
-            "/wat/test.me.2 = a:1 g:2\n"
-            "DONE", res)
+        self.assertEqual((
+            'Root: f9bfc2be6cc201aa81b733b9d83c1030cc88bffe\n'
+            'Remote repo-backup-name current=None staging=None desired=f9bfc2\n'
+            'Remote repo-full-name current=None staging=None desired=f9bfc2\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
+            '/test.me.1 = a:1 g:2\n'
+            '/wat/test.me.2 = a:1 g:2\n'
+            'DONE'), res)
 
         res = await hoard_cmd.contents.pull("repo-partial-name", ignore_epoch=True)  # does noting...
-        self.assertEqual("Sync'ed repo-partial-name to hoard!\nDONE", res.strip())
+        self.assertEqual((
+            'Pulling repo-partial-name...\n'
+            'Before: Hoard [f9bfc2] <- repo [curr: f9bfc2, stg: f9bfc2, des: f9bfc2]\n'
+            'After: Hoard [f9bfc2], repo [curr: f9bfc2, stg: f9bfc2, des: f9bfc2]\n'
+            "Sync'ed repo-partial-name to hoard!\n"
+            'DONE'), res.strip())
 
         res = await hoard_cmd.contents.ls(skip_folders=True)
-        self.assertEqual(
-            "/test.me.1 = a:1 g:2\n"
-            "/wat/test.me.2 = a:1 g:2\n"
-            "DONE", res)
+        self.assertEqual((
+            'Root: f9bfc2be6cc201aa81b733b9d83c1030cc88bffe\n'
+            'Remote repo-backup-name current=None staging=None desired=f9bfc2\n'
+            'Remote repo-full-name current=None staging=None desired=f9bfc2\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
+            '/test.me.1 = a:1 g:2\n'
+            '/wat/test.me.2 = a:1 g:2\n'
+            'DONE'), res)
 
         res = await hoard_cmd.contents.pull("repo-full-name")
-        self.assertEqual(
-            "=/test.me.1\n"
-            "=/wat/test.me.2\n"
-            "ADD_NEW_TO_HOARD /test.me.4\n"
-            "ADD_NEW_TO_HOARD /wat/test.me.3\n"
-            "Sync'ed repo-full-name to hoard!\nDONE", res.strip())
+        self.assertEqual((
+            'Pulling repo-full-name...\n'
+            'Before: Hoard [f9bfc2] <- repo [curr: None, stg: 1ad9e0, des: f9bfc2]\n'
+            'REPO_MARK_FILE_AVAILABLE /test.me.1\n'
+            'REPO_MARK_FILE_AVAILABLE /test.me.4\n'
+            'HOARD_FILE_ADDED /test.me.4\n'
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.2\n'
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.3\n'
+            'HOARD_FILE_ADDED /wat/test.me.3\n'
+            'updated repo-full-name from f9bfc2 to 1ad9e0\n'
+            'updated repo-backup-name from f9bfc2 to 1ad9e0\n'
+            'After: Hoard [1ad9e0], repo [curr: 1ad9e0, stg: 1ad9e0, des: 1ad9e0]\n'
+            "Sync'ed repo-full-name to hoard!\n"
+            'DONE'), res.strip())
 
         res = await hoard_cmd.contents.pull("repo-full-name", ignore_epoch=True)  # does nothing ...
-        self.assertEqual("Sync'ed repo-full-name to hoard!\nDONE", res.strip())
+        self.assertEqual((
+            'Pulling repo-full-name...\n'
+            'Before: Hoard [1ad9e0] <- repo [curr: 1ad9e0, stg: 1ad9e0, des: 1ad9e0]\n'
+            'After: Hoard [1ad9e0], repo [curr: 1ad9e0, stg: 1ad9e0, des: 1ad9e0]\n'
+            "Sync'ed repo-full-name to hoard!\n"
+            'DONE'), res.strip())
 
         res = await hoard_cmd.contents.pull("repo-backup-name")  # just registers the files already in backup
-        self.assertEqual(
-            "=/test.me.1\n"
-            "=/wat/test.me.3\n"
-            "Sync'ed repo-backup-name to hoard!\nDONE", res.strip())
+        self.assertEqual((
+            'Pulling repo-backup-name...\n'
+            'Before: Hoard [1ad9e0] <- repo [curr: None, stg: 3a0889, des: 1ad9e0]\n'
+            'REPO_MARK_FILE_AVAILABLE /test.me.1\n'
+            'REPO_DESIRED_FILE_TO_GET /test.me.4\n'
+            'REPO_DESIRED_FILE_TO_GET /wat/test.me.2\n'
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.3\n'
+            'After: Hoard [1ad9e0], repo [curr: 3a0889, stg: 3a0889, des: 1ad9e0]\n'
+            "Sync'ed repo-backup-name to hoard!\n"
+            'DONE'), res.strip())
 
         res = await hoard_cmd.contents.pull("repo-backup-name")  # does nothing
         self.assertEqual("Skipping update as past epoch 1 is not after hoard epoch 1\nDONE", res.strip())
 
         res = await hoard_cmd.contents.ls(skip_folders=True)
-        self.assertEqual(
-            "/test.me.1 = a:3\n"
-            "/test.me.4 = a:1 g:1\n"
-            "/wat/test.me.2 = a:2 g:1\n"
-            "/wat/test.me.3 = a:2\n"
-            "DONE", res)
+        self.assertEqual((
+            'Root: 1ad9e0f92a8411689b1aee57f9ccf36c1f09a1ad\n'
+            'Remote repo-backup-name current=3a0889 staging=3a0889 desired=1ad9e0\n'
+            'Remote repo-full-name current=1ad9e0 staging=1ad9e0 desired=1ad9e0\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
+            '/test.me.1 = a:3\n'
+            '/test.me.4 = a:1 g:1\n'
+            '/wat/test.me.2 = a:2 g:1\n'
+            '/wat/test.me.3 = a:2\n'
+            'DONE'), res)
 
         res = await hoard_cmd.contents.pull("repo-incoming-name")
-        self.assertEqual(
-            "CLEANUP_SAME /test.me.4\n"
-            "INCOMING_TO_HOARD /test.me.5\n"
-            "INCOMING_TO_HOARD /wat/test.me.6\n"
-            "CLEANUP_DIFFERENT /wat/test.me.3\n"
-            "Sync'ed repo-incoming-name to hoard!\nDONE", res.strip())
+        self.assertEqual((
+            'Pulling repo-incoming-name...\n'
+            'Before: Hoard [1ad9e0] <- repo [curr: None, stg: 3d1726, des: None]\n'
+            'REPO_MARK_FILE_AVAILABLE /test.me.4\n'
+            'REPO_MARK_FILE_AVAILABLE /test.me.5\n'
+            'HOARD_FILE_ADDED /test.me.5\n'
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.6\n'
+            'HOARD_FILE_ADDED /wat/test.me.6\n'
+            'updated repo-full-name from 1ad9e0 to 8da760\n'
+            'updated repo-backup-name from 1ad9e0 to 8da760\n'
+            'After: Hoard [8da760], repo [curr: 3d1726, stg: 3d1726, des: None]\n'
+            "Sync'ed repo-incoming-name to hoard!\n"
+            'DONE'), res.strip())
 
         res = await incoming_cave_cmd.refresh(show_details=False)
-        self.assertEqual("Refresh done!", res)
+        self.assertEqual((
+            'old: 3d1726bd296f20d36cb9df60a0da4d4feae29248\n'
+            'current: 3d1726bd296f20d36cb9df60a0da4d4feae29248\n'
+            'Refresh done!'), res)
 
         res = await hoard_cmd.contents.pull("repo-incoming-name")
-        self.assertEqual("Sync'ed repo-incoming-name to hoard!\nDONE", res.strip())
+        self.assertEqual((
+            'Pulling repo-incoming-name...\n'
+            'Before: Hoard [8da760] <- repo [curr: 3d1726, stg: 3d1726, des: None]\n'
+            'REPO_FILE_TO_DELETE /test.me.4\n'
+            'REPO_FILE_TO_DELETE /test.me.5\n'
+            'REPO_FILE_TO_DELETE /wat/test.me.3\n'
+            'REPO_FILE_TO_DELETE /wat/test.me.6\n'
+            'After: Hoard [8da760], repo [curr: 3d1726, stg: 3d1726, des: None]\n'
+            "Sync'ed repo-incoming-name to hoard!\n"
+            'DONE'), res.strip())
 
         res = await hoard_cmd.contents.ls(skip_folders=True)
-        self.assertEqual(
-            "/test.me.1 = a:3\n"
-            "/test.me.4 = a:1 g:1 c:1\n"
-            "/test.me.5 = g:2 c:1\n"
-            "/wat/test.me.2 = a:2 g:1\n"
-            "/wat/test.me.3 = a:2 c:1\n"
-            "/wat/test.me.6 = g:2 c:1\n"
-            "DONE", res)
+        self.assertEqual((
+            'Root: 8da76083b9eab9f49945d8f2487df38ab909b7df\n'
+            'Remote repo-backup-name current=3a0889 staging=3a0889 desired=8da760\n'
+            'Remote repo-full-name current=1ad9e0 staging=1ad9e0 desired=8da760\n'
+            'Remote repo-incoming-name current=3d1726 staging=3d1726 desired=None\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
+            '/test.me.1 = a:3\n'
+            '/test.me.4 = a:1 g:1 c:1\n'
+            '/test.me.5 = g:2 c:1\n'
+            '/wat/test.me.2 = a:2 g:1\n'
+            '/wat/test.me.3 = a:2 c:1\n'
+            '/wat/test.me.6 = g:2 c:1\n'
+            'DONE'), res)
 
     async def test_sync_hoard_file_contents_one(self):
         populate_repotypes(self.tmpdir.name)
@@ -463,34 +673,56 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         await hoard_cmd.contents.pull("repo-full-name")
         await hoard_cmd.contents.pull("repo-backup-name")  # just registers the files already in backup
         res = await hoard_cmd.contents.pull("repo-incoming-name")
-        self.assertEqual(
-            "CLEANUP_SAME /test.me.4\n"
-            "INCOMING_TO_HOARD /test.me.5\n"
-            "INCOMING_TO_HOARD /wat/test.me.6\n"
-            "CLEANUP_DIFFERENT /wat/test.me.3\n"
-            "Sync'ed repo-incoming-name to hoard!\nDONE", res)
+        self.assertEqual((
+            'Pulling repo-incoming-name...\n'
+            'Before: Hoard [1ad9e0] <- repo [curr: None, stg: 3d1726, des: None]\n'
+            'REPO_MARK_FILE_AVAILABLE /test.me.4\n'
+            'REPO_MARK_FILE_AVAILABLE /test.me.5\n'
+            'HOARD_FILE_ADDED /test.me.5\n'
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.6\n'
+            'HOARD_FILE_ADDED /wat/test.me.6\n'
+            'updated repo-full-name from 1ad9e0 to 8da760\n'
+            'updated repo-backup-name from 1ad9e0 to 8da760\n'
+            'After: Hoard [8da760], repo [curr: 3d1726, stg: 3d1726, des: None]\n'
+            "Sync'ed repo-incoming-name to hoard!\n"
+            'DONE'), res)
 
         res = await hoard_cmd.contents.ls(skip_folders=True)
-        self.assertEqual(
-            "/test.me.1 = a:3\n"
-            "/test.me.4 = a:1 g:1 c:1\n"
-            "/test.me.5 = g:2 c:1\n"
-            "/wat/test.me.2 = a:2 g:1\n"
-            "/wat/test.me.3 = a:2 c:1\n"
-            "/wat/test.me.6 = g:2 c:1\n"
-            "DONE", res)
+        self.assertEqual((
+            'Root: 8da76083b9eab9f49945d8f2487df38ab909b7df\n'
+            'Remote repo-backup-name current=3a0889 staging=3a0889 desired=8da760\n'
+            'Remote repo-full-name current=1ad9e0 staging=1ad9e0 desired=8da760\n'
+            'Remote repo-incoming-name current=3d1726 staging=3d1726 desired=None\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
+            '/test.me.1 = a:3\n'
+            '/test.me.4 = a:1 g:1 c:1\n'
+            '/test.me.5 = g:2 c:1\n'
+            '/wat/test.me.2 = a:2 g:1\n'
+            '/wat/test.me.3 = a:2 c:1\n'
+            '/wat/test.me.6 = g:2 c:1\n'
+            'DONE'), res)
 
         self.assertEqual([
             'repo-partial/test.me.1',
             'repo-partial/wat/test.me.2', ], dump_file_list(self.tmpdir.name, 'repo-partial'))
 
         res = await hoard_cmd.files.push("repo-full-name")
-        self.assertEqual(
-            f"repo-full-name:\n"
-            "+ test.me.5\n"
-            "+ wat/test.me.6\n"
-            f"repo-full-name:\n"
-            "DONE", res)
+        self.assertEqual((
+            'Before push:\n'
+            'Remote repo-backup-name current=3a0889 staging=3a0889 desired=8da760\n'
+            'Remote repo-full-name current=1ad9e0 staging=1ad9e0 desired=8da760\n'
+            'Remote repo-incoming-name current=3d1726 staging=3d1726 desired=None\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
+            'repo-full-name:\n'
+            '+ test.me.5\n'
+            '+ wat/test.me.6\n'
+            'repo-full-name:\n'
+            'After:\n'
+            'Remote repo-backup-name current=3a0889 staging=3a0889 desired=8da760\n'
+            'Remote repo-full-name current=8da760 staging=1ad9e0 desired=8da760\n'
+            'Remote repo-incoming-name current=3d1726 staging=3d1726 desired=None\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
+            'DONE'), res)
 
         self.assertEqual([
             'repo-full/test.me.1',
@@ -501,22 +733,35 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             'repo-full/wat/test.me.6'], dump_file_list(self.tmpdir.name, 'repo-full'))
 
         res = await hoard_cmd.contents.ls(skip_folders=True)
-        self.assertEqual(
-            "/test.me.1 = a:3\n"
-            "/test.me.4 = a:1 g:1 c:1\n"
-            "/test.me.5 = a:1 g:1 c:1\n"
-            "/wat/test.me.2 = a:2 g:1\n"
-            "/wat/test.me.3 = a:2 c:1\n"
-            "/wat/test.me.6 = a:1 g:1 c:1\n"
-            "DONE", res)
+        self.assertEqual((
+            'Root: 8da76083b9eab9f49945d8f2487df38ab909b7df\n'
+            'Remote repo-backup-name current=3a0889 staging=3a0889 desired=8da760\n'
+            'Remote repo-full-name current=8da760 staging=1ad9e0 desired=8da760\n'
+            'Remote repo-incoming-name current=3d1726 staging=3d1726 desired=None\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
+            '/test.me.1 = a:3\n'
+            '/test.me.4 = a:1 g:1 c:1\n'
+            '/test.me.5 = a:1 g:1 c:1\n'
+            '/wat/test.me.2 = a:2 g:1\n'
+            '/wat/test.me.3 = a:2 c:1\n'
+            '/wat/test.me.6 = a:1 g:1 c:1\n'
+            'DONE'), res)
 
         res = await full_cave_cmd.refresh(show_details=False)
-        self.assertEqual("Refresh done!", res)
+        self.assertEqual((
+            'old: 1ad9e0f92a8411689b1aee57f9ccf36c1f09a1ad\n'
+            'current: 8da76083b9eab9f49945d8f2487df38ab909b7df\n'
+            'Refresh done!'), res)
 
         res = await hoard_cmd.contents.differences("repo-full-name")
-        self.assertEqual(
-            f"Status of repo-full-name:\n"
-            f"DONE", res)
+        self.assertEqual((
+            'Root: 8da76083b9eab9f49945d8f2487df38ab909b7df\n'
+            'Remote repo-backup-name current=3a0889 staging=3a0889 desired=8da760\n'
+            'Remote repo-full-name current=8da760 staging=1ad9e0 desired=8da760\n'
+            'Remote repo-incoming-name current=3d1726 staging=3d1726 desired=None\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
+            'Status of repo-full-name:\n'
+            'DONE'), res)
 
     async def test_pull_all(self):
         populate_repotypes(self.tmpdir.name)
@@ -524,27 +769,54 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             self.tmpdir.name)
 
         res = await hoard_cmd.contents.pull(all=True)
-        self.assertEqual(
-            "ADD_NEW_TO_HOARD /test.me.1\n"
-            "ADD_NEW_TO_HOARD /wat/test.me.2\n"
+        self.assertEqual((
+            'Pulling repo-partial-name...\n'
+            'Before: Hoard [None] <- repo [curr: None, stg: f9bfc2, des: None]\n'
+            'REPO_MARK_FILE_AVAILABLE /test.me.1\n'
+            'HOARD_FILE_ADDED /test.me.1\n'
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.2\n'
+            'HOARD_FILE_ADDED /wat/test.me.2\n'
+            'updated repo-partial-name from None to f9bfc2\n'
+            'updated repo-full-name from None to f9bfc2\n'
+            'updated repo-backup-name from None to f9bfc2\n'
+            'After: Hoard [f9bfc2], repo [curr: f9bfc2, stg: f9bfc2, des: f9bfc2]\n'
             "Sync'ed repo-partial-name to hoard!\n"
-            "=/test.me.1\n"
-            "=/wat/test.me.2\n"
-            "ADD_NEW_TO_HOARD /test.me.4\n"
-            "ADD_NEW_TO_HOARD /wat/test.me.3\n"
+            'Pulling repo-full-name...\n'
+            'Before: Hoard [f9bfc2] <- repo [curr: None, stg: 1ad9e0, des: f9bfc2]\n'
+            'REPO_MARK_FILE_AVAILABLE /test.me.1\n'
+            'REPO_MARK_FILE_AVAILABLE /test.me.4\n'
+            'HOARD_FILE_ADDED /test.me.4\n'
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.2\n'
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.3\n'
+            'HOARD_FILE_ADDED /wat/test.me.3\n'
+            'updated repo-full-name from f9bfc2 to 1ad9e0\n'
+            'updated repo-backup-name from f9bfc2 to 1ad9e0\n'
+            'After: Hoard [1ad9e0], repo [curr: 1ad9e0, stg: 1ad9e0, des: 1ad9e0]\n'
             "Sync'ed repo-full-name to hoard!\n"
-            "=/test.me.1\n"
-            "=/wat/test.me.3\n"
+            'Pulling repo-backup-name...\n'
+            'Before: Hoard [1ad9e0] <- repo [curr: None, stg: 3a0889, des: 1ad9e0]\n'
+            'REPO_MARK_FILE_AVAILABLE /test.me.1\n'
+            'REPO_DESIRED_FILE_TO_GET /test.me.4\n'
+            'REPO_DESIRED_FILE_TO_GET /wat/test.me.2\n'
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.3\n'
+            'After: Hoard [1ad9e0], repo [curr: 3a0889, stg: 3a0889, des: 1ad9e0]\n'
             "Sync'ed repo-backup-name to hoard!\n"
-            "CLEANUP_SAME /test.me.4\n"
-            "INCOMING_TO_HOARD /test.me.5\n"
-            "INCOMING_TO_HOARD /wat/test.me.6\n"
-            "CLEANUP_DIFFERENT /wat/test.me.3\n"
+            'Pulling repo-incoming-name...\n'
+            'Before: Hoard [1ad9e0] <- repo [curr: None, stg: 3d1726, des: None]\n'
+            'REPO_MARK_FILE_AVAILABLE /test.me.4\n'
+            'REPO_MARK_FILE_AVAILABLE /test.me.5\n'
+            'HOARD_FILE_ADDED /test.me.5\n'
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.6\n'
+            'HOARD_FILE_ADDED /wat/test.me.6\n'
+            'updated repo-full-name from 1ad9e0 to 8da760\n'
+            'updated repo-backup-name from 1ad9e0 to 8da760\n'
+            'After: Hoard [8da760], repo [curr: 3d1726, stg: 3d1726, des: None]\n'
             "Sync'ed repo-incoming-name to hoard!\n"
-            "DONE", res)
+            'DONE'), res)
 
         res = await hoard_cmd.contents.status(hide_disk_sizes=True)
         self.assertEqual([
+            'Root: 8da76083b9eab9f49945d8f2487df38ab909b7df',
             '|Num Files                |             updated|total     |available |get       |cleanup   |',
             '|repo-backup-name         |                 now|         6|         2|         4|          |',
             '|repo-full-name           |                 now|         6|         4|         2|          |',
@@ -570,6 +842,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.status(hide_disk_sizes=True, hide_time=True)
         self.assertEqual([
+            'Root: 8da76083b9eab9f49945d8f2487df38ab909b7df',
             '|Num Files                |total     |available |get       |cleanup   |',
             '|repo-backup-name         |         6|         2|         4|          |',
             '|repo-full-name           |         6|         4|         2|          |',
@@ -585,6 +858,11 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.files.push(all=True)
         self.assertEqual([
+            'Before push:',
+            'Remote repo-backup-name current=3a0889 staging=3a0889 desired=8da760',
+            'Remote repo-full-name current=1ad9e0 staging=1ad9e0 desired=8da760',
+            'Remote repo-incoming-name current=3d1726 staging=3d1726 desired=None',
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2',
             'repo-partial-name:',
             'repo-full-name:',
             '+ test.me.5',
@@ -603,6 +881,11 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             'd test.me.5',
             'd wat/test.me.3',
             'd wat/test.me.6',
+            'After:',
+            'Remote repo-backup-name current=8da760 staging=3a0889 desired=8da760',
+            'Remote repo-full-name current=8da760 staging=1ad9e0 desired=8da760',
+            'Remote repo-incoming-name current=None staging=3d1726 desired=None',
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2',
             'DONE'], res.splitlines())
 
         self.assertEqual([
@@ -611,14 +894,19 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             dump_file_list(self.tmpdir.name, 'repo-partial'))
 
         res = await hoard_cmd.contents.ls(skip_folders=True)
-        self.assertEqual(
-            "/test.me.1 = a:3\n"
-            "/test.me.4 = a:2\n"
-            "/test.me.5 = a:2\n"
-            "/wat/test.me.2 = a:3\n"
-            "/wat/test.me.3 = a:2\n"
-            "/wat/test.me.6 = a:2\n"
-            "DONE", res)
+        self.assertEqual((
+            'Root: 8da76083b9eab9f49945d8f2487df38ab909b7df\n'
+            'Remote repo-backup-name current=8da760 staging=3a0889 desired=8da760\n'
+            'Remote repo-full-name current=8da760 staging=1ad9e0 desired=8da760\n'
+            'Remote repo-incoming-name current=None staging=3d1726 desired=None\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
+            '/test.me.1 = a:3\n'
+            '/test.me.4 = a:2\n'
+            '/test.me.5 = a:2\n'
+            '/wat/test.me.2 = a:3\n'
+            '/wat/test.me.3 = a:2\n'
+            '/wat/test.me.6 = a:2\n'
+            'DONE'), res)
 
         self.assertEqual([
             'repo-full/test.me.1',
@@ -655,13 +943,23 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             type=CaveType.PARTIAL, fetch_new=True)
 
         res = await hoard_cmd.contents.pull("repo-full-name")
-        self.assertEqual(
-            "ADD_NEW_TO_HOARD /test.me.1\n"
-            "ADD_NEW_TO_HOARD /test.me.4\n"
-            "ADD_NEW_TO_HOARD /wat/inner/another.file\n"
-            "ADD_NEW_TO_HOARD /wat/test.me.2\n"
-            "ADD_NEW_TO_HOARD /wat/test.me.3\n"
-            "Sync'ed repo-full-name to hoard!\nDONE", res)
+        self.assertEqual((
+            'Pulling repo-full-name...\n'
+            'Before: Hoard [None] <- repo [curr: None, stg: d48f4e, des: None]\n'
+            'REPO_MARK_FILE_AVAILABLE /test.me.1\n'
+            'HOARD_FILE_ADDED /test.me.1\n'
+            'REPO_MARK_FILE_AVAILABLE /test.me.4\n'
+            'HOARD_FILE_ADDED /test.me.4\n'
+            'REPO_MARK_FILE_AVAILABLE /wat/inner/another.file\n'
+            'HOARD_FILE_ADDED /wat/inner/another.file\n'
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.2\n'
+            'HOARD_FILE_ADDED /wat/test.me.2\n'
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.3\n'
+            'HOARD_FILE_ADDED /wat/test.me.3\n'
+            'updated repo-full-name from None to d48f4e\n'
+            'After: Hoard [d48f4e], repo [curr: d48f4e, stg: d48f4e, des: d48f4e]\n'
+            "Sync'ed repo-full-name to hoard!\n"
+            'DONE'), res)
 
         os.mkdir(join(self.tmpdir.name, "repo-cloned-wat"))
         res = await hoard_cmd.clone(
@@ -674,32 +972,44 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         self.assertEqual("+/wat/inner/another.file\nConsidered 1 files.\nDONE", res)
 
         res = await hoard_cmd.contents.ls(show_remotes=True)
-        self.assertEqual(
-            "/ => (repo-full-name:.)\n"
-            "/test.me.1 = a:1\n"
-            "/test.me.4 = a:1\n"
-            "/wat => (repo-cloned-wat:.), (repo-full-name:wat)\n"
-            "/wat/test.me.2 = a:1\n"
-            "/wat/test.me.3 = a:1\n"
-            "/wat/inner => (repo-cloned-wat:inner), (repo-full-name:wat/inner)\n"
-            "/wat/inner/another.file = a:1 g:1\n"
-            "DONE", res)
+        self.assertEqual((
+            'Root: d48f4edfef726ccfebd58e8c7061e5f18c815734\n'
+            'Remote repo-cloned-wat current=None staging=None desired=31a330\n'
+            'Remote repo-full-name current=d48f4e staging=d48f4e desired=d48f4e\n'
+            '/ => (repo-full-name:.)\n'
+            '/test.me.1 = a:1\n'
+            '/test.me.4 = a:1\n'
+            '/wat => (repo-cloned-wat:.), (repo-full-name:wat)\n'
+            '/wat/test.me.2 = a:1\n'
+            '/wat/test.me.3 = a:1\n'
+            '/wat/inner => (repo-cloned-wat:inner), (repo-full-name:wat/inner)\n'
+            '/wat/inner/another.file = a:1 g:1\n'
+            'DONE'), res)
 
         self.assertEqual([], dump_file_list(self.tmpdir.name, "repo-cloned-wat/"))  # no files yet
 
         res = await hoard_cmd.files.push("repo-cloned-wat")
-        self.assertEqual(
-            f"repo-cloned-wat:\n"
-            "+ inner/another.file\n"
-            f"repo-cloned-wat:\n"
-            "DONE", res)
+        self.assertEqual((
+            'Before push:\n'
+            'Remote repo-cloned-wat current=None staging=None desired=31a330\n'
+            'Remote repo-full-name current=d48f4e staging=d48f4e desired=d48f4e\n'
+            'repo-cloned-wat:\n'
+            '+ inner/another.file\n'
+            'repo-cloned-wat:\n'
+            'After:\n'
+            'Remote repo-cloned-wat current=31a330 staging=None desired=31a330\n'
+            'Remote repo-full-name current=d48f4e staging=d48f4e desired=d48f4e\n'
+            'DONE'), res)
 
         self.assertEqual(
             ['repo-cloned-wat/inner/another.file'],
             dump_file_list(self.tmpdir.name, "repo-cloned-wat/"))
 
         res = await cloned_cave_cmd.refresh(show_details=False)
-        self.assertEqual("Refresh done!", res)
+        self.assertEqual((
+            'old: a80f91bc48850a1fb3459bb76b9f6308d4d35710\n'
+            'current: 844f930bec57c669128c27975d86a5d81bd51f47\n'
+            'Refresh done!'), res)
 
         res = await hoard_cmd.contents.get(repo="repo-cloned-wat", path="")
         self.assertEqual(
@@ -708,12 +1018,18 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             "Considered 3 files.\nDONE", res)
 
         res = await hoard_cmd.files.push("repo-cloned-wat")
-        self.assertEqual(
-            f"repo-cloned-wat:\n"
-            "+ test.me.2\n"
-            "+ test.me.3\n"
-            f"repo-cloned-wat:\n"
-            "DONE", res)
+        self.assertEqual((
+            'Before push:\n'
+            'Remote repo-cloned-wat current=31a330 staging=None desired=8ab884\n'
+            'Remote repo-full-name current=d48f4e staging=d48f4e desired=d48f4e\n'
+            'repo-cloned-wat:\n'
+            '+ test.me.2\n'
+            '+ test.me.3\n'
+            'repo-cloned-wat:\n'
+            'After:\n'
+            'Remote repo-cloned-wat current=8ab884 staging=None desired=8ab884\n'
+            'Remote repo-full-name current=d48f4e staging=d48f4e desired=d48f4e\n'
+            'DONE'), res)
 
         self.assertEqual([
             'repo-cloned-wat/inner/another.file',
@@ -735,10 +1051,17 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             type=CaveType.PARTIAL, fetch_new=True)
 
         res = await hoard_cmd.contents.pull("repo-partial-name")
-        self.assertEqual(
-            "ADD_NEW_TO_HOARD /first-point/test.me.1\n"
-            "ADD_NEW_TO_HOARD /first-point/wat/test.me.2\n"
-            "Sync'ed repo-partial-name to hoard!\nDONE", res.strip())
+        self.assertEqual((
+            'Pulling repo-partial-name...\n'
+            'Before: Hoard [None] <- repo [curr: None, stg: cfe6f4, des: None]\n'
+            'REPO_MARK_FILE_AVAILABLE /first-point/test.me.1\n'
+            'HOARD_FILE_ADDED /first-point/test.me.1\n'
+            'REPO_MARK_FILE_AVAILABLE /first-point/wat/test.me.2\n'
+            'HOARD_FILE_ADDED /first-point/wat/test.me.2\n'
+            'updated repo-partial-name from None to cfe6f4\n'
+            'After: Hoard [cfe6f4], repo [curr: cfe6f4, stg: cfe6f4, des: cfe6f4]\n'
+            "Sync'ed repo-partial-name to hoard!\n"
+            'DONE'), res.strip())
 
         res = hoard_cmd.remotes(hide_paths=True)
         self.assertEqual(
@@ -749,13 +1072,15 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             "DONE", res.strip())
 
         res = await hoard_cmd.contents.ls(show_remotes=True)
-        self.assertEqual(
-            "/\n"
-            "/first-point => (repo-partial-name:.)\n"
-            "/first-point/test.me.1 = a:1\n"
-            "/first-point/wat => (repo-partial-name:wat)\n"
-            "/first-point/wat/test.me.2 = a:1\n"
-            "DONE", res)
+        self.assertEqual((
+            'Root: cfe6f4f9842fe5cd83051d49aa307bc40ed10084\n'
+            'Remote repo-partial-name current=cfe6f4 staging=cfe6f4 desired=cfe6f4\n'
+            '/\n'
+            '/first-point => (repo-partial-name:.)\n'
+            '/first-point/test.me.1 = a:1\n'
+            '/first-point/wat => (repo-partial-name:wat)\n'
+            '/first-point/wat/test.me.2 = a:1\n'
+            'DONE'), res)
 
         res = await hoard_cmd.move_mounts(from_path="/first-point/inner", to_path="/cant-move-files")
         self.assertEqual(
@@ -763,23 +1088,29 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             res.strip())
 
         res = await hoard_cmd.move_mounts(from_path="/", to_path="/move-all-inside")
-        self.assertEqual(
-            "Moving files and folders:\n"
-            "/first-point/test.me.1=>/move-all-inside/first-point/test.me.1\n"
-            "/first-point/wat/test.me.2=>/move-all-inside/first-point/wat/test.me.2\n"
-            "Moving 1 repos:\n"
-            "[repo-partial-name] /first-point => /move-all-inside/first-point\n"
-            "DONE", res)
+        self.assertEqual((
+            'Moving files and folders:\n'
+            'repo-partial-name.current: cfe6f4 => f38587\n'
+            'repo-partial-name.staging: cfe6f4 => f38587\n'
+            'repo-partial-name.desired: cfe6f4 => f38587\n'
+            'HOARD.desired: cfe6f4 => f38587\n'
+            '/first-point/test.me.1=>/move-all-inside/first-point/test.me.1\n'
+            '/first-point/wat/test.me.2=>/move-all-inside/first-point/wat/test.me.2\n'
+            'Moving 1 repos:\n'
+            '[repo-partial-name] /first-point => /move-all-inside/first-point\n'
+            'DONE'), res)
 
         res = await hoard_cmd.contents.ls(show_remotes=True)
-        self.assertEqual(
-            "/\n"
-            "/move-all-inside\n"
-            "/move-all-inside/first-point => (repo-partial-name:.)\n"
-            "/move-all-inside/first-point/test.me.1 = a:1\n"
-            "/move-all-inside/first-point/wat => (repo-partial-name:wat)\n"
-            "/move-all-inside/first-point/wat/test.me.2 = a:1\n"
-            "DONE", res)
+        self.assertEqual((
+            'Root: f3858768bf4e1794b1a4dbffb40acd9d8044bab3\n'
+            'Remote repo-partial-name current=f38587 staging=f38587 desired=f38587\n'
+            '/\n'
+            '/move-all-inside\n'
+            '/move-all-inside/first-point => (repo-partial-name:.)\n'
+            '/move-all-inside/first-point/test.me.1 = a:1\n'
+            '/move-all-inside/first-point/wat => (repo-partial-name:wat)\n'
+            '/move-all-inside/first-point/wat/test.me.2 = a:1\n'
+            'DONE'), res)
 
         res = hoard_cmd.remotes(hide_paths=True)
         self.assertEqual(
@@ -793,26 +1124,36 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         self.assertEqual("No repos to move!", res.strip())
 
         res = await hoard_cmd.move_mounts(from_path="/move-all-inside/first-point", to_path="/moved-data")
-        self.assertEqual(
-            "Moving files and folders:\n"
-            "/move-all-inside/first-point/test.me.1=>/moved-data/test.me.1\n"
-            "/move-all-inside/first-point/wat/test.me.2=>/moved-data/wat/test.me.2\n"
-            "Moving 1 repos:\n"
-            "[repo-partial-name] /move-all-inside/first-point => /moved-data\n"
-            "DONE", res)
+        self.assertEqual((
+            'Moving files and folders:\n'
+            'repo-partial-name.current: f38587 => b65582\n'
+            'repo-partial-name.staging: f38587 => b65582\n'
+            'repo-partial-name.desired: f38587 => b65582\n'
+            'HOARD.desired: f38587 => b65582\n'
+            '/move-all-inside/first-point/test.me.1=>/moved-data/test.me.1\n'
+            '/move-all-inside/first-point/wat/test.me.2=>/moved-data/wat/test.me.2\n'
+            'Moving 1 repos:\n'
+            '[repo-partial-name] /move-all-inside/first-point => /moved-data\n'
+            'DONE'), res)
 
         res = await hoard_cmd.contents.ls(show_remotes=True)
-        self.assertEqual(
-            "/\n"
-            "/moved-data => (repo-partial-name:.)\n"
-            "/moved-data/test.me.1 = a:1\n"
-            "/moved-data/wat => (repo-partial-name:wat)\n"
-            "/moved-data/wat/test.me.2 = a:1\n"
-            "DONE", res)
+        self.assertEqual((
+            'Root: b6558267774b76f40b7801ed1ed1ec84526c544c\n'
+            'Remote repo-partial-name current=b65582 staging=b65582 desired=b65582\n'
+            '/\n'
+            '/moved-data => (repo-partial-name:.)\n'
+            '/moved-data/test.me.1 = a:1\n'
+            '/moved-data/wat => (repo-partial-name:wat)\n'
+            '/moved-data/wat/test.me.2 = a:1\n'
+            'DONE'), res)
 
         res = await hoard_cmd.move_mounts(from_path="/moved-data", to_path="/")
         self.assertEqual(
             "Moving files and folders:\n"
+            'repo-partial-name.current: b65582 => f9bfc2\n'
+            'repo-partial-name.staging: b65582 => f9bfc2\n'
+            'repo-partial-name.desired: b65582 => f9bfc2\n'
+            'HOARD.desired: b65582 => f9bfc2\n'
             "/moved-data/test.me.1=>/test.me.1\n"
             "/moved-data/wat/test.me.2=>/wat/test.me.2\n"
             "Moving 1 repos:\n"
@@ -820,84 +1161,24 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             "DONE", res)
 
         res = await hoard_cmd.contents.ls(show_remotes=True)
-        self.assertEqual(
-            "/ => (repo-partial-name:.)\n"
-            "/test.me.1 = a:1\n"
-            "/wat => (repo-partial-name:wat)\n"
-            "/wat/test.me.2 = a:1\n"
-            "DONE", res)
+        self.assertEqual((
+            'Root: f9bfc2be6cc201aa81b733b9d83c1030cc88bffe\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
+            '/ => (repo-partial-name:.)\n'
+            '/test.me.1 = a:1\n'
+            '/wat => (repo-partial-name:wat)\n'
+            '/wat/test.me.2 = a:1\n'
+            'DONE'), res)
 
         await partial_cave_cmd.refresh(show_details=False)
 
         res = await hoard_cmd.contents.pull("repo-partial-name")  # needs to do nothing
-        self.assertEqual("Sync'ed repo-partial-name to hoard!\nDONE", res.strip())
-
-    async def test_copy_locations_of_files(self):
-        populate_repotypes(self.tmpdir.name)
-        partial_cave_cmd = TotalCommand(path=join(self.tmpdir.name, "repo-partial")).cave
-        partial_cave_cmd.init()
-        await partial_cave_cmd.refresh(show_details=False)
-
-        hoard_cmd = TotalCommand(path=join(self.tmpdir.name, "hoard")).hoard
-        hoard_cmd.init()
-
-        hoard_cmd.add_remote(
-            remote_path=join(self.tmpdir.name, "repo-partial"), name="repo-partial-name",
-            mount_point="/first-point",
-            type=CaveType.PARTIAL, fetch_new=True)
-
-        # "ADD_NEW_TO_HOARD /first-point/test.me.1\n"
-        # "ADD_NEW_TO_HOARD /first-point/wat/test.me.2\n"
-        await hoard_cmd.contents.pull("repo-partial-name")
-
-        res = await hoard_cmd.move_mounts(from_path="/first-point", to_path="/moved-data")
-        self.assertEqual(
-            "Moving files and folders:\n"
-            "/first-point/test.me.1=>/moved-data/test.me.1\n"
-            "/first-point/wat/test.me.2=>/moved-data/wat/test.me.2\n"
-            "Moving 1 repos:\n"
-            "[repo-partial-name] /first-point => /moved-data\n"
-            "DONE", res)
-
-        res = await hoard_cmd.contents.copy(from_path="/moved-data/wat", to_path="/moved-data/zed")
-        self.assertEqual(
-            "c+ /moved-data/zed/test.me.2\n"
-            "DONE", res)
-
-        res = await hoard_cmd.contents.ls(show_remotes=True)
-        self.assertEqual(
-            "/\n"
-            "/moved-data => (repo-partial-name:.)\n"
-            "/moved-data/test.me.1 = a:1\n"
-            "/moved-data/wat => (repo-partial-name:wat)\n"
-            "/moved-data/wat/test.me.2 = a:1\n"
-            "/moved-data/zed => (repo-partial-name:zed)\n"
-            "/moved-data/zed/test.me.2 = x:1\n"
-            "DONE", res)
-
-        res = await hoard_cmd.files.push("repo-partial-name")
-        self.assertEqual(
-            f"repo-partial-name:\n"
-            "c+ zed/test.me.2\n"
-            f"repo-partial-name:\n"
-            "DONE", res)
-
-        res = await hoard_cmd.contents.ls(show_remotes=True)
-        self.assertEqual(
-            "/\n"
-            "/moved-data => (repo-partial-name:.)\n"
-            "/moved-data/test.me.1 = a:1\n"
-            "/moved-data/wat => (repo-partial-name:wat)\n"
-            "/moved-data/wat/test.me.2 = a:1\n"
-            "/moved-data/zed => (repo-partial-name:zed)\n"
-            "/moved-data/zed/test.me.2 = a:1\n"
-            "DONE", res)
-
-        res = dump_file_list(self.tmpdir.name, "repo-partial")
-        self.assertEqual(
-            ['repo-partial/test.me.1',
-             'repo-partial/wat/test.me.2',
-             'repo-partial/zed/test.me.2'], res)
+        self.assertEqual((
+            'Pulling repo-partial-name...\n'
+            'Before: Hoard [f9bfc2] <- repo [curr: f9bfc2, stg: f9bfc2, des: f9bfc2]\n'
+            'After: Hoard [f9bfc2], repo [curr: f9bfc2, stg: f9bfc2, des: f9bfc2]\n'
+            "Sync'ed repo-partial-name to hoard!\n"
+            'DONE'), res.strip())
 
     async def test_restore_missing_local_file_on_refresh(self):
         populate_repotypes(self.tmpdir.name)
@@ -905,39 +1186,75 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             self.tmpdir.name)
 
         res = await hoard_cmd.contents.pull("repo-partial-name")
-        self.assertEqual(
-            "ADD_NEW_TO_HOARD /test.me.1\n"
-            "ADD_NEW_TO_HOARD /wat/test.me.2\n"
-            "Sync'ed repo-partial-name to hoard!\nDONE", res)
+        self.assertEqual((
+            'Pulling repo-partial-name...\n'
+            'Before: Hoard [None] <- repo [curr: None, stg: f9bfc2, des: None]\n'
+            'REPO_MARK_FILE_AVAILABLE /test.me.1\n'
+            'HOARD_FILE_ADDED /test.me.1\n'
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.2\n'
+            'HOARD_FILE_ADDED /wat/test.me.2\n'
+            'updated repo-partial-name from None to f9bfc2\n'
+            'updated repo-full-name from None to f9bfc2\n'
+            'updated repo-backup-name from None to f9bfc2\n'
+            'After: Hoard [f9bfc2], repo [curr: f9bfc2, stg: f9bfc2, des: f9bfc2]\n'
+            "Sync'ed repo-partial-name to hoard!\n"
+            'DONE'), res)
 
         res = await hoard_cmd.contents.pull("repo-backup-name")
-        self.assertEqual("=/test.me.1\n?/wat/test.me.3\nSync'ed repo-backup-name to hoard!\nDONE", res)
+        self.assertEqual((
+            'Pulling repo-backup-name...\n'
+            'Before: Hoard [f9bfc2] <- repo [curr: None, stg: 3a0889, des: f9bfc2]\n'
+            'REPO_MARK_FILE_AVAILABLE /test.me.1\n'
+            'REPO_DESIRED_FILE_TO_GET /wat/test.me.2\n'
+            'After: Hoard [f9bfc2], repo [curr: 3a0889, stg: 3a0889, des: f9bfc2]\n'
+            "Sync'ed repo-backup-name to hoard!\n"
+            'DONE'), res)
 
-        self.assertEqual(
-            "/\n"
-            "/test.me.1 = a:2 g:1\n"
-            "/wat\n"
-            "/wat/test.me.2 = a:1 g:2\n"
-            "DONE", await hoard_cmd.contents.ls(depth=2))
+        self.assertEqual((
+            'Root: f9bfc2be6cc201aa81b733b9d83c1030cc88bffe\n'
+            'Remote repo-backup-name current=3a0889 staging=3a0889 desired=f9bfc2\n'
+            'Remote repo-full-name current=None staging=None desired=f9bfc2\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
+            '/\n'
+            '/test.me.1 = a:2 g:1\n'
+            '/wat\n'
+            '/wat/test.me.2 = a:1 g:2\n'
+            'DONE'), await hoard_cmd.contents.ls(depth=2))
 
         res = await hoard_cmd.files.push("repo-backup-name")
-        self.assertEqual(
-            f"repo-backup-name:\n"
-            "+ wat/test.me.2\n"
-            f"repo-backup-name:\n"
-            "DONE", res.strip())
+        self.assertEqual((
+            'Before push:\n'
+            'Remote repo-backup-name current=3a0889 staging=3a0889 desired=f9bfc2\n'
+            'Remote repo-full-name current=None staging=None desired=f9bfc2\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
+            'repo-backup-name:\n'
+            '+ wat/test.me.2\n'
+            'repo-backup-name:\n'
+            'd wat/test.me.3\n'
+            'After:\n'
+            'Remote repo-backup-name current=f9bfc2 staging=3a0889 desired=f9bfc2\n'
+            'Remote repo-full-name current=None staging=None desired=f9bfc2\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
+            'DONE'), res.strip())
 
         self.assertEqual([
             'repo-backup/test.me.1',
-            'repo-backup/wat/test.me.2',
-            'repo-backup/wat/test.me.3'], dump_file_list(self.tmpdir.name, 'repo-backup'))
+            'repo-backup/wat/test.me.2'], dump_file_list(self.tmpdir.name, 'repo-backup'))
 
-        self.assertEqual(
-            "/\n"
-            "/test.me.1 = a:2 g:1\n"
-            "/wat\n"
-            "/wat/test.me.2 = a:2 g:1\n"
-            "DONE", await hoard_cmd.contents.ls(depth=2))
+        self.assertEqual((
+            'Root: f9bfc2be6cc201aa81b733b9d83c1030cc88bffe\n'
+            'Remote repo-backup-name current=f9bfc2 staging=3a0889 desired=f9bfc2\n'
+            'Remote repo-full-name current=None staging=None desired=f9bfc2\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
+            '/\n'
+            '/test.me.1 = a:2 g:1\n'
+            '/wat\n'
+            '/wat/test.me.2 = a:2 g:1\n'
+            'DONE'), await hoard_cmd.contents.ls(depth=2))
 
         self.assertEqual([
             'repo-partial/test.me.1',
@@ -948,7 +1265,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
 
         res = await partial_cave_cmd.status()
         self.assertEqual(
-            f"{partial_cave_cmd.current_uuid()}:\n"
+            f"{partial_cave_cmd.current_uuid()} [f9bfc2be6cc201aa81b733b9d83c1030cc88bffe]:\n"
             "files:\n"
             "    same: 1 (100.0%)\n"
             "     mod: 0 (0.0%)\n"
@@ -959,26 +1276,47 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             " deleted: 1 (50.0%)\n", res)
 
         res = await partial_cave_cmd.refresh(show_details=False)
-        self.assertEqual("Refresh done!", res)
+        self.assertEqual((
+            'old: f9bfc2be6cc201aa81b733b9d83c1030cc88bffe\n'
+            'current: 57a93ffeacf20f3d2de15ebce34a47b20478eaf2\n'
+            'Refresh done!'), res)
 
         res = await hoard_cmd.contents.pull("repo-partial-name", force_fetch_local_missing=True)
-        self.assertEqual(
-            "g/wat/test.me.2\n"
-            "Sync'ed repo-partial-name to hoard!\nDONE", res)
+        self.assertEqual((
+            'Pulling repo-partial-name...\n'
+            'Before: Hoard [f9bfc2] <- repo [curr: f9bfc2, stg: 57a93f, des: f9bfc2]\n'
+            'After: Hoard [f9bfc2], repo [curr: 57a93f, stg: 57a93f, des: f9bfc2]\n'
+            "Sync'ed repo-partial-name to hoard!\n"
+            'DONE'), res)
 
-        self.assertEqual(
-            "/\n"
-            "/test.me.1 = a:2 g:1\n"
-            "/wat\n"
-            "/wat/test.me.2 = a:1 g:2\n"
-            "DONE", await hoard_cmd.contents.ls(depth=2))
+        self.assertEqual((
+            'Root: f9bfc2be6cc201aa81b733b9d83c1030cc88bffe\n'
+            'Remote repo-backup-name current=f9bfc2 staging=3a0889 desired=f9bfc2\n'
+            'Remote repo-full-name current=None staging=None desired=f9bfc2\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=57a93f staging=57a93f desired=f9bfc2\n'
+            '/\n'
+            '/test.me.1 = a:2 g:1\n'
+            '/wat\n'
+            '/wat/test.me.2 = a:1 g:2\n'
+            'DONE'), await hoard_cmd.contents.ls(depth=2))
 
         res = await hoard_cmd.files.push("repo-partial-name")
-        self.assertEqual(
-            f"repo-partial-name:\n"
-            f"+ wat/test.me.2\n"
-            f"repo-partial-name:\n"
-            f"DONE", res)
+        self.assertEqual((
+            'Before push:\n'
+            'Remote repo-backup-name current=f9bfc2 staging=3a0889 desired=f9bfc2\n'
+            'Remote repo-full-name current=None staging=None desired=f9bfc2\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=57a93f staging=57a93f desired=f9bfc2\n'
+            'repo-partial-name:\n'
+            '+ wat/test.me.2\n'
+            'repo-partial-name:\n'
+            'After:\n'
+            'Remote repo-backup-name current=f9bfc2 staging=3a0889 desired=f9bfc2\n'
+            'Remote repo-full-name current=None staging=None desired=f9bfc2\n'
+            'Remote repo-incoming-name current=None staging=None desired=None\n'
+            'Remote repo-partial-name current=f9bfc2 staging=57a93f desired=f9bfc2\n'
+            'DONE'), res)
 
         self.assertEqual(
             ['repo-partial/test.me.1', 'repo-partial/wat/test.me.2'],
@@ -1011,13 +1349,20 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         self.assertEqual(f"Repo {partial_cave_cmd.current_uuid()} has no current contents available!\nDONE", res)
 
         res = await partial_cave_cmd.refresh(show_details=False)
-        self.assertEqual("Refresh done!", res)
+        self.assertEqual('old: None\ncurrent: f9bfc2be6cc201aa81b733b9d83c1030cc88bffe\nRefresh done!', res)
 
         res = await hoard_cmd.contents.pull(partial_cave_cmd.current_uuid())
-        self.assertEqual(
-            "ADD_NEW_TO_HOARD /test.me.1\n"
-            "ADD_NEW_TO_HOARD /wat/test.me.2\n"
-            "Sync'ed repo-partial-name to hoard!\nDONE", res)
+        self.assertEqual((
+            'Pulling repo-partial-name...\n'
+            'Before: Hoard [None] <- repo [curr: None, stg: f9bfc2, des: None]\n'
+            'REPO_MARK_FILE_AVAILABLE /test.me.1\n'
+            'HOARD_FILE_ADDED /test.me.1\n'
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.2\n'
+            'HOARD_FILE_ADDED /wat/test.me.2\n'
+            'updated repo-partial-name from None to f9bfc2\n'
+            'After: Hoard [f9bfc2], repo [curr: f9bfc2, stg: f9bfc2, des: f9bfc2]\n'
+            "Sync'ed repo-partial-name to hoard!\n"
+            'DONE'), res)
 
         full_cave_cmd = TotalCommand(path=join(tmpdir, "repo-full")).cave
         full_cave_cmd.init()
@@ -1029,14 +1374,20 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         self.assertEqual(f"Added repo-full-name[{full_cave_cmd.current_uuid()}] at {join(tmpdir, 'repo-full')}!", res)
 
         res = await hoard_cmd.contents.pull(all=True)
-        self.assertEqual(
-            "Skipping update as past epoch 1 is not after hoard epoch 1\n"
-            "=/test.me.1\n"
-            "=/wat/test.me.2\n"
-            "ADD_NEW_TO_HOARD /test.me.4\n"
-            "ADD_NEW_TO_HOARD /wat/test.me.3\n"
+        self.assertEqual((
+            'Skipping update as past epoch 1 is not after hoard epoch 1\n'
+            'Pulling repo-full-name...\n'
+            'Before: Hoard [f9bfc2] <- repo [curr: None, stg: 1ad9e0, des: None]\n'
+            'REPO_MARK_FILE_AVAILABLE /test.me.1\n'
+            'REPO_MARK_FILE_AVAILABLE /test.me.4\n'
+            'HOARD_FILE_ADDED /test.me.4\n'
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.2\n'
+            'REPO_MARK_FILE_AVAILABLE /wat/test.me.3\n'
+            'HOARD_FILE_ADDED /wat/test.me.3\n'
+            'updated repo-full-name from None to 1ad9e0\n'
+            'After: Hoard [1ad9e0], repo [curr: 1ad9e0, stg: 1ad9e0, des: 1ad9e0]\n'
             "Sync'ed repo-full-name to hoard!\n"
-            "DONE", res)
+            'DONE'), res)
 
 
 def dump_file_list(tmpdir: str, path: str, data: bool = False) -> List[str] | Dict[str, str]:

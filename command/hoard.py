@@ -5,7 +5,7 @@ from typing import List
 
 from command.repo import ConnectedRepo
 from config import HoardConfig, HoardPaths
-from contents.hoard import HoardContents, HOARD_CONTENTS_FILENAME, HoardContentsConn, ReadonlyHoardContentsConn
+from contents.hoard import ReadonlyHoardContentsConn, HOARD_CONTENTS_LMDB_DIR
 from exceptions import RepoOpeningFailed
 from resolve_uuid import load_config, load_paths, CONFIG_FILE
 
@@ -37,14 +37,14 @@ class Hoard:
             return False
 
     def open_contents(self, create_missing: bool = False) -> ReadonlyHoardContentsConn:
-        hoard_contents_filename = os.path.join(self.hoardpath, HOARD_CONTENTS_FILENAME)
+        hoard_contents_lmdb_dir = os.path.join(self.hoardpath, HOARD_CONTENTS_LMDB_DIR)
         if not os.path.isfile(os.path.join(self.hoardpath, CONFIG_FILE)):
             raise ValueError(f"Hoard is not configured in {self.hoardpath}!")
-        if not os.path.isfile(hoard_contents_filename) and not create_missing:
+        if not os.path.isdir(hoard_contents_lmdb_dir) and not create_missing:
             raise ValueError(
-                f"Hoard contents file {hoard_contents_filename} is not available,"
+                f"Hoard contents dir {hoard_contents_lmdb_dir} is not available,"
                 f" but --create-missing = False")
-        return ReadonlyHoardContentsConn(pathlib.Path(self.hoardpath))
+        return ReadonlyHoardContentsConn(pathlib.Path(self.hoardpath), self.config(create=False))
 
     def available_remotes(self) -> List[str]:
         return [

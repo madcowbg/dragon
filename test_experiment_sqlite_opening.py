@@ -1,9 +1,12 @@
 import logging
+import os
+import unittest
 from unittest.async_case import IsolatedAsyncioTestCase
 
 from sql_util import sqlite3_standard
 
 
+@unittest.skipUnless(os.getenv('MYPROJECT_DEVELOPMENT_TEST'), reason="Uses total hoard")
 class TestSQLiteOpening(IsolatedAsyncioTestCase):
     def setUp(self):
         logging.basicConfig(

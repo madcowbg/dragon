@@ -1,14 +1,12 @@
-import datetime
 import logging
 import os
 import pathlib
 import shutil
 from io import StringIO
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, TextIO
 
 from alive_progress import alive_bar, alive_it
 
-import command.fast_path
 from command.backups.command import HoardCommandBackups
 from command.command_repo import RepoCommand
 from command.contents.command import HoardCommandContents
@@ -18,13 +16,16 @@ from command.hoard import Hoard
 from command.pathing import HoardPathing
 from command.repo import ProspectiveRepo
 from config import HoardRemote, CavePath, CaveType, ConnectionSpeed, ConnectionLatency
+from contents.hoard import HoardContents
 from contents.hoard_props import HoardFileProps
-from contents.repo_props import RepoFileStatus
 from exceptions import MissingRepo
 from gui.hoard_explorer import start_hoard_explorer_gui
 from hashing import fast_hash
+from lmdb_storage.tree_iteration import dfs
+from lmdb_storage.tree_operations import get_child, remove_child
+from lmdb_storage.tree_structure import ObjectID, add_object, ObjectType
 from resolve_uuid import resolve_remote_uuid
-from util import group_to_dict, run_in_separate_loop
+from util import group_to_dict, run_in_separate_loop, safe_hex
 
 
 def path_in_local(hoard_file: str, mounted_at: str) -> str:
@@ -80,6 +81,10 @@ class HoardCommand(object):
         async def hack():  # fixme remove when unit tests are updated
             async with self.hoard.open_contents(create_missing=True).writeable() as hoard:
                 hoard.config.set_max_size_fallback(remote_uuid, shutil.disk_usage(remote_path).total)
+
+                remote_root = hoard.env.roots(write=True)[remote_uuid]
+                remote_root.desired = None
+                remote_root.current = None
 
         run_in_separate_loop(hack())
 
@@ -219,16 +224,26 @@ class HoardCommand(object):
 
             with StringIO() as out:
                 out.write("Moving files and folders:\n")
-                current_path: FastPosixPath
-                for current_path, props in list(hoard.fsobjects):
-                    assert isinstance(props, HoardFileProps), f"Unsupported props type: {type(props)}"
-                    if current_path.is_relative_to(from_path):
-                        rel_path = current_path.relative_to(from_path)
-                        logging.info(f"Relative file path to move: {rel_path}")
-                        new_path = command.fast_path.FastPosixPath(to_path).joinpath(rel_path)
+                roots = hoard.env.roots(True)
 
-                        out.write(f"{current_path.as_posix()}=>{new_path.as_posix()}\n")
-                        hoard.fsobjects.move_via_mounts(current_path, new_path, props)
+                for remote in sorted(config.remotes.all(), key=lambda remote: remote.name):
+                    rname = remote.name if remote else r.name
+                    r = roots[remote.uuid]
+
+                    r.current = move_paths(
+                        hoard, FastPosixPath(from_path), FastPosixPath(to_path), r.current,
+                        rname, "current", out)
+                    r.staging = move_paths(
+                        hoard, FastPosixPath(from_path), FastPosixPath(to_path), r.staging,
+                        rname, "staging", out)
+                    r.desired = move_paths(
+                        hoard, FastPosixPath(from_path), FastPosixPath(to_path), r.desired,
+                        rname, "desired", out)
+
+                hoard_root = roots["HOARD"]
+                hoard_root.desired = move_paths(
+                    hoard, FastPosixPath(from_path), FastPosixPath(to_path), hoard_root.desired,
+                    "HOARD", "desired", out, dump_changes=True)
 
                 logging.info(f"Moving {', '.join(r.name for r in repos_to_move)}.")
                 out.write(f"Moving {len(repos_to_move)} repos:\n")
@@ -280,9 +295,7 @@ class HoardCommand(object):
                         current_contents.fsobjects.add_file(
                             local_path_obj.as_pure_path,
                             size=hoard_props.size,
-                            mtime=datetime.datetime.now(),
-                            fasthash=hoard_props.fasthash,
-                            status=RepoFileStatus.PRESENT)
+                            fasthash=hoard_props.fasthash)
                         out.write(f"PRESENT {local_path_obj}\n")
 
                     current_contents.config.end_updating()
@@ -397,3 +410,27 @@ class HoardCommand(object):
                     f"Copied: {copied} to Dest: {copied_dest}, Mismatched: {mismatched},"
                     f" Errors: {errors} and Skipped: {skipped}\n")
                 return out.getvalue()
+
+
+def move_paths(
+        hoard: HoardContents, from_path: FastPosixPath, to_path: FastPosixPath, root_id: ObjectID | None, rname: str,
+        rtype: str, out: TextIO, dump_changes: bool = False):
+    with hoard.env.objects(write=True) as objects:
+        # get and remove old subpath
+        old_subpath_id = get_child(objects, from_path._rem, root_id)
+        new_root_id = remove_child(objects, from_path._rem, root_id)
+
+        # graft into the new subpath
+        new_root_id = add_object(objects, new_root_id, to_path._rem, old_subpath_id)
+
+        if new_root_id != root_id:
+            out.write(f"{rname}.{rtype}: {safe_hex(root_id)[:6]} => {safe_hex(new_root_id)[:6]}\n")
+
+        if dump_changes:
+            for current_path, obj_type, obj_id, obj, skip_children in dfs(objects, "", old_subpath_id):
+                if obj_type == ObjectType.BLOB:
+                    current_path = FastPosixPath(current_path).relative_to("/")
+                    out.write(
+                        f"{from_path.joinpath(current_path).as_posix()}=>{to_path.joinpath(current_path).as_posix()}\n")
+
+    return new_root_id

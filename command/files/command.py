@@ -6,7 +6,7 @@ from typing import Optional, List, Dict
 from alive_progress import alive_bar
 
 from command.content_prefs import ContentPrefs
-from command.contents.command import clean_dangling_files
+from command.contents.command import dump_remotes
 from command.files.file_operations import _fetch_files_in_repo, _cleanup_files_in_repo
 
 from command.hoard import Hoard
@@ -84,6 +84,9 @@ class HoardCommandFiles:
 async def execute_files_push(config: HoardConfig, hoard: Hoard, repo_uuids: List[str], out: StringIO, progress_bar):
     pathing = HoardPathing(config, hoard.paths())
     async with hoard.open_contents(False).writeable() as hoard_contents:
+        out.write(f"Before push:\n")
+        dump_remotes(config, hoard_contents, out)
+
         content_prefs = ContentPrefs(config, pathing, hoard_contents, hoard.available_remotes())
         logging.info("try getting all requested files, per repo")
 
@@ -103,4 +106,6 @@ async def execute_files_push(config: HoardConfig, hoard: Hoard, repo_uuids: List
             out.write(f"{config.remotes[repo_uuid].name}:\n")
 
             await _cleanup_files_in_repo(content_prefs, hoard_contents, repo_uuid, pathing, out, progress_bar)
-        clean_dangling_files(hoard_contents, out)
+
+        out.write(f"After:\n")
+        dump_remotes(config, hoard_contents, out)
