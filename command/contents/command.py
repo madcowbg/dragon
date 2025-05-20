@@ -288,7 +288,7 @@ class PullMergePreferences(MergePreferences):
         repos_to_add = self.content_prefs.repos_to_add(
             file_path,
             file_desc,
-            self.hoard_contents.fsobjects[file_path] if file_path in self.hoard_contents.fsobjects else None)
+            None)
         base_to_add = ["HOARD", self.remote_uuid] if self.remote_type == CaveType.PARTIAL else ["HOARD"]
         return base_to_add + [r for r in repos_to_add if r in self._where_to_apply_adds]
 

@@ -368,11 +368,7 @@ class ReadonlyHoardFSObjects:
 
     def __contains__(self, file_path: FastPosixPath) -> bool:
         assert file_path.is_absolute()
-
-        curr = self._first_value_curr()
-        return curr.execute(
-            "SELECT count(1) > 0 FROM fsobject WHERE fsobject.fullpath = ? AND isdir = FALSE ",
-            (file_path.as_posix(),)).fetchone()
+        raise NotImplementedError()
 
     def _first_value_curr(self):
         curr = self.parent.conn.cursor()
