@@ -4,9 +4,8 @@ import pathlib
 import sys
 from datetime import datetime
 from functools import cached_property
-from sqlite3 import Connection
 from types import NoneType
-from typing import Dict, Any, Optional, Tuple, Generator, Iterable, List, AsyncGenerator, Callable
+from typing import Dict, Any, Optional, Tuple, Generator, Iterable, List, AsyncGenerator
 
 import rtoml
 
@@ -14,19 +13,17 @@ from command.fast_path import FastPosixPath
 from config import HoardConfig
 from contents.hoard_props import HoardFileStatus, HoardFileProps
 from contents.repo import RepoContentsConfig
-from contents.repo_props import FileDesc
 from lmdb_storage.file_object import FileObject
 from lmdb_storage.object_store import ObjectStorage
-from lmdb_storage.operations.types import Procedure, TreeGenerator
+from lmdb_storage.operations.types import TreeGenerator
 from lmdb_storage.operations.util import ByRoot
-from lmdb_storage.roots import Root
 from lmdb_storage.tree_iteration import zip_trees_dfs
 from lmdb_storage.tree_operations import get_child
 from lmdb_storage.tree_structure import TreeObject, Objects, MaybeObjectID
-from sql_util import SubfolderFilter, NoFilter, sqlite3_standard
-from util import FIRST_VALUE, custom_isabs
+from sql_util import SubfolderFilter
+from util import custom_isabs
 
-HOARD_CONTENTS_FILENAME = "hoard.contents"
+HOARD_CONTENTS_LMDB_DIR = "hoard.contents.lmdb"
 HOARD_CONTENTS_TOML = "hoard.contents.toml"
 
 
@@ -471,16 +468,6 @@ class ReadonlyHoardContentsConn:
 class HoardContentsConn:
     def __init__(self, folder: pathlib.Path, config: HoardConfig):
         self.config = config
-        config_filename = os.path.join(folder, HOARD_CONTENTS_FILENAME)
-
-        if not os.path.isfile(config_filename):
-            conn = sqlite3_standard(config_filename)
-            curr = conn.cursor()
-
-            init_hoard_db_tables(curr)
-
-            conn.commit()
-            conn.close()
 
         toml_filename = os.path.join(folder, HOARD_CONTENTS_TOML)
         if not os.path.isfile(toml_filename):
@@ -501,26 +488,17 @@ class HoardContentsConn:
 
 
 class HoardContents:
-    conn: Connection
     config: HoardContentsConfig
     fsobjects: ReadonlyHoardFSObjects
 
     def __init__(self, folder: pathlib.Path, is_readonly: bool, hoard_config: HoardConfig):
-        sqlite_db_path = os.path.join(folder, HOARD_CONTENTS_FILENAME)
-        self.conn = sqlite3_standard(
-            f"file:{sqlite_db_path}{'?mode=ro' if is_readonly else ''}",
-            uri=True)
-
         self.hoard_config: HoardConfig = hoard_config
         self.config = HoardContentsConfig(folder.joinpath(HOARD_CONTENTS_TOML), is_readonly)
         self.fsobjects = ReadonlyHoardFSObjects(self)
 
-        self.env = ObjectStorage(f"{sqlite_db_path}.lmdb")
-        # self.objects = self.env.objects(write=True)
+        self.env = ObjectStorage(os.path.join(folder, HOARD_CONTENTS_LMDB_DIR))
 
     def close(self, writeable: bool):
-        # self.objects = None
-
         self.env.gc()
         self.validate_desired()
         self.env.close()
@@ -530,12 +508,8 @@ class HoardContents:
             self.config.bump_hoard_epoch()
             self.config.write()
 
-        self.conn.commit()
-        self.conn.close()
-
         self.config = None
         self.fsobjects = None
-        self.conn = None
 
     def validate_desired(self):
         """Validate that all desired trees have only one file version for each file."""
@@ -566,106 +540,3 @@ class HoardContents:
                     if hoard_root_idx is not None and desired_objs[hoard_root_idx] is None:
                         raise ValueError(f"File at path {path} is not in hoard root!")
 
-
-def init_hoard_db_tables(curr):
-    curr.execute(
-        "CREATE TABLE fsobject("
-        " fsobject_id INTEGER PRIMARY KEY AUTOINCREMENT,"
-        " fullpath TEXT NOT NULL UNIQUE,"
-        " isdir BOOL NOT NULL,"
-        " size INTEGER,"
-        " fasthash TEXT,"
-        " last_epoch_updated INTEGER)")
-    # for fasthash lookups in melding
-    curr.execute("CREATE INDEX index_fsobject_fasthash ON fsobject (fasthash) ")
-    curr.execute(
-        "CREATE TABLE fspresence ("
-        " fsobject_id INTEGER,"
-        " uuid TEXT NOT NULL,"
-        " status TEXT NOT NULL,"
-        " move_from TEXT,"
-        " FOREIGN KEY (fsobject_id) REFERENCES fsobject(fsobject_id) ON DELETE RESTRICT)"
-    )
-
-    curr.execute("CREATE UNIQUE INDEX fspresence_fsobject_id__uuid ON fspresence(fsobject_id, uuid)")
-
-    curr.executescript("""
-                       CREATE TABLE folder_structure
-                       (
-                           fullpath    TEXT NOT NULL PRIMARY KEY,
-                           fsobject_id INTEGER,
-                           ISDIR       BOOL NOT NULL,
-                           parent      TEXT,
-                           FOREIGN KEY (parent) REFERENCES folder_structure (fullpath) ON DELETE RESTRICT
-                       );
-                       CREATE INDEX _folder_structure_parent ON folder_structure (parent);
-
-                       -- add to folder structure
-                       CREATE TRIGGER add_missing__folder_structure_on_fsobject
-                           AFTER INSERT
-                           ON fsobject
-                       BEGIN
-                           INSERT INTO folder_structure (fullpath, parent, isdir)
-                           SELECT new.fullpath,
-                                  CASE
-                                      WHEN LENGTH(new.fullpath) == 0 THEN NULL
-                                      ELSE rtrim(rtrim(new.fullpath, replace(new.fullpath, '/', '')), '/') END,
-                                  new.isdir WHERE NOT EXISTS (SELECT 1
-                                             FROM folder_structure
-                                             WHERE folder_structure.fullpath = new.fullpath);
-
-                           UPDATE folder_structure SET fsobject_id = new.fsobject_id WHERE fullpath = new.fullpath;
-                       END;
-
-                       CREATE TRIGGER add_missing__folder_structure_parent
-                           BEFORE INSERT
-                           ON folder_structure
-                           WHEN new.parent IS NOT NULL AND NOT EXISTS (SELECT 1
-                                                                       FROM folder_structure
-                                                                       WHERE folder_structure.fullpath = new.parent)
-                       BEGIN
-                           INSERT OR
-                           REPLACE
-                           INTO folder_structure(fullpath, parent, isdir)
-                           VALUES (new.parent, CASE
-                                                   WHEN LENGTH(new.parent) = 0 THEN NULL
-                                                   ELSE rtrim(rtrim(new.parent, replace(new.parent, '/', '')), '/')
-                       END,
-                       TRUE);
-                       END;
-
-                       CREATE TRIGGER remove_obsolete__folder_structure_on_fsobject_can_delete
-                           AFTER DELETE
-                           ON fsobject
-                           WHEN NOT EXISTS(SELECT 1
-                                           FROM folder_structure
-                                           WHERE parent == old.fullpath)
-                       BEGIN
-                           DELETE
-                           FROM folder_structure
-                           WHERE folder_structure.fullpath = old.fullpath; -- no child folders
-                       END;
-
-                       CREATE TRIGGER remove_obsolete__folder_structure_on_fsobject
-                           AFTER DELETE
-                           ON fsobject
-                       BEGIN
-                           UPDATE folder_structure
-                           SET fsobject_id = NULL
-                           WHERE folder_structure.fullpath = old.fullpath;
-                       END;
-
-                       CREATE TRIGGER remove_obsolete__folder_structure_on_no_other_children
-                           AFTER DELETE
-                           ON folder_structure
-                           WHEN NOT EXISTS (SELECT 1
-                                            FROM fsobject
-                                            WHERE fsobject.fullpath = old.parent)
-                               AND NOT EXISTS (SELECT 1
-                                               FROM folder_structure
-                                               WHERE folder_structure.parent = old.parent)
-                       BEGIN
-                           DELETE
-                           FROM folder_structure
-                           WHERE folder_structure.fullpath = old.parent;
-                       END;""")
