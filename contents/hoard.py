@@ -281,48 +281,29 @@ class ReadonlyHoardFSObjects:
         return hoard_file_props_from_tree(self.parent, file_path)
 
     def by_fasthash(self, fasthash: str) -> Iterable[Tuple[FastPosixPath, HoardFileProps]]:
-        curr = self.parent.conn.cursor()
-        curr.row_factory = self._read_as_path_to_props
-        yield from curr.execute(
-            "SELECT fullpath, fsobject_id, isdir, size, fasthash "
-            "FROM fsobject "
-            "WHERE fasthash = ? AND isdir = FALSE ", (fasthash,))
+        logging.error("Should not use this method, is too slow!")
+        for path, props in HoardFilesIterator.all(self.parent):
+            if props.fasthash == fasthash:
+                yield path, props
 
     def __iter__(self) -> Iterable[Tuple[FastPosixPath, HoardFileProps]]:
         yield from HoardFilesIterator.all(self.parent)
 
     def with_pending(self, repo_uuid: str) -> Iterable[Tuple[FastPosixPath, HoardFileProps]]:
-        curr = self.parent.conn.cursor()
-        curr.row_factory = self._read_as_path_to_props
-        yield from curr.execute(
-            "SELECT fullpath, fsobject_id, isdir, size, fasthash FROM fsobject "
-            "WHERE isdir = FALSE AND EXISTS ("
-            "  SELECT 1 FROM fspresence "
-            "  WHERE fspresence.fsobject_id = fsobject.fsobject_id AND "
-            "    uuid = ? AND "
-            "    status in (?, ?, ?, ?))",
-            (repo_uuid, HoardFileStatus.GET.value, HoardFileStatus.COPY.value, HoardFileStatus.MOVE.value,
-             HoardFileStatus.CLEANUP.value))
+        pending_statuses = {HoardFileStatus.GET, HoardFileStatus.COPY, HoardFileStatus.MOVE, HoardFileStatus.CLEANUP}
+        for path, props in HoardFilesIterator.all(self.parent):
+            if props.get_status(repo_uuid) in pending_statuses:
+                yield path, props
 
-    def available_in_repo(self, remote_uuid: str) -> Iterable[Tuple[FastPosixPath, HoardFileProps]]:
-        curr = self.parent.conn.cursor()
-        curr.row_factory = self._read_as_path_to_props
-        yield from curr.execute(
-            "SELECT fullpath, fsobject_id, isdir, size, fasthash FROM fsobject "
-            "WHERE isdir = FALSE AND EXISTS ("
-            "  SELECT 1 FROM fspresence "
-            "  WHERE fspresence.fsobject_id = fsobject.fsobject_id AND uuid = ? AND status = ?)",
-            (remote_uuid, HoardFileStatus.AVAILABLE.value))
+    def available_in_repo(self, repo_uuid: str) -> Iterable[Tuple[FastPosixPath, HoardFileProps]]:
+        for path, props in HoardFilesIterator.all(self.parent):
+            if props.get_status(repo_uuid) == HoardFileStatus.AVAILABLE:
+                yield path, props
 
-    def to_get_in_repo(self, remote_uuid: str) -> Iterable[Tuple[FastPosixPath, HoardFileProps]]:
-        curr = self.parent.conn.cursor()
-        curr.row_factory = self._read_as_path_to_props
-        yield from curr.execute(
-            "SELECT fullpath, fsobject_id, isdir, size, fasthash FROM fsobject "
-            "WHERE isdir = FALSE AND EXISTS ("
-            "  SELECT 1 FROM fspresence "
-            "  WHERE fspresence.fsobject_id = fsobject.fsobject_id AND uuid = ? AND status = ?)",
-            (remote_uuid, HoardFileStatus.GET.value))
+    def to_get_in_repo(self, repo_uuid: str) -> Iterable[Tuple[FastPosixPath, HoardFileProps]]:
+        for path, props in HoardFilesIterator.all(self.parent):
+            if props.get_status(repo_uuid) == HoardFileStatus.GET:
+                yield path, props
 
     async def in_folder(self, folder: FastPosixPath) -> AsyncGenerator[
         Tuple[FastPosixPath, HoardFileProps]]:
@@ -331,14 +312,10 @@ class ReadonlyHoardFSObjects:
         folder_with_trailing = folder if folder.endswith("/") else folder + "/"
         assert folder_with_trailing.endswith('/')
 
-        curr = self.parent.conn.cursor()
-        curr.row_factory = self._read_as_path_to_props
-
-        for fp in curr.execute(
-                "SELECT fullpath, fsobject_id, isdir, size, fasthash FROM fsobject "
-                "WHERE isdir = FALSE AND fullpath like ? or fullpath = ?",
-                (f"{folder_with_trailing}%", folder)):
-            yield fp
+        # fixme this could be done faster by directly drilling down to the folder
+        for path, props in HoardFilesIterator.all(self.parent):
+            if path.simple.startswith(folder_with_trailing):
+                yield path, props
 
     async def in_folder_non_deleted(self, folder: FastPosixPath) -> AsyncGenerator[
         Tuple[FastPosixPath, HoardFileProps]]:
@@ -348,19 +325,11 @@ class ReadonlyHoardFSObjects:
         folder_with_trailing = folder if folder.endswith("/") else folder + "/"
         assert folder_with_trailing.endswith('/')
 
-        curr = self.parent.conn.cursor()
-        curr.row_factory = self._read_as_path_to_props
-
-        for fp in curr.execute(
-                "SELECT fullpath, fsobject_id, isdir, size, fasthash FROM fsobject "
-                "WHERE isdir = FALSE "
-                "  AND (fullpath like ? or fullpath = ?) "
-                "  AND EXISTS ("
-                "    SELECT 1 FROM fspresence "
-                "    WHERE fsobject.fsobject_id = fspresence.fsobject_id "
-                "      AND status != ?)",
-                (f"{folder_with_trailing}%", folder, HoardFileStatus.CLEANUP.value)):
-            yield fp
+        # fixme this could be done faster by directly drilling down to the folder
+        for path, props in HoardFilesIterator.all(self.parent):
+            if path.simple.startswith(folder_with_trailing):
+                if any(status != HoardFileStatus.CLEANUP for uuid, status in props.presence.items()):
+                    yield path, props
 
     def status_by_uuid(self, folder_path: FastPosixPath | None) -> Dict[str, Dict[str, Dict[str, Any]]]:
         if folder_path is not None:
