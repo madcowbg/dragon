@@ -393,7 +393,7 @@ class ReadonlyHoardFSObjects:
 
     @cached_property
     def query(self) -> "Query":
-        return Query(self.parent.conn)
+        return Query(self.parent)
 
     def get_sub_dirs(self, fullpath: str) -> Iterable[str]:
         # fixme drilldown can be done via actual tree, no need for this hack
@@ -445,41 +445,33 @@ class HoardFSObjects(ReadonlyHoardFSObjects):
 
 
 class Query:
-    def __init__(self, conn: Connection):
-        self.conn = conn
-        conn.execute(
-            f"CREATE TEMPORARY VIEW IF NOT EXISTS file_stats_query AS "
-            f"SELECT "
-            f"  (SELECT COUNT(1) from fspresence WHERE fsobject.fsobject_id = fspresence.fsobject_id AND status IN ('available', 'move')) as source_count,"
-            f"  NOT EXISTS (SELECT 1 from fspresence WHERE fsobject.fsobject_id = fspresence.fsobject_id and status NOT IN ('cleanup')) as is_deleted,"
-            f"  fullpath, fsobject_id "
-            f"FROM fsobject "
-            f"WHERE isdir = 0 ")
+    def __init__(self, parent: "HoardContents"):
+        self.parent = parent
+
+        # fixme replace with live aggregator
+        self.file_stats = dict()
+        for path, props in HoardFilesIterator.all(self.parent):
+            self.file_stats[path.simple] = {
+                "is_deleted": len([uuid for uuid, status in props.presence.items() if status != HoardFileStatus.CLEANUP]) == 0,
+                "num_sources": len([uuid for uuid, status in props.presence.items() if status in (HoardFileStatus.AVAILABLE, HoardFileStatus.MOVE)])
+            }
 
     def count_non_deleted(self, folder_name: FastPosixPath) -> int:
-        subfolder_filter = SubfolderFilter('fullpath', folder_name)
-        return int(self.cursor().execute(
-            "SELECT IFNULL(SUM(is_deleted == 0), 0) AS non_deleted_count "
-            f"FROM file_stats_query WHERE {subfolder_filter.where_clause} ",
-            subfolder_filter.params).fetchone())
-
-    def cursor(self):
-        curr = self.conn.cursor()
-        curr.row_factory = FIRST_VALUE
-        return curr
+        count = 0
+        for path, stats in self.file_stats:
+            if path.startswith(folder_name.simple + "/") and not stats["is_deleted"]:
+                count += 1
+        return count
 
     def num_without_source(self, folder_name: FastPosixPath) -> int:
-        subfolder_filter = SubfolderFilter('fullpath', folder_name)
-        return int(self.cursor().execute(
-            "SELECT IFNULL(SUM(source_count == 0), 0) AS without_source_count "
-            f"FROM file_stats_query WHERE {subfolder_filter.where_clause}",
-            subfolder_filter.params).fetchone())
+        count = 0
+        for path, stats in self.file_stats:
+            if path.startswith(folder_name.simple + "/") and stats["num_sources"] == 0:
+                count += 1
+        return count
 
     def is_deleted(self, file_name: FastPosixPath) -> bool:
-        logging.warning(file_name.as_posix())
-        return bool(self.cursor().execute(
-            "SELECT is_deleted FROM file_stats_query WHERE fullpath = ?",
-            (file_name.as_posix(),)).fetchone())
+        return self.file_stats[file_name.simple]["is_deleted"]
 
 
 STATUSES_THAT_USE_SIZE = [
