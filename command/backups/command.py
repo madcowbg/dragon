@@ -6,7 +6,6 @@ from alive_progress import alive_it
 
 import command.fast_path
 from command.content_prefs import BackupSet, MIN_REPO_PERC_FREE
-from command.contents.comparisons import sync_object_storage_to_recreate_fsobject_and_fspresence
 from command.hoard import Hoard
 from command.pathing import HoardPathing
 from command.tree_operations import add_to_desired_tree, \
@@ -110,9 +109,6 @@ class HoardCommandBackups:
                     for repo, cnt in sorted(removed_cnt.items(), key=lambda rc: rc[0].name):
                         out.write(f" {repo.name} LOST {cnt} files ({format_size(removed_size[repo])})\n")
 
-                # fixme remove, just dumping
-                sync_object_storage_to_recreate_fsobject_and_fspresence(hoard.env, hoard.fsobjects, config)
-
                 out.write("DONE")
                 return out.getvalue()
 
@@ -167,9 +163,6 @@ class HoardCommandBackups:
                     for repo, cnt in sorted(added_cnt.items(), key=lambda rc: rc[0].name):
                         out.write(f" {repo.name} <- {cnt} files ({format_size(added_size[repo])})\n")
 
-                # fixme remove, just dumping
-                sync_object_storage_to_recreate_fsobject_and_fspresence(hoard.env, hoard.fsobjects, config)
-
                 out.write("DONE")
                 return out.getvalue()
 
@@ -218,9 +211,5 @@ class HoardCommandBackups:
                             remove_from_desired_tree(hoard, remote.uuid, hoard_file.simple)
 
                             out.write(f"WONT_GET {hoard_file.as_posix()}\n")
-
-                        # fixme remove, just dumping
-                        sync_object_storage_to_recreate_fsobject_and_fspresence(
-                            hoard.env, hoard.fsobjects, pathing._config)
 
                 return out.getvalue()

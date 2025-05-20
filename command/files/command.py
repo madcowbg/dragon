@@ -7,7 +7,6 @@ from alive_progress import alive_bar
 
 from command.content_prefs import ContentPrefs
 from command.contents.command import dump_remotes
-from command.contents.comparisons import sync_object_storage_to_recreate_fsobject_and_fspresence
 from command.files.file_operations import _fetch_files_in_repo, _cleanup_files_in_repo
 
 from command.hoard import Hoard
@@ -98,10 +97,6 @@ async def execute_files_push(config: HoardConfig, hoard: Hoard, repo_uuids: List
 
             await _fetch_files_in_repo(content_prefs, hoard_contents, repo_uuid, pathing, out, progress_bar)
 
-        # fixme remove, just dumping
-        sync_object_storage_to_recreate_fsobject_and_fspresence(
-            hoard_contents.env, hoard_contents.fsobjects, hoard.config())
-
         logging.info("Finding files that need copy - will not cleanup them!")
         content_prefs = ContentPrefs(config, pathing, hoard_contents, hoard.available_remotes())
         logging.info(f"Found {len(content_prefs.files_to_copy)} hashes to copy, won't cleanup them.")
@@ -111,10 +106,6 @@ async def execute_files_push(config: HoardConfig, hoard: Hoard, repo_uuids: List
             out.write(f"{config.remotes[repo_uuid].name}:\n")
 
             await _cleanup_files_in_repo(content_prefs, hoard_contents, repo_uuid, pathing, out, progress_bar)
-
-        # fixme remove, just dumping
-        sync_object_storage_to_recreate_fsobject_and_fspresence(
-            hoard_contents.env, hoard_contents.fsobjects, hoard.config())
 
         out.write(f"After:\n")
         dump_remotes(config, hoard_contents, out)

@@ -130,7 +130,7 @@ class HoardTree:
 
 
 class HoardFile:
-    def __init__(self, parent: "HoardDir", name: str, fullname: str, fsobjects: "HoardFSObjects"):
+    def __init__(self, parent: "HoardDir", name: str, fullname: str, fsobjects: "ReadonlyHoardFSObjects"):
         self.parent = parent
         self.name = name
 
@@ -416,34 +416,6 @@ class ReadonlyHoardFSObjects:
                 yield from [fullpath + "/" + child_name for child_name, child_obj in children if isinstance(child_obj, FileObject)]
 
 
-class HoardFSObjects(ReadonlyHoardFSObjects):
-    def __init__(self, parent: "HoardContents"):
-        super().__init__(parent)
-
-    def HACK_set_file_information(self, filepath: FastPosixPath, props: FileDesc, presence: Dict[str, HoardFileStatus]):
-        assert filepath.is_absolute()
-        curr = self.parent.conn.cursor()
-        curr.row_factory = FIRST_VALUE
-
-        # add fsobject entry
-        curr.execute(
-            "INSERT INTO fsobject(fullpath, isdir, size, fasthash, last_epoch_updated) VALUES (?, FALSE, ?, ?, ?) "
-            "ON CONFLICT (fullpath) DO UPDATE "
-            "SET isdir = excluded.isdir, size = excluded.size, fasthash = excluded.fasthash, last_epoch_updated = excluded.last_epoch_updated ",
-            (filepath.as_posix(), props.size, props.fasthash, self.parent.config.hoard_epoch))
-
-        # cleanup presence status
-        fsobject_id: int = curr.execute(
-            "SELECT fsobject_id FROM fsobject WHERE fullpath = ?", (filepath.as_posix(),)).fetchone()
-        curr.execute("DELETE FROM fspresence WHERE fsobject_id = ?", (fsobject_id,))
-
-        for uuid, status in presence.items():
-            assert status != HoardFileStatus.MOVE
-            self.parent.conn.execute(
-                "INSERT OR REPLACE INTO fspresence (fsobject_id, uuid, status, move_from) VALUES (?, ?, ?, NULL)",
-                (fsobject_id, uuid, status.value))
-
-
 class Query:
     def __init__(self, parent: "HoardContents"):
         self.parent = parent
@@ -531,7 +503,7 @@ class HoardContentsConn:
 class HoardContents:
     conn: Connection
     config: HoardContentsConfig
-    fsobjects: HoardFSObjects
+    fsobjects: ReadonlyHoardFSObjects
 
     def __init__(self, folder: pathlib.Path, is_readonly: bool, hoard_config: HoardConfig):
         sqlite_db_path = os.path.join(folder, HOARD_CONTENTS_FILENAME)
@@ -541,7 +513,7 @@ class HoardContents:
 
         self.hoard_config: HoardConfig = hoard_config
         self.config = HoardContentsConfig(folder.joinpath(HOARD_CONTENTS_TOML), is_readonly)
-        self.fsobjects = HoardFSObjects(self) if not is_readonly else ReadonlyHoardFSObjects(self)
+        self.fsobjects = ReadonlyHoardFSObjects(self)
 
         self.env = ObjectStorage(f"{sqlite_db_path}.lmdb")
         # self.objects = self.env.objects(write=True)

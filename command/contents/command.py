@@ -7,8 +7,7 @@ import humanize
 from alive_progress import alive_it
 
 from command.content_prefs import ContentPrefs
-from command.contents.comparisons import copy_local_staging_to_hoard, \
-    sync_object_storage_to_recreate_fsobject_and_fspresence
+from command.contents.comparisons import copy_local_staging_to_hoard
 from command.contents.pull_preferences import PullPreferences, PullIntention
 from command.fast_path import FastPosixPath
 from command.hoard import Hoard
@@ -139,10 +138,6 @@ async def execute_pull(
 
             out.write(f"Pulling {config.remotes[uuid].name}...\n")
 
-            # fixme remove, just dumping
-            sync_object_storage_to_recreate_fsobject_and_fspresence(
-                hoard_contents.env, hoard_contents.fsobjects, hoard.config())
-
             roots = hoard_contents.env.roots(False)
             dump_before_op(roots, uuid, out)
 
@@ -163,10 +158,6 @@ async def execute_pull(
             print_differences(hoard_contents, hoard_root, repo_root, merged_ids, out)
 
             commit_merged(hoard_root, repo_root, all_remote_roots, merged_ids)
-
-            # fixme remove, just dumping
-            sync_object_storage_to_recreate_fsobject_and_fspresence(
-                hoard_contents.env, hoard_contents.fsobjects, hoard.config())
 
             for root in all_remote_roots:
                 old_desired = all_remote_roots_old_desired[root.name]
@@ -714,10 +705,6 @@ class HoardCommandContents:
                 # this effectively discards all changes
                 roots[remote_uuid].current = roots[remote_uuid].staging
 
-                # fixme remove, just dumping
-                sync_object_storage_to_recreate_fsobject_and_fspresence(
-                    hoard_contents.env, hoard_contents.fsobjects, self.hoard.config())
-
                 repo_root = roots[remote_uuid]
                 hoard_root = roots["HOARD"]
 
@@ -780,9 +767,6 @@ async def execute_get(
 
     repo_root.desired = new_desired_id
 
-    # fixme remove, just dumping
-    sync_object_storage_to_recreate_fsobject_and_fspresence(hoard.env, hoard.fsobjects, pathing._config)
-
     out.write(f"Considered {considered} files.\n")
     out.write("DONE")
 
@@ -835,9 +819,6 @@ async def execute_drop(
     with hoard.env.objects(write=False) as objects:
         cleaned_up = dump_dropped_files_info(
             objects, path_in_hoard._rem, old_desired_id, new_desired_id, out)
-
-    # fixme remove, just dumping
-    sync_object_storage_to_recreate_fsobject_and_fspresence(hoard.env, hoard.fsobjects, pathing._config)
 
     out.write(
         f"{cleaned_up} marked for cleanup.\n")

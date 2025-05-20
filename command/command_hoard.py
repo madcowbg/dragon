@@ -10,7 +10,6 @@ from alive_progress import alive_bar, alive_it
 from command.backups.command import HoardCommandBackups
 from command.command_repo import RepoCommand
 from command.contents.command import HoardCommandContents
-from command.contents.comparisons import sync_object_storage_to_recreate_fsobject_and_fspresence
 from command.fast_path import FastPosixPath
 from command.files.command import HoardCommandFiles
 from command.hoard import Hoard
@@ -245,9 +244,6 @@ class HoardCommand(object):
                 hoard_root.desired = move_paths(
                     hoard, FastPosixPath(from_path), FastPosixPath(to_path), hoard_root.desired,
                     "HOARD", "desired", out, dump_changes=True)
-
-                # fixme remove, just dumping
-                sync_object_storage_to_recreate_fsobject_and_fspresence(hoard.env, hoard.fsobjects, pathing._config)
 
                 logging.info(f"Moving {', '.join(r.name for r in repos_to_move)}.")
                 out.write(f"Moving {len(repos_to_move)} repos:\n")
