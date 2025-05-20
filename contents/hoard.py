@@ -554,10 +554,10 @@ class HoardContents:
         self.fsobjects = HoardFSObjects(self) if not is_readonly else ReadonlyHoardFSObjects(self)
 
         self.env = ObjectStorage(f"{sqlite_db_path}.lmdb")
-        self.objects = self.env.objects(write=True)
+        #self.objects = self.env.objects(write=True)
 
     def close(self, writeable: bool):
-        self.objects = None
+        #self.objects = None
 
         self.env.gc()
         self.validate_desired()

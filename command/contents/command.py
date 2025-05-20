@@ -772,7 +772,7 @@ async def execute_get(
 
     old_desired_id = repo_root.desired
     hoard_root_id = hoard_root.desired
-    with hoard.objects as objects:
+    with hoard.env.objects(write=True) as objects:
         path_in_tree = path_in_hoard._rem
         new_desired_id = graft_in_tree(objects, old_desired_id, path_in_tree, hoard_root_id)
 

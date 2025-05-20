@@ -419,7 +419,7 @@ class HoardCommand(object):
 def move_paths(
         hoard: HoardContents, from_path: FastPosixPath, to_path: FastPosixPath, root_id: ObjectID | None, rname: str,
         rtype: str, out: TextIO, dump_changes: bool = False):
-    with hoard.objects as objects:
+    with hoard.env.objects(write=True) as objects:
         # get and remove old subpath
         old_subpath_id = get_child(objects, from_path._rem, root_id)
         new_root_id = remove_child(objects, from_path._rem, root_id)

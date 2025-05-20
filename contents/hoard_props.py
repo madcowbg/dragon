@@ -61,7 +61,7 @@ class HoardFileProps:
     @property
     def presence(self) -> Dict[str, HoardFileStatus]:
         result = dict()
-        with self.parent.objects as objects:
+        with self.parent.env.objects(write=False) as objects:
             hoard_id = get_child(objects, self._path._rem, self.hoard_root_id)
             for uuid, current_root_id, desired_root_id in self.remote_roots:
                 current_id = get_child(objects, self._path._rem, current_root_id)
