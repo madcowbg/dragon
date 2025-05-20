@@ -3,8 +3,7 @@ import logging
 import pathlib
 import shutil
 import unittest
-from io import StringIO
-from typing import List, Iterable, TextIO
+from typing import List, Iterable
 from unittest.async_case import IsolatedAsyncioTestCase
 
 import msgpack
@@ -12,23 +11,13 @@ from alive_progress import alive_it
 
 from command.test_command_file_changing_flows import populate
 from command.test_hoard_command import populate_repotypes, init_complex_hoard
-from contents.hoard_props import HoardFileStatus
+from lmdb_storage.file_object import FileObject
 from lmdb_storage.object_store import ObjectStorage
 from lmdb_storage.operations.types import Procedure, TreeGenerator
 from lmdb_storage.operations.util import ByRoot, ObjectsByRoot
 from lmdb_storage.tree_iteration import dfs, zip_dfs
 from lmdb_storage.tree_structure import ExpandableTreeObject, add_file_object, Objects, remove_file_object, ObjectType, \
     ObjectID, TreeObject, MaybeObjectID
-from lmdb_storage.file_object import FileObject
-from sql_util import sqlite3_standard
-from util import FIRST_VALUE
-
-
-def _list_uuids(conn) -> List[str]:
-    curr = conn.cursor()
-    curr.row_factory = FIRST_VALUE
-    all_repos = list(curr.execute("SELECT uuid FROM fspresence GROUP BY uuid ORDER BY uuid"))
-    return all_repos
 
 
 def dump_tree(objects: Objects[FileObject], root_id, show_fasthash: bool = False):

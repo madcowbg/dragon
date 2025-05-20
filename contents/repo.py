@@ -14,7 +14,6 @@ from lmdb_storage.roots import Roots
 from lmdb_storage.tree_calculation import TreeCalculator, RecursiveSumCalculator
 from lmdb_storage.tree_iteration import dfs
 from lmdb_storage.tree_structure import Objects, ObjectID, ObjectType, add_file_object, remove_file_object
-from util import FIRST_VALUE
 
 
 class RepoFSObjects:
@@ -48,11 +47,6 @@ class RepoFSObjects:
     @property
     def stats_existing(self):
         return RepoFSObjects.Stats(self.objects, self.roots)
-
-    def _first_value_cursor(self):
-        curr = self.parent.conn.cursor()
-        curr.row_factory = FIRST_VALUE
-        return curr
 
     def len_existing(self) -> int:
         return self.stats_existing.num_files
