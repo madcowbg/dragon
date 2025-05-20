@@ -396,20 +396,24 @@ class ReadonlyHoardFSObjects:
         return Query(self.parent.conn)
 
     def get_sub_dirs(self, fullpath: str) -> Iterable[str]:
-        curr = self.parent.conn.cursor()
-        curr.row_factory = FIRST_VALUE
-        yield from curr.execute(
-            "SELECT fullpath FROM folder_structure "
-            "WHERE parent = ? AND isdir = TRUE",
-            (fullpath,))
+        # fixme drilldown can be done via actual tree, no need for this hack
+        hoard_root = self.parent.env.roots(write=False)["HOARD"].desired
+        with self.parent.env.objects(write=False) as objects:
+            path_id = get_child(objects, FastPosixPath(fullpath)._rem, hoard_root)
+            path_obj = objects[path_id] if path_id else None
+            if isinstance(path_obj, TreeObject):
+                children = [(child_name, objects[child_id]) for child_name, child_id in path_obj.children.items()]
+                yield from [fullpath + "/" + child_name for child_name, child_obj in children if isinstance(child_obj, TreeObject)]
 
     def get_sub_files(self, fullpath: str) -> Iterable[str]:
-        curr = self.parent.conn.cursor()
-        curr.row_factory = FIRST_VALUE
-        yield from curr.execute(
-            "SELECT fullpath FROM folder_structure "
-            "WHERE parent = ? AND isdir = FALSE",
-            (fullpath,))
+        # fixme drilldown can be done via actual tree, no need for this hack
+        hoard_root = self.parent.env.roots(write=False)["HOARD"].desired
+        with self.parent.env.objects(write=False) as objects:
+            path_id = get_child(objects, FastPosixPath(fullpath)._rem, hoard_root)
+            path_obj = objects[path_id] if path_id else None
+            if isinstance(path_obj, TreeObject):
+                children = [(child_name, objects[child_id]) for child_name, child_id in path_obj.children.items()]
+                yield from [fullpath + "/" + child_name for child_name, child_obj in children if isinstance(child_obj, FileObject)]
 
 
 class HoardFSObjects(ReadonlyHoardFSObjects):
@@ -548,10 +552,10 @@ class HoardContents:
         self.fsobjects = HoardFSObjects(self) if not is_readonly else ReadonlyHoardFSObjects(self)
 
         self.env = ObjectStorage(f"{sqlite_db_path}.lmdb")
-        #self.objects = self.env.objects(write=True)
+        # self.objects = self.env.objects(write=True)
 
     def close(self, writeable: bool):
-        #self.objects = None
+        # self.objects = None
 
         self.env.gc()
         self.validate_desired()

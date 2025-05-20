@@ -1220,7 +1220,6 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             '/test.me.1 = a:2 g:1\n'
             '/wat\n'
             '/wat/test.me.2 = a:1 g:2\n'
-            '/wat/test.me.3 = c:1\n'
             'DONE'), await hoard_cmd.contents.ls(depth=2))
 
         res = await hoard_cmd.files.push("repo-backup-name")
