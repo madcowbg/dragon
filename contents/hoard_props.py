@@ -37,10 +37,10 @@ def compute_status(
         else:
             return None  # file not desired and not current
 
+
 class HoardFileProps:
-    def __init__(self, parent: "HoardContents", path: FastPosixPath, fsobject_id: int, size: int, fasthash: str):
+    def __init__(self, parent: "HoardContents", path: FastPosixPath, size: int, fasthash: str):
         self.parent = parent
-        self.fsobject_id = fsobject_id
         self._path = path
 
         self.size = size

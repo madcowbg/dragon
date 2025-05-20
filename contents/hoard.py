@@ -6,7 +6,7 @@ from datetime import datetime
 from functools import cached_property
 from sqlite3 import Connection
 from types import NoneType
-from typing import Dict, Any, Optional, Tuple, Generator, Iterable, List, AsyncGenerator
+from typing import Dict, Any, Optional, Tuple, Generator, Iterable, List, AsyncGenerator, Callable
 
 import rtoml
 
@@ -17,8 +17,11 @@ from contents.repo import RepoContentsConfig
 from contents.repo_props import FileDesc
 from lmdb_storage.file_object import FileObject
 from lmdb_storage.object_store import ObjectStorage
+from lmdb_storage.operations.types import Procedure, TreeGenerator
+from lmdb_storage.operations.util import ByRoot
+from lmdb_storage.roots import Root
 from lmdb_storage.tree_iteration import zip_trees_dfs
-from lmdb_storage.tree_structure import TreeObject
+from lmdb_storage.tree_structure import TreeObject, Objects
 from sql_util import SubfolderFilter, NoFilter, sqlite3_standard
 from util import FIRST_VALUE, custom_isabs
 
@@ -193,6 +196,50 @@ def _filename(filepath: str) -> str:
 STATUSES_TO_FETCH = [HoardFileStatus.COPY.value, HoardFileStatus.GET.value, HoardFileStatus.MOVE.value]
 
 
+class HoardFilesIterator(TreeGenerator[FileObject, Tuple[str, HoardFileProps]]):
+    def __init__(self, objects: Objects[FileObject], parent: "HoardContents"):
+        self.parent = parent
+        self.objects = objects
+
+    def compute_on_level(
+            self, path: List[str], original: ByRoot[TreeObject | FileObject]
+    ) -> Iterable[Tuple[FastPosixPath, HoardFileProps]]:
+        path = FastPosixPath("/" + "/".join(path))
+        file_obj = original.get_if_present("HOARD")
+
+        if file_obj is None:
+            # fixme this is the legacy case where we iterate over current but not desired files. remove!
+            file_obj = next((f for root_name, f in original.items() if isinstance(f, FileObject)), None)
+
+        if not isinstance(file_obj, FileObject):
+            logging.debug("Skipping path %s as it is not a FileObject", path)
+            return
+
+        yield path, HoardFileProps(self.parent, path, file_obj.size, file_obj.fasthash)
+
+    def should_drill_down(self, path: List[str], trees: ByRoot[TreeObject], files: ByRoot[FileObject]) -> bool:
+        return True
+
+    @staticmethod
+    def all(parent: "HoardContents") -> Iterable[Tuple[FastPosixPath, HoardFileProps]]:
+        roots = parent.env.roots(write=False)
+        hoard_root = roots["HOARD"].desired
+        all_roots = roots.all_roots
+
+        with roots:
+            root_data = [r.load_from_storage for r in all_roots]
+        root_ids = sum(
+            [[data.current, data.desired] for data in root_data],  # fixme should only iterate over desired files
+            [])
+
+        obj_ids = ByRoot(
+            [str(i) for i in range(len(root_ids))] + ["HOARD"],
+            [(str(i), root_id) for i, root_id in enumerate(root_ids)] + [("HOARD", hoard_root)])
+
+        with parent.env.objects(write=False) as objects:
+            yield from list(HoardFilesIterator(objects, parent).execute(obj_ids=obj_ids))
+
+
 class ReadonlyHoardFSObjects:
     def __init__(self, parent: "HoardContents"):
         self.parent = parent
@@ -204,7 +251,7 @@ class ReadonlyHoardFSObjects:
     def _read_as_path_to_props(self, cursor, row) -> Tuple[FastPosixPath, HoardFileProps]:
         fullpath, fsobject_id, isdir, size, fasthash = row
         assert isdir == False
-        return FastPosixPath(fullpath), HoardFileProps(self.parent, FastPosixPath(fullpath), fsobject_id, size, fasthash)
+        return FastPosixPath(fullpath), HoardFileProps(self.parent, FastPosixPath(fullpath), size, fasthash)
 
     def __getitem__(self, file_path: FastPosixPath) -> HoardFileProps:
         assert file_path.is_absolute()
@@ -226,10 +273,7 @@ class ReadonlyHoardFSObjects:
             "WHERE fasthash = ? AND isdir = FALSE ", (fasthash,))
 
     def __iter__(self) -> Iterable[Tuple[FastPosixPath, HoardFileProps]]:
-        curr = self.parent.conn.cursor()
-        curr.row_factory = self._read_as_path_to_props
-        yield from curr.execute(
-            "SELECT fullpath, fsobject_id, isdir, size, fasthash FROM fsobject WHERE isdir = FALSE ")
+        yield from HoardFilesIterator.all(self.parent)
 
     def with_pending(self, repo_uuid: str) -> Iterable[Tuple[FastPosixPath, HoardFileProps]]:
         curr = self.parent.conn.cursor()
@@ -334,7 +378,7 @@ class ReadonlyHoardFSObjects:
                 "WHERE fspresence.uuid = ? and fspresence.status in (?, ?, ?) AND isdir = FALSE ",
                 (repo_uuid, *STATUSES_TO_FETCH)):
             assert not isdir
-            yield fullpath, HoardFileProps(self.parent, FastPosixPath(fullpath), fsobject_id, size, fasthash)
+            yield fullpath, HoardFileProps(self.parent, FastPosixPath(fullpath), size, fasthash)
 
     def to_cleanup(self, repo_uuid: str) -> Generator[Tuple[FastPosixPath, HoardFileProps], None, None]:
         for fsobject_id, fullpath, isdir, size, fasthash in self.parent.conn.execute(
@@ -343,7 +387,7 @@ class ReadonlyHoardFSObjects:
                 "WHERE fspresence.uuid = ? AND fspresence.status = ? AND isdir = FALSE ",
                 (repo_uuid, HoardFileStatus.CLEANUP.value)):
             assert not isdir
-            yield FastPosixPath(fullpath), HoardFileProps(self.parent, FastPosixPath(fullpath), fsobject_id, size, fasthash)
+            yield FastPosixPath(fullpath), HoardFileProps(self.parent, FastPosixPath(fullpath), size, fasthash)
 
     def where_to_move(self, remote: str, hoard_file: FastPosixPath) -> List[str]:
         assert hoard_file.is_absolute()
