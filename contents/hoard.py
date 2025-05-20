@@ -194,7 +194,7 @@ def _filename(filepath: str) -> str:
     return name
 
 
-STATUSES_TO_FETCH = [HoardFileStatus.COPY.value, HoardFileStatus.GET.value, HoardFileStatus.MOVE.value]
+STATUSES_TO_FETCH = [HoardFileStatus.COPY, HoardFileStatus.GET, HoardFileStatus.MOVE]
 
 
 class HoardFilesIterator(TreeGenerator[FileObject, Tuple[str, HoardFileProps]]):
@@ -357,22 +357,14 @@ class ReadonlyHoardFSObjects:
         return stats
 
     def to_fetch(self, repo_uuid: str) -> Generator[Tuple[str, HoardFileProps], None, None]:
-        for fsobject_id, fullpath, isdir, size, fasthash in self.parent.conn.execute(
-                "SELECT fsobject.fsobject_id, fullpath, isdir, size, fasthash "
-                "FROM fsobject JOIN fspresence on fsobject.fsobject_id = fspresence.fsobject_id "
-                "WHERE fspresence.uuid = ? and fspresence.status in (?, ?, ?) AND isdir = FALSE ",
-                (repo_uuid, *STATUSES_TO_FETCH)):
-            assert not isdir
-            yield fullpath, HoardFileProps(self.parent, FastPosixPath(fullpath), size, fasthash)
+        for path, props in HoardFilesIterator.all(self.parent):
+            if props.get_status(repo_uuid) in STATUSES_TO_FETCH:
+                yield path.as_posix(), props
 
     def to_cleanup(self, repo_uuid: str) -> Generator[Tuple[FastPosixPath, HoardFileProps], None, None]:
-        for fsobject_id, fullpath, isdir, size, fasthash in self.parent.conn.execute(
-                "SELECT fsobject.fsobject_id, fullpath, isdir, size, fasthash "
-                "FROM fsobject JOIN fspresence ON fsobject.fsobject_id = fspresence.fsobject_id "
-                "WHERE fspresence.uuid = ? AND fspresence.status = ? AND isdir = FALSE ",
-                (repo_uuid, HoardFileStatus.CLEANUP.value)):
-            assert not isdir
-            yield FastPosixPath(fullpath), HoardFileProps(self.parent, FastPosixPath(fullpath), size, fasthash)
+        for path, props in HoardFilesIterator.all(self.parent):
+            if props.get_status(repo_uuid) == HoardFileStatus.CLEANUP:
+                yield path, props
 
     def where_to_move(self, remote: str, hoard_file: FastPosixPath) -> List[str]:
         assert hoard_file.is_absolute()
