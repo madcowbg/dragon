@@ -35,7 +35,7 @@ class HoardExplorerApp(App):
         "cave_explorer": CaveExplorerScreen}
 
     def on_mount(self):
-        self.get_screen("cave_explorer", CaveExplorerScreen).hoard = Hoard(config["hoard_path"])
+        self.get_screen("cave_explorer", CaveExplorerScreen).hoard = Hoard(config.get("hoard_path", "."))
         self.push_screen(config.get("last_screen", "hoard_explorer"))
 
     def action_push_screen(self, screen: str) -> None:
