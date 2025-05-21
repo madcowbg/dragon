@@ -1,11 +1,11 @@
 import abc
 import dataclasses
 from types import NoneType
-from typing import List, Collection
+from typing import List, Collection, Dict
 
 from lmdb_storage.file_object import FileObject
 from lmdb_storage.operations.types import Transformation
-from lmdb_storage.operations.util import ByRoot, MergeResult, SeparateRootsMergeResult
+from lmdb_storage.operations.util import ByRoot, Transformed
 from lmdb_storage.tree_structure import Objects, TreeObject, ObjectID
 
 
@@ -125,13 +125,13 @@ class ThreewayMerge(Transformation[FileObject, ThreewayMergeState, ByRoot[Object
         finally:
             self.allowed_roots = None
 
-    def should_drill_down(self, state: ThreewayMergeState, trees: ByRoot[TreeObject],
-                          files: ByRoot[FileObject]) -> bool:
+    def should_drill_down(
+            self, state: ThreewayMergeState, trees: ByRoot[TreeObject], files: ByRoot[FileObject]) -> bool:
         # we have trees and the current and staging trees are different
         return len(trees) > 0 and state.base != state.staging
 
-    def create_merge_result(self) -> MergeResult[FileObject, ByRoot[ObjectID]]:
-        return SeparateRootsMergeResult[FileObject](self.allowed_roots, self.objects)
+    def create_merge_result(self) -> Transformed[FileObject, ByRoot[ObjectID]]:
+        return TransformedRoots[FileObject](self.allowed_roots, self.objects)
 
     def combine_non_drilldown(self, state: ThreewayMergeState, original: ByRoot[TreeObject | FileObject]) -> ByRoot[
         ObjectID]:
@@ -172,3 +172,30 @@ class ThreewayMerge(Transformation[FileObject, ThreewayMergeState, ByRoot[Object
         #     if merged.get_if_present(root_name) is None:
         #         merged[root_name] = original_obj.id
         return merged
+
+
+class TransformedRoots[F](Transformed[F, ByRoot[ObjectID]]):
+    def __init__(self, allowed_roots: List[str], objects: Objects[F]):
+        self.allowed_roots = allowed_roots
+        self.objects = objects
+
+        self._merged_children: Dict[str, TreeObject] = dict()
+
+    def add_for_child(self, child_name: str, merged_child_by_roots: ByRoot[ObjectID]) -> None:
+        for root_name, obj_id in merged_child_by_roots.items():
+            if root_name not in self._merged_children:
+                self._merged_children[root_name] = TreeObject({})
+
+            self._merged_children[root_name].children[child_name] = obj_id
+
+    def get_value(self) -> ByRoot[ObjectID]:
+        # store potential new objects
+        for root_name, child_tree in self._merged_children.items():
+            new_child_id = child_tree.id
+            self.objects[new_child_id] = child_tree
+
+        result = ByRoot[ObjectID](
+            self.allowed_roots,
+            ((root_name, child_tree.id) for root_name, child_tree in self._merged_children.items()))
+
+        return result

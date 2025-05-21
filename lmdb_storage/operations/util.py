@@ -1,7 +1,7 @@
 import abc
 from typing import Collection, Iterable, Tuple, Callable, Type, List, Dict
 
-from lmdb_storage.tree_structure import ObjectID, Objects, TreeObject
+from lmdb_storage.tree_structure import ObjectID
 
 
 class ByRoot[V]:
@@ -80,7 +80,7 @@ class ObjectsByRoot:
         return ByRoot[ObjectID](list(dictionary), dictionary.items())
 
 
-class MergeResult[F, R]:
+class Transformed[F, R]:
     @abc.abstractmethod
     def add_for_child(self, child_name: str, merged_child_by_roots: R) -> None:
         pass
@@ -88,30 +88,3 @@ class MergeResult[F, R]:
     @abc.abstractmethod
     def get_value(self) -> R:
         pass
-
-
-class SeparateRootsMergeResult[F](MergeResult[F, ByRoot[ObjectID]]):
-    def __init__(self, allowed_roots: List[str], objects: Objects[F]):
-        self.allowed_roots = allowed_roots
-        self.objects = objects
-
-        self._merged_children: Dict[str, TreeObject] = dict()
-
-    def add_for_child(self, child_name: str, merged_child_by_roots: ByRoot[ObjectID]) -> None:
-        for root_name, obj_id in merged_child_by_roots.items():
-            if root_name not in self._merged_children:
-                self._merged_children[root_name] = TreeObject({})
-
-            self._merged_children[root_name].children[child_name] = obj_id
-
-    def get_value(self) -> ByRoot[ObjectID]:
-        # store potential new objects
-        for root_name, child_tree in self._merged_children.items():
-            new_child_id = child_tree.id
-            self.objects[new_child_id] = child_tree
-
-        result = ByRoot[ObjectID](
-            self.allowed_roots,
-            ((root_name, child_tree.id) for root_name, child_tree in self._merged_children.items()))
-
-        return result

@@ -2,7 +2,7 @@ from typing import List
 
 from lmdb_storage.file_object import FileObject
 from lmdb_storage.operations.types import Transformation
-from lmdb_storage.operations.util import ByRoot, MergeResult
+from lmdb_storage.operations.util import ByRoot, Transformed
 from lmdb_storage.tree_structure import ObjectID, Objects, TreeObject
 
 
@@ -13,7 +13,7 @@ class TakeOneFile[F](Transformation[F, List[str], ObjectID]):
     def drilldown_state(self, child_name: str, merge_state: List[str]) -> List[str]:
         return merge_state + [child_name]
 
-    class TakeOneMergeResult[F](MergeResult[F, ObjectID]):
+    class TakeOneMergeResult[F](Transformed[F, ObjectID]):
         def __init__(self, objects: Objects[F]):
             self.objects = objects
             self._result = TreeObject({})
@@ -38,7 +38,7 @@ class TakeOneFile[F](Transformation[F, List[str], ObjectID]):
     def should_drill_down(self, state: List[str], trees: ByRoot[TreeObject], files: ByRoot[FileObject]) -> bool:
         return len(files) == 0  # as we prioritize taking the first file
 
-    def create_merge_result(self) -> MergeResult[F, ObjectID]:
+    def create_merge_result(self) -> Transformed[F, ObjectID]:
         return TakeOneFile.TakeOneMergeResult(self.objects)
 
     def combine_non_drilldown(self, state: List[str], original: ByRoot[TreeObject | FileObject]) -> ObjectID:

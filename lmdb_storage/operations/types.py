@@ -2,7 +2,7 @@ import abc
 from typing import List, Iterable
 
 from lmdb_storage.file_object import FileObject
-from lmdb_storage.operations.util import ByRoot, MergeResult
+from lmdb_storage.operations.util import ByRoot, Transformed
 from lmdb_storage.tree_structure import Objects, TreeObject, ObjectID
 
 
@@ -19,7 +19,7 @@ class Transformation[F, S, R](abc.ABC):
         pass
 
     @abc.abstractmethod
-    def create_merge_result(self) -> MergeResult[F, R]:
+    def create_merge_result(self) -> Transformed[F, R]:
         pass
 
     @abc.abstractmethod
@@ -40,7 +40,7 @@ class Transformation[F, S, R](abc.ABC):
             all_children_names = list(sorted(set(
                 child_name for tree_obj in trees.values() for child_name in tree_obj.children)))
 
-            merge_result: MergeResult[F, R] = self.create_merge_result()
+            merge_result: Transformed[F, R] = self.create_merge_result()
             for child_name in all_children_names:
                 all_objects_in_child_name = trees.map(lambda obj: obj.children.get(child_name))
                 merged_child_by_roots: R = self._execute_recursively(
@@ -62,7 +62,7 @@ class Transformation[F, S, R](abc.ABC):
         pass
 
 
-class EmptyMergeResult[F](MergeResult[F, None]):
+class EmptyTransformed[F](Transformed[F, None]):
     def add_for_child(self, child_name: str, merged_child_by_roots: None) -> None:
         return None
 
@@ -70,7 +70,7 @@ class EmptyMergeResult[F](MergeResult[F, None]):
         return None
 
 
-_empty_merge_result = EmptyMergeResult()
+_empty_merge_result = EmptyTransformed()
 
 
 class Procedure[F](Transformation[F, List[str], None]):
@@ -80,7 +80,7 @@ class Procedure[F](Transformation[F, List[str], None]):
     def combine(self, state: List[str], merged: None, original: ByRoot[TreeObject | FileObject]) -> None:
         self.run_on_level(state, original)
 
-    def create_merge_result(self) -> MergeResult[F, None]:
+    def create_merge_result(self) -> Transformed[F, None]:
         return _empty_merge_result
 
     def combine_non_drilldown(self, state: List[str], original: ByRoot[TreeObject | FileObject]) -> None:
@@ -93,7 +93,7 @@ class Procedure[F](Transformation[F, List[str], None]):
         return merge_state + [child_name]
 
 
-class GeneratorMergeResult[F, R](MergeResult[F, Iterable[R]]):
+class GeneratorTransformed[F, R](Transformed[F, Iterable[R]]):
     def __init__(self):
         self._child_res_list = list()
 
@@ -113,8 +113,8 @@ class TreeGenerator[F, R](Transformation[F, List[str], Iterable[R]]):
         yield from merged
         yield from self.compute_on_level(state, original)
 
-    def create_merge_result(self) -> MergeResult[F, Iterable[R]]:
-        return GeneratorMergeResult()
+    def create_merge_result(self) -> Transformed[F, Iterable[R]]:
+        return GeneratorTransformed()
 
     def combine_non_drilldown(self, state: List[str], original: ByRoot[TreeObject | FileObject]) -> Iterable[R]:
         yield from self.compute_on_level(state, original)

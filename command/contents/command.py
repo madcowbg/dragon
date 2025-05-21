@@ -359,7 +359,9 @@ class PullMergePreferences(MergePreferences):
             else:
                 return self.add_or_update_object(original_roots, path, staging_original)
 
-    def add_or_update_object(self, original_roots, path, staging_original):
+    def add_or_update_object(
+            self, original_roots: ByRoot[TreeObject | FileObject], path: List[str],
+            staging_original: FileObject) -> ByRoot[ObjectID]:
         result: ByRoot[ObjectID] = original_roots.new()
         for merge_name in self.where_to_apply_adds(path, staging_original) + list(original_roots.assigned_keys()):
             result[merge_name] = staging_original.file_id
