@@ -1,7 +1,7 @@
 import abc
 import dataclasses
 from types import NoneType
-from typing import List, Collection, Dict
+from typing import List, Dict
 
 from lmdb_storage.file_object import FileObject
 from lmdb_storage.operations.types import Transformation
@@ -37,7 +37,7 @@ class MergePreferences:
     def combine_base_only(
             self, path: List[str], repo_name: str, original_roots: ByRoot[TreeObject | FileObject],
             base_original: FileObject) -> TransformedRoots:
-        return TransformedRoots(original_roots.new())
+        pass
 
     @abc.abstractmethod
     def combine_staging_only(
@@ -48,43 +48,6 @@ class MergePreferences:
     @abc.abstractmethod
     def merge_missing(self, path: List[str], original_roots: ByRoot[TreeObject | FileObject]) -> TransformedRoots:
         pass
-
-
-class NaiveMergePreferences(MergePreferences):
-    def __init__(self, to_modify: Collection[str]):
-        self.to_modify = list(to_modify)
-
-    def where_to_apply_diffs(self, original_roots: List[str]) -> List[str]:
-        return list(set(original_roots + self.to_modify))
-
-    def where_to_apply_adds(self, original_roots: List[str]) -> List[str]:
-        return list(set(original_roots + self.to_modify))
-
-    def combine_both_existing(
-            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject],
-            staging_original: FileObject, base_original: FileObject) -> TransformedRoots:
-        result: ByRoot[ObjectID] = original_roots.new()
-        for merge_name in (self.where_to_apply_diffs(list(original_roots.assigned_keys()))):
-            result[merge_name] = staging_original.file_id
-        return TransformedRoots(result)
-
-    def combine_base_only(
-            self, path: List[str], repo_name: str, original_roots: ByRoot[TreeObject | FileObject],
-            base_original: FileObject) -> TransformedRoots:
-
-        return TransformedRoots(original_roots.new())
-
-    def combine_staging_only(self, path: List[str], repo_name: str, original_roots: ByRoot[TreeObject | FileObject],
-                             staging_original: FileObject) -> TransformedRoots:
-        assert type(staging_original) is FileObject
-
-        result: ByRoot[ObjectID] = original_roots.new()
-        for merge_name in (self.where_to_apply_adds(list(original_roots.assigned_keys()))):
-            result[merge_name] = staging_original.file_id
-        return TransformedRoots(result)
-
-    def merge_missing(self, path: List[str], original_roots: ByRoot[TreeObject | FileObject]) -> TransformedRoots:
-        return TransformedRoots(original_roots.map(lambda obj: obj.id))
 
 
 @dataclasses.dataclass

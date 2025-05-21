@@ -2,7 +2,7 @@ import binascii
 import hashlib
 import pathlib
 from tempfile import TemporaryDirectory
-from typing import Iterable, Tuple, Union, Dict
+from typing import Iterable, Tuple, Union, Dict, Collection, List
 from unittest import IsolatedAsyncioTestCase
 
 from lmdb import Transaction
@@ -11,10 +11,10 @@ from command.test_command_file_changing_flows import populate
 from command.test_hoard_command import populate_repotypes
 from lmdb_storage.file_object import FileObject
 from lmdb_storage.operations.naive_ops import TakeOneFile
-from lmdb_storage.operations.util import ObjectsByRoot
+from lmdb_storage.operations.util import ObjectsByRoot, ByRoot
 from lmdb_storage.object_store import ObjectStorage
 from lmdb_storage.test_experiment_lmdb import dump_tree, dump_diffs
-from lmdb_storage.operations.three_way_merge import ThreewayMerge, NaiveMergePreferences
+from lmdb_storage.operations.three_way_merge import ThreewayMerge, MergePreferences, TransformedRoots
 from lmdb_storage.tree_iteration import zip_dfs
 from lmdb_storage.tree_structure import ObjectID, Objects, do_nothing, TreeObject
 
@@ -445,3 +445,40 @@ def populate_trees(filepath: str) -> (ObjectStorage, ObjectID, ObjectID, ObjectI
             ('/wat/test.me.6', make_file("f2fwsdf"))])
 
         return env, partial_id, full_id, backup_id, incoming_id
+
+
+class NaiveMergePreferences(MergePreferences):
+    def __init__(self, to_modify: Collection[str]):
+        self.to_modify = list(to_modify)
+
+    def where_to_apply_diffs(self, original_roots: List[str]) -> List[str]:
+        return list(set(original_roots + self.to_modify))
+
+    def where_to_apply_adds(self, original_roots: List[str]) -> List[str]:
+        return list(set(original_roots + self.to_modify))
+
+    def combine_both_existing(
+            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject],
+            staging_original: FileObject, base_original: FileObject) -> TransformedRoots:
+        result: ByRoot[ObjectID] = original_roots.new()
+        for merge_name in (self.where_to_apply_diffs(list(original_roots.assigned_keys()))):
+            result[merge_name] = staging_original.file_id
+        return TransformedRoots(result)
+
+    def combine_base_only(
+            self, path: List[str], repo_name: str, original_roots: ByRoot[TreeObject | FileObject],
+            base_original: FileObject) -> TransformedRoots:
+
+        return TransformedRoots(original_roots.new())
+
+    def combine_staging_only(self, path: List[str], repo_name: str, original_roots: ByRoot[TreeObject | FileObject],
+                             staging_original: FileObject) -> TransformedRoots:
+        assert type(staging_original) is FileObject
+
+        result: ByRoot[ObjectID] = original_roots.new()
+        for merge_name in (self.where_to_apply_adds(list(original_roots.assigned_keys()))):
+            result[merge_name] = staging_original.file_id
+        return TransformedRoots(result)
+
+    def merge_missing(self, path: List[str], original_roots: ByRoot[TreeObject | FileObject]) -> TransformedRoots:
+        return TransformedRoots(original_roots.map(lambda obj: obj.id))

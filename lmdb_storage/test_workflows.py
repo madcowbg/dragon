@@ -2,11 +2,12 @@ import binascii
 import unittest
 from tempfile import TemporaryDirectory
 
-from lmdb_storage.pull_contents import pull_contents
+from lmdb_storage.object_store import ObjectStorage
+from lmdb_storage.pull_contents import merge_contents, commit_merged
+
 from lmdb_storage.test_experiment_lmdb import dump_tree
-from lmdb_storage.test_merge_trees import populate_trees
-from lmdb_storage.operations.three_way_merge import NaiveMergePreferences
-from lmdb_storage.tree_structure import remove_file_object
+from lmdb_storage.test_merge_trees import populate_trees, NaiveMergePreferences
+from lmdb_storage.tree_structure import remove_file_object, ObjectID
 from util import safe_hex
 
 
@@ -224,3 +225,21 @@ class TestWorkflows(unittest.TestCase):
                 ('$ROOT/wat', 1),
                 ('$ROOT/wat/test.me.3', 2, '2cbc8608c915e94723752d4f0c54302f')],  # fixme should not have changed!
                 dump_tree(objects, current_backup_id, show_fasthash=True))
+
+
+def pull_contents(env: ObjectStorage, repo_uuid: str, staging_id: ObjectID, merge_prefs: NaiveMergePreferences):
+    assert "HOARD" not in merge_prefs.to_modify
+    merge_prefs = NaiveMergePreferences(merge_prefs.to_modify + [repo_uuid, "HOARD"])
+
+    env.roots(write=True)[repo_uuid].staging = staging_id
+
+    roots = env.roots(write=False)
+    repo_roots = [r for r in roots.all_roots if r.name != "HOARD"]
+    repo_root_names = [r.name for r in repo_roots]
+
+    merged_ids = merge_contents(env, roots[repo_uuid], repo_roots, merge_prefs=merge_prefs)
+
+    roots = env.roots(write=True)
+    commit_merged(roots['HOARD'], roots[repo_uuid], [roots[rn] for rn in repo_root_names], merged_ids)
+
+    return merged_ids

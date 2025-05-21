@@ -5,27 +5,8 @@ from command.contents.pull_preferences import PullMergePreferences, PullPreferen
 from lmdb_storage.operations.util import ByRoot
 from lmdb_storage.object_store import ObjectStorage
 from lmdb_storage.roots import Root
-from lmdb_storage.operations.three_way_merge import ThreewayMerge, MergePreferences, NaiveMergePreferences, \
-    TransformedRoots
+from lmdb_storage.operations.three_way_merge import ThreewayMerge, MergePreferences, TransformedRoots
 from lmdb_storage.tree_structure import ObjectID
-
-
-def pull_contents(env: ObjectStorage, repo_uuid: str, staging_id: ObjectID, merge_prefs: NaiveMergePreferences):
-    assert "HOARD" not in merge_prefs.to_modify
-    merge_prefs = NaiveMergePreferences(merge_prefs.to_modify + [repo_uuid, "HOARD"])
-
-    env.roots(write=True)[repo_uuid].staging = staging_id
-
-    roots = env.roots(write=False)
-    repo_roots = [r for r in roots.all_roots if r.name != "HOARD"]
-    repo_root_names = [r.name for r in repo_roots]
-
-    merged_ids = merge_contents(env, roots[repo_uuid], repo_roots, merge_prefs=merge_prefs)
-
-    roots = env.roots(write=True)
-    commit_merged(roots['HOARD'], roots[repo_uuid], [roots[rn] for rn in repo_root_names], merged_ids)
-
-    return merged_ids
 
 
 def merge_contents(
