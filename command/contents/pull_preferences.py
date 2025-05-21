@@ -1,4 +1,16 @@
 import enum
+import logging
+from typing import List
+
+from command.content_prefs import ContentPrefs
+from command.fast_path import FastPosixPath
+from config import HoardRemotes, CaveType
+from contents.hoard import HoardContents
+from contents.repo_props import FileDesc
+from lmdb_storage.file_object import FileObject
+from lmdb_storage.operations.three_way_merge import MergePreferences, TransformedRoots
+from lmdb_storage.operations.util import ByRoot
+from lmdb_storage.tree_structure import TreeObject, ObjectID
 
 
 class PullIntention(enum.Enum):
@@ -32,3 +44,118 @@ class PullPreferences:
 
         self.force_fetch_local_missing = force_fetch_local_missing
         self.force_reset_with_local_contents = force_reset_with_local_contents
+
+
+class PullMergePreferences(MergePreferences):
+    def __init__(
+            self, preferences: PullPreferences, content_prefs: ContentPrefs, hoard_contents: HoardContents,  # fixme rem
+            remote_uuid: str, remotes: HoardRemotes, uuid_roots: List[str]):
+        self.remote_uuid = remote_uuid
+        self.remote_type = remotes[remote_uuid].type
+
+        self.preferences = preferences
+        self.content_prefs = content_prefs
+
+        self.hoard_contents = hoard_contents  # fixme should not need this
+
+        self._where_to_apply_adds = ["HOARD"] + uuid_roots
+
+    def where_to_apply_adds(self, path: List[str], staging_original: FileObject) -> List[str]:
+        file_path = FastPosixPath("/" + "/".join(path))
+        file_desc = FileDesc(staging_original.size, staging_original.fasthash, None)  # fixme add md5
+        repos_to_add = self.content_prefs.repos_to_add(
+            file_path,
+            file_desc,
+            None)
+        base_to_add = ["HOARD", self.remote_uuid] if self.remote_type == CaveType.PARTIAL else ["HOARD"]
+        return base_to_add + [r for r in repos_to_add if r in self._where_to_apply_adds]
+
+    def combine_both_existing(
+            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject],
+            staging_original: FileObject, base_original: FileObject, roots_to_merge: List[str]) -> TransformedRoots:
+        original_roots = original_roots.subset(roots_to_merge)
+
+        if staging_original.file_id == base_original.file_id:
+            logging.error(f"Both staging and base staging for %s are identical, returns as-is.", path)
+            return TransformedRoots(original_roots.map(lambda obj: obj.id))
+
+        assert staging_original.file_id != base_original.file_id, staging_original.file_id
+
+        if self.remote_type == CaveType.BACKUP:  # fixme use PullPreferences
+            logging.error("Ignoring changes to %s coming from a backup repo!", path)
+
+            result: ByRoot[ObjectID] = original_roots.map(lambda obj: obj.id)
+            return result  # ignore changes coming from backups
+
+        if self.remote_type == CaveType.INCOMING:  # fixme use PullPreferences
+            # fixme lower
+            logging.error("Ignoring changes to %s coming from an incoming repo!", path)
+            return TransformedRoots(original_roots.map(lambda obj: obj.id))  # ignore changes coming from incoming
+
+        result: ByRoot[ObjectID] = ByRoot(roots_to_merge)
+        for merge_name in ["HOARD"] + list(original_roots.assigned_keys()):
+            if merge_name in roots_to_merge:
+                result[merge_name] = staging_original.file_id
+        return TransformedRoots(result)
+
+    def combine_base_only(
+            self, path: List[str], repo_name: str, original_roots: ByRoot[TreeObject | FileObject],
+            base_original: FileObject, roots_to_merge: List[str]) -> TransformedRoots:
+        original_roots = original_roots.subset(roots_to_merge)
+
+        if self.remote_type == CaveType.BACKUP:  # fixme use PullPreferences
+            # fixme lower
+            logging.error("Ignoring changes to %s coming from a backup repo!", path)
+            return TransformedRoots(original_roots.map(lambda obj: obj.id))  # ignore changes coming from backups
+
+        if self.preferences.force_fetch_local_missing:
+            hoard_object = original_roots.get_if_present("HOARD")
+            if hoard_object is not None:
+                result: ByRoot[ObjectID] = original_roots.map(lambda obj: obj.id)
+                result[repo_name] = hoard_object.id
+                return TransformedRoots(result)
+
+        return TransformedRoots(original_roots.new())
+
+    def combine_staging_only(
+            self, path: List[str], repo_name: str, original_roots: ByRoot[TreeObject | FileObject],
+            staging_original: FileObject, roots_to_merge: List[str]) -> TransformedRoots:
+        original_roots = original_roots.subset(roots_to_merge)
+
+        hoard_object = original_roots.get_if_present("HOARD")
+        if self.remote_type == CaveType.BACKUP:
+            # fixme use PullPreferences
+            logging.error("Ignoring changes to %s coming from a backup repo!", path)
+            result: ByRoot[ObjectID] = original_roots.map(lambda obj: obj.id)
+
+            if hoard_object is not None:  # there is a hoard object already
+                result[repo_name] = hoard_object.id  # reset desired to currently existing object
+
+            return TransformedRoots(result)  # ignore changes coming from backups
+        elif self.remote_type == CaveType.INCOMING:
+            if hoard_object is not None:
+                return TransformedRoots(original_roots.map(lambda obj: obj.id))  # ignore from incoming
+            else:
+                return self.add_or_update_object(original_roots, path, staging_original)
+        else:  # for partials, update object
+            if hoard_object is not None and hoard_object.id == staging_original.id:
+                # the repo is just recognizing it already has the object
+                result: ByRoot[ObjectID] = original_roots.map(lambda obj: obj.id)
+                result[repo_name] = staging_original.id
+                return TransformedRoots(result)
+            else:
+                return self.add_or_update_object(original_roots, path, staging_original)
+
+    def add_or_update_object(
+            self, original_roots: ByRoot[TreeObject | FileObject], path: List[str],
+            staging_original: FileObject) -> TransformedRoots:
+        result: ByRoot[ObjectID] = original_roots.new()
+        for merge_name in self.where_to_apply_adds(path, staging_original) + list(original_roots.assigned_keys()):
+            result[merge_name] = staging_original.file_id
+        return TransformedRoots(result)
+
+    def merge_missing(
+            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject],
+            roots_to_merge: List[str]) -> TransformedRoots:
+        original_roots = original_roots.subset(roots_to_merge)
+        return TransformedRoots(original_roots.map(lambda obj: obj.id))

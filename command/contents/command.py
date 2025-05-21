@@ -8,22 +8,21 @@ from alive_progress import alive_it
 
 from command.content_prefs import ContentPrefs
 from command.contents.comparisons import copy_local_staging_to_hoard
-from command.contents.pull_preferences import PullPreferences, PullIntention
+from command.contents.pull_preferences import PullPreferences, PullIntention, PullMergePreferences
 from command.fast_path import FastPosixPath
 from command.hoard import Hoard
 from command.pathing import HoardPathing
 from command.tree_operations import remove_from_desired_tree
-from config import CaveType, HoardRemote, HoardConfig, HoardRemotes
+from config import CaveType, HoardRemote, HoardConfig
 from contents.hoard import HoardContents, HoardFile, HoardDir
 from contents.hoard_props import HoardFileStatus, HoardFileProps
 from contents.repo import RepoContents
-from contents.repo_props import FileDesc
 from exceptions import MissingRepoContents
 from lmdb_storage.file_object import FileObject
+from lmdb_storage.operations.three_way_merge import TransformedRoots
 from lmdb_storage.operations.util import ByRoot
 from lmdb_storage.pull_contents import merge_contents, commit_merged
 from lmdb_storage.roots import Root, Roots
-from lmdb_storage.operations.three_way_merge import MergePreferences
 from lmdb_storage.tree_iteration import zip_trees_dfs
 from lmdb_storage.tree_operations import get_child, graft_in_tree
 from lmdb_storage.tree_structure import Objects, ObjectID, TreeObject
@@ -259,121 +258,6 @@ def pull_prefs_to_restore_from_hoard(remote_uuid):
                            force_reset_with_local_contents=False)
 
 
-class PullMergePreferences(MergePreferences):
-    def __init__(
-            self, preferences: PullPreferences, content_prefs: ContentPrefs, hoard_contents: HoardContents,  # fixme rem
-            remote_uuid: str, remotes: HoardRemotes, uuid_roots: List[str]):
-        self.remote_uuid = remote_uuid
-        self.remote_type = remotes[remote_uuid].type
-
-        self.preferences = preferences
-        self.content_prefs = content_prefs
-
-        self.hoard_contents = hoard_contents  # fixme should not need this
-
-        self._where_to_apply_adds = ["HOARD"] + uuid_roots
-
-    def where_to_apply_adds(self, path: List[str], staging_original: FileObject):
-        file_path = FastPosixPath("/" + "/".join(path))
-        file_desc = FileDesc(staging_original.size, staging_original.fasthash, None)  # fixme add md5
-        repos_to_add = self.content_prefs.repos_to_add(
-            file_path,
-            file_desc,
-            None)
-        base_to_add = ["HOARD", self.remote_uuid] if self.remote_type == CaveType.PARTIAL else ["HOARD"]
-        return base_to_add + [r for r in repos_to_add if r in self._where_to_apply_adds]
-
-    def combine_both_existing(
-            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject],
-            staging_original: FileObject, base_original: FileObject, roots_to_merge: List[str]) -> ByRoot[ObjectID]:
-        original_roots = original_roots.subset(roots_to_merge)
-
-        if staging_original.file_id == base_original.file_id:
-            logging.error(f"Both staging and base staging for %s are identical, returns as-is.", path)
-            return original_roots.map(lambda obj: obj.id)
-
-        assert staging_original.file_id != base_original.file_id, staging_original.file_id
-
-        if self.remote_type == CaveType.BACKUP:  # fixme use PullPreferences
-            logging.error("Ignoring changes to %s coming from a backup repo!", path)
-
-            result: ByRoot[ObjectID] = original_roots.map(lambda obj: obj.id)
-            return result  # ignore changes coming from backups
-
-        if self.remote_type == CaveType.INCOMING:  # fixme use PullPreferences
-            # fixme lower
-            logging.error("Ignoring changes to %s coming from an incoming repo!", path)
-            return original_roots.map(lambda obj: obj.id)  # ignore changes coming from incoming
-
-        result: ByRoot[ObjectID] = ByRoot(roots_to_merge)
-        for merge_name in ["HOARD"] + list(original_roots.assigned_keys()):
-            if merge_name in roots_to_merge:
-                result[merge_name] = staging_original.file_id
-        return result
-
-    def combine_base_only(
-            self, path: List[str], repo_name: str, original_roots: ByRoot[TreeObject | FileObject],
-            base_original: FileObject, roots_to_merge: List[str]) -> ByRoot[ObjectID]:
-        original_roots = original_roots.subset(roots_to_merge)
-
-        if self.remote_type == CaveType.BACKUP:  # fixme use PullPreferences
-            # fixme lower
-            logging.error("Ignoring changes to %s coming from a backup repo!", path)
-            return original_roots.map(lambda obj: obj.id)  # ignore changes coming from backups
-
-        if self.preferences.force_fetch_local_missing:
-            hoard_object = original_roots.get_if_present("HOARD")
-            if hoard_object is not None:
-                result: ByRoot[ObjectID] = original_roots.map(lambda obj: obj.id)
-                result[repo_name] = hoard_object.id
-                return result
-
-        return original_roots.new()
-
-    def combine_staging_only(
-            self, path: List[str], repo_name: str, original_roots: ByRoot[TreeObject | FileObject],
-            staging_original: FileObject, roots_to_merge: List[str]) -> ByRoot[ObjectID]:
-        original_roots = original_roots.subset(roots_to_merge)
-
-        hoard_object = original_roots.get_if_present("HOARD")
-        if self.remote_type == CaveType.BACKUP:
-            # fixme use PullPreferences
-            logging.error("Ignoring changes to %s coming from a backup repo!", path)
-            result: ByRoot[ObjectID] = original_roots.map(lambda obj: obj.id)
-
-            if hoard_object is not None:  # there is a hoard object already
-                result[repo_name] = hoard_object.id  # reset desired to currently existing object
-
-            return result  # ignore changes coming from backups
-        elif self.remote_type == CaveType.INCOMING:
-            if hoard_object is not None:
-                return original_roots.map(lambda obj: obj.id)  # ignore from incoming
-            else:
-                return self.add_or_update_object(original_roots, path, staging_original)
-        else:  # for partials, update object
-            if hoard_object is not None and hoard_object.id == staging_original.id:
-                # the repo is just recognizing it already has the object
-                result: ByRoot[ObjectID] = original_roots.map(lambda obj: obj.id)
-                result[repo_name] = staging_original.id
-                return result
-            else:
-                return self.add_or_update_object(original_roots, path, staging_original)
-
-    def add_or_update_object(
-            self, original_roots: ByRoot[TreeObject | FileObject], path: List[str],
-            staging_original: FileObject) -> ByRoot[ObjectID]:
-        result: ByRoot[ObjectID] = original_roots.new()
-        for merge_name in self.where_to_apply_adds(path, staging_original) + list(original_roots.assigned_keys()):
-            result[merge_name] = staging_original.file_id
-        return result
-
-    def merge_missing(
-            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject],
-            roots_to_merge: List[str]) -> ByRoot[ObjectID]:
-        original_roots = original_roots.subset(roots_to_merge)
-        return original_roots.map(lambda obj: obj.id)
-
-
 async def print_pending_to_pull(
         hoard_contents: HoardContents, content_prefs: ContentPrefs, current_contents: RepoContents, config: HoardConfig,
         preferences: PullPreferences, out):
@@ -399,7 +283,7 @@ async def print_pending_to_pull(
 
 
 def print_differences(
-        hoard_contents: HoardContents, hoard_root: Root, repo_root: Root, merged_ids: ByRoot[ObjectID], out: StringIO):
+        hoard_contents: HoardContents, hoard_root: Root, repo_root: Root, merged_ids: TransformedRoots, out: StringIO):
     print_differences_for_id(
         hoard_contents, hoard_root, repo_root,
         merged_ids.get_if_present("HOARD"),

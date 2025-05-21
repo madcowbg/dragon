@@ -3,7 +3,8 @@ from typing import List
 from lmdb_storage.operations.util import ByRoot
 from lmdb_storage.object_store import ObjectStorage
 from lmdb_storage.roots import Root
-from lmdb_storage.operations.three_way_merge import ThreewayMerge, MergePreferences, NaiveMergePreferences
+from lmdb_storage.operations.three_way_merge import ThreewayMerge, MergePreferences, NaiveMergePreferences, \
+    TransformedRoots
 from lmdb_storage.tree_structure import ObjectID
 
 
@@ -27,7 +28,7 @@ def pull_contents(env: ObjectStorage, repo_uuid: str, staging_id: ObjectID, merg
 
 def merge_contents(
         env: ObjectStorage, repo_root: Root, all_repo_roots: List[Root], merge_prefs: MergePreferences) \
-        -> ByRoot[ObjectID]:
+        -> TransformedRoots:
     assert repo_root in all_repo_roots, f"{repo_root.name} is missing from other_roots={all_repo_roots}"
 
     # assign roots
@@ -56,7 +57,7 @@ def merge_contents(
     return merged_ids
 
 
-def commit_merged(hoard: Root, repo: Root, all_roots: List[Root], merged_ids: ByRoot[ObjectID]):
+def commit_merged(hoard: Root, repo: Root, all_roots: List[Root], merged_ids: TransformedRoots):
     # set current for the repo being merged
     repo.current = repo.staging
 
