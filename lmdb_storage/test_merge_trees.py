@@ -463,13 +463,13 @@ class NaiveMergePreferences(MergePreferences):
         result: ByRoot[ObjectID] = original_roots.new()
         for merge_name in (self.where_to_apply_diffs(list(original_roots.assigned_keys()))):
             result[merge_name] = staging_original.file_id
-        return TransformedRoots(result)
+        return TransformedRoots.HACK_create(result)
 
     def combine_base_only(
             self, path: List[str], repo_name: str, original_roots: ByRoot[TreeObject | FileObject],
             base_original: FileObject) -> TransformedRoots:
 
-        return TransformedRoots(original_roots.new())
+        return TransformedRoots.HACK_create(original_roots.new())
 
     def combine_staging_only(self, path: List[str], repo_name: str, original_roots: ByRoot[TreeObject | FileObject],
                              staging_original: FileObject) -> TransformedRoots:
@@ -478,7 +478,7 @@ class NaiveMergePreferences(MergePreferences):
         result: ByRoot[ObjectID] = original_roots.new()
         for merge_name in (self.where_to_apply_adds(list(original_roots.assigned_keys()))):
             result[merge_name] = staging_original.file_id
-        return TransformedRoots(result)
+        return TransformedRoots.HACK_create(result)
 
     def merge_missing(self, path: List[str], original_roots: ByRoot[TreeObject | FileObject]) -> TransformedRoots:
-        return TransformedRoots(original_roots.map(lambda obj: obj.id))
+        return TransformedRoots.HACK_create(original_roots.map(lambda obj: obj.id))

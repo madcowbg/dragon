@@ -1,7 +1,7 @@
 import abc
 import dataclasses
 from types import NoneType
-from typing import List, Dict
+from typing import List, Dict, Iterable, Tuple
 
 from lmdb_storage.file_object import FileObject
 from lmdb_storage.operations.types import Transformation
@@ -10,19 +10,31 @@ from lmdb_storage.tree_structure import Objects, TreeObject, ObjectID, MaybeObje
 
 
 class TransformedRoots:
-    # def __init__(self, roots_names_idxs: Dict[str, int]):
-    #     self.roots_names_idxs = roots_names_idxs
-    def __init__(self, result: ByRoot[ObjectID]):
-        self.result = result
+    def __init__(self, keys: Tuple[str], values: Tuple[MaybeObjectID]):
+        self._keys: Tuple[str] = keys
+        self._values: Tuple[MaybeObjectID] = values
 
-    def get_value(self) -> ByRoot[ObjectID]:
-        return self.result
+    @staticmethod
+    def HACK_create(result: ByRoot[ObjectID]) -> "TransformedRoots":
+        _keys: List[str] = list()
+        _values: List[MaybeObjectID] = list()
+        for key in result.allowed_roots:
+            _keys.append(key)
+            _values.append(result.get_if_present(key))
+        return TransformedRoots(_keys, _values)
 
     def get_if_present(self, root_name: str) -> MaybeObjectID:
-        return self.result.get_if_present(root_name)
+        return self._values[self._keys.index(root_name)]
 
-    def assigned_keys(self):
-        return self.result.assigned_keys()
+    def assigned_keys(self) -> Iterable[str]:
+        for key, value in zip(self._keys, self._values):
+            if value is not None:
+                yield key
+
+    def HACK_items(self) -> Iterable[Tuple[str, ObjectID]]:
+        for key, value in zip(self._keys, self._values):
+            if value is not None:
+                yield key, value
 
 
 class MergePreferences:
@@ -66,7 +78,7 @@ class CombinedRoots[F](Transformed[F, ByRoot[ObjectID]]):
 
     def add_for_child(self, child_name: str, merged_child_by_roots: TransformedRoots) -> None:
         assert isinstance(merged_child_by_roots, TransformedRoots), type(merged_child_by_roots)
-        for root_name, obj_id in merged_child_by_roots.result.items():
+        for root_name, obj_id in merged_child_by_roots.HACK_items():
             if root_name not in self._merged_children:
                 self._merged_children[root_name] = TreeObject({})
 
@@ -82,7 +94,7 @@ class CombinedRoots[F](Transformed[F, ByRoot[ObjectID]]):
             self.allowed_roots,
             ((root_name, child_tree.id) for root_name, child_tree in self._merged_children.items()))
 
-        return TransformedRoots(result)
+        return TransformedRoots.HACK_create(result)
 
 
 class ThreewayMerge(Transformation[FileObject, ThreewayMergeState, TransformedRoots]):
@@ -139,7 +151,7 @@ class ThreewayMerge(Transformation[FileObject, ThreewayMergeState, TransformedRo
         base_original = state.base
         staging_original = state.staging
         if base_original == staging_original:  # no diffs
-            return TransformedRoots(original.map(lambda obj: obj.id))
+            return TransformedRoots.HACK_create(original.map(lambda obj: obj.id))
 
         assert staging_original is None or isinstance(staging_original, FileObject)
         assert base_original is None or isinstance(base_original, FileObject)
