@@ -36,15 +36,6 @@ def merge_contents(
         merge_only: Optional[List[str]] = None) \
         -> TransformedRoots:
     assert repo_root in all_repo_roots, f"{repo_root.name} is missing from other_roots={all_repo_roots}"
-    if merge_prefs is not None:
-        assert preferences is None
-        assert content_prefs is None
-    else:
-        assert preferences is not None, "Missing preferences"
-        assert content_prefs is not None, "Missing content_prefs"
-        merge_prefs = PullMergePreferences(
-            preferences, content_prefs, preferences.local_uuid, preferences.remote_type,
-            uuid_roots=[r.name for r in all_repo_roots] if merge_only is None else merge_only)
 
     # assign roots
     repo_current_id = repo_root.current
@@ -53,6 +44,18 @@ def merge_contents(
     hoard_head_id = env.roots(False)["HOARD"].desired
 
     all_root_names = [r.name for r in all_repo_roots] + ["HOARD"]
+
+    if merge_prefs is not None:
+        assert preferences is None
+        assert content_prefs is None
+    else:
+        assert preferences is not None, "Missing preferences"
+        assert content_prefs is not None, "Missing content_prefs"
+        merge_prefs = PullMergePreferences(
+            preferences, content_prefs, preferences.local_uuid, preferences.remote_type,
+            uuid_roots=[r.name for r in all_repo_roots] if merge_only is None else merge_only,
+            roots_to_merge=all_root_names)
+
     current_ids = ByRoot[ObjectID](
         list(set(all_root_names + ["current", "staging"])),
         [(r.name, r.desired) for r in all_repo_roots] + [
@@ -66,7 +69,7 @@ def merge_contents(
     with env.objects(write=True) as objects:
         merged_ids = ThreewayMerge(
             objects, current_id=repo_current_id, staging_id=repo_staging_id, repo_name=repo_root.name,
-            roots_to_merge=all_root_names, merge_prefs=merge_prefs) \
+            merge_prefs=merge_prefs) \
             .execute(current_ids)
 
     return merged_ids

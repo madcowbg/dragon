@@ -181,7 +181,6 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
 
             merged_ids = ThreewayMerge(
                 objects, current_id=backup_id, staging_id=incoming_id, repo_name='staging',
-                roots_to_merge=['full', 'partial', 'hoard'],
                 merge_prefs=NaiveMergePreferences(['full', 'hoard'])).execute(
                 ObjectsByRoot.from_map({
                     'current': backup_id, 'staging': incoming_id,
@@ -261,7 +260,7 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
 
             merged_ids = ThreewayMerge(
                 objects, current_id=objects.mktree_from_tuples([]), staging_id=partial_id, repo_name='staging',
-                roots_to_merge=['hoard'], merge_prefs=NaiveMergePreferences(['hoard'])).execute(
+                merge_prefs=NaiveMergePreferences(['hoard'])).execute(
                 ObjectsByRoot.from_map(
                     {'empty': objects.mktree_from_tuples([]), "staging": partial_id, 'hoard': hoard_id}))
 
@@ -276,7 +275,7 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
 
             merged_ids = ThreewayMerge(
                 objects, current_id=objects.mktree_from_tuples([]), staging_id=full_id, repo_name='staging',
-                roots_to_merge=['hoard'], merge_prefs=NaiveMergePreferences(['hoard'])).execute(
+                merge_prefs=NaiveMergePreferences(['hoard'])).execute(
                 ObjectsByRoot.from_map(
                     {'empty': objects.mktree_from_tuples([]), "staging": full_id, 'hoard': hoard_id}))
 
@@ -293,7 +292,7 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
 
             merged_ids = ThreewayMerge(
                 objects, current_id=objects.mktree_from_tuples([]), staging_id=backup_id, repo_name='staging',
-                roots_to_merge=['hoard'], merge_prefs=NaiveMergePreferences(['hoard'])).execute(
+                merge_prefs=NaiveMergePreferences(['hoard'])).execute(
                 ObjectsByRoot.from_map(
                     {'empty': objects.mktree_from_tuples([]), "staging": backup_id, 'hoard': hoard_id}))
 
@@ -344,7 +343,6 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
 
         merged_ids = ThreewayMerge(
             objects, current_id=backup_id, staging_id=incoming_id, repo_name='staging',
-            roots_to_merge=['full', 'partial', 'hoard'],
             merge_prefs=NaiveMergePreferences(['full', 'hoard'])).execute(
             ObjectsByRoot.from_map({
                 'current': backup_id, 'staging': incoming_id,
