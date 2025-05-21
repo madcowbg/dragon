@@ -27,17 +27,12 @@ class PullIntention(enum.Enum):
 
 class PullPreferences:
     def __init__(
-            self, local_uuid: str,
-            on_same_file_is_present: PullIntention,
-            on_file_added_or_present: PullIntention,
-            on_file_is_different_and_modified: PullIntention,
-            on_file_is_different_and_added: PullIntention,
-            on_file_is_different_but_present: PullIntention,
-            on_hoard_only_local_deleted: PullIntention,
-            on_hoard_only_local_unknown: PullIntention,
-            on_hoard_only_local_moved: PullIntention,
-            force_fetch_local_missing: bool,
-            force_reset_with_local_contents: bool):
+            self, local_uuid: str, on_same_file_is_present: PullIntention, on_file_added_or_present: PullIntention,
+            on_file_is_different_and_modified: PullIntention, on_file_is_different_and_added: PullIntention,
+            on_file_is_different_but_present: PullIntention, on_hoard_only_local_deleted: PullIntention,
+            on_hoard_only_local_unknown: PullIntention, on_hoard_only_local_moved: PullIntention,
+            force_fetch_local_missing: bool, force_reset_with_local_contents: bool, remote_type: CaveType):
+        self.remote_type = remote_type
         self.local_uuid = local_uuid
 
         self.on_file_added_or_present = on_file_added_or_present
@@ -48,15 +43,13 @@ class PullPreferences:
 
 class PullMergePreferences(MergePreferences):
     def __init__(
-            self, preferences: PullPreferences, content_prefs: ContentPrefs, hoard_contents: HoardContents,  # fixme rem
-            remote_uuid: str, remotes: HoardRemotes, uuid_roots: List[str]):
+            self, preferences: PullPreferences, content_prefs: ContentPrefs,
+            remote_uuid: str, remote_type: CaveType, uuid_roots: List[str]):
         self.remote_uuid = remote_uuid
-        self.remote_type = remotes[remote_uuid].type
+        self.remote_type = remote_type
 
         self.preferences = preferences
         self.content_prefs = content_prefs
-
-        self.hoard_contents = hoard_contents  # fixme should not need this
 
         self._where_to_apply_adds = ["HOARD"] + uuid_roots
 

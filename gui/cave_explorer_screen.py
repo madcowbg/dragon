@@ -474,7 +474,7 @@ class CaveInfoWidget(Widget):
                     f"{self.remote.name}({self.remote.uuid}\n"
                     f"")):
             with StringIO() as out:
-                preferences = pull_prefs_to_restore_from_hoard(self.remote.uuid)
+                preferences = pull_prefs_to_restore_from_hoard(self.remote.uuid, self.remote.type)
                 await execute_pull(
                     self.hoard, preferences, ignore_epoch=False, out=out,
                     progress_bar=progress_reporting_it(self, "restore-from-hoard-operation", 10))

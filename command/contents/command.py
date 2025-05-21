@@ -58,8 +58,8 @@ def _init_pull_preferences_partial(
                            on_hoard_only_local_deleted=PullIntention.DELETE_FROM_HOARD if not force_fetch_local_missing else PullIntention.RESTORE_FROM_HOARD,
                            on_hoard_only_local_unknown=PullIntention.ACCEPT_FROM_HOARD,
                            on_hoard_only_local_moved=PullIntention.MOVE_IN_HOARD,
-                           force_fetch_local_missing=force_fetch_local_missing,
-                           force_reset_with_local_contents=False)
+                           force_fetch_local_missing=force_fetch_local_missing, force_reset_with_local_contents=False,
+                           remote_type=CaveType.PARTIAL)
 
 
 def _init_pull_preferences_backup(remote_uuid: str) -> PullPreferences:
@@ -71,7 +71,7 @@ def _init_pull_preferences_backup(remote_uuid: str) -> PullPreferences:
                            on_hoard_only_local_deleted=PullIntention.RESTORE_FROM_HOARD,
                            on_hoard_only_local_unknown=PullIntention.RESTORE_FROM_HOARD,
                            on_hoard_only_local_moved=PullIntention.RESTORE_FROM_HOARD, force_fetch_local_missing=False,
-                           force_reset_with_local_contents=False)
+                           force_reset_with_local_contents=False, remote_type=CaveType.BACKUP)
 
 
 def _init_pull_preferences_incoming(remote_uuid: str) -> PullPreferences:
@@ -83,7 +83,7 @@ def _init_pull_preferences_incoming(remote_uuid: str) -> PullPreferences:
                            on_hoard_only_local_deleted=PullIntention.IGNORE,
                            on_hoard_only_local_unknown=PullIntention.IGNORE,
                            on_hoard_only_local_moved=PullIntention.IGNORE, force_fetch_local_missing=False,
-                           force_reset_with_local_contents=False)
+                           force_reset_with_local_contents=False, remote_type=CaveType.INCOMING)
 
 
 def augment_statuses(config, hoard, show_empty, statuses):
@@ -149,9 +149,7 @@ async def execute_pull(
 
             merged_ids = merge_contents(
                 hoard_contents.env, repo_root, all_repo_roots=[hoard_root] + all_remote_roots,
-                merge_prefs=PullMergePreferences(
-                    preferences, content_prefs, hoard_contents, current_contents.uuid,
-                    config.remotes, [r.name for r in all_remote_roots]))
+                preferences=preferences, content_prefs=content_prefs)
 
             # print what actually changed for the hoard and the repo todo consider printing other repo changes?
             print_differences(hoard_contents, hoard_root, repo_root, merged_ids, out)
@@ -246,7 +244,7 @@ async def execute_print_differences(hoard: HoardContents, repo_uuid: str, ignore
     out.write("DONE")
 
 
-def pull_prefs_to_restore_from_hoard(remote_uuid):
+def pull_prefs_to_restore_from_hoard(remote_uuid: str, remote_type: CaveType) -> PullPreferences:
     return PullPreferences(remote_uuid, on_same_file_is_present=PullIntention.ADD_TO_HOARD,
                            on_file_added_or_present=PullIntention.CLEANUP,
                            on_file_is_different_and_modified=PullIntention.RESTORE_FROM_HOARD,
@@ -255,7 +253,7 @@ def pull_prefs_to_restore_from_hoard(remote_uuid):
                            on_hoard_only_local_deleted=PullIntention.RESTORE_FROM_HOARD,
                            on_hoard_only_local_unknown=PullIntention.RESTORE_FROM_HOARD,
                            on_hoard_only_local_moved=PullIntention.RESTORE_FROM_HOARD, force_fetch_local_missing=False,
-                           force_reset_with_local_contents=False)
+                           force_reset_with_local_contents=False, remote_type=remote_type)
 
 
 async def print_pending_to_pull(
@@ -273,8 +271,7 @@ async def print_pending_to_pull(
 
         merged_ids = merge_contents(
             hoard_contents.env, repo_root, [repo_root, hoard_root],
-            PullMergePreferences(
-                preferences, content_prefs, hoard_contents, current_contents.uuid, config.remotes, [repo_root.name]))
+            preferences=preferences, content_prefs=content_prefs, merge_only=[repo_root.name])
 
         # raise ValueError()
         print_differences(hoard_contents, hoard_root, repo_root, merged_ids, out)
