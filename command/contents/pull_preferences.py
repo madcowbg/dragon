@@ -115,7 +115,7 @@ class PullMergePreferences(MergePreferences):
                 result[repo_name] = hoard_object.id
                 return TransformedRoots.HACK_create(result)
 
-        return TransformedRoots.HACK_create(original_roots.new())
+        return self.empty_association
 
     def combine_staging_only(
             self, path: List[str], repo_name: str, original_roots: ByRoot[TreeObject | FileObject],

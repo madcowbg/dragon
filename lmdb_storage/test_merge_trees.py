@@ -182,7 +182,9 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
 
             merged_ids = ThreewayMerge(
                 objects, current_id=backup_id, staging_id=incoming_id, repo_name='staging',
-                merge_prefs=NaiveMergePreferences(['full', 'hoard'], allowed_roots=('current', 'staging', 'full', 'partial', 'hoard'))).execute(
+                merge_prefs=NaiveMergePreferences(['full', 'hoard'],
+                                                  allowed_roots=('current', 'staging', 'full', 'partial',
+                                                                 'hoard'))).execute(
                 ObjectsByRoot.from_map({
                     'current': backup_id, 'staging': incoming_id,
                     'full': full_id, 'partial': partial_id, 'hoard': hoard_id}), )
@@ -261,7 +263,8 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
 
             merged_ids = ThreewayMerge(
                 objects, current_id=objects.mktree_from_tuples([]), staging_id=partial_id, repo_name='staging',
-                merge_prefs=NaiveMergePreferences(['hoard'], allowed_roots=('current', 'staging', 'full', 'partial', 'hoard'))).execute(
+                merge_prefs=NaiveMergePreferences(['hoard'], allowed_roots=('current', 'staging', 'full', 'partial',
+                                                                            'hoard'))).execute(
                 ObjectsByRoot.from_map(
                     {'empty': objects.mktree_from_tuples([]), "staging": partial_id, 'hoard': hoard_id}))
 
@@ -276,7 +279,8 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
 
             merged_ids = ThreewayMerge(
                 objects, current_id=objects.mktree_from_tuples([]), staging_id=full_id, repo_name='staging',
-                merge_prefs=NaiveMergePreferences(['hoard'], allowed_roots=('current', 'staging', 'full', 'partial', 'hoard'))).execute(
+                merge_prefs=NaiveMergePreferences(['hoard'], allowed_roots=('current', 'staging', 'full', 'partial',
+                                                                            'hoard'))).execute(
                 ObjectsByRoot.from_map(
                     {'empty': objects.mktree_from_tuples([]), "staging": full_id, 'hoard': hoard_id}))
 
@@ -293,7 +297,8 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
 
             merged_ids = ThreewayMerge(
                 objects, current_id=objects.mktree_from_tuples([]), staging_id=backup_id, repo_name='staging',
-                merge_prefs=NaiveMergePreferences(['hoard'], allowed_roots=('current', 'staging', 'full', 'partial', 'hoard'))).execute(
+                merge_prefs=NaiveMergePreferences(['hoard'], allowed_roots=('current', 'staging', 'full', 'partial',
+                                                                            'hoard'))).execute(
                 ObjectsByRoot.from_map(
                     {'empty': objects.mktree_from_tuples([]), "staging": backup_id, 'hoard': hoard_id}))
 
@@ -344,7 +349,8 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
 
         merged_ids = ThreewayMerge(
             objects, current_id=backup_id, staging_id=incoming_id, repo_name='staging',
-            merge_prefs=NaiveMergePreferences(['full', 'hoard'], allowed_roots=('current', 'staging', 'full', 'partial', 'hoard'))).execute(
+            merge_prefs=NaiveMergePreferences(['full', 'hoard'], allowed_roots=('current', 'staging', 'full', 'partial',
+                                                                                'hoard'))).execute(
             ObjectsByRoot.from_map({
                 'current': backup_id, 'staging': incoming_id,
                 'full': full_id, 'partial': partial_id, 'hoard': hoard_id}))
@@ -466,25 +472,26 @@ class NaiveMergePreferences(MergePreferences):
     def combine_both_existing(
             self, path: List[str], original_roots: ByRoot[TreeObject | FileObject],
             staging_original: FileObject, base_original: FileObject) -> TransformedRoots:
-        result: ByRoot[ObjectID] = original_roots.new()
+        result: TransformedRoots = TransformedRoots.wrap(self.empty_association.new())
         for merge_name in (self.where_to_apply_diffs(list(original_roots.assigned_keys()))):
-            result[merge_name] = staging_original.file_id
-        return TransformedRoots.HACK_create(result)
+            result.HACK_maybe_set_by_key(merge_name, staging_original.file_id)
+        return result
 
     def combine_base_only(
             self, path: List[str], repo_name: str, original_roots: ByRoot[TreeObject | FileObject],
             base_original: FileObject) -> TransformedRoots:
 
-        return TransformedRoots.HACK_create(original_roots.new())
+        return self.empty_association
 
-    def combine_staging_only(self, path: List[str], repo_name: str, original_roots: ByRoot[TreeObject | FileObject],
-                             staging_original: FileObject) -> TransformedRoots:
+    def combine_staging_only(
+            self, path: List[str], repo_name: str, original_roots: ByRoot[TreeObject | FileObject],
+            staging_original: FileObject) -> TransformedRoots:
         assert type(staging_original) is FileObject
 
-        result: ByRoot[ObjectID] = original_roots.new()
+        result: TransformedRoots = TransformedRoots.wrap(self.empty_association.new())
         for merge_name in (self.where_to_apply_adds(list(original_roots.assigned_keys()))):
-            result[merge_name] = staging_original.file_id
-        return TransformedRoots.HACK_create(result)
+            result.HACK_maybe_set_by_key(merge_name, staging_original.file_id)
+        return result
 
     def merge_missing(self, path: List[str], original_roots: ByRoot[TreeObject | FileObject]) -> TransformedRoots:
         return TransformedRoots.HACK_create(original_roots.map(lambda obj: obj.id))

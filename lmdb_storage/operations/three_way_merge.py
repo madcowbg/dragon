@@ -41,7 +41,7 @@ class FastAssociation[V]:
 
 
 class TransformedRoots(FastAssociation[ObjectID]):
-    def __init__(self, keys: Tuple[str], values: Tuple[MaybeObjectID]):
+    def __init__(self, keys: Tuple[str], values: List[MaybeObjectID]):
         super().__init__(keys, values)
 
     @staticmethod
@@ -62,6 +62,14 @@ class TransformedRoots(FastAssociation[ObjectID]):
         for key, value in self.HACK_items():
             if key in _keys:
                 yield _keys.index(key), value
+
+    @staticmethod
+    def wrap(inner: FastAssociation[ObjectID]) -> "TransformedRoots":
+        return TransformedRoots(inner._keys, inner._values)
+
+    def HACK_maybe_set_by_key(self, key: str, value: ObjectID):
+        if key in self._keys:
+            self[self._keys.index(key)] = value
 
 
 class MergePreferences:
