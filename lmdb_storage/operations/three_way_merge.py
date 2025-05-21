@@ -9,10 +9,28 @@ from lmdb_storage.operations.util import ByRoot, Transformed
 from lmdb_storage.tree_structure import Objects, TreeObject, ObjectID, MaybeObjectID
 
 
-class TransformedRoots:
-    def __init__(self, keys: Tuple[str], values: Tuple[MaybeObjectID]):
+class FastAssociation[V]:
+    def __init__(self, keys: Tuple[str], values: Tuple[V | None]):
         self._keys: Tuple[str] = keys
-        self._values: Tuple[MaybeObjectID] = values
+        self._values: Tuple[V | None] = values
+
+    def get_if_present(self, root_name: str) -> V | None:
+        return self._values[self._keys.index(root_name)]
+
+    def assigned_keys(self) -> Iterable[str]:
+        for key, value in zip(self._keys, self._values):
+            if value is not None:
+                yield key
+
+    def available_items(self) -> Iterable[Tuple[int, V]]:
+        for i, value in enumerate(self._values):
+            if value is not None:
+                yield i, value
+
+
+class TransformedRoots(FastAssociation[ObjectID]):
+    def __init__(self, keys: Tuple[str], values: Tuple[MaybeObjectID]):
+        super().__init__(keys, values)
 
     @staticmethod
     def HACK_create(result: ByRoot[ObjectID]) -> "TransformedRoots":
@@ -22,14 +40,6 @@ class TransformedRoots:
             _keys.append(key)
             _values.append(result.get_if_present(key))
         return TransformedRoots(_keys, _values)
-
-    def get_if_present(self, root_name: str) -> MaybeObjectID:
-        return self._values[self._keys.index(root_name)]
-
-    def assigned_keys(self) -> Iterable[str]:
-        for key, value in zip(self._keys, self._values):
-            if value is not None:
-                yield key
 
     def HACK_items(self) -> Iterable[Tuple[str, ObjectID]]:
         for key, value in zip(self._keys, self._values):
@@ -61,6 +71,11 @@ class MergePreferences:
     def merge_missing(self, path: List[str], original_roots: ByRoot[TreeObject | FileObject]) -> TransformedRoots:
         pass
 
+    @abc.abstractmethod
+    # fixme remove allowed_roots
+    def create_result(self, allowed_roots: List[str], objects: Objects[FileObject]):
+        pass
+
 
 @dataclasses.dataclass
 class ThreewayMergeState:
@@ -70,11 +85,13 @@ class ThreewayMergeState:
 
 
 class CombinedRoots[F](Transformed[F, ByRoot[ObjectID]]):
-    def __init__(self, allowed_roots: List[str], objects: Objects[F]):
+    def __init__(self, allowed_roots: List[str], empty_association: FastAssociation[ObjectID], objects: Objects[F]):
         self.allowed_roots = allowed_roots
         self.objects = objects
 
         self._merged_children: Dict[str, TreeObject] = dict()
+        self.empty_association = empty_association
+        # self._merged_children = FastAssociation[]
 
     def add_for_child(self, child_name: str, merged_child_by_roots: TransformedRoots) -> None:
         assert isinstance(merged_child_by_roots, TransformedRoots), type(merged_child_by_roots)
@@ -91,6 +108,7 @@ class CombinedRoots[F](Transformed[F, ByRoot[ObjectID]]):
             self.objects[new_child_id] = child_tree
 
         result = ByRoot[ObjectID](
+            # self.empty_association._keys,
             self.allowed_roots,
             ((root_name, child_tree.id) for root_name, child_tree in self._merged_children.items()))
 
@@ -143,10 +161,10 @@ class ThreewayMerge(Transformation[FileObject, ThreewayMergeState, TransformedRo
         return len(trees) > 0 and state.base != state.staging
 
     def create_merge_result(self) -> Transformed[FileObject, ByRoot[ObjectID]]:
-        return CombinedRoots[FileObject](self.allowed_roots, self.objects)
+        return self.merge_prefs.create_result(self.allowed_roots, self.objects)
 
-    def combine_non_drilldown(self, state: ThreewayMergeState,
-                              original: ByRoot[TreeObject | FileObject]) -> TransformedRoots:
+    def combine_non_drilldown(
+            self, state: ThreewayMergeState, original: ByRoot[TreeObject | FileObject]) -> TransformedRoots:
         # we are on file level
         base_original = state.base
         staging_original = state.staging

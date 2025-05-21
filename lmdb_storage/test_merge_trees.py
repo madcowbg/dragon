@@ -14,7 +14,8 @@ from lmdb_storage.operations.naive_ops import TakeOneFile
 from lmdb_storage.operations.util import ObjectsByRoot, ByRoot
 from lmdb_storage.object_store import ObjectStorage
 from lmdb_storage.test_experiment_lmdb import dump_tree, dump_diffs
-from lmdb_storage.operations.three_way_merge import ThreewayMerge, MergePreferences, TransformedRoots
+from lmdb_storage.operations.three_way_merge import ThreewayMerge, MergePreferences, TransformedRoots, CombinedRoots, \
+    FastAssociation
 from lmdb_storage.tree_iteration import zip_dfs
 from lmdb_storage.tree_structure import ObjectID, Objects, do_nothing, TreeObject
 
@@ -448,8 +449,12 @@ def populate_trees(filepath: str) -> (ObjectStorage, ObjectID, ObjectID, ObjectI
 
 
 class NaiveMergePreferences(MergePreferences):
+    def create_result(self, allowed_roots: List[str], objects: Objects[FileObject]):
+        return CombinedRoots[FileObject](allowed_roots, self.empty_association, objects)
+
     def __init__(self, to_modify: Collection[str]):
         self.to_modify = list(to_modify)
+        self.empty_association = FastAssociation(self.to_modify, (None,) * len(self.to_modify))
 
     def where_to_apply_diffs(self, original_roots: List[str]) -> List[str]:
         return list(set(original_roots + self.to_modify))
