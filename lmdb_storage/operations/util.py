@@ -84,7 +84,3 @@ class Transformed[F, R]:
     @abc.abstractmethod
     def add_for_child(self, child_name: str, merged_child_by_roots: R) -> None:
         pass
-
-    @abc.abstractmethod
-    def get_value(self) -> R:
-        pass

@@ -84,6 +84,33 @@ class ThreewayMergeState:
     staging: FileObject | TreeObject | None
 
 
+class TransformedRoots[F](Transformed[F, ByRoot[ObjectID]]):
+    def __init__(self, allowed_roots: List[str], objects: Objects[F]):
+        self.allowed_roots = allowed_roots
+        self.objects = objects
+
+        self._merged_children: Dict[str, TreeObject] = dict()
+
+    def add_for_child(self, child_name: str, merged_child_by_roots: ByRoot[ObjectID]) -> None:
+        for root_name, obj_id in merged_child_by_roots.items():
+            if root_name not in self._merged_children:
+                self._merged_children[root_name] = TreeObject({})
+
+            self._merged_children[root_name].children[child_name] = obj_id
+
+    def get_value(self) -> ByRoot[ObjectID]:
+        # store potential new objects
+        for root_name, child_tree in self._merged_children.items():
+            new_child_id = child_tree.id
+            self.objects[new_child_id] = child_tree
+
+        result = ByRoot[ObjectID](
+            self.allowed_roots,
+            ((root_name, child_tree.id) for root_name, child_tree in self._merged_children.items()))
+
+        return result
+
+
 class ThreewayMerge(Transformation[FileObject, ThreewayMergeState, ByRoot[ObjectID]]):
     def object_or_none(self, object_id: ObjectID) -> FileObject | TreeObject | None:
         return self.objects[object_id] if object_id is not None else None
@@ -163,39 +190,13 @@ class ThreewayMerge(Transformation[FileObject, ThreewayMergeState, ByRoot[Object
             # current and staging are not in original, retain what was already there
             return self.merge_prefs.merge_missing(state.path, original, self.roots_to_merge)
 
-    def combine(self, state: ThreewayMergeState, merged: ByRoot[ObjectID], original: ByRoot[TreeObject | FileObject]) -> \
-            ByRoot[ObjectID]:
+    def combine(
+            self, state: ThreewayMergeState, merged: TransformedRoots[FileObject],
+            original: ByRoot[TreeObject | FileObject]) -> ByRoot[ObjectID]:
         # tree-level, just return the merged
         # # fixme this is needed because empty folders get dropped in "merged" - should fix that problem
         # merged = merged.copy()
         # for root_name, original_obj in original.items():
         #     if merged.get_if_present(root_name) is None:
         #         merged[root_name] = original_obj.id
-        return merged
-
-
-class TransformedRoots[F](Transformed[F, ByRoot[ObjectID]]):
-    def __init__(self, allowed_roots: List[str], objects: Objects[F]):
-        self.allowed_roots = allowed_roots
-        self.objects = objects
-
-        self._merged_children: Dict[str, TreeObject] = dict()
-
-    def add_for_child(self, child_name: str, merged_child_by_roots: ByRoot[ObjectID]) -> None:
-        for root_name, obj_id in merged_child_by_roots.items():
-            if root_name not in self._merged_children:
-                self._merged_children[root_name] = TreeObject({})
-
-            self._merged_children[root_name].children[child_name] = obj_id
-
-    def get_value(self) -> ByRoot[ObjectID]:
-        # store potential new objects
-        for root_name, child_tree in self._merged_children.items():
-            new_child_id = child_tree.id
-            self.objects[new_child_id] = child_tree
-
-        result = ByRoot[ObjectID](
-            self.allowed_roots,
-            ((root_name, child_tree.id) for root_name, child_tree in self._merged_children.items()))
-
-        return result
+        return merged.get_value()

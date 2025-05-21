@@ -10,7 +10,7 @@ class Transformation[F, S, R](abc.ABC):
     objects: Objects[F]
 
     @abc.abstractmethod
-    def combine(self, state: S, merged: R, original: ByRoot[TreeObject | FileObject]) -> R:
+    def combine(self, state: S, merged: Transformed[F, R], original: ByRoot[TreeObject | FileObject]) -> R:
         """Calculates values for the combined path by working on trees and files that are attached to this path."""
         pass
 
@@ -48,8 +48,7 @@ class Transformation[F, S, R](abc.ABC):
                     all_objects_in_child_name)
                 merge_result.add_for_child(child_name, merged_child_by_roots)
 
-            merged_objects: R = merge_result.get_value()
-            return self.combine(merge_state, merged_objects, all_original)
+            return self.combine(merge_state, merge_result, all_original)
         else:
             return self.combine_non_drilldown(merge_state, all_original)
 
@@ -109,8 +108,8 @@ class TreeGenerator[F, R](Transformation[F, List[str], Iterable[R]]):
     @abc.abstractmethod
     def compute_on_level(self, path: List[str], original: ByRoot[TreeObject | FileObject]) -> Iterable[R]: pass
 
-    def combine(self, state: List[str], merged: Iterable[R], original: ByRoot[TreeObject | FileObject]) -> Iterable[R]:
-        yield from merged
+    def combine(self, state: List[str], merged: GeneratorTransformed[F, R], original: ByRoot[TreeObject | FileObject]) -> Iterable[R]:
+        yield from merged.get_value()
         yield from self.compute_on_level(state, original)
 
     def create_merge_result(self) -> Transformed[F, Iterable[R]]:

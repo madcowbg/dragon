@@ -31,9 +31,9 @@ class TakeOneFile[F](Transformation[F, List[str], ObjectID]):
     def __init__(self, objects: Objects[F]):
         self.objects = objects
 
-    def combine(self, state: List[str], merged: ObjectID, original: ByRoot[TreeObject | FileObject]) -> ObjectID:
+    def combine(self, state: List[str], merged: TakeOneMergeResult[F], original: ByRoot[TreeObject | FileObject]) -> ObjectID:
         """Take the first value that is a file object as the resolved combined value."""
-        return merged
+        return merged.get_value()
 
     def should_drill_down(self, state: List[str], trees: ByRoot[TreeObject], files: ByRoot[FileObject]) -> bool:
         return len(files) == 0  # as we prioritize taking the first file
