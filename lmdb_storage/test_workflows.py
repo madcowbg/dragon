@@ -36,8 +36,9 @@ class TestWorkflows(unittest.TestCase):
         roots["incoming-uuid"].desired = None
         roots["incoming-uuid"].current = None
 
-        pull_contents(env, repo_uuid="partial-uuid", staging_id=partial_id,
-                      merge_prefs=NaiveMergePreferences({"full-uuid"}))
+        pull_contents(
+            env, repo_uuid="partial-uuid", staging_id=partial_id,
+            merge_prefs=NaiveMergePreferences({"full-uuid"}, allowed_roots=[r.name for r in roots.all_roots]))
 
         roots = env.roots(write=False)
         current_full_id = roots["full-uuid"].desired
@@ -61,7 +62,8 @@ class TestWorkflows(unittest.TestCase):
                 dump_tree(objects, current_hoard_id, show_fasthash=True))
 
         pull_contents(
-            env, repo_uuid="incoming-uuid", staging_id=incoming_id, merge_prefs=NaiveMergePreferences({"full-uuid"}))
+            env, repo_uuid="incoming-uuid", staging_id=incoming_id,
+            merge_prefs=NaiveMergePreferences({"full-uuid"}, allowed_roots=[r.name for r in roots.all_roots]))
 
         current_full_id = roots["full-uuid"].desired
         current_hoard_id = roots["HOARD"].desired
@@ -116,7 +118,7 @@ class TestWorkflows(unittest.TestCase):
 
         pull_contents(
             env, repo_uuid="incoming-uuid", staging_id=staging_incoming_id,
-            merge_prefs=NaiveMergePreferences({"full-uuid"}))
+            merge_prefs=NaiveMergePreferences({"full-uuid"}, allowed_roots=[r.name for r in roots.all_roots]))
 
         self.assertEqual([
             ('HOARD', 'e1d05b'),
@@ -168,7 +170,8 @@ class TestWorkflows(unittest.TestCase):
 
         # adding the backup too
         pull_contents(
-            env, repo_uuid="backup-uuid", staging_id=backup_id, merge_prefs=NaiveMergePreferences({"full-uuid"}))
+            env, repo_uuid="backup-uuid", staging_id=backup_id,
+            merge_prefs=NaiveMergePreferences({"full-uuid"}, allowed_roots=[r.name for r in roots.all_roots]))
 
         current_full_id = roots["full-uuid"].desired
         current_hoard_id = roots["HOARD"].desired
@@ -229,7 +232,9 @@ class TestWorkflows(unittest.TestCase):
 
 def pull_contents(env: ObjectStorage, repo_uuid: str, staging_id: ObjectID, merge_prefs: NaiveMergePreferences):
     assert "HOARD" not in merge_prefs.to_modify
-    merge_prefs = NaiveMergePreferences(merge_prefs.to_modify + [repo_uuid, "HOARD"])
+    merge_prefs = NaiveMergePreferences(
+        merge_prefs.to_modify + [repo_uuid, "HOARD"],
+        allowed_roots=merge_prefs.allowed_roots)
 
     env.roots(write=True)[repo_uuid].staging = staging_id
 

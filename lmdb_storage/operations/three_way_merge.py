@@ -1,7 +1,7 @@
 import abc
 import dataclasses
 from types import NoneType
-from typing import List, Dict, Iterable, Tuple
+from typing import List, Dict, Iterable, Tuple, Callable
 
 from lmdb_storage.file_object import FileObject
 from lmdb_storage.operations.types import Transformation
@@ -10,9 +10,9 @@ from lmdb_storage.tree_structure import Objects, TreeObject, ObjectID, MaybeObje
 
 
 class FastAssociation[V]:
-    def __init__(self, keys: Tuple[str], values: Tuple[V | None]):
+    def __init__(self, keys: Tuple[str], values: List[V | None]):
         self._keys: Tuple[str] = keys
-        self._values: Tuple[V | None] = values
+        self._values: List[V | None] = values
 
     def get_if_present(self, root_name: str) -> V | None:
         return self._values[self._keys.index(root_name)]
@@ -26,6 +26,18 @@ class FastAssociation[V]:
         for i, value in enumerate(self._values):
             if value is not None:
                 yield i, value
+
+    def new[Z](self):
+        return FastAssociation[Z](self._keys, [None] * len(self._keys))
+
+    def __getitem__(self, key: int) -> V | None:
+        return self._values[key]
+
+    def __setitem__(self, key: int, value: V):
+        self._values[key] = value
+
+    def map[R](self, func: Callable[[V], R]) -> "FastAssociation[R]":
+        return FastAssociation[R](self._keys, [None if v is None else func(v) for v in self._values])
 
 
 class TransformedRoots(FastAssociation[ObjectID]):
@@ -45,6 +57,11 @@ class TransformedRoots(FastAssociation[ObjectID]):
         for key, value in zip(self._keys, self._values):
             if value is not None:
                 yield key, value
+
+    def HACK_custom_available_items(self, _keys: Tuple[str]) -> Iterable[Tuple[int, ObjectID]]:
+        for key, value in self.HACK_items():
+            if key in _keys:
+                yield _keys.index(key), value
 
 
 class MergePreferences:
@@ -72,8 +89,7 @@ class MergePreferences:
         pass
 
     @abc.abstractmethod
-    # fixme remove allowed_roots
-    def create_result(self, allowed_roots: List[str], objects: Objects[FileObject]):
+    def create_result(self, objects: Objects[FileObject]):
         pass
 
 
@@ -85,34 +101,36 @@ class ThreewayMergeState:
 
 
 class CombinedRoots[F](Transformed[F, ByRoot[ObjectID]]):
-    def __init__(self, allowed_roots: List[str], empty_association: FastAssociation[ObjectID], objects: Objects[F]):
-        self.allowed_roots = allowed_roots
+    def __init__(self, empty_association: FastAssociation[ObjectID], objects: Objects[F]):
         self.objects = objects
 
-        self._merged_children: Dict[str, TreeObject] = dict()
         self.empty_association = empty_association
-        # self._merged_children = FastAssociation[]
+        self._merged_children: FastAssociation[TreeObject] = empty_association.new()
 
     def add_for_child(self, child_name: str, merged_child_by_roots: TransformedRoots) -> None:
-        assert isinstance(merged_child_by_roots, TransformedRoots), type(merged_child_by_roots)
-        for root_name, obj_id in merged_child_by_roots.HACK_items():
-            if root_name not in self._merged_children:
-                self._merged_children[root_name] = TreeObject({})
+        if isinstance(merged_child_by_roots, TransformedRoots):
+            # fixme remove this case
+            for root_idx, obj_id in merged_child_by_roots.HACK_custom_available_items(self._merged_children._keys):
+                if self._merged_children[root_idx] is None:
+                    self._merged_children[root_idx] = TreeObject({})
 
-            self._merged_children[root_name].children[child_name] = obj_id
+                self._merged_children[root_idx].children[child_name] = obj_id
+            return
 
-    def get_value(self) -> TransformedRoots:
+        assert isinstance(merged_child_by_roots, FastAssociation), type(merged_child_by_roots)
+        for root_idx, obj_id in merged_child_by_roots.available_items():
+            if self._merged_children[root_idx] is None:
+                self._merged_children[root_idx] = TreeObject({})
+
+            self._merged_children[root_idx].children[child_name] = obj_id
+
+    def get_value(self) -> FastAssociation[ObjectID]:
         # store potential new objects
-        for root_name, child_tree in self._merged_children.items():
+        for _, child_tree in self._merged_children.available_items():
             new_child_id = child_tree.id
             self.objects[new_child_id] = child_tree
 
-        result = ByRoot[ObjectID](
-            # self.empty_association._keys,
-            self.allowed_roots,
-            ((root_name, child_tree.id) for root_name, child_tree in self._merged_children.items()))
-
-        return TransformedRoots.HACK_create(result)
+        return self._merged_children.map(lambda obj: obj.id)
 
 
 class ThreewayMerge(Transformation[FileObject, ThreewayMergeState, TransformedRoots]):
@@ -161,7 +179,7 @@ class ThreewayMerge(Transformation[FileObject, ThreewayMergeState, TransformedRo
         return len(trees) > 0 and state.base != state.staging
 
     def create_merge_result(self) -> Transformed[FileObject, ByRoot[ObjectID]]:
-        return self.merge_prefs.create_result(self.allowed_roots, self.objects)
+        return self.merge_prefs.create_result(self.objects)
 
     def combine_non_drilldown(
             self, state: ThreewayMergeState, original: ByRoot[TreeObject | FileObject]) -> TransformedRoots:
@@ -192,7 +210,7 @@ class ThreewayMerge(Transformation[FileObject, ThreewayMergeState, TransformedRo
 
     def combine(
             self, state: ThreewayMergeState, merged: CombinedRoots[FileObject],
-            original: ByRoot[TreeObject | FileObject]) -> TransformedRoots:
+            original: ByRoot[TreeObject | FileObject]) -> FastAssociation[ObjectID]:
         # tree-level, just return the merged
         # # fixme this is needed because empty folders get dropped in "merged" - should fix that problem
         # merged = merged.copy()

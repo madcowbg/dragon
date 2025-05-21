@@ -182,7 +182,7 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
 
             merged_ids = ThreewayMerge(
                 objects, current_id=backup_id, staging_id=incoming_id, repo_name='staging',
-                merge_prefs=NaiveMergePreferences(['full', 'hoard'])).execute(
+                merge_prefs=NaiveMergePreferences(['full', 'hoard'], allowed_roots=('current', 'staging', 'full', 'partial', 'hoard'))).execute(
                 ObjectsByRoot.from_map({
                     'current': backup_id, 'staging': incoming_id,
                     'full': full_id, 'partial': partial_id, 'hoard': hoard_id}), )
@@ -261,7 +261,7 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
 
             merged_ids = ThreewayMerge(
                 objects, current_id=objects.mktree_from_tuples([]), staging_id=partial_id, repo_name='staging',
-                merge_prefs=NaiveMergePreferences(['hoard'])).execute(
+                merge_prefs=NaiveMergePreferences(['hoard'], allowed_roots=('current', 'staging', 'full', 'partial', 'hoard'))).execute(
                 ObjectsByRoot.from_map(
                     {'empty': objects.mktree_from_tuples([]), "staging": partial_id, 'hoard': hoard_id}))
 
@@ -276,7 +276,7 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
 
             merged_ids = ThreewayMerge(
                 objects, current_id=objects.mktree_from_tuples([]), staging_id=full_id, repo_name='staging',
-                merge_prefs=NaiveMergePreferences(['hoard'])).execute(
+                merge_prefs=NaiveMergePreferences(['hoard'], allowed_roots=('current', 'staging', 'full', 'partial', 'hoard'))).execute(
                 ObjectsByRoot.from_map(
                     {'empty': objects.mktree_from_tuples([]), "staging": full_id, 'hoard': hoard_id}))
 
@@ -293,7 +293,7 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
 
             merged_ids = ThreewayMerge(
                 objects, current_id=objects.mktree_from_tuples([]), staging_id=backup_id, repo_name='staging',
-                merge_prefs=NaiveMergePreferences(['hoard'])).execute(
+                merge_prefs=NaiveMergePreferences(['hoard'], allowed_roots=('current', 'staging', 'full', 'partial', 'hoard'))).execute(
                 ObjectsByRoot.from_map(
                     {'empty': objects.mktree_from_tuples([]), "staging": backup_id, 'hoard': hoard_id}))
 
@@ -344,7 +344,7 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
 
         merged_ids = ThreewayMerge(
             objects, current_id=backup_id, staging_id=incoming_id, repo_name='staging',
-            merge_prefs=NaiveMergePreferences(['full', 'hoard'])).execute(
+            merge_prefs=NaiveMergePreferences(['full', 'hoard'], allowed_roots=('current', 'staging', 'full', 'partial', 'hoard'))).execute(
             ObjectsByRoot.from_map({
                 'current': backup_id, 'staging': incoming_id,
                 'full': full_id, 'partial': partial_id, 'hoard': hoard_id}))
@@ -449,12 +449,13 @@ def populate_trees(filepath: str) -> (ObjectStorage, ObjectID, ObjectID, ObjectI
 
 
 class NaiveMergePreferences(MergePreferences):
-    def create_result(self, allowed_roots: List[str], objects: Objects[FileObject]):
-        return CombinedRoots[FileObject](allowed_roots, self.empty_association, objects)
-
-    def __init__(self, to_modify: Collection[str]):
+    def __init__(self, to_modify: Collection[str], allowed_roots: Collection[str]):
         self.to_modify = list(to_modify)
-        self.empty_association = FastAssociation(self.to_modify, (None,) * len(self.to_modify))
+        self.allowed_roots = list(allowed_roots)
+        self.empty_association = FastAssociation(self.allowed_roots, (None,) * len(self.allowed_roots))
+
+    def create_result(self, objects: Objects[FileObject]):
+        return CombinedRoots[FileObject](self.empty_association, objects)
 
     def where_to_apply_diffs(self, original_roots: List[str]) -> List[str]:
         return list(set(original_roots + self.to_modify))

@@ -59,8 +59,8 @@ class PullMergePreferences(MergePreferences):
         result_roots = tuple(set(self.roots_to_merge))
         self.empty_association = FastAssociation(result_roots, (None,) * len(result_roots))
 
-    def create_result(self, allowed_roots: List[str], objects: Objects[FileObject]):
-        return CombinedRoots[FileObject](allowed_roots, self.empty_association, objects)
+    def create_result(self, objects: Objects[FileObject]):
+        return CombinedRoots[FileObject](self.empty_association, objects)
 
     def where_to_apply_adds(self, path: List[str], staging_original: FileObject) -> List[str]:
         file_path = FastPosixPath("/" + "/".join(path))
