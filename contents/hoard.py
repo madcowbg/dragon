@@ -214,7 +214,8 @@ class HoardFilesIterator(TreeGenerator[FileObject, Tuple[str, HoardFileProps]]):
             logging.debug("Skipping path %s as it is not a FileObject", path)
             return
 
-        yield path, HoardFileProps(self.parent, path, file_obj.size, file_obj.fasthash, by_root=original, file_id=file_obj.id)
+        yield path, HoardFileProps(
+            self.parent, path, file_obj.size, file_obj.fasthash, by_root=original, file_id=file_obj.id)
 
     def should_drill_down(self, path: List[str], trees: ByRoot[TreeObject], files: ByRoot[FileObject]) -> bool:
         return True
@@ -238,7 +239,8 @@ def find_roots(parent: "HoardContents") -> (MaybeObjectID, List[Tuple[str, Maybe
     with roots:
         root_data = [(r.name, r.load_from_storage) for r in all_roots]
     root_ids = sum(
-        [[("current@" + name, data.current), ("desired@" + name, data.desired)] for name, data in root_data],  # fixme should only iterate over desired files
+        [[("current@" + name, data.current), ("desired@" + name, data.desired)] for name, data in root_data],
+        # fixme should only iterate over desired files
         [])
     return hoard_root, root_ids
 
@@ -364,23 +366,12 @@ class ReadonlyHoardFSObjects:
         raise NotImplementedError()
 
     def used_size(self, repo_uuid: str) -> int:
-        # fixme replace with size aggregator
-        used_size = 0
-        for path, props in HoardFilesIterator.all(self.parent):
-            if props.get_status(repo_uuid).value in STATUSES_THAT_USE_SIZE:
-                used_size += props.size
-        return used_size
+        return self.query.used_size(repo_uuid)
 
     def stats_in_folder(self, folder_path: FastPosixPath) -> Tuple[int, int]:
         assert folder_path.is_absolute()
 
-        count, used_size = 0, 0
-        # fixme replace with size aggregator
-        for path, props in HoardFilesIterator.all(self.parent):
-            if path.simple.startswith(folder_path.simple + "/"):
-                used_size += props.size
-                count += 1
-        return count, used_size
+        return self.query.stats_in_folder(folder_path)
 
     @cached_property
     def query(self) -> "Query":
@@ -394,7 +385,8 @@ class ReadonlyHoardFSObjects:
             path_obj = objects[path_id] if path_id else None
             if isinstance(path_obj, TreeObject):
                 children = [(child_name, objects[child_id]) for child_name, child_id in path_obj.children.items()]
-                yield from [fullpath + "/" + child_name for child_name, child_obj in children if isinstance(child_obj, TreeObject)]
+                yield from [fullpath + "/" + child_name for child_name, child_obj in children if
+                            isinstance(child_obj, TreeObject)]
 
     def get_sub_files(self, fullpath: str) -> Iterable[str]:
         # fixme drilldown can be done via actual tree, no need for this hack
@@ -404,20 +396,32 @@ class ReadonlyHoardFSObjects:
             path_obj = objects[path_id] if path_id else None
             if isinstance(path_obj, TreeObject):
                 children = [(child_name, objects[child_id]) for child_name, child_id in path_obj.children.items()]
-                yield from [fullpath + "/" + child_name for child_name, child_obj in children if isinstance(child_obj, FileObject)]
+                yield from [fullpath + "/" + child_name for child_name, child_obj in children if
+                            isinstance(child_obj, FileObject)]
 
 
 class Query:
     def __init__(self, parent: "HoardContents"):
         self.parent = parent
 
+        # fixme replace with size aggregator
+        self.repo_stats = dict()
         # fixme replace with live aggregator
         self.file_stats = dict()
         for path, props in HoardFilesIterator.all(self.parent):
             self.file_stats[path.simple] = {
-                "is_deleted": len([uuid for uuid, status in props.presence.items() if status != HoardFileStatus.CLEANUP]) == 0,
-                "num_sources": len([uuid for uuid, status in props.presence.items() if status in (HoardFileStatus.AVAILABLE, HoardFileStatus.MOVE)])
+                "is_deleted": len(
+                    [uuid for uuid, status in props.presence.items() if status != HoardFileStatus.CLEANUP]) == 0,
+                "num_sources": len([uuid for uuid, status in props.presence.items() if
+                                    status in (HoardFileStatus.AVAILABLE, HoardFileStatus.MOVE)]),
+                "used_size": props.size
             }
+            for uuid, status in props.presence.items():
+                if status in STATUSES_THAT_USE_SIZE:
+                    if uuid not in self.repo_stats:
+                        self.repo_stats[uuid] = {"used_size": 0}
+
+                    self.repo_stats[uuid]["used_size"] += props.size
 
     def count_non_deleted(self, folder_name: FastPosixPath) -> int:
         count = 0
@@ -436,10 +440,20 @@ class Query:
     def is_deleted(self, file_name: FastPosixPath) -> bool:
         return self.file_stats[file_name.simple]["is_deleted"]
 
+    def stats_in_folder(self, folder_path: FastPosixPath):
+        count, used_size = 0, 0
+        # fixme replace with size aggregator
+        for path, stats in self.file_stats.items():
+            if path.startswith(folder_path.simple + "/"):
+                used_size += stats["used_size"]
+                count += 1
+        return count, used_size
 
-STATUSES_THAT_USE_SIZE = [
-    HoardFileStatus.AVAILABLE.value, HoardFileStatus.GET.value, HoardFileStatus.COPY.value,
-    HoardFileStatus.CLEANUP.value]
+    def used_size(self, repo_uuid: str) -> int:
+        return self.repo_stats.get(repo_uuid, dict()).get("used_size", 0)
+
+
+STATUSES_THAT_USE_SIZE = [HoardFileStatus.AVAILABLE, HoardFileStatus.GET, HoardFileStatus.COPY, HoardFileStatus.CLEANUP]
 
 
 class ReadonlyHoardContentsConn:
@@ -490,7 +504,7 @@ class HoardContents:
         self.config = HoardContentsConfig(folder.joinpath(HOARD_CONTENTS_TOML), is_readonly)
         self.fsobjects = ReadonlyHoardFSObjects(self)
 
-        self.env = ObjectStorage(os.path.join(folder, HOARD_CONTENTS_LMDB_DIR), map_size=1<<30) # 1GB
+        self.env = ObjectStorage(os.path.join(folder, HOARD_CONTENTS_LMDB_DIR), map_size=1 << 30)  # 1GB
 
     def close(self, writeable: bool):
         self.env.gc()
@@ -534,4 +548,3 @@ class HoardContents:
 
                     if hoard_root_idx is not None and desired_objs[hoard_root_idx] is None:
                         raise ValueError(f"File at path {path} is not in hoard root!")
-
