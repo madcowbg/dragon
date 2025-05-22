@@ -4,6 +4,7 @@ from typing import Dict, List
 
 from command.fast_path import FastPosixPath
 from lmdb_storage.file_object import FileObject
+from lmdb_storage.operations.fast_association import FastAssociation
 from lmdb_storage.operations.util import ByRoot
 from lmdb_storage.tree_operations import get_child
 from lmdb_storage.tree_structure import ObjectID, MaybeObjectID
@@ -42,7 +43,7 @@ def compute_status(
 
 
 class HoardFileProps:
-    def __init__(self, parent: "HoardContents", path: FastPosixPath, size: int, fasthash: str, *, by_root: ByRoot[FileObject] | None=None, file_id: MaybeObjectID = None):
+    def __init__(self, parent: "HoardContents", path: FastPosixPath, size: int, fasthash: str, *, by_root: FastAssociation[FileObject] | None=None, file_id: MaybeObjectID = None):
         self.parent = parent
         self._path = path
         self._maybe_by_root = by_root
@@ -74,17 +75,24 @@ class HoardFileProps:
     @property
     def presence(self) -> Dict[str, HoardFileStatus]:
         if self._maybe_by_root is not None: # fast path
-            result = dict()
             hoard_id = self._maybe_by_root.get_if_present("HOARD")
-            for uuid in self.remote_names.keys():
-                current_id = self._maybe_by_root.get_if_present("current@" + uuid)
-                desired_id = self._maybe_by_root.get_if_present("desired@" + uuid)
-
-                computed_status = compute_status(hoard_id, current_id, desired_id)
-                if computed_status is not None:
-                    result[uuid] = computed_status
-
-            return result
+            presents = dict()
+            for key, value in self._maybe_by_root.keyed_items():
+                if key.endswith("HOARD"):
+                    continue
+                if key.startswith("current@"):
+                    uuid = key[8:]
+                    if uuid not in presents:
+                        presents[uuid] = [value, None]
+                    else:
+                        presents[uuid][0] = value
+                elif key.startswith("desired@"):
+                    uuid = key[8:]
+                    if uuid not in presents:
+                        presents[uuid] = [None, value]
+                    else:
+                        presents[uuid][1] = value
+            return dict((uuid, compute_status(hoard_id, current_id, desired_id)) for uuid, (current_id, desired_id) in presents.items())
 
         result = dict()
         with self.parent.env.objects(write=False) as objects:

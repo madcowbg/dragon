@@ -14,8 +14,8 @@ from lmdb_storage.operations.naive_ops import TakeOneFile
 from lmdb_storage.operations.util import ObjectsByRoot, ByRoot
 from lmdb_storage.object_store import ObjectStorage
 from lmdb_storage.test_experiment_lmdb import dump_tree, dump_diffs
-from lmdb_storage.operations.three_way_merge import ThreewayMerge, MergePreferences, TransformedRoots, CombinedRoots, \
-    FastAssociation
+from lmdb_storage.operations.three_way_merge import ThreewayMerge, MergePreferences, TransformedRoots, CombinedRoots
+from lmdb_storage.operations.fast_association import FastAssociation
 from lmdb_storage.tree_iteration import zip_dfs
 from lmdb_storage.tree_structure import ObjectID, Objects, do_nothing, TreeObject
 

@@ -15,7 +15,8 @@ from contents.hoard_props import HoardFileStatus, HoardFileProps
 from contents.repo import RepoContentsConfig
 from lmdb_storage.file_object import FileObject
 from lmdb_storage.object_store import ObjectStorage
-from lmdb_storage.operations.types import TreeGenerator
+from lmdb_storage.operations.generator import TreeGenerator
+from lmdb_storage.operations.fast_association import FastAssociation
 from lmdb_storage.operations.util import ByRoot
 from lmdb_storage.tree_iteration import zip_trees_dfs
 from lmdb_storage.tree_operations import get_child
@@ -200,14 +201,14 @@ class HoardFilesIterator(TreeGenerator[FileObject, Tuple[str, HoardFileProps]]):
         self.objects = objects
 
     def compute_on_level(
-            self, path: List[str], original: ByRoot[TreeObject | FileObject]
+            self, path: List[str], original: FastAssociation[TreeObject | FileObject]
     ) -> Iterable[Tuple[FastPosixPath, HoardFileProps]]:
         path = FastPosixPath("/" + "/".join(path))
         file_obj = original.get_if_present("HOARD")
 
         if file_obj is None:
             # fixme this is the legacy case where we iterate over current but not desired files. remove!
-            file_obj = next((f for root_name, f in original.items() if isinstance(f, FileObject)), None)
+            file_obj = next((f for root_name, f in original.available_items() if isinstance(f, FileObject)), None)
 
         if not isinstance(file_obj, FileObject):
             logging.debug("Skipping path %s as it is not a FileObject", path)
@@ -493,7 +494,8 @@ class HoardContents:
 
     def close(self, writeable: bool):
         self.env.gc()
-        self.validate_desired()
+        if writeable:
+            self.validate_desired()
         self.env.close()
         self.env = None
 

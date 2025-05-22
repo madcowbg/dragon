@@ -8,7 +8,8 @@ from config import HoardRemotes, CaveType
 from contents.hoard import HoardContents
 from contents.repo_props import FileDesc
 from lmdb_storage.file_object import FileObject
-from lmdb_storage.operations.three_way_merge import MergePreferences, TransformedRoots, FastAssociation, CombinedRoots
+from lmdb_storage.operations.three_way_merge import MergePreferences, TransformedRoots, CombinedRoots
+from lmdb_storage.operations.fast_association import FastAssociation
 from lmdb_storage.operations.util import ByRoot
 from lmdb_storage.tree_structure import TreeObject, ObjectID, Objects
 

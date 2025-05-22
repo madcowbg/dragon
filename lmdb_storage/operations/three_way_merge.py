@@ -1,43 +1,13 @@
 import abc
 import dataclasses
 from types import NoneType
-from typing import List, Dict, Iterable, Tuple, Callable
+from typing import List, Iterable, Tuple
 
 from lmdb_storage.file_object import FileObject
+from lmdb_storage.operations.fast_association import FastAssociation
 from lmdb_storage.operations.types import Transformation
 from lmdb_storage.operations.util import ByRoot, Transformed
 from lmdb_storage.tree_structure import Objects, TreeObject, ObjectID, MaybeObjectID
-
-
-class FastAssociation[V]:
-    def __init__(self, keys: Tuple[str], values: List[V | None]):
-        self._keys: Tuple[str] = keys
-        self._values: List[V | None] = values
-
-    def get_if_present(self, root_name: str) -> V | None:
-        return self._values[self._keys.index(root_name)]
-
-    def assigned_keys(self) -> Iterable[str]:
-        for key, value in zip(self._keys, self._values):
-            if value is not None:
-                yield key
-
-    def available_items(self) -> Iterable[Tuple[int, V]]:
-        for i, value in enumerate(self._values):
-            if value is not None:
-                yield i, value
-
-    def new[Z](self):
-        return FastAssociation[Z](self._keys, [None] * len(self._keys))
-
-    def __getitem__(self, key: int) -> V | None:
-        return self._values[key]
-
-    def __setitem__(self, key: int, value: V):
-        self._values[key] = value
-
-    def map[R](self, func: Callable[[V], R]) -> "FastAssociation[R]":
-        return FastAssociation[R](self._keys, [None if v is None else func(v) for v in self._values])
 
 
 class TransformedRoots(FastAssociation[ObjectID]):

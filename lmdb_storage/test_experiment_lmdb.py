@@ -13,7 +13,9 @@ from command.test_command_file_changing_flows import populate
 from command.test_hoard_command import populate_repotypes, init_complex_hoard
 from lmdb_storage.file_object import FileObject
 from lmdb_storage.object_store import ObjectStorage
-from lmdb_storage.operations.types import Procedure, TreeGenerator
+from lmdb_storage.operations.fast_association import FastAssociation
+from lmdb_storage.operations.types import Procedure
+from lmdb_storage.operations.generator import TreeGenerator
 from lmdb_storage.operations.util import ByRoot, ObjectsByRoot
 from lmdb_storage.tree_iteration import dfs, zip_dfs
 from lmdb_storage.tree_structure import ExpandableTreeObject, add_file_object, Objects, remove_file_object, ObjectType, \
@@ -391,13 +393,13 @@ class PrettyPrintProcedure(Procedure[FileObject]):
 
 
 class PrettyPrintGenerator(TreeGenerator[FileObject, str]):
-    def compute_on_level(self, state: List[str], original: ByRoot[TreeObject | FileObject]) -> Iterable[str]:
+    def compute_on_level(self, state: List[str], original: FastAssociation[TreeObject | FileObject]) -> Iterable[str]:
         if len(state) == 0:
             yield "Root"
         else:
             yield "┃" * (len(state) - 1) + "┖" + state[-1]
 
-    def should_drill_down(self, state: List[str], trees: ByRoot[TreeObject], files: ByRoot[FileObject]) -> bool:
+    def should_drill_down(self, state: List[str], trees: FastAssociation[TreeObject], files: FastAssociation[FileObject]) -> bool:
         return True
 
     def __init__(self, objects: Objects[FileObject]):
