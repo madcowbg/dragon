@@ -75,8 +75,8 @@ class HoardFileProps:
     def presence(self) -> Dict[str, HoardFileStatus]:
         if self._maybe_by_root is not None: # fast path
             result = dict()
+            hoard_id = self._maybe_by_root.get_if_present("HOARD")
             for uuid in self.remote_names.keys():
-                hoard_id = self._maybe_by_root.get_if_present("HOARD")
                 current_id = self._maybe_by_root.get_if_present("current@" + uuid)
                 desired_id = self._maybe_by_root.get_if_present("desired@" + uuid)
 

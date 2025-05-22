@@ -227,7 +227,7 @@ class HoardFilesIterator(TreeGenerator[FileObject, Tuple[str, HoardFileProps]]):
             root_ids + [("HOARD", hoard_root)])
 
         with parent.env.objects(write=False) as objects:
-            yield from list(HoardFilesIterator(objects, parent).execute(obj_ids=obj_ids))
+            yield from HoardFilesIterator(objects, parent).execute(obj_ids=obj_ids)
 
 
 def find_roots(parent: "HoardContents") -> (MaybeObjectID, List[Tuple[str, MaybeObjectID]]):

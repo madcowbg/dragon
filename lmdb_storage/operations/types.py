@@ -65,9 +65,6 @@ class EmptyTransformed[F](Transformed[F, None]):
     def add_for_child(self, child_name: str, merged_child_by_roots: None) -> None:
         return None
 
-    def get_value(self) -> None:
-        return None
-
 
 _empty_merge_result = EmptyTransformed()
 
@@ -92,34 +89,36 @@ class Procedure[F](Transformation[F, List[str], None]):
         return merge_state + [child_name]
 
 
-class GeneratorTransformed[F, R](Transformed[F, Iterable[R]]):
-    def __init__(self):
-        self._child_res_list = list()
+class TreeGenerator[F, R]:
+    objects: Objects[F]
 
-    def add_for_child(self, child_name: str, merged_child_by_roots: Iterable[R]) -> None:
-        self._child_res_list.append(merged_child_by_roots)
+    @abc.abstractmethod
+    def should_drill_down(self, state: List[str], trees: ByRoot[TreeObject], files: ByRoot[FileObject]) -> bool:
+        pass
 
-    def get_value(self) -> Iterable[R]:
-        for child_res in self._child_res_list:
-            yield from child_res
+    def execute(self, obj_ids: ByRoot[ObjectID]) -> R:
+        assert isinstance(obj_ids, ByRoot)
+        return self._execute_recursively([], obj_ids)
 
+    def _execute_recursively(self, merge_state: List[str], obj_ids: ByRoot[ObjectID]) -> Iterable[R]:
+        all_original: ByRoot[TreeObject | FileObject] = obj_ids.map(lambda obj_id: self.objects[obj_id])
 
-class TreeGenerator[F, R](Transformation[F, List[str], Iterable[R]]):
+        trees = all_original.filter_type(TreeObject)
+        files = all_original.filter_type(FileObject)
+
+        if self.should_drill_down(merge_state, trees, files):
+            all_children_names = list(sorted(set(
+                child_name for tree_obj in trees.values() for child_name in tree_obj.children)))
+
+            for child_name in all_children_names:
+                all_objects_in_child_name = trees.map(lambda obj: obj.children.get(child_name))
+                yield from self._execute_recursively(
+                    merge_state + [child_name],
+                    all_objects_in_child_name)
+
+            yield from self.compute_on_level(merge_state, all_original)
+        else:
+            yield from self.compute_on_level(merge_state, all_original)
+
     @abc.abstractmethod
     def compute_on_level(self, path: List[str], original: ByRoot[TreeObject | FileObject]) -> Iterable[R]: pass
-
-    def combine(self, state: List[str], merged: GeneratorTransformed[F, R], original: ByRoot[TreeObject | FileObject]) -> Iterable[R]:
-        yield from merged.get_value()
-        yield from self.compute_on_level(state, original)
-
-    def create_merge_result(self) -> Transformed[F, Iterable[R]]:
-        return GeneratorTransformed()
-
-    def combine_non_drilldown(self, state: List[str], original: ByRoot[TreeObject | FileObject]) -> Iterable[R]:
-        yield from self.compute_on_level(state, original)
-
-    def initial_state(self, obj_ids: ByRoot[ObjectID]) -> List[str]:
-        return []
-
-    def drilldown_state(self, child_name: str, merge_state: List[str]) -> List[str]:
-        return merge_state + [child_name]
