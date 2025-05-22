@@ -25,8 +25,8 @@ class TreeGenerator[F, R]:
         return self._execute_recursively([], TransformedRoots.HACK_create(obj_ids).map(self.get_objects))
 
     @lru_cache(maxsize=1<<16)
-    def get_objects(self, obj_id: ObjectID) -> TreeObject | FileObject:
-        return self.objects[obj_id]
+    def get_objects(self, obj_id: ObjectID) -> TreeObject | FileObject | None:
+        return self.objects[obj_id] if obj_id is not None else None
 
     def _execute_recursively(self, merge_state: List[str], all_original: FastAssociation[TreeObject | FileObject]) -> Iterable[R]:
         trees = all_original.filter(lambda v: type(v) is TreeObject)
@@ -42,6 +42,4 @@ class TreeGenerator[F, R]:
                     merge_state + [child_name],
                     all_objects_in_child_name)
 
-            yield from self.compute_on_level(merge_state, all_original)
-        else:
-            yield from self.compute_on_level(merge_state, all_original)
+        yield from self.compute_on_level(merge_state, all_original)
