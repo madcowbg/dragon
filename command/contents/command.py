@@ -636,19 +636,15 @@ async def execute_get(
         out: TextIO) -> None:
     assert path_in_hoard.is_absolute()
 
-    roots = hoard.env.roots(True)
-    repo_root = roots[repo_uuid]
-    hoard_root = roots["HOARD"]
-
-    old_desired_id = repo_root.desired
-    hoard_root_id = hoard_root.desired
+    old_desired_id = hoard.env.roots(False)[repo_uuid].desired
     with hoard.env.objects(write=True) as objects:
         path_in_tree = path_in_hoard._rem
-        new_desired_id = graft_in_tree(objects, old_desired_id, path_in_tree, hoard_root_id)
+        hoard_root = hoard.env.roots(False)["HOARD"]
+        new_desired_id = graft_in_tree(objects, old_desired_id, path_in_tree, hoard_root.desired)
 
         considered = dump_changed_files_info(objects, path_in_tree, old_desired_id, new_desired_id, out)
 
-    repo_root.desired = new_desired_id
+    hoard.env.roots(True)[repo_uuid].desired = new_desired_id
 
     out.write(f"Considered {considered} files.\n")
     out.write("DONE")
