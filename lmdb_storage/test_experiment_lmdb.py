@@ -59,9 +59,9 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
     def test_fully_load_lmdb(self):
         env = ObjectStorage(self.obj_storage_path)  # , map_size=(1 << 30) // 4)
 
-        root_id = env.roots(write=True)["HOARD"].desired
-
         with env.objects(write=False) as objects:
+            root_id = env.roots(write=True)["HOARD"].desired
+
             root = ExpandableTreeObject.create(root_id, objects)
 
             def all_files(tree: ExpandableTreeObject) -> Iterable[FileObject]:
@@ -87,10 +87,10 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
         env = ObjectStorage(self.obj_storage_path)
         uuid = full_cave_cmd.current_uuid()
 
-        hoard_id = env.roots(write=False)["HOARD"].desired
-        repo_id = env.roots(write=False)[uuid].current
-
         with env.objects(write=False) as objects:
+            hoard_id = env.roots(write=False)["HOARD"].desired
+            repo_id = env.roots(write=False)[uuid].current
+
             diffs = [
                 (path, diff_type.value)
                 for path, diff_type, left_id, right_id, should_skip
@@ -219,10 +219,8 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
 
     def test_dfs(self):
         env = ObjectStorage(self.obj_storage_path)
-        hoard_id = env.roots(write=False)["HOARD"].desired
-
         with env.objects(write=False) as objects:
-            all_nodes = dump_tree(objects, hoard_id)
+            all_nodes = dump_tree(objects, env.roots(write=False)["HOARD"].desired)
             self.assertEqual([
                 ('$ROOT', 1),
                 ('$ROOT/test.me.1', 2),
@@ -234,7 +232,8 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
                 ('$ROOT/wat/test.me.6', 2)], all_nodes)
 
             nodes = list()
-            for path, obj_type, obj_id, obj, skip_children in dfs(objects, "$ROOT", hoard_id):
+            for path, obj_type, obj_id, obj, skip_children in dfs(
+                    objects, "$ROOT", env.roots(write=False)["HOARD"].desired):
                 if path == '$ROOT/wat':
                     skip_children()
                 nodes.append((path, obj_type.value))
@@ -399,7 +398,8 @@ class PrettyPrintGenerator(TreeGenerator[FileObject, str]):
         else:
             yield "┃" * (len(state) - 1) + "┖" + state[-1]
 
-    def should_drill_down(self, state: List[str], trees: FastAssociation[TreeObject], files: FastAssociation[FileObject]) -> bool:
+    def should_drill_down(self, state: List[str], trees: FastAssociation[TreeObject],
+                          files: FastAssociation[FileObject]) -> bool:
         return True
 
     def __init__(self, objects: Objects[FileObject]):

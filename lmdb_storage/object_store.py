@@ -19,7 +19,10 @@ class ObjectStorage:
     def __init__(self, path: str, *, map_size: int | None = None, max_dbs=5):
         self._path = path
         logging.info(f"### LMDB OPEN {path}\n")
-        self.env = lmdb.open(path, max_dbs=max_dbs, map_size=map_size, readonly=False)
+        self._env = lmdb.open(path, max_dbs=max_dbs, map_size=map_size, readonly=False)
+        self._dbs = {
+            "objects": self._env.open_db("objects".encode()),
+            "repos": self._env.open_db("repos".encode())}
 
     def gc(self):
         root_ids = self.roots(write=False).all_live
@@ -56,7 +59,7 @@ class ObjectStorage:
                         self_objects[live_id] = other_objects[live_id]
 
     def begin(self, db_name: str, write: bool) -> Transaction:
-        return self.env.begin(db=self.env.open_db(db_name.encode()), write=write)
+        return self._env.begin(db=self._dbs[db_name], write=write)
 
     def objects(self, write: bool) -> StoredObjects:
         return StoredObjects(self, write, FileObject)
@@ -65,8 +68,8 @@ class ObjectStorage:
         return Roots(self, write)
 
     def close(self):
-        logging.info(f"### LMDB CLOSE {self._path} {self.env.info()}\n")
-        self.env.close()
+        logging.info(f"### LMDB CLOSE {self._path} {self._env.info()}\n")
+        self._env.close()
 
 
 def find_all_live[F](objects: Objects[F], root_ids: Collection[ObjectID]) -> Collection[ObjectID]:

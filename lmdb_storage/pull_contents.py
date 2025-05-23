@@ -22,8 +22,6 @@ def merge_contents(
     repo_current_id = repo_root.current
     repo_staging_id = repo_root.staging
 
-    hoard_head_id = env.roots(False)["HOARD"].desired
-
     all_root_names = [r.name for r in all_repo_roots] + ["HOARD"]
 
     if merge_prefs is not None:
@@ -42,7 +40,7 @@ def merge_contents(
         [(r.name, r.desired) for r in all_repo_roots] + [
             ("current", repo_current_id),
             ("staging", repo_staging_id),
-            ("HOARD", hoard_head_id)])
+            ("HOARD", env.roots(False)["HOARD"].desired)])
 
     assert all(v is not None for v in current_ids.values())
 
