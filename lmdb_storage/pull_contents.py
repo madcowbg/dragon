@@ -6,21 +6,17 @@ from lmdb_storage.operations.util import ByRoot
 from lmdb_storage.object_store import ObjectStorage
 from lmdb_storage.roots import Root
 from lmdb_storage.operations.three_way_merge import ThreewayMerge, MergePreferences, TransformedRoots
-from lmdb_storage.tree_structure import ObjectID
+from lmdb_storage.tree_structure import ObjectID, MaybeObjectID
 
 
 def merge_contents(
-        env: ObjectStorage, repo_root: Root, all_repo_roots: List[Root],
+        env: ObjectStorage,
+        repo_name: str, repo_current_id: MaybeObjectID, repo_staging_id: MaybeObjectID, all_repo_roots: List[Root],
         *, preferences: PullPreferences = None,
         content_prefs: ContentPrefs = None,
         merge_prefs: MergePreferences = None,
         merge_only: Optional[List[str]] = None) \
         -> TransformedRoots:
-    assert repo_root in all_repo_roots, f"{repo_root.name} is missing from other_roots={all_repo_roots}"
-
-    # assign roots
-    repo_current_id = repo_root.current
-    repo_staging_id = repo_root.staging
 
     all_root_names = [r.name for r in all_repo_roots] + ["HOARD"]
 
@@ -47,7 +43,7 @@ def merge_contents(
     # execute merge
     with env.objects(write=True) as objects:
         merged_ids = ThreewayMerge(
-            objects, current_id=repo_current_id, staging_id=repo_staging_id, repo_name=repo_root.name,
+            objects, current_id=repo_current_id, staging_id=repo_staging_id, repo_name=repo_name,
             merge_prefs=merge_prefs) \
             .execute(current_ids)
 

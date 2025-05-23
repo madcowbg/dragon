@@ -25,7 +25,7 @@ from lmdb_storage.pull_contents import merge_contents, commit_merged
 from lmdb_storage.roots import Root, Roots
 from lmdb_storage.tree_iteration import zip_trees_dfs
 from lmdb_storage.tree_operations import get_child, graft_in_tree
-from lmdb_storage.tree_structure import Objects, ObjectID, TreeObject
+from lmdb_storage.tree_structure import Objects, ObjectID, TreeObject, MaybeObjectID
 from resolve_uuid import resolve_remote_uuid
 from util import format_size, custom_isabs, safe_hex
 
@@ -149,11 +149,12 @@ async def execute_pull(
             repo_root = roots[uuid]
 
             merged_ids = merge_contents(
-                hoard_contents.env, repo_root, all_repo_roots=[hoard_root] + all_remote_roots,
+                hoard_contents.env, repo_root.name, repo_root.current, repo_root.staging,
+                all_repo_roots=[hoard_root] + all_remote_roots,
                 preferences=preferences, content_prefs=content_prefs)
 
             # print what actually changed for the hoard and the repo todo consider printing other repo changes?
-            print_differences(hoard_contents, hoard_root, repo_root, merged_ids, out)
+            print_differences(hoard_contents, hoard_root, repo_root, merged_ids, repo_root.staging, out)
 
             commit_merged(hoard_root, repo_root, all_remote_roots, merged_ids)
 
@@ -205,14 +206,14 @@ def is_tree_or_none(objects: Objects, obj_id: ObjectID | None) -> bool:
     return True if obj_id is None else isinstance(objects[obj_id], TreeObject)
 
 
-async def execute_print_differences(hoard: HoardContents, repo_uuid: str, ignore_missing: bool, out: StringIO):
-    repo_root = hoard.env.roots(write=False)[repo_uuid]
-
+async def execute_print_differences(
+        hoard: HoardContents, repo_current: MaybeObjectID, repo_staging: MaybeObjectID, ignore_missing: bool,
+        out: TextIO):
     with (hoard.env.objects(write=False) as objects):
         for path, (sub_before_hoard_id, sub_repo_current, sub_repo_staging), _ in zip_trees_dfs(
                 objects, "", [
                     hoard.env.roots(write=False)["HOARD"].desired,
-                    repo_root.current, repo_root.staging],
+                    repo_current, repo_staging],
                 drilldown_same=True):
 
             if sub_before_hoard_id is not None:  # file is in hoard
@@ -258,7 +259,7 @@ def pull_prefs_to_restore_from_hoard(remote_uuid: str, remote_type: CaveType) ->
 
 async def print_pending_to_pull(
         hoard_contents: HoardContents, content_prefs: ContentPrefs, current_contents: RepoContents,
-        preferences: PullPreferences, out):
+        preferences: PullPreferences, repo_staging_id: MaybeObjectID, out):
     with StringIO() as other_out:
         roots = hoard_contents.env.roots(write=False)
         repo_root = roots[current_contents.uuid]
@@ -266,37 +267,43 @@ async def print_pending_to_pull(
 
         out.write(f"Hoard root: {safe_hex(hoard_contents.env.roots(False)['HOARD'].desired)}:\n")
         out.write(
-            f"Repo current={safe_hex(repo_root.current)[:6]} staging={safe_hex(repo_root.staging)[:6]} desired={safe_hex(repo_root.desired)[:6]}\n")
+            f"Repo current={safe_hex(repo_root.current)[:6]} staging={safe_hex(repo_staging_id)[:6]} desired={safe_hex(repo_root.desired)[:6]}\n")
         out.write(f"Repo root: {safe_hex(current_contents.fsobjects.root_id)}:\n")
 
+        # assign roots
+        repo_current_id = repo_root.current
+
         merged_ids = merge_contents(
-            hoard_contents.env, repo_root, [repo_root, hoard_root],
+            hoard_contents.env, repo_root.name, repo_current_id, repo_staging_id, [repo_root, hoard_root],
             preferences=preferences, content_prefs=content_prefs, merge_only=[repo_root.name])
 
         # raise ValueError()
-        print_differences(hoard_contents, hoard_root, repo_root, merged_ids, out)
+        print_differences(hoard_contents, hoard_root, repo_root, merged_ids, repo_staging_id, out)
 
         logging.debug(other_out.getvalue())
 
 
 def print_differences(
-        hoard_contents: HoardContents, hoard_root: Root, repo_root: Root, merged_ids: TransformedRoots, out: StringIO):
+        hoard_contents: HoardContents, hoard_root: Root, repo_root: Root, merged_ids: TransformedRoots,
+        staging_root: MaybeObjectID, out: StringIO):
     print_differences_for_id(
         hoard_contents, hoard_root, repo_root,
         merged_ids.get_if_present("HOARD"),
         merged_ids.get_if_present(repo_root.name),
+        staging_root,
         out)
 
 
 def print_differences_for_id(
         hoard_contents: HoardContents, hoard_root: Root, repo_root: Root,
-        desired_hoard_root_id: ObjectID | None, desired_repo_root_id: ObjectID | None, out: StringIO):
+        desired_hoard_root_id: ObjectID | None, desired_repo_root_id: ObjectID | None,
+        staging_root: MaybeObjectID, out: TextIO):
     with hoard_contents.env.objects(write=False) as objects:
         for path, (base_hoard_id, merged_hoard_id, base_current_repo_id, merged_repo_id, staging_repo_id), _ \
                 in zip_trees_dfs(
             objects, "", [
                 hoard_root.desired, desired_hoard_root_id,
-                repo_root.current, desired_repo_root_id, repo_root.staging],
+                repo_root.current, desired_repo_root_id, staging_root],
             drilldown_same=True):
 
             if base_current_repo_id and merged_repo_id:
@@ -370,19 +377,11 @@ class HoardCommandContents:
                     pathing = HoardPathing(config, self.hoard.paths())
                     content_prefs = ContentPrefs(config, pathing, hoard_contents, self.hoard.available_remotes())
 
-                    old_staging_root_id = hoard_contents.env.roots(write=False)[
-                        current_contents.uuid].staging  # fixme bad to modify twice
-                    try:
-                        abs_staging_root_id = copy_local_staging_data_to_hoard(
-                            hoard_contents, current_contents, self.hoard.config())
-                        commit_local_staging(
-                            hoard_contents, current_contents, abs_staging_root_id)
+                    abs_staging_root_id = copy_local_staging_data_to_hoard(
+                        hoard_contents, current_contents, self.hoard.config())
 
-                        await print_pending_to_pull(
-                            hoard_contents, content_prefs, current_contents, preferences, out)
-                    finally:
-                        commit_local_staging(
-                            hoard_contents, current_contents, old_staging_root_id)  # fixme bad to modify twice
+                    await print_pending_to_pull(
+                        hoard_contents, content_prefs, current_contents, preferences, abs_staging_root_id, out)
 
                     return out.getvalue()
 
@@ -404,15 +403,9 @@ class HoardCommandContents:
 
                     config = self.hoard.config()
                     abs_staging_root_id = copy_local_staging_data_to_hoard(hoard, current_contents, config)
-                    old_staging_root_id = hoard.env.roots(write=False)[
-                        current_contents.uuid].staging  # fixme bad to modify twice
-                    try:
-                        commit_local_staging(hoard, current_contents, abs_staging_root_id)
 
-                        await execute_print_differences(hoard, current_contents.uuid, ignore_missing, out)
-                    finally:
-                        commit_local_staging(
-                            hoard, current_contents, old_staging_root_id)  # fixme bad to modify twice
+                    repo_root = hoard.env.roots(write=False)[current_contents.uuid]
+                    await execute_print_differences(hoard, repo_root.current, abs_staging_root_id, ignore_missing, out)
 
                     return out.getvalue()
 
@@ -602,7 +595,8 @@ class HoardCommandContents:
 
                 dump_before_op(roots, remote_uuid, out)
 
-                with self.hoard.connect_to_repo(remote_uuid, require_contents=True).open_contents(is_readonly=True) as repo_contents:
+                with self.hoard.connect_to_repo(remote_uuid, require_contents=True).open_contents(
+                        is_readonly=True) as repo_contents:
                     abs_staging_root_id = copy_local_staging_data_to_hoard(
                         hoard_contents, repo_contents, self.hoard.config())
                     commit_local_staging(
@@ -616,8 +610,9 @@ class HoardCommandContents:
                 hoard_root = roots["HOARD"]
 
                 # print what actually changed for the hoard and the repo todo consider printing other repo changes?
-                print_differences_for_id(hoard_contents, hoard_root, repo_root, hoard_root.desired,
-                                         repo_root.desired, out)
+                print_differences_for_id(
+                    hoard_contents, hoard_root, repo_root, hoard_root.desired,
+                    repo_root.desired, repo_root.staging, out)
 
                 dump_after_op(roots, remote_uuid, out)
 

@@ -225,7 +225,9 @@ def pull_contents(env: ObjectStorage, repo_uuid: str, staging_id: ObjectID, merg
     repo_roots = [r for r in roots.all_roots if r.name != "HOARD"]
     repo_root_names = [r.name for r in repo_roots]
 
-    merged_ids = merge_contents(env, roots[repo_uuid], repo_roots, merge_prefs=merge_prefs)
+    merged_ids = merge_contents(
+        env, roots[repo_uuid].name, roots[repo_uuid].current, roots[repo_uuid].staging, repo_roots,
+        merge_prefs=merge_prefs)
 
     roots = env.roots(write=True)
     commit_merged(roots['HOARD'], roots[repo_uuid], [roots[rn] for rn in repo_root_names], merged_ids)
