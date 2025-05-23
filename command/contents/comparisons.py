@@ -4,10 +4,10 @@ import logging
 from config import HoardConfig
 from contents.hoard import HoardContents
 from contents.repo import RepoContents
-from lmdb_storage.tree_structure import add_object
+from lmdb_storage.tree_structure import add_object, MaybeObjectID
 
 
-def copy_local_staging_to_hoard(hoard: HoardContents, local: RepoContents, config: HoardConfig) -> None:
+def copy_local_staging_data_to_hoard(hoard: HoardContents, local: RepoContents, config: HoardConfig) -> MaybeObjectID:
     logging.info("Copying objects from local to hoard")
     staging_root_id = local.fsobjects.root_id
 
@@ -25,4 +25,8 @@ def copy_local_staging_to_hoard(hoard: HoardContents, local: RepoContents, confi
             objects, None,
             path=config.remotes[local.uuid].mounted_at._rem,
             obj_id=staging_root_id)
+
+    return abs_staging_root_id
+
+def commit_local_staging(hoard: HoardContents, local: RepoContents, abs_staging_root_id: MaybeObjectID):
     hoard.env.roots(write=True)[local.uuid].staging = abs_staging_root_id

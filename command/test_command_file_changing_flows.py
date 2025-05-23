@@ -845,7 +845,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'current: 3884dba707937a10d461979214213b4cbbba3f6f\n'
             'Refresh done!'), res)
 
-        res = await hoard_cmd.contents.pull(new_content_cmd.current_uuid())
+        res = await hoard_cmd.contents.pull(new_content_cmd.current_uuid(), ignore_epoch=True)
         self.assertEqual((
             'Pulling repo-new-contents-name...\n'
             'Before: Hoard [d934e1] <- repo [curr: b66f52, stg: b66f52, des: adcdce]\n'
@@ -1284,7 +1284,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             "Sync'ed repo-copy-name to hoard!\n"
             'DONE'), res)
 
-        res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
+        res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid(), ignore_epoch=True)
         self.assertEqual((
             'Pulling repo-full-name...\n'
             'Before: Hoard [01152a] <- repo [curr: 01152a, stg: 01152a, des: 01152a]\n'
@@ -1718,7 +1718,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             "Sync'ed repo-copy-name to hoard!\n"
             'DONE'), res)
 
-        res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
+        res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid(), ignore_epoch=True)
         self.assertEqual((
             'Pulling repo-full-name...\n'
             'Before: Hoard [01152a] <- repo [curr: 01152a, stg: 01152a, des: 01152a]\n'
@@ -2112,7 +2112,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'REPO_FILE_TO_DELETE /wat/test.me.2',
             'HOARD_FILE_DELETED /wat/test.me.2'], res.splitlines())
 
-        res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
+        res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid(), ignore_epoch=True)
         self.assertEqual((
             'Pulling repo-full-name...\n'
             'Before: Hoard [e48d88] <- repo [curr: e48d88, stg: 01152a, des: e48d88]\n'
@@ -2277,7 +2277,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         self.assertEqual([
             'Root: 8da76083b9eab9f49945d8f2487df38ab909b7df',
             'Remote repo-backup-name current=3a0889 staging=3a0889 desired=8da760',
-            'Remote repo-full-name current=8da760 staging=20b513 desired=8da760',
+            'Remote repo-full-name current=8da760 staging=8da760 desired=8da760',
             'Remote repo-incoming-name current=3d1726 staging=3d1726 desired=None',
             'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2',
             '/',
@@ -2292,7 +2292,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.restore(full_cave_cmd.current_uuid())
         self.assertEqual([
-            'Before: Hoard [8da760] <- repo [curr: 8da760, stg: 20b513, des: 8da760]',
+            'Before: Hoard [8da760] <- repo [curr: 8da760, stg: 8da760, des: 8da760]',
             'REPO_DESIRED_FILE_CHANGED /test.me.4',
             'REPO_FILE_TO_DELETE /test.me.6-moved',  # fixme should clean up unnecessary files maybe?
             'REPO_DESIRED_FILE_TO_GET /wat/test.me.2',

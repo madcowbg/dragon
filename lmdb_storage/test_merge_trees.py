@@ -8,7 +8,7 @@ from unittest import IsolatedAsyncioTestCase
 from lmdb import Transaction
 
 from command.test_command_file_changing_flows import populate
-from command.test_hoard_command import populate_repotypes
+from command.test_hoard_command import populate_repotypes, init_complex_hoard
 from lmdb_storage.file_object import FileObject
 from lmdb_storage.operations.naive_ops import TakeOneFile
 from lmdb_storage.operations.util import ObjectsByRoot, ByRoot
@@ -68,21 +68,18 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
         populate(self.tmpdir)
         populate_repotypes(self.tmpdir)
 
-    def test_merge_combining(self):
+    async def test_merge_combining(self):
+        hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = \
+            await init_complex_hoard(self.tmpdir)
+        await hoard_cmd.contents.pull(all=True)
+
         with ObjectStorage(self.obj_storage_path) as env:
             root_ids = sorted(env.roots(write=False).all_live)
             self.assertEqual([
                 b'1ad9e0f92a8411689b1aee57f9ccf36c1f09a1ad',
-                b'1ad9e0f92a8411689b1aee57f9ccf36c1f09a1ad',
-                b'1ad9e0f92a8411689b1aee57f9ccf36c1f09a1ad',
                 b'3a0889e00c0c4ace24843be76d59b3baefb16d77',
-                b'3a0889e00c0c4ace24843be76d59b3baefb16d77',
-                b'3a0889e00c0c4ace24843be76d59b3baefb16d77',
-                b'3d1726bd296f20d36cb9df60a0da4d4feae29248',
                 b'3d1726bd296f20d36cb9df60a0da4d4feae29248',
                 b'8da76083b9eab9f49945d8f2487df38ab909b7df',
-                b'f9bfc2be6cc201aa81b733b9d83c1030cc88bffe',
-                b'f9bfc2be6cc201aa81b733b9d83c1030cc88bffe',
                 b'f9bfc2be6cc201aa81b733b9d83c1030cc88bffe'], [binascii.hexlify(r) for r in root_ids])
 
             root_left_id = binascii.unhexlify(b'f9bfc2be6cc201aa81b733b9d83c1030cc88bffe')
@@ -314,10 +311,12 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
                 hoard_id = merged_ids.get_if_present('hoard')
 
             with InMemoryObjectsExtension(env) as objects:
-                self._run_threeway_merge_after_hoard_created(objects, partial_id, full_id, backup_id, incoming_id, hoard_id)
+                self._run_threeway_merge_after_hoard_created(objects, partial_id, full_id, backup_id, incoming_id,
+                                                             hoard_id)
 
             with env.objects(write=True) as objects:
-                self._run_threeway_merge_after_hoard_created(objects, partial_id, full_id, backup_id, incoming_id, hoard_id)
+                self._run_threeway_merge_after_hoard_created(objects, partial_id, full_id, backup_id, incoming_id,
+                                                             hoard_id)
 
     def _run_threeway_merge_after_hoard_created(
             self, objects: Objects[FileObject],

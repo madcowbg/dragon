@@ -3,6 +3,7 @@ import logging
 import pathlib
 import shutil
 import unittest
+from tempfile import TemporaryDirectory
 from typing import List, Iterable
 from unittest.async_case import IsolatedAsyncioTestCase
 
@@ -38,25 +39,21 @@ def dump_diffs(objects: Objects[FileObject], left_id: ObjectID, right_id: Object
 
 class VariousLMDBFunctions(IsolatedAsyncioTestCase):
     def setUp(self):
-        self.tmpdir = "./tests"
-        self.obj_storage_path = f"{self.tmpdir}/test/example.lmdb"
+        self.tmpdir_obj = TemporaryDirectory(delete=True)
+        self.tmpdir = self.tmpdir_obj.name
+
+        self.obj_storage_path = f"{self.tmpdir}/hoard/hoard.contents.lmdb"
 
         pathlib.Path(self.obj_storage_path).parent.mkdir(parents=True, exist_ok=True)
 
         populate(self.tmpdir)
         populate_repotypes(self.tmpdir)
 
-    async def test_create_lmdb(self):
-        shutil.rmtree(self.obj_storage_path, ignore_errors=True)
-
+    async def test_fully_load_lmdb(self):
         hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = \
             await init_complex_hoard(self.tmpdir)
-
         await hoard_cmd.contents.pull(all=True)
 
-        shutil.copytree(rf"{hoard_cmd.hoard.hoardpath}\hoard.contents.lmdb", self.obj_storage_path, dirs_exist_ok=True)
-
-    def test_fully_load_lmdb(self):
         with ObjectStorage(self.obj_storage_path) as env:  # , map_size=(1 << 30) // 4)
 
             with env.objects(write=False) as objects:
@@ -76,13 +73,14 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
         with ObjectStorage(self.obj_storage_path) as env:  # , map_size=(1 << 30) // 4)
             with env.begin(db_name="objects", write=False) as txn:
                 with txn.cursor() as curr:
-                    with open(self.tmpdir + "/test/dbdump.msgpack", "wb") as f:
+                    with open(self.tmpdir + "/dbdump.msgpack", "wb") as f:
                         # msgpack.dump(((k, v) for k, v in alive_it(curr, title="loading from lmdb...")), f)
                         msgpack.dump(list(((k, v) for k, v in curr)), f)
 
     async def test_tree_compare(self):
         hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = \
             await init_complex_hoard(self.tmpdir)
+        await hoard_cmd.contents.pull(all=True)
 
         with ObjectStorage(self.obj_storage_path) as env:  # , map_size=(1 << 30) // 4)
             uuid = full_cave_cmd.current_uuid()
@@ -120,9 +118,9 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
     async def test_tree_compare_with_missing_trees(self):
         hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = \
             await init_complex_hoard(self.tmpdir)
+        await hoard_cmd.contents.pull(all=True)
 
         with ObjectStorage(self.obj_storage_path) as env:
-
             left_uuid = full_cave_cmd.current_uuid()
             right_uuid = partial_cave_cmd.current_uuid()
 
@@ -132,7 +130,8 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
             with env.objects(write=True) as objects:
                 left_id = add_file_object(objects, left_id, "newdir/new.file".split("/"), FileObject.create("dasda", 1))
                 old_left_id = left_id
-                left_id = add_file_object(objects, left_id, "wat/lat/new.file".split("/"), FileObject.create("dasda", 2))
+                left_id = add_file_object(objects, left_id, "wat/lat/new.file".split("/"),
+                                          FileObject.create("dasda", 2))
 
                 right_id = add_file_object(
                     objects, right_id, "wat/zat/new.file".split("/"), FileObject.create("dadassda", 3))
@@ -218,7 +217,11 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
                     ('/wat/zat', 'right_missing'),
                     ('/wat/zat/new.file', 'right_missing')], diffs)
 
-    def test_dfs(self):
+    async def test_dfs(self):
+        hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = \
+            await init_complex_hoard(self.tmpdir)
+        await hoard_cmd.contents.pull(all=True)
+
         with ObjectStorage(self.obj_storage_path) as env:
 
             with env.objects(write=False) as objects:
@@ -252,7 +255,6 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
 
     def test_create_manual_tree(self):
         with ObjectStorage(self.obj_storage_path) as objs:
-
             with objs.objects(write=True) as objects:
                 tree_id = add_file_object(
                     objects, None, "wat/da/faque.isit".split("/"), FileObject.create("dasda", 100))
@@ -316,19 +318,23 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
 
             objs.gc()
 
-    def test_copy_trees(self):
+    async def test_copy_trees(self):
+        hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = \
+            await init_complex_hoard(self.tmpdir)
+        await hoard_cmd.contents.pull(all=True)
+
         with ObjectStorage(self.obj_storage_path) as env:
 
             root_ids = env.roots(write=False).all_live
             self.assertEqual([
                 b'1ad9e0f92a8411689b1aee57f9ccf36c1f09a1ad',
                 b'1ad9e0f92a8411689b1aee57f9ccf36c1f09a1ad',
-                b'1ad9e0f92a8411689b1aee57f9ccf36c1f09a1ad',
-                b'3a0889e00c0c4ace24843be76d59b3baefb16d77',
                 b'3a0889e00c0c4ace24843be76d59b3baefb16d77',
                 b'3a0889e00c0c4ace24843be76d59b3baefb16d77',
                 b'3d1726bd296f20d36cb9df60a0da4d4feae29248',
                 b'3d1726bd296f20d36cb9df60a0da4d4feae29248',
+                b'8da76083b9eab9f49945d8f2487df38ab909b7df',
+                b'8da76083b9eab9f49945d8f2487df38ab909b7df',
                 b'8da76083b9eab9f49945d8f2487df38ab909b7df',
                 b'f9bfc2be6cc201aa81b733b9d83c1030cc88bffe',
                 b'f9bfc2be6cc201aa81b733b9d83c1030cc88bffe',

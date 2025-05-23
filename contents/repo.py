@@ -113,7 +113,6 @@ class RepoContentsConfig:
 
     def start_updating(self):
         self.doc["is_updating"] = True
-        self.doc["epoch"] = self.doc.get("epoch", 0) + 1
         self.write()
 
     def end_updating(self):
@@ -123,9 +122,6 @@ class RepoContentsConfig:
 
     @property
     def uuid(self) -> str: return self.doc["uuid"]
-
-    @property
-    def epoch(self) -> int: return self.doc["epoch"]
 
     @property
     def max_size(self) -> int:

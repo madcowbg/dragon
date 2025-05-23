@@ -160,7 +160,6 @@ async def refresh_all(connected_repo, hoard_ignore):
         logging.info("Start updating, setting is_dirty to TRUE")
         contents.config.start_updating()
 
-        logging.info(f"Bumped epoch to {contents.config.epoch}")
         with StringIO() as out:
             async for change in find_repo_changes(connected_repo.path, contents, hoard_ignore, RepoFileStatus.PRESENT):
                 _apply_repo_change_to_contents(change, contents, False, out)

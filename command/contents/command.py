@@ -7,8 +7,9 @@ import humanize
 from alive_progress import alive_it
 
 from command.content_prefs import ContentPrefs
-from command.contents.comparisons import copy_local_staging_to_hoard
-from command.contents.pull_preferences import PullPreferences, PullIntention, PullMergePreferences
+from command.contents.comparisons import copy_local_staging_data_to_hoard, \
+    commit_local_staging
+from command.contents.pull_preferences import PullPreferences, PullIntention
 from command.fast_path import FastPosixPath
 from command.hoard import Hoard
 from command.pathing import HoardPathing
@@ -20,7 +21,6 @@ from contents.repo import RepoContents
 from exceptions import MissingRepoContents
 from lmdb_storage.file_object import FileObject
 from lmdb_storage.operations.three_way_merge import TransformedRoots
-from lmdb_storage.operations.util import ByRoot
 from lmdb_storage.pull_contents import merge_contents, commit_merged
 from lmdb_storage.roots import Root, Roots
 from lmdb_storage.tree_iteration import zip_trees_dfs
@@ -100,7 +100,7 @@ def augment_statuses(config, hoard, show_empty, statuses):
 async def execute_pull(
         hoard: Hoard, preferences: PullPreferences, ignore_epoch: bool, out: StringIO, progress_bar=alive_it):
     config = hoard.config()
-    remote_uuid = preferences.local_uuid
+    uuid = preferences.local_uuid
     pathing = HoardPathing(config, hoard.paths())
 
     logging.info(f"Loading hoard contents TOML...")
@@ -109,35 +109,36 @@ async def execute_pull(
         content_prefs = ContentPrefs(config, pathing, hoard_contents, hoard.available_remotes())
 
         try:
-            connected_repo = hoard.connect_to_repo(remote_uuid, require_contents=True)
+            connected_repo = hoard.connect_to_repo(uuid, require_contents=True)
             current_contents = connected_repo.open_contents(is_readonly=True)
         except MissingRepoContents as e:
             logging.error(e)
-            out.write(f"Repo {remote_uuid} has no current contents available!\n")
+            out.write(f"Repo {uuid} has no current contents available!\n")
             return
 
         with current_contents:
             if current_contents.config.is_dirty:
                 logging.error(
-                    f"{remote_uuid} is_dirty = TRUE, so the refresh is not complete - can't use current repo.")
-                out.write(f"Skipping update as {remote_uuid} is not fully calculated!\n")
+                    f"{uuid} is_dirty = TRUE, so the refresh is not complete - can't use current repo.")
+                out.write(f"Skipping update as {uuid} is not fully calculated!\n")
                 return
 
-            if not ignore_epoch \
-                    and hoard_contents.config.remote_epoch(remote_uuid) >= current_contents.config.epoch:
-                out.write(f"Skipping update as past epoch {current_contents.config.epoch} "
-                          f"is not after hoard epoch {hoard_contents.config.remote_epoch(remote_uuid)}\n")
+            roots = hoard_contents.env.roots(False)
+
+            abs_staging_root_id = copy_local_staging_data_to_hoard(hoard_contents, current_contents, hoard.config())
+            past_staging = roots[uuid].staging
+            if not ignore_epoch and abs_staging_root_id == past_staging:
+                out.write(f"Skipping update as staging has not changed: {safe_hex(past_staging)[:6]}\n")
                 return
 
-            logging.info(f"Saving config of remote {remote_uuid}...")
+            logging.info(f"Saving config of remote {uuid}...")
             hoard_contents.config.save_remote_config(current_contents.config)
 
-            copy_local_staging_to_hoard(hoard_contents, current_contents, hoard.config())
-            uuid = current_contents.config.uuid
+            logging.info(f"Updating staging of {uuid} to {safe_hex(abs_staging_root_id)[:6]}")
+            commit_local_staging(hoard_contents, current_contents, abs_staging_root_id)
 
             out.write(f"Pulling {config.remotes[uuid].name}...\n")
 
-            roots = hoard_contents.env.roots(False)
             dump_before_op(roots, uuid, out)
 
             roots = hoard_contents.env.roots(True)
@@ -164,11 +165,10 @@ async def execute_pull(
 
             dump_after_op(roots, uuid, out)
 
-            logging.info(f"Updating epoch of {remote_uuid} to {current_contents.config.epoch}")
-            hoard_contents.config.mark_up_to_date(
-                remote_uuid, current_contents.config.epoch, current_contents.config.updated)
+            logging.info(f"Marking as done {uuid}")  # fixme this is probably not needed as changes are atomic
+            hoard_contents.config.mark_up_to_date(uuid, current_contents.config.updated)
 
-    out.write(f"Sync'ed {config.remotes[remote_uuid].name} to hoard!\n")
+    out.write(f"Sync'ed {config.remotes[uuid].name} to hoard!\n")
 
 
 def dump_after_op(roots: Roots, uuid: str, out: TextIO):
@@ -257,7 +257,7 @@ def pull_prefs_to_restore_from_hoard(remote_uuid: str, remote_type: CaveType) ->
 
 
 async def print_pending_to_pull(
-        hoard_contents: HoardContents, content_prefs: ContentPrefs, current_contents: RepoContents, config: HoardConfig,
+        hoard_contents: HoardContents, content_prefs: ContentPrefs, current_contents: RepoContents,
         preferences: PullPreferences, out):
     with StringIO() as other_out:
         roots = hoard_contents.env.roots(write=False)
@@ -370,10 +370,19 @@ class HoardCommandContents:
                     pathing = HoardPathing(config, self.hoard.paths())
                     content_prefs = ContentPrefs(config, pathing, hoard_contents, self.hoard.available_remotes())
 
-                    copy_local_staging_to_hoard(hoard_contents, current_contents, self.hoard.config())
+                    old_staging_root_id = hoard_contents.env.roots(write=False)[
+                        current_contents.uuid].staging  # fixme bad to modify twice
+                    try:
+                        abs_staging_root_id = copy_local_staging_data_to_hoard(
+                            hoard_contents, current_contents, self.hoard.config())
+                        commit_local_staging(
+                            hoard_contents, current_contents, abs_staging_root_id)
 
-                    await print_pending_to_pull(hoard_contents, content_prefs, current_contents, config, preferences,
-                                                out)
+                        await print_pending_to_pull(
+                            hoard_contents, content_prefs, current_contents, preferences, out)
+                    finally:
+                        commit_local_staging(
+                            hoard_contents, current_contents, old_staging_root_id)  # fixme bad to modify twice
 
                     return out.getvalue()
 
@@ -393,9 +402,18 @@ class HoardCommandContents:
                     dump_remotes(self.hoard.config(), hoard, out)
                     out.write(f"Status of {self.hoard.config().remotes[remote_uuid].name}:\n")
 
-                    copy_local_staging_to_hoard(hoard, current_contents, self.hoard.config())
+                    config = self.hoard.config()
+                    abs_staging_root_id = copy_local_staging_data_to_hoard(hoard, current_contents, config)
+                    old_staging_root_id = hoard.env.roots(write=False)[
+                        current_contents.uuid].staging  # fixme bad to modify twice
+                    try:
+                        commit_local_staging(hoard, current_contents, abs_staging_root_id)
 
-                    await execute_print_differences(hoard, current_contents.uuid, ignore_missing, out)
+                        await execute_print_differences(hoard, current_contents.uuid, ignore_missing, out)
+                    finally:
+                        commit_local_staging(
+                            hoard, current_contents, old_staging_root_id)  # fixme bad to modify twice
+
                     return out.getvalue()
 
     async def status(
@@ -583,6 +601,12 @@ class HoardCommandContents:
                 roots = hoard_contents.env.roots(True)
 
                 dump_before_op(roots, remote_uuid, out)
+
+                with self.hoard.connect_to_repo(remote_uuid, require_contents=True).open_contents(is_readonly=True) as repo_contents:
+                    abs_staging_root_id = copy_local_staging_data_to_hoard(
+                        hoard_contents, repo_contents, self.hoard.config())
+                    commit_local_staging(
+                        hoard_contents, repo_contents, abs_staging_root_id)
 
                 # sets current to whatever is currently available, but do not update desired
                 # this effectively discards all changes

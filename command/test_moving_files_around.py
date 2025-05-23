@@ -96,7 +96,7 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
             'Refresh done!'], res.splitlines())
 
         # should do nothing
-        res = await hoard_cmd.contents.pull(all=True)
+        res = await hoard_cmd.contents.pull(all=True, ignore_epoch=True)
         self.assertEqual([
             'Pulling repo-partial-name...',
             'Before: Hoard [8da760] <- repo [curr: f9bfc2, stg: f9bfc2, des: f9bfc2]',
@@ -175,7 +175,7 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
             'current: ba46648582193b0f2ab9a4894708a6106f7479ab',
             'Refresh done!'], res.splitlines())
 
-        res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid())
+        res = await hoard_cmd.contents.pull(full_cave_cmd.current_uuid(), ignore_epoch=True)
         self.assertEqual([
             'Pulling repo-full-name...',
             'Before: Hoard [d16f79] <- repo [curr: ba4664, stg: ba4664, des: d16f79]',
@@ -203,7 +203,7 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
             'current: 3d1726bd296f20d36cb9df60a0da4d4feae29248',
             'Refresh done!'], res.splitlines())
 
-        res = await hoard_cmd.contents.pull(incoming_cave_cmd.current_uuid())
+        res = await hoard_cmd.contents.pull(incoming_cave_cmd.current_uuid(), ignore_epoch=True)
         self.assertEqual([
             'Pulling repo-incoming-name...',
             'Before: Hoard [d16f79] <- repo [curr: 3d1726, stg: 3d1726, des: None]',
@@ -262,7 +262,7 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
             'current: 3d1726bd296f20d36cb9df60a0da4d4feae29248',
             'Refresh done!'], res.splitlines())
 
-        res = await hoard_cmd.contents.pull(incoming_cave_cmd.current_uuid())
+        res = await hoard_cmd.contents.pull(incoming_cave_cmd.current_uuid(), ignore_epoch=True)
         self.assertEqual([
             'Pulling repo-incoming-name...',
             'Before: Hoard [ea749c] <- repo [curr: 3d1726, stg: 3d1726, des: None]',

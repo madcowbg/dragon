@@ -20,7 +20,8 @@ from textual.widgets._tree import TreeNode
 
 from command.content_prefs import ContentPrefs
 from command.contents.command import execute_pull, init_pull_preferences, pull_prefs_to_restore_from_hoard
-from command.contents.comparisons import copy_local_staging_to_hoard
+from command.contents.comparisons import copy_local_staging_data_to_hoard, \
+    commit_local_staging
 from command.fast_path import FastPosixPath
 from command.files.command import execute_files_push
 from command.hoard import Hoard
@@ -238,7 +239,9 @@ class HoardContentsPendingToPull(Tree[Action]):
                     preferences = init_pull_preferences(
                         self.remote, assume_current=False, force_fetch_local_missing=False)
 
-                    copy_local_staging_to_hoard(hoard_contents, current_contents, self.hoard.config())
+                    config = self.hoard.config()
+                    abs_staging_root_id = copy_local_staging_data_to_hoard(hoard_contents, current_contents, config)
+                    commit_local_staging(hoard_contents, current_contents, abs_staging_root_id)
                     uuid = current_contents.config.uuid
 
                     # resolutions = await resolution_to_match_repo_and_hoard(

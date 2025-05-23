@@ -68,8 +68,6 @@ class RepoCommand(object):
             logging.info("Start updating, setting is_dirty to TRUE")
             contents.config.start_updating()
 
-            logging.info(f"Bumped epoch to {contents.config.epoch}")
-
             logging.info("Reading filesystem state...")
             state = FilesystemState(contents)
             await state.read_state_from_filesystem(contents, hoard_ignore, self.repo.path)
@@ -105,7 +103,7 @@ class RepoCommand(object):
                 out.write(f"Refresh done!")
                 return out.getvalue()
 
-    def status_index(self, show_files: bool = True, show_dates: bool = True, show_epoch = True):
+    def status_index(self, show_files: bool = True, show_dates: bool = True, show_epoch = True):  # fixme remove show_epoch
         remote_uuid = self.current_uuid()
 
         logging.info(f"Reading repo {self.repo.path}...")

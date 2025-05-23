@@ -165,7 +165,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
                     ('/wat/test.me.twice', 6, 1, '1881f6f9784fb08bf6690e9763b76ac3')])
 
         res = await hoard_cmd.contents.pull("repo-in-local")
-        self.assertEqual("Skipping update as past epoch 1 is not after hoard epoch 1\nDONE", res)
+        self.assertEqual('Skipping update as staging has not changed: 72174f\nDONE', res)
 
         res = await hoard_cmd.contents.pull("repo-in-local-2")
         self.assertEqual((
@@ -257,7 +257,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             'current: 1b736d16c16bdacf49df7cd5aa66e7b5479ad4b7\n'
             'Refresh done!'), res)
 
-        res = await hoard_cmd.contents.pull("repo-in-local-2")
+        res = await hoard_cmd.contents.pull("repo-in-local-2", ignore_epoch=True)
         self.assertEqual([
             'Pulling repo-in-local-2...',
             'Before: Hoard [72174f] <- repo [curr: 966d51, stg: 966d51, des: 72174f]',
@@ -414,7 +414,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.differences(new_uuid)
         self.assertEqual((
             'Root: 72174f950289a454493d243bb72bdb76982e5f62\n'
-            'Remote cloned-repo current=None staging=654b8b desired=72174f\n'
+            'Remote cloned-repo current=None staging=None desired=72174f\n'
             'Remote repo-in-local current=72174f staging=72174f desired=72174f\n'
             'Status of cloned-repo:\n'
             'MISSING /wat/test.me.different\n'
@@ -435,7 +435,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         res = await hoard_cmd.files.push(repo="cloned-repo")
         self.assertEqual((
             'Before push:\n'
-            'Remote cloned-repo current=None staging=654b8b desired=72174f\n'
+            'Remote cloned-repo current=None staging=None desired=72174f\n'
             'Remote repo-in-local current=72174f staging=72174f desired=72174f\n'
             'cloned-repo:\n'
             '+ test.me.different\n'
@@ -443,7 +443,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             '+ test.me.twice\n'
             'cloned-repo:\n'
             'After:\n'
-            'Remote cloned-repo current=72174f staging=654b8b desired=72174f\n'
+            'Remote cloned-repo current=72174f staging=None desired=72174f\n'
             'Remote repo-in-local current=72174f staging=72174f desired=72174f\n'
             'DONE'), res.strip())
 
@@ -456,7 +456,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.differences(new_uuid)
         self.assertEqual((
             'Root: 72174f950289a454493d243bb72bdb76982e5f62\n'
-            'Remote cloned-repo current=72174f staging=654b8b desired=72174f\n'
+            'Remote cloned-repo current=72174f staging=None desired=72174f\n'
             'Remote repo-in-local current=72174f staging=72174f desired=72174f\n'
             'Status of cloned-repo:\n'
             'DONE'), res.strip())
@@ -471,12 +471,12 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         res = await hoard_cmd.files.push(repo="cloned-repo")
         self.assertEqual((
             'Before push:\n'
-            'Remote cloned-repo current=72174f staging=72174f desired=72174f\n'
+            'Remote cloned-repo current=72174f staging=None desired=72174f\n'
             'Remote repo-in-local current=72174f staging=72174f desired=72174f\n'
             'cloned-repo:\n'
             'cloned-repo:\n'
             'After:\n'
-            'Remote cloned-repo current=72174f staging=72174f desired=72174f\n'
+            'Remote cloned-repo current=72174f staging=None desired=72174f\n'
             'Remote repo-in-local current=72174f staging=72174f desired=72174f\n'
             'DONE'), res.strip())
 
@@ -601,7 +601,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             'DONE'), res.strip())
 
         res = await hoard_cmd.contents.pull("repo-backup-name")  # does nothing
-        self.assertEqual("Skipping update as past epoch 1 is not after hoard epoch 1\nDONE", res.strip())
+        self.assertEqual('Skipping update as staging has not changed: 3a0889\nDONE', res.strip())
 
         res = await hoard_cmd.contents.ls(skip_folders=True)
         self.assertEqual((
@@ -637,7 +637,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             'current: 3d1726bd296f20d36cb9df60a0da4d4feae29248\n'
             'Refresh done!'), res)
 
-        res = await hoard_cmd.contents.pull("repo-incoming-name")
+        res = await hoard_cmd.contents.pull("repo-incoming-name", ignore_epoch=True)
         self.assertEqual((
             'Pulling repo-incoming-name...\n'
             'Before: Hoard [8da760] <- repo [curr: 3d1726, stg: 3d1726, des: None]\n'
@@ -1172,7 +1172,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
 
         await partial_cave_cmd.refresh(show_details=False)
 
-        res = await hoard_cmd.contents.pull("repo-partial-name")  # needs to do nothing
+        res = await hoard_cmd.contents.pull("repo-partial-name", ignore_epoch=True)  # needs to do nothing
         self.assertEqual((
             'Pulling repo-partial-name...\n'
             'Before: Hoard [f9bfc2] <- repo [curr: f9bfc2, stg: f9bfc2, des: f9bfc2]\n'
@@ -1375,7 +1375,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull(all=True)
         self.assertEqual((
-            'Skipping update as past epoch 1 is not after hoard epoch 1\n'
+            'Skipping update as staging has not changed: f9bfc2\n'
             'Pulling repo-full-name...\n'
             'Before: Hoard [f9bfc2] <- repo [curr: None, stg: 1ad9e0, des: None]\n'
             'REPO_MARK_FILE_AVAILABLE /test.me.1\n'

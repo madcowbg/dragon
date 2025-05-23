@@ -60,24 +60,7 @@ class HoardContentsConfig:
 
         return self.doc["remotes"][remote_uuid]
 
-    @property
-    def hoard_epoch(self) -> int:
-        return self.doc.get("hoard_epoch", 0)
-
-    @hoard_epoch.setter
-    def hoard_epoch(self, epoch: int) -> None:
-        self.doc["hoard_epoch"] = epoch
-        self.write()
-
-    def remote_epoch(self, remote_uuid: str) -> int:
-        return self._remote_config(remote_uuid).get("epoch", -1)
-
-    def last_hoard_epoch_for_remote(self, remote_uuid: str) -> int:
-        return self._remote_config(remote_uuid).get("last_hoard_epoch", -1)
-
-    def mark_up_to_date(self, remote_uuid: str, epoch: int, updated: datetime):
-        self._remote_config(remote_uuid)["epoch"] = epoch
-        self._remote_config(remote_uuid)["last_hoard_epoch"] = self.hoard_epoch
+    def mark_up_to_date(self, remote_uuid: str, updated: datetime):
         self._remote_config(remote_uuid)["updated"] = updated.isoformat()
         self.write()
 
@@ -91,7 +74,6 @@ class HoardContentsConfig:
 
     def restore_remote_config(self, config: RepoContentsConfig):
         config.doc["max_size"] = self.max_size(config.uuid)
-        config.doc["epoch"] = self.remote_epoch(config.uuid)
         config.write()
 
     def max_size(self, uuid: str):
@@ -105,10 +87,6 @@ class HoardContentsConfig:
         if 'max_size' not in remote["config"]:
             remote["config"]["max_size"] = max_size
             self.write()
-
-    def bump_hoard_epoch(self):
-        self.hoard_epoch += 1
-
 
 class HoardTree:
     def __init__(self, objects: "ReadonlyHoardFSObjects"):
@@ -516,7 +494,6 @@ class HoardContents:
         self.env = None
 
         if writeable:
-            self.config.bump_hoard_epoch()
             self.config.write()
 
         self.config = None

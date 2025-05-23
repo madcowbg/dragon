@@ -312,29 +312,6 @@ class FilesystemState:
             self.state_root_id = objects.mktree_from_tuples(all_files_sorted, alive_it)
 
 
-def build_diff(_, row) -> RepoDiffs:  # fixme remove obsolete
-    fullpath_s, fo_size, fo_mtime, fo_fasthash, fo_md5, fo_last_status, fo_last_update_epoch, fo_last_related_fullpath, \
-        ff_size, ff_mtime, ff_fasthash, ff_md5, ff_error = row
-
-    assert fullpath_s is not None
-    fullpath = FastPosixPath(fullpath_s)
-    if ff_error is not None:
-        return ErrorReadingFilesystem(fullpath, FileDesc(fo_size, fo_fasthash, fo_md5))
-    elif fo_size is None:
-        assert ff_size is not None
-        return FileNotInRepo(fullpath, FileDesc(ff_size, ff_fasthash, ff_md5))
-    elif ff_size is None:
-        return FileNotInFilesystem(fullpath, FileDesc(fo_size, fo_fasthash, fo_md5))
-    else:
-        props = FileDesc(fo_size, fo_fasthash, fo_md5)
-        filesystem_prop = FileDesc(ff_size, ff_fasthash, ff_md5)
-
-        if fo_fasthash == ff_fasthash:
-            return RepoFileSame(fullpath, props, filesystem_prop)
-        else:
-            return RepoFileDifferent(fullpath, props, filesystem_prop)
-
-
 async def compute_difference_between_contents_and_filesystem(
         contents: RepoContents, repo_path: str, hoard_ignore: HoardIgnore,
         njobs: int = 32) -> AsyncGenerator[RepoDiffs]:
