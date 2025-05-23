@@ -152,7 +152,8 @@ class RepoContents:
                 "max_size": shutil.disk_usage(folder).total
             }, f)
 
-        ObjectStorage(f"{contents_filepath}.lmdb")
+        with ObjectStorage(f"{contents_filepath}.lmdb", map_size=1 << 30):  # 1GB
+            pass
 
         return RepoContents.load_existing(folder, uuid, is_readonly=False)
 
@@ -183,6 +184,7 @@ class RepoContents:
         self.config = RepoContentsConfig(self.config_filepath)
 
         self.env = ObjectStorage(f"{self.filepath}.lmdb", map_size=1 << 30)  # 1GB
+        self.env.__enter__()
 
         self.objects = self.env.objects(write=True)
 
@@ -191,12 +193,12 @@ class RepoContents:
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
         assert self.objects is not None
-        self.env.gc()
-
         self.objects = None
+
+        self.env.gc()
+        self.env.__exit__(exc_type, exc_val, exc_tb)
         self.env = None
 
         self.config.write()
 
         return False
-

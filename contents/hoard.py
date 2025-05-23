@@ -505,12 +505,14 @@ class HoardContents:
         self.fsobjects = ReadonlyHoardFSObjects(self)
 
         self.env = ObjectStorage(os.path.join(folder, HOARD_CONTENTS_LMDB_DIR), map_size=1 << 30)  # 1GB
+        self.env.__enter__()
 
     def close(self, writeable: bool):
         self.env.gc()
         if writeable:
             self.validate_desired()
-        self.env.close()
+
+        self.env.__exit__(None, None, None)
         self.env = None
 
         if writeable:

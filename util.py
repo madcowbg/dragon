@@ -51,9 +51,18 @@ R = TypeVar('R')
 
 def run_in_separate_loop(coro: Coroutine[Any, Any, R]) -> R:
     value = []
-    thread = threading.Thread(target=lambda: value.append(asyncio.run(coro)))
+    def run():
+        try:
+            value.append(asyncio.run(coro))
+        except Exception as e:
+            value.append(e)
+
+    thread = threading.Thread(target=run)
     thread.start()
     thread.join()
+    if isinstance(value[0], Exception):
+        raise value[0]
+
     return value[0]
 
 
