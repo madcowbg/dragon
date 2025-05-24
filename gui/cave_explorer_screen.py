@@ -461,9 +461,11 @@ class CaveInfoWidget(Widget):
                     f"into hoard?")):
             with StringIO() as out:
                 preferences = init_pull_preferences(self.remote, assume_current=False, force_fetch_local_missing=False)
-                await execute_pull(
-                    self.hoard, preferences, ignore_epoch=False, out=out,
-                    progress_bar=progress_reporting_it(self, "pull-to-hoard-operation", 10))
+                logging.info(f"Loading hoard contents TOML...")
+                async with self.hoard.open_contents(create_missing=False).writeable() as hoard_contents:
+                    await execute_pull(
+                        self.hoard, hoard_contents, preferences, ignore_epoch=False, out=out,
+                        progress_bar=progress_reporting_it(self, "pull-to-hoard-operation", 10))
                 logging.info(out.getvalue())
 
             await self.recompose()
@@ -478,9 +480,12 @@ class CaveInfoWidget(Widget):
                     f"")):
             with StringIO() as out:
                 preferences = pull_prefs_to_restore_from_hoard(self.remote.uuid, self.remote.type)
-                await execute_pull(
-                    self.hoard, preferences, ignore_epoch=False, out=out,
-                    progress_bar=progress_reporting_it(self, "restore-from-hoard-operation", 10))
+
+                logging.info(f"Loading hoard contents TOML...")
+                async with self.hoard.open_contents(create_missing=False).writeable() as hoard_contents:
+                    await execute_pull(
+                        self.hoard, hoard_contents, preferences, ignore_epoch=False, out=out,
+                        progress_bar=progress_reporting_it(self, "restore-from-hoard-operation", 10))
                 logging.info(out.getvalue())
 
             await self.recompose()

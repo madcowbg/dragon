@@ -18,7 +18,7 @@ from config import CaveType, HoardRemote, HoardConfig
 from contents.hoard import HoardContents, HoardFile, HoardDir
 from contents.hoard_props import HoardFileStatus, HoardFileProps
 from contents.repo import RepoContents
-from exceptions import MissingRepoContents
+from exceptions import MissingRepoContents, MissingRepo
 from lmdb_storage.file_object import FileObject
 from lmdb_storage.operations.three_way_merge import TransformedRoots
 from lmdb_storage.pull_contents import merge_contents, commit_merged
@@ -98,76 +98,77 @@ def augment_statuses(config, hoard, show_empty, statuses):
 
 
 async def execute_pull(
-        hoard: Hoard, preferences: PullPreferences, ignore_epoch: bool, out: StringIO, progress_bar=alive_it):
+        hoard: Hoard, hoard_contents: HoardContents, preferences: PullPreferences, ignore_epoch: bool,
+        out: TextIO, progress_bar=alive_it):
     config = hoard.config()
     uuid = preferences.local_uuid
     pathing = HoardPathing(config, hoard.paths())
+    content_prefs = ContentPrefs(config, pathing, hoard_contents, hoard.available_remotes())
 
-    logging.info(f"Loading hoard contents TOML...")
-    async with hoard.open_contents(create_missing=False).writeable() as hoard_contents:
-        logging.info(f"Loaded hoard contents TOML!")
-        content_prefs = ContentPrefs(config, pathing, hoard_contents, hoard.available_remotes())
+    try:
+        connected_repo = hoard.connect_to_repo(uuid, require_contents=True)
+        current_contents = connected_repo.open_contents(is_readonly=True)
+    except MissingRepo as e:
+        logging.error(e)
+        out.write(f"Repo {uuid} is not currently available!\n")
+        return
+    except MissingRepoContents as e:
+        logging.error(e)
+        out.write(f"Repo {uuid} has no current contents available!\n")
+        return
 
-        try:
-            connected_repo = hoard.connect_to_repo(uuid, require_contents=True)
-            current_contents = connected_repo.open_contents(is_readonly=True)
-        except MissingRepoContents as e:
-            logging.error(e)
-            out.write(f"Repo {uuid} has no current contents available!\n")
+    with current_contents:
+        if current_contents.config.is_dirty:
+            logging.error(
+                f"{uuid} is_dirty = TRUE, so the refresh is not complete - can't use current repo.")
+            out.write(f"Skipping update as {uuid} is not fully calculated!\n")
             return
 
-        with current_contents:
-            if current_contents.config.is_dirty:
-                logging.error(
-                    f"{uuid} is_dirty = TRUE, so the refresh is not complete - can't use current repo.")
-                out.write(f"Skipping update as {uuid} is not fully calculated!\n")
-                return
+        roots = hoard_contents.env.roots(False)
 
-            roots = hoard_contents.env.roots(False)
+        abs_staging_root_id = copy_local_staging_data_to_hoard(hoard_contents, current_contents, hoard.config())
+        past_staging = roots[uuid].staging
+        if not ignore_epoch and abs_staging_root_id == past_staging:
+            out.write(f"Skipping update as staging has not changed: {safe_hex(past_staging)[:6]}\n")
+            return
 
-            abs_staging_root_id = copy_local_staging_data_to_hoard(hoard_contents, current_contents, hoard.config())
-            past_staging = roots[uuid].staging
-            if not ignore_epoch and abs_staging_root_id == past_staging:
-                out.write(f"Skipping update as staging has not changed: {safe_hex(past_staging)[:6]}\n")
-                return
+        logging.info(f"Saving config of remote {uuid}...")
+        hoard_contents.config.save_remote_config(current_contents.config)
 
-            logging.info(f"Saving config of remote {uuid}...")
-            hoard_contents.config.save_remote_config(current_contents.config)
+        logging.info(f"Updating staging of {uuid} to {safe_hex(abs_staging_root_id)[:6]}")
+        commit_local_staging(hoard_contents, current_contents, abs_staging_root_id)
 
-            logging.info(f"Updating staging of {uuid} to {safe_hex(abs_staging_root_id)[:6]}")
-            commit_local_staging(hoard_contents, current_contents, abs_staging_root_id)
+        out.write(f"Pulling {config.remotes[uuid].name}...\n")
 
-            out.write(f"Pulling {config.remotes[uuid].name}...\n")
+        dump_before_op(roots, uuid, out)
 
-            dump_before_op(roots, uuid, out)
+        roots = hoard_contents.env.roots(True)
+        all_remote_roots = [roots[remote.uuid] for remote in config.remotes.all()]
+        all_remote_roots_old_desired = dict((root.name, root.desired) for root in all_remote_roots)
 
-            roots = hoard_contents.env.roots(True)
-            all_remote_roots = [roots[remote.uuid] for remote in config.remotes.all()]
-            all_remote_roots_old_desired = dict((root.name, root.desired) for root in all_remote_roots)
+        hoard_root = roots["HOARD"]
+        repo_root = roots[uuid]
 
-            hoard_root = roots["HOARD"]
-            repo_root = roots[uuid]
+        merged_ids = merge_contents(
+            hoard_contents.env, repo_root.name, repo_root.current, repo_root.staging,
+            all_repo_roots=[hoard_root] + all_remote_roots,
+            preferences=preferences, content_prefs=content_prefs)
 
-            merged_ids = merge_contents(
-                hoard_contents.env, repo_root.name, repo_root.current, repo_root.staging,
-                all_repo_roots=[hoard_root] + all_remote_roots,
-                preferences=preferences, content_prefs=content_prefs)
+        # print what actually changed for the hoard and the repo todo consider printing other repo changes?
+        print_differences(hoard_contents, hoard_root, repo_root, merged_ids, repo_root.staging, out)
 
-            # print what actually changed for the hoard and the repo todo consider printing other repo changes?
-            print_differences(hoard_contents, hoard_root, repo_root, merged_ids, repo_root.staging, out)
+        commit_merged(hoard_root, repo_root, all_remote_roots, merged_ids)
 
-            commit_merged(hoard_root, repo_root, all_remote_roots, merged_ids)
+        for root in all_remote_roots:
+            old_desired = all_remote_roots_old_desired[root.name]
+            if root.desired != old_desired:
+                out.write(
+                    f"updated {config.remotes[root.name].name} from {safe_hex(old_desired)[:6]} to {safe_hex(root.desired)[:6]}\n")
 
-            for root in all_remote_roots:
-                old_desired = all_remote_roots_old_desired[root.name]
-                if root.desired != old_desired:
-                    out.write(
-                        f"updated {config.remotes[root.name].name} from {safe_hex(old_desired)[:6]} to {safe_hex(root.desired)[:6]}\n")
+        dump_after_op(roots, uuid, out)
 
-            dump_after_op(roots, uuid, out)
-
-            logging.info(f"Marking as done {uuid}")  # fixme this is probably not needed as changes are atomic
-            hoard_contents.config.mark_up_to_date(uuid, current_contents.config.updated)
+        logging.info(f"Marking as done {uuid}")  # fixme this is probably not needed as changes are atomic
+        hoard_contents.config.mark_up_to_date(uuid, current_contents.config.updated)
 
     out.write(f"Sync'ed {config.remotes[uuid].name} to hoard!\n")
 
@@ -562,17 +563,21 @@ class HoardCommandContents:
                 ignore_epoch = True
 
         with StringIO() as out:
-            for remote_uuid in remote_uuids:
-                remote_uuid = resolve_remote_uuid(self.hoard.config(), remote_uuid)
-                remote_obj = config.remotes[remote_uuid]
-                logging.info(f"Pulling contents of {remote_obj.name}[{remote_uuid}].")
+            logging.info(f"Loading hoard contents TOML...")
+            async with self.hoard.open_contents(create_missing=False).writeable() as hoard_contents:
+                logging.info(f"Loaded hoard contents TOML!")
 
-                if remote_obj is None or remote_obj.mounted_at is None:
-                    out.write(f"Remote {remote_uuid} is not mounted!\n")
-                    continue
+                for remote_uuid in remote_uuids:
+                    remote_uuid = resolve_remote_uuid(self.hoard.config(), remote_uuid)
+                    remote_obj = config.remotes[remote_uuid]
+                    logging.info(f"Pulling contents of {remote_obj.name}[{remote_uuid}].")
 
-                preferences = init_pull_preferences(remote_obj, assume_current, force_fetch_local_missing)
-                await execute_pull(self.hoard, preferences, ignore_epoch, out)
+                    if remote_obj is None or remote_obj.mounted_at is None:
+                        out.write(f"Remote {remote_uuid} is not mounted!\n")
+                        continue
+
+                    preferences = init_pull_preferences(remote_obj, assume_current, force_fetch_local_missing)
+                    await execute_pull(self.hoard, hoard_contents, preferences, ignore_epoch, out)
 
             out.write("DONE")
             return out.getvalue()

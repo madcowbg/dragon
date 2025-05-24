@@ -387,14 +387,15 @@ class Query:
         # fixme replace with live aggregator
         self.file_stats = dict()
         for path, props in HoardFilesIterator.all(self.parent):
+            presence = props.presence
             self.file_stats[path.simple] = {
                 "is_deleted": len(
-                    [uuid for uuid, status in props.presence.items() if status != HoardFileStatus.CLEANUP]) == 0,
-                "num_sources": len([uuid for uuid, status in props.presence.items() if
+                    [uuid for uuid, status in presence.items() if status != HoardFileStatus.CLEANUP]) == 0,
+                "num_sources": len([uuid for uuid, status in presence.items() if
                                     status in (HoardFileStatus.AVAILABLE, HoardFileStatus.MOVE)]),
                 "used_size": props.size
             }
-            for uuid, status in props.presence.items():
+            for uuid, status in presence.items():
                 if status in STATUSES_THAT_USE_SIZE:
                     if uuid not in self.repo_stats:
                         self.repo_stats[uuid] = {"used_size": 0}
