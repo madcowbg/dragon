@@ -1,6 +1,5 @@
 import dataclasses
 import logging
-import sys
 from typing import Collection, Tuple, Dict
 
 import lmdb
