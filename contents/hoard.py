@@ -15,13 +15,12 @@ from contents.hoard_props import HoardFileStatus, HoardFileProps
 from contents.repo import RepoContentsConfig
 from lmdb_storage.file_object import BlobObject
 from lmdb_storage.object_store import ObjectStorage
-from lmdb_storage.operations.generator import TreeGenerator
 from lmdb_storage.operations.fast_association import FastAssociation
+from lmdb_storage.operations.generator import TreeGenerator
 from lmdb_storage.operations.util import ByRoot
 from lmdb_storage.tree_iteration import zip_trees_dfs
 from lmdb_storage.tree_operations import get_child
 from lmdb_storage.tree_structure import TreeObject, Objects, MaybeObjectID, ObjectType, StoredObject
-from sql_util import SubfolderFilter
 from util import custom_isabs
 
 HOARD_CONTENTS_LMDB_DIR = "hoard.contents.lmdb"

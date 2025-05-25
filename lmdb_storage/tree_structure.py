@@ -8,15 +8,6 @@ import msgpack
 from lmdb import Transaction
 from propcache import cached_property
 
-## LMDB object format
-#  object_id    blob
-#
-# blob is file:
-#  Type.FILE, (fasthash, size)
-#
-# blob is tree:
-#  Type.TREE, Dict[obj name to object_id]
-
 type ObjectID = bytes
 type MaybeObjectID = Union[ObjectID, None]
 
@@ -29,17 +20,12 @@ class ObjectType(enum.Enum):
 class StoredObject:
     object_type: ObjectType
     id: ObjectID
-    serialized: bytes
 
 
 @dataclasses.dataclass
 class TreeObject(StoredObject):
     children: Dict[str, ObjectID]
     object_type: ObjectType = ObjectType.TREE
-
-    @cached_property
-    def serialized(self) -> bytes:
-        return msgpack.packb((ObjectType.TREE.value, list(sorted(self.children.items()))))
 
     @staticmethod
     def load(data: bytes) -> "TreeObject":
@@ -49,7 +35,8 @@ class TreeObject(StoredObject):
 
     @property
     def id(self) -> bytes:
-        return hashlib.sha1(self.serialized).digest()
+        serialized = msgpack.packb((ObjectType.TREE.value, list(sorted(self.children.items()))))
+        return hashlib.sha1(serialized).digest()
 
     def __eq__(self, other):
         return isinstance(other, TreeObject) and self.id == other.id
@@ -163,10 +150,14 @@ class Objects:
 
 
 class StoredObjects(Objects):
-    def __init__(self, storage: "ObjectStorage", write: bool, object_builder: Callable[[ObjectID, any], StoredObject]):
+    def __init__(
+            self, storage: "ObjectStorage", write: bool,
+            object_reader: Callable[[ObjectID, bytes], StoredObject],
+            object_writer: Callable[[StoredObject], bytes]):
         self.storage = storage
         self.write = write
-        self.object_builder = object_builder
+        self._object_reader = object_reader
+        self._object_writer = object_writer
 
     def __enter__(self):
         self.txn = self.storage.begin(db_name="objects", write=self.write)
@@ -187,18 +178,11 @@ class StoredObjects(Objects):
         obj_packed = self.txn.get(obj_id)  # todo use streaming op
         if obj_packed is None:
             return None
-
-        obj_data = msgpack.loads(obj_packed)  # fixme make this faster by extracting type away
-        if obj_data[0] == ObjectType.BLOB.value:
-            return self.object_builder(obj_id, obj_data[1])
-        elif obj_data[0] == ObjectType.TREE.value:
-            return TreeObject(dict(obj_data[1]))
-        else:
-            raise ValueError(f"Unrecognized type {obj_data[0]}")
+        return self._object_reader(obj_id, obj_packed)
 
     def __setitem__(self, obj_id: bytes, obj: StoredObject):
         if self[obj_id] is None:
-            self.txn.put(obj_id, obj.serialized)
+            self.txn.put(obj_id, self._object_writer(obj))
 
     def __delitem__(self, obj_id: bytes) -> None:
         self.txn.delete(obj_id)

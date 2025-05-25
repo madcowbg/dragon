@@ -6,9 +6,9 @@ import lmdb
 from alive_progress import alive_bar
 from lmdb import Transaction, Environment, _Database
 
+from lmdb_storage.object_serialization import read_stored_object, write_stored_object
 from lmdb_storage.roots import Roots
-from lmdb_storage.tree_structure import TreeObject, Objects, ObjectID, StoredObjects, ObjectType
-from lmdb_storage.file_object import BlobObject
+from lmdb_storage.tree_structure import TreeObject, Objects, ObjectID, StoredObjects, ObjectType, StoredObject
 
 
 class InconsistentObjectStorage(BaseException):
@@ -130,7 +130,7 @@ class ObjectStorage:
         return self._env.begin(db=self._dbs[db_name], write=write)
 
     def objects(self, write: bool) -> StoredObjects:
-        return StoredObjects(self, write, BlobObject)
+        return StoredObjects(self, write, read_stored_object, write_stored_object)
 
     def roots(self, write: bool) -> Roots:
         return Roots(self, write)
@@ -144,8 +144,9 @@ def find_all_live(objects: Objects, root_ids: Collection[ObjectID]) -> Collectio
             current_id = q.pop()
 
             bar()
-            live_obj = objects[current_id]
+            live_obj: StoredObject = objects[current_id]
             if live_obj.object_type == ObjectType.TREE:
+                live_obj: TreeObject
                 # add all children to queue
                 for child_id in live_obj.children.values():
                     if child_id not in live_ids:

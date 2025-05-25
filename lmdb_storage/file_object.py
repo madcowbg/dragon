@@ -20,10 +20,6 @@ class BlobObject(StoredObject):
         self.md5 = data[2]
         self.object_type = ObjectType.BLOB
 
-    @cached_property
-    def serialized(self) -> bytes:
-        return msgpack.packb((ObjectType.BLOB.value, (self.fasthash, self.size, self.md5)))
-
     @staticmethod
     def create(fasthash: str, size: int, md5: Optional[str] = None) -> "BlobObject":
         file_packed = msgpack.packb((ObjectType.BLOB.value, (fasthash, size, md5)))
