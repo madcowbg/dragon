@@ -136,7 +136,7 @@ class ObjectStorage:
         return Roots(self, write)
 
 
-def find_all_live[F](objects: Objects[F], root_ids: Collection[ObjectID]) -> Collection[ObjectID]:
+def find_all_live(objects: Objects, root_ids: Collection[ObjectID]) -> Collection[ObjectID]:
     live_ids = set(root_ids)
     q = list(live_ids)
     with alive_bar(title="iterating live objects") as bar:

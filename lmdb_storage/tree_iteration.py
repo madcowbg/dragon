@@ -1,14 +1,14 @@
 import enum
 from typing import Iterable, Callable, Tuple, List
 
-from lmdb_storage.tree_structure import ObjectID, Objects, TreeObject, ObjectType
+from lmdb_storage.tree_structure import ObjectID, Objects, TreeObject, ObjectType, StoredObject
 
 type SkipFun = Callable[[], None]
 
 
-def dfs[F](
-        objects: Objects[F], path: str,
-        obj_id: bytes) -> Iterable[Tuple[str, ObjectType, ObjectID, F | TreeObject, SkipFun]]:
+def dfs(
+        objects: Objects, path: str,
+        obj_id: bytes) -> Iterable[Tuple[str, ObjectType, ObjectID, StoredObject, SkipFun]]:
     if obj_id is None:
         return
     assert type(obj_id) is bytes

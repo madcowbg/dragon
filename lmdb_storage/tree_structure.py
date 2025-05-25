@@ -8,6 +8,7 @@ import msgpack
 from lmdb import Transaction
 from propcache import cached_property
 
+
 ## LMDB object format
 #  object_id    blob
 #
@@ -20,13 +21,20 @@ from propcache import cached_property
 type ObjectID = bytes
 type MaybeObjectID = Union[ObjectID, None]
 
+
 class ObjectType(enum.Enum):
     TREE = 1
     BLOB = 2
 
 
+class StoredObject:
+    object_type: ObjectType
+    id: ObjectID
+    serialized: bytes
+
+
 @dataclasses.dataclass
-class TreeObject:
+class TreeObject(StoredObject):
     children: Dict[str, ObjectID]
     object_type: ObjectType = ObjectType.TREE
 
@@ -48,16 +56,16 @@ class TreeObject:
         return isinstance(other, TreeObject) and self.id == other.id
 
 
-class ExpandableTreeObject[F]:
-    def __init__(self, data: TreeObject, objects: "Objects[F]"):
+class ExpandableTreeObject:
+    def __init__(self, data: TreeObject, objects: "Objects"):
         self.objects = objects
         self.children: Dict[str, ObjectID] = data.children
 
-        self._files: Dict[str, F] | None = None
+        self._files: Dict[str, "FileObject"] | None = None
         self._dirs: Dict[str, ExpandableTreeObject] | None = None
 
     @property
-    def files(self) -> Dict[str, F]:
+    def files(self) -> Dict[str, "FileObject"]:
         if self._files is None:
             self._load()
         return self._files
@@ -80,18 +88,20 @@ class ExpandableTreeObject[F]:
                 self._files[name] = obj
 
     @staticmethod
-    def create(obj_id: bytes, objects: "Objects[F]") -> "ExpandableTreeObject[F]":
-        return ExpandableTreeObject[F](objects[obj_id], objects)
+    def create(obj_id: bytes, objects: "Objects") -> "ExpandableTreeObject":
+        tree_obj = objects[obj_id]
+        assert tree_obj.object_type == ObjectType.TREE
+        return ExpandableTreeObject(tree_obj, objects)
 
 
 def do_nothing[T](x: T, *, title) -> T: return x
 
 
-class Objects[F]:
+class Objects:
     txn: Transaction
 
     @abc.abstractmethod
-    def __enter__(self) -> "Objects[F]":
+    def __enter__(self) -> "Objects":
         pass
 
     @abc.abstractmethod
@@ -103,18 +113,18 @@ class Objects[F]:
         pass
 
     @abc.abstractmethod
-    def __getitem__(self, obj_id: bytes) -> Union[F, TreeObject, None]:
+    def __getitem__(self, obj_id: bytes) -> StoredObject | None:
         pass
 
     @abc.abstractmethod
-    def __setitem__(self, obj_id: bytes, obj: Union[F, TreeObject]):
+    def __setitem__(self, obj_id: bytes, obj: StoredObject):
         pass
 
     @abc.abstractmethod
     def __delitem__(self, obj_id: bytes) -> None:
         pass
 
-    def mktree_from_tuples(self, all_data: Iterable[Tuple[str, F]], alive_it=do_nothing) -> bytes:
+    def mktree_from_tuples(self, all_data: Iterable[Tuple[str, StoredObject]], alive_it=do_nothing) -> bytes:
         all_data = sorted(all_data, key=lambda t: t[0])
 
         # every element is a partially-constructed object
@@ -140,11 +150,11 @@ class Objects[F]:
                 stack.append((current_path, TreeObject(dict())))
 
             # add file to current's children
-            self[file.file_id] = file
+            self[file.id] = file
 
             top_obj_path, tree_obj = stack[-1]
             assert ASSERTS_DISABLED or is_child_of(fullpath, top_obj_path) and len(top_obj_path) + 1 == len(fullpath)
-            tree_obj.children[file_name] = file.file_id
+            tree_obj.children[file_name] = file.id
 
         pop_and_write_nonparents(self, stack, [])  # commits the stack
         assert len(stack) == 1
@@ -153,8 +163,8 @@ class Objects[F]:
         return obj_id
 
 
-class StoredObjects[F](Objects[F]):
-    def __init__(self, storage: "ObjectStorage", write: bool, object_builder: Callable[[ObjectID, any], F]):
+class StoredObjects(Objects):
+    def __init__(self, storage: "ObjectStorage", write: bool, object_builder: Callable[[ObjectID, any], StoredObject]):
         self.storage = storage
         self.write = write
         self.object_builder = object_builder
@@ -173,7 +183,7 @@ class StoredObjects[F](Objects[F]):
         assert type(obj_id) is bytes, type(obj_id)
         return self.txn.get(obj_id) is not None
 
-    def __getitem__(self, obj_id: bytes) -> Union[F, TreeObject, None]:
+    def __getitem__(self, obj_id: bytes) -> StoredObject | None:
         assert type(obj_id) is bytes, f"{obj_id} -> {type(obj_id)}"
         obj_packed = self.txn.get(obj_id)  # todo use streaming op
         if obj_packed is None:
@@ -187,7 +197,7 @@ class StoredObjects[F](Objects[F]):
         else:
             raise ValueError(f"Unrecognized type {obj_data[0]}")
 
-    def __setitem__(self, obj_id: bytes, obj: Union[F, TreeObject]):
+    def __setitem__(self, obj_id: bytes, obj: StoredObject):
         if self[obj_id] is None:
             self.txn.put(obj_id, obj.serialized)
 
@@ -229,12 +239,12 @@ def pop_and_write_obj(stack: List[Tuple[ObjPath, TreeObject]], objects: Objects)
     return obj_id, top_obj_path
 
 
-def add_file_object[F](objects: Objects[F], tree_id: ObjectID | None, filepath: ObjPath, file: F) -> ObjectID:
+def add_file_object[O](objects: Objects, tree_id: ObjectID | None, filepath: ObjPath, file: O) -> ObjectID:
     objects[file.file_id] = file
     return add_object(objects, tree_id, filepath, file.file_id)
 
 
-def add_object[F](objects: Objects[F], tree_id: ObjectID | None, path: ObjPath, obj_id: ObjectID) -> ObjectID | None:
+def add_object(objects: Objects, tree_id: ObjectID | None, path: ObjPath, obj_id: ObjectID) -> ObjectID | None:
     if len(path) == 0:  # is here
         return obj_id
 
@@ -261,7 +271,7 @@ def add_object[F](objects: Objects[F], tree_id: ObjectID | None, path: ObjPath, 
     return new_tree_id
 
 
-def remove_file_object[F](objects: Objects[F], tree_id: ObjectID, filepath: ObjPath) -> ObjectID:
+def remove_file_object(objects: Objects, tree_id: ObjectID, filepath: ObjPath) -> ObjectID:
     assert len(filepath) > 0
 
     sub_name = filepath[0]

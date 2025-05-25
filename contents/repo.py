@@ -18,7 +18,7 @@ from lmdb_storage.tree_structure import Objects, ObjectID, ObjectType, add_file_
 
 class RepoFSObjects:
     class Stats:
-        def __init__(self, objects: Objects[FileObject], roots: Roots):
+        def __init__(self, objects: Objects, roots: Roots):
             self.objects = objects
             self.root_id = roots["REPO"].current
 
@@ -35,7 +35,7 @@ class RepoFSObjects:
             with self.objects as objects:
                 return self.size_aggregator[self.root_id, objects]
 
-    def __init__(self, objects: Objects[FileObject], roots: Roots, config: "RepoContentsConfig"):
+    def __init__(self, objects: Objects, roots: Roots, config: "RepoContentsConfig"):
         self.objects = objects
         self.roots = roots
         self.config = config
@@ -158,7 +158,7 @@ class RepoContents:
         return RepoContents(folder, uuid, is_readonly)
 
     env: ObjectStorage
-    objects: Objects[FileObject]
+    objects: Objects
 
     def __init__(self, folder: str, uuid: str, is_readonly: bool):
         self.folder = folder

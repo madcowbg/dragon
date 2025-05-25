@@ -80,7 +80,7 @@ class ObjectsByRoot:
         return ByRoot[ObjectID](list(dictionary), dictionary.items())
 
 
-class Transformed[F, R]:
+class Transformed[R]:
     @abc.abstractmethod
     def add_for_child(self, child_name: str, merged_child_by_roots: R) -> None:
         pass

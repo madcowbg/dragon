@@ -8,9 +8,8 @@ from command.fast_path import FastPosixPath
 from command.hoard import Hoard
 from contents.hoard import HoardFilesIterator
 from dragon import TotalCommand
-from lmdb_storage.file_object import FileObject
 from lmdb_storage.object_store import ObjectStorage
-from lmdb_storage.tree_structure import TreeObject, ObjectType
+from lmdb_storage.tree_structure import ObjectType
 
 
 @unittest.skipUnless(os.getenv('RUN_LENGTHY_TESTS'), reason="Lengthy test")

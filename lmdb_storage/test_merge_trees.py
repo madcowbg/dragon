@@ -17,15 +17,15 @@ from lmdb_storage.test_experiment_lmdb import dump_tree, dump_diffs
 from lmdb_storage.operations.three_way_merge import ThreewayMerge, MergePreferences, TransformedRoots, CombinedRoots
 from lmdb_storage.operations.fast_association import FastAssociation
 from lmdb_storage.tree_iteration import zip_dfs
-from lmdb_storage.tree_structure import ObjectID, Objects, do_nothing, TreeObject
+from lmdb_storage.tree_structure import ObjectID, Objects, do_nothing, TreeObject, StoredObject
 
 
-class InMemoryObjectsExtension(Objects[FileObject]):
+class InMemoryObjectsExtension(Objects):
     def __init__(self, env: ObjectStorage) -> None:
         self.stored_objects = env.objects(write=False)
         self.in_mem: Dict[ObjectID, FileObject | TreeObject] = dict()
 
-    def __enter__(self) -> Objects[FileObject]:
+    def __enter__(self) -> Objects:
         self.stored_objects.__enter__()
         return self
 
@@ -319,7 +319,7 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
                                                              hoard_id)
 
     def _run_threeway_merge_after_hoard_created(
-            self, objects: Objects[FileObject],
+            self, objects: Objects,
             partial_id: ObjectID, full_id: ObjectID, backup_id: ObjectID, incoming_id: ObjectID, hoard_id: ObjectID):
         self.assertEqual([
             ('$ROOT', 1),
@@ -459,8 +459,8 @@ class NaiveMergePreferences(MergePreferences):
         self.allowed_roots = list(allowed_roots)
         self.empty_association = FastAssociation(self.allowed_roots, (None,) * len(self.allowed_roots))
 
-    def create_result(self, objects: Objects[FileObject]):
-        return CombinedRoots[FileObject](self.empty_association, objects)
+    def create_result(self, objects: Objects):
+        return CombinedRoots(self.empty_association, objects)
 
     def where_to_apply_diffs(self, original_roots: List[str]) -> List[str]:
         return list(set(original_roots + self.to_modify))
@@ -469,7 +469,7 @@ class NaiveMergePreferences(MergePreferences):
         return list(set(original_roots + self.to_modify))
 
     def combine_both_existing(
-            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject],
+            self, path: List[str], original_roots: ByRoot[StoredObject],
             staging_original: FileObject, base_original: FileObject) -> TransformedRoots:
         result: TransformedRoots = TransformedRoots.wrap(self.empty_association.new())
         for merge_name in (self.where_to_apply_diffs(list(original_roots.assigned_keys()))):
@@ -477,13 +477,13 @@ class NaiveMergePreferences(MergePreferences):
         return result
 
     def combine_base_only(
-            self, path: List[str], repo_name: str, original_roots: ByRoot[TreeObject | FileObject],
+            self, path: List[str], repo_name: str, original_roots: ByRoot[StoredObject],
             base_original: FileObject) -> TransformedRoots:
 
         return self.empty_association
 
     def combine_staging_only(
-            self, path: List[str], repo_name: str, original_roots: ByRoot[TreeObject | FileObject],
+            self, path: List[str], repo_name: str, original_roots: ByRoot[StoredObject],
             staging_original: FileObject) -> TransformedRoots:
         assert type(staging_original) is FileObject
 
@@ -492,5 +492,5 @@ class NaiveMergePreferences(MergePreferences):
             result.HACK_maybe_set_by_key(merge_name, staging_original.file_id)
         return result
 
-    def merge_missing(self, path: List[str], original_roots: ByRoot[TreeObject | FileObject]) -> TransformedRoots:
+    def merge_missing(self, path: List[str], original_roots: ByRoot[StoredObject]) -> TransformedRoots:
         return TransformedRoots.HACK_create(original_roots.map(lambda obj: obj.id))

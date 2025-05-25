@@ -65,7 +65,7 @@ class HoardCommandBackups:
 
                 for idx, name in [(0, "scheduled"), (1, "available"), (2, "get_or_copy"), (3, "move"), (4, "cleanup")]:
                     out.write(f"{name} count:\n")
-                    sizes = pivot_stat(idx, lambda f: file_sizes[f])
+                    sizes = pivot_stat(idx, lambda file: file_sizes[file])
                     for num_copies, cnt in sorted(pivot_stat(idx, lambda _: 1).items(), key=lambda x: x[0]):
                         size = sizes[num_copies]
                         out.write(f" {num_copies}: {cnt} files ({format_size(size)})\n")

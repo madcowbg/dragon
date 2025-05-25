@@ -3,11 +3,9 @@ from functools import cached_property
 from typing import Dict, List
 
 from command.fast_path import FastPosixPath
-from lmdb_storage.file_object import FileObject
 from lmdb_storage.operations.fast_association import FastAssociation
-from lmdb_storage.operations.util import ByRoot
 from lmdb_storage.tree_operations import get_child
-from lmdb_storage.tree_structure import ObjectID, MaybeObjectID
+from lmdb_storage.tree_structure import ObjectID, MaybeObjectID, StoredObject
 
 
 class HoardFileStatus(enum.Enum):
@@ -43,7 +41,7 @@ def compute_status(
 
 
 class HoardFileProps:
-    def __init__(self, parent: "HoardContents", path: FastPosixPath, size: int, fasthash: str, *, by_root: FastAssociation[FileObject] | None=None, file_id: MaybeObjectID = None):
+    def __init__(self, parent: "HoardContents", path: FastPosixPath, size: int, fasthash: str, *, by_root: FastAssociation[StoredObject] | None=None, file_id: MaybeObjectID = None):
         self.parent = parent
         self._path = path
         self._maybe_by_root = by_root

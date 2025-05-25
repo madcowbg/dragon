@@ -20,7 +20,7 @@ from lmdb_storage.operations.fast_association import FastAssociation
 from lmdb_storage.operations.util import ByRoot
 from lmdb_storage.tree_iteration import zip_trees_dfs
 from lmdb_storage.tree_operations import get_child
-from lmdb_storage.tree_structure import TreeObject, Objects, MaybeObjectID, ObjectType
+from lmdb_storage.tree_structure import TreeObject, Objects, MaybeObjectID, ObjectType, StoredObject
 from sql_util import SubfolderFilter
 from util import custom_isabs
 
@@ -175,15 +175,15 @@ STATUSES_TO_FETCH = [HoardFileStatus.COPY, HoardFileStatus.GET, HoardFileStatus.
 
 
 class HoardFilesIterator(TreeGenerator[FileObject, Tuple[str, HoardFileProps]]):
-    def __init__(self, objects: Objects[FileObject], parent: "HoardContents"):
+    def __init__(self, objects: Objects, parent: "HoardContents"):
         self.parent = parent
         self.objects = objects
 
     def compute_on_level(
-            self, path: List[str], original: FastAssociation[TreeObject | FileObject]
+            self, path: List[str], original: FastAssociation[StoredObject]
     ) -> Iterable[Tuple[FastPosixPath, HoardFileProps]]:
         path = FastPosixPath("/" + "/".join(path))
-        file_obj = original.get_if_present("HOARD")
+        file_obj: FileObject | None = original.get_if_present("HOARD")
 
         if file_obj is None:
             # fixme this is the legacy case where we iterate over current but not desired files. remove!

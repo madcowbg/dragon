@@ -20,17 +20,17 @@ from lmdb_storage.operations.generator import TreeGenerator
 from lmdb_storage.operations.util import ByRoot, ObjectsByRoot
 from lmdb_storage.tree_iteration import dfs, zip_dfs
 from lmdb_storage.tree_structure import ExpandableTreeObject, add_file_object, Objects, remove_file_object, ObjectType, \
-    ObjectID, TreeObject, MaybeObjectID
+    ObjectID, TreeObject, MaybeObjectID, StoredObject
 
 
-def dump_tree(objects: Objects[FileObject], root_id, show_fasthash: bool = False):
+def dump_tree(objects: Objects, root_id, show_fasthash: bool = False):
     return list(
         (path, obj_type.value) if not show_fasthash or obj_type == ObjectType.TREE
         else (path, obj_type.value, obj.fasthash)
         for path, obj_type, _, obj, _ in dfs(objects, "$ROOT", root_id))
 
 
-def dump_diffs(objects: Objects[FileObject], left_id: ObjectID, right_id: ObjectID):
+def dump_diffs(objects: Objects, left_id: ObjectID, right_id: ObjectID):
     return [
         (path, diff_type.value)
         for path, diff_type, left_id, right_id, should_skip
@@ -377,12 +377,12 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
                         pass
 
 
-class PrettyPrintProcedure(Procedure[FileObject]):
-    def __init__(self, objects: Objects[FileObject]):
+class PrettyPrintProcedure(Procedure):
+    def __init__(self, objects: Objects):
         self.objects = objects
         self.out: List[str] = []
 
-    def run_on_level(self, state: List[str], original: ByRoot[TreeObject | FileObject]):
+    def run_on_level(self, state: List[str], original: ByRoot[StoredObject]):
         if len(state) == 0:
             self.out.append("Root")
         else:
@@ -392,14 +392,14 @@ class PrettyPrintProcedure(Procedure[FileObject]):
         return True
 
     @staticmethod
-    def as_str(objects: Objects[FileObject], root_id: MaybeObjectID) -> str:
+    def as_str(objects: Objects, root_id: MaybeObjectID) -> str:
         pp = PrettyPrintProcedure(objects)
         pp.execute(ObjectsByRoot.singleton("root", root_id))
         return "\n".join(reversed(pp.out))
 
 
 class PrettyPrintGenerator(TreeGenerator[FileObject, str]):
-    def compute_on_level(self, state: List[str], original: FastAssociation[TreeObject | FileObject]) -> Iterable[str]:
+    def compute_on_level(self, state: List[str], original: FastAssociation[StoredObject]) -> Iterable[str]:
         if len(state) == 0:
             yield "Root"
         else:
@@ -409,12 +409,12 @@ class PrettyPrintGenerator(TreeGenerator[FileObject, str]):
                           files: FastAssociation[FileObject]) -> bool:
         return True
 
-    def __init__(self, objects: Objects[FileObject]):
+    def __init__(self, objects: Objects):
         self.objects = objects
         self.out: List[str] = []
 
     @staticmethod
-    def as_str(objects: Objects[FileObject], root_id: MaybeObjectID) -> str:
+    def as_str(objects: Objects, root_id: MaybeObjectID) -> str:
         return "\n".join(
             reversed(list(PrettyPrintGenerator(objects).execute(ObjectsByRoot.singleton("root", root_id)))))
 

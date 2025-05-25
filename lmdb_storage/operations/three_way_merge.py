@@ -7,7 +7,7 @@ from lmdb_storage.file_object import FileObject
 from lmdb_storage.operations.fast_association import FastAssociation
 from lmdb_storage.operations.types import Transformation
 from lmdb_storage.operations.util import ByRoot, Transformed
-from lmdb_storage.tree_structure import Objects, TreeObject, ObjectID, MaybeObjectID, ObjectType
+from lmdb_storage.tree_structure import Objects, TreeObject, ObjectID, MaybeObjectID, ObjectType, StoredObject
 
 
 class TransformedRoots(FastAssociation[ObjectID]):
@@ -46,28 +46,28 @@ class MergePreferences:
 
     @abc.abstractmethod
     def combine_both_existing(
-            self, path: List[str], original_roots: ByRoot[TreeObject | FileObject],
+            self, path: List[str], original_roots: ByRoot[StoredObject],
             staging_original: FileObject, base_original: FileObject) -> TransformedRoots:
         pass
 
     @abc.abstractmethod
     def combine_base_only(
-            self, path: List[str], repo_name: str, original_roots: ByRoot[TreeObject | FileObject],
+            self, path: List[str], repo_name: str, original_roots: ByRoot[StoredObject],
             base_original: FileObject) -> TransformedRoots:
         pass
 
     @abc.abstractmethod
     def combine_staging_only(
-            self, path: List[str], repo_name, original_roots: ByRoot[TreeObject | FileObject],
+            self, path: List[str], repo_name, original_roots: ByRoot[StoredObject],
             staging_original: FileObject) -> TransformedRoots:
         pass
 
     @abc.abstractmethod
-    def merge_missing(self, path: List[str], original_roots: ByRoot[TreeObject | FileObject]) -> TransformedRoots:
+    def merge_missing(self, path: List[str], original_roots: ByRoot[StoredObject]) -> TransformedRoots:
         pass
 
     @abc.abstractmethod
-    def create_result(self, objects: Objects[FileObject]):
+    def create_result(self, objects: Objects):
         pass
 
 
@@ -78,8 +78,8 @@ class ThreewayMergeState:
     staging: FileObject | TreeObject | None
 
 
-class CombinedRoots[F](Transformed[F, ByRoot[ObjectID]]):
-    def __init__(self, empty_association: FastAssociation[ObjectID], objects: Objects[F]):
+class CombinedRoots(Transformed[ByRoot[ObjectID]]):
+    def __init__(self, empty_association: FastAssociation[ObjectID], objects: Objects):
         self.objects = objects
 
         self.empty_association = empty_association
@@ -111,7 +111,7 @@ class CombinedRoots[F](Transformed[F, ByRoot[ObjectID]]):
         return self._merged_children.map(lambda obj: obj.id)
 
 
-class ThreewayMerge(Transformation[FileObject, ThreewayMergeState, TransformedRoots]):
+class ThreewayMerge(Transformation[ThreewayMergeState, TransformedRoots]):
     def object_or_none(self, object_id: ObjectID) -> FileObject | TreeObject | None:
         return self.objects[object_id] if object_id is not None else None
 
@@ -131,7 +131,7 @@ class ThreewayMerge(Transformation[FileObject, ThreewayMergeState, TransformedRo
             self.object_or_none(staging_obj.children.get(child_name)) if staging_obj and staging_obj.object_type == ObjectType.TREE else None)
 
     def __init__(
-            self, objects: Objects[FileObject], current_id: ObjectID | None, staging_id: ObjectID | None,
+            self, objects: Objects, current_id: ObjectID | None, staging_id: ObjectID | None,
             repo_name: str, merge_prefs: MergePreferences):
         self.objects = objects
         self.current_id = current_id
@@ -156,11 +156,11 @@ class ThreewayMerge(Transformation[FileObject, ThreewayMergeState, TransformedRo
         # we have trees and the current and staging trees are different
         return len(trees) > 0 and state.base != state.staging
 
-    def create_merge_result(self) -> Transformed[FileObject, ByRoot[ObjectID]]:
+    def create_merge_result(self) -> Transformed[ByRoot[ObjectID]]:
         return self.merge_prefs.create_result(self.objects)
 
     def combine_non_drilldown(
-            self, state: ThreewayMergeState, original: ByRoot[TreeObject | FileObject]) -> TransformedRoots:
+            self, state: ThreewayMergeState, original: ByRoot[StoredObject]) -> TransformedRoots:
         # we are on file level
         base_original = state.base
         staging_original = state.staging
@@ -187,8 +187,8 @@ class ThreewayMerge(Transformation[FileObject, ThreewayMergeState, TransformedRo
             return self.merge_prefs.merge_missing(state.path, original)
 
     def combine(
-            self, state: ThreewayMergeState, merged: CombinedRoots[FileObject],
-            original: ByRoot[TreeObject | FileObject]) -> FastAssociation[ObjectID]:
+            self, state: ThreewayMergeState, merged: CombinedRoots,
+            original: ByRoot[StoredObject]) -> FastAssociation[ObjectID]:
         # tree-level, just return the merged
         # # fixme this is needed because empty folders get dropped in "merged" - should fix that problem
         # merged = merged.copy()

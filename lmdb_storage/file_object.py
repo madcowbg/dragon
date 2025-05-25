@@ -4,10 +4,10 @@ from typing import Optional
 import msgpack
 from propcache import cached_property
 
-from lmdb_storage.tree_structure import ObjectType, ObjectID
+from lmdb_storage.tree_structure import ObjectType, ObjectID, StoredObject
 
 
-class FileObject:
+class FileObject(StoredObject):
     file_id: bytes
     fasthash: str
     md5: str

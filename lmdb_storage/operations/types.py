@@ -3,14 +3,14 @@ from typing import List
 
 from lmdb_storage.file_object import FileObject
 from lmdb_storage.operations.util import ByRoot, Transformed
-from lmdb_storage.tree_structure import Objects, TreeObject, ObjectID
+from lmdb_storage.tree_structure import Objects, TreeObject, ObjectID, StoredObject
 
 
-class Transformation[F, S, R](abc.ABC):
-    objects: Objects[F]
+class Transformation[S, R](abc.ABC):
+    objects: Objects
 
     @abc.abstractmethod
-    def combine(self, state: S, merged: Transformed[F, R], original: ByRoot[TreeObject | FileObject]) -> R:
+    def combine(self, state: S, merged: Transformed[R], original: ByRoot[StoredObject]) -> R:
         """Calculates values for the combined path by working on trees and files that are attached to this path."""
         pass
 
@@ -19,11 +19,11 @@ class Transformation[F, S, R](abc.ABC):
         pass
 
     @abc.abstractmethod
-    def create_merge_result(self) -> Transformed[F, R]:
+    def create_merge_result(self) -> Transformed[R]:
         pass
 
     @abc.abstractmethod
-    def combine_non_drilldown(self, state: S, original: ByRoot[TreeObject | FileObject]) -> R:
+    def combine_non_drilldown(self, state: S, original: ByRoot[StoredObject]) -> R:
         pass
 
     def execute(self, obj_ids: ByRoot[ObjectID]) -> R:
@@ -31,7 +31,7 @@ class Transformation[F, S, R](abc.ABC):
         return self._execute_recursively(self.initial_state(obj_ids), obj_ids)
 
     def _execute_recursively(self, merge_state: S, obj_ids: ByRoot[ObjectID]) -> R:
-        all_original: ByRoot[TreeObject | FileObject] = obj_ids.map(lambda obj_id: self.objects[obj_id])
+        all_original: ByRoot[StoredObject] = obj_ids.map(lambda obj_id: self.objects[obj_id])
 
         trees = all_original.filter_type(TreeObject)
         files = all_original.filter_type(FileObject)
@@ -40,7 +40,7 @@ class Transformation[F, S, R](abc.ABC):
             all_children_names = list(sorted(set(
                 child_name for tree_obj in trees.values() for child_name in tree_obj.children)))
 
-            merge_result: Transformed[F, R] = self.create_merge_result()
+            merge_result: Transformed[R] = self.create_merge_result()
             for child_name in all_children_names:
                 all_objects_in_child_name = trees.map(lambda obj: obj.children.get(child_name))
                 merged_child_by_roots: R = self._execute_recursively(
@@ -61,7 +61,7 @@ class Transformation[F, S, R](abc.ABC):
         pass
 
 
-class EmptyTransformed[F](Transformed[F, None]):
+class EmptyTransformed(Transformed[None]):
     def add_for_child(self, child_name: str, merged_child_by_roots: None) -> None:
         return None
 
@@ -69,17 +69,17 @@ class EmptyTransformed[F](Transformed[F, None]):
 _empty_merge_result = EmptyTransformed()
 
 
-class Procedure[F](Transformation[F, List[str], None]):
+class Procedure(Transformation[List[str], None]):
     @abc.abstractmethod
-    def run_on_level(self, state: List[str], original: ByRoot[TreeObject | FileObject]): pass
+    def run_on_level(self, state: List[str], original: ByRoot[StoredObject]): pass
 
-    def combine(self, state: List[str], merged: None, original: ByRoot[TreeObject | FileObject]) -> None:
+    def combine(self, state: List[str], merged: None, original: ByRoot[StoredObject]) -> None:
         self.run_on_level(state, original)
 
-    def create_merge_result(self) -> Transformed[F, None]:
+    def create_merge_result(self) -> Transformed[None]:
         return _empty_merge_result
 
-    def combine_non_drilldown(self, state: List[str], original: ByRoot[TreeObject | FileObject]) -> None:
+    def combine_non_drilldown(self, state: List[str], original: ByRoot[StoredObject]) -> None:
         self.run_on_level(state, original)
 
     def initial_state(self, obj_ids: ByRoot[ObjectID]) -> List[str]:

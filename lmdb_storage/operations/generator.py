@@ -6,11 +6,11 @@ from lmdb_storage.file_object import FileObject
 from lmdb_storage.operations.three_way_merge import TransformedRoots
 from lmdb_storage.operations.fast_association import FastAssociation
 from lmdb_storage.operations.util import ByRoot
-from lmdb_storage.tree_structure import Objects, TreeObject, ObjectID, ObjectType
+from lmdb_storage.tree_structure import Objects, TreeObject, ObjectID, ObjectType, StoredObject
 
 
 class TreeGenerator[F, R]:
-    objects: Objects[F]
+    objects: Objects
 
     @abc.abstractmethod
     def should_drill_down(
@@ -18,17 +18,17 @@ class TreeGenerator[F, R]:
         pass
 
     @abc.abstractmethod
-    def compute_on_level(self, path: List[str], original: FastAssociation[TreeObject | FileObject]) -> Iterable[R]: pass
+    def compute_on_level(self, path: List[str], original: FastAssociation[StoredObject]) -> Iterable[R]: pass
 
     def execute(self, obj_ids: ByRoot[ObjectID]) -> R:
         assert isinstance(obj_ids, ByRoot)
         return self._execute_recursively([], TransformedRoots.HACK_create(obj_ids).map(self.get_objects))
 
     @lru_cache(maxsize=1<<16)
-    def get_objects(self, obj_id: ObjectID) -> TreeObject | FileObject | None:
+    def get_objects(self, obj_id: ObjectID) -> StoredObject | None:
         return self.objects[obj_id] if obj_id is not None else None
 
-    def _execute_recursively(self, merge_state: List[str], all_original: FastAssociation[TreeObject | FileObject]) -> Iterable[R]:
+    def _execute_recursively(self, merge_state: List[str], all_original: FastAssociation[StoredObject]) -> Iterable[R]:
         trees = all_original.filter(lambda v: v.object_type == ObjectType.TREE)
         files = all_original.filter(lambda v: v.object_type == ObjectType.BLOB)
 
