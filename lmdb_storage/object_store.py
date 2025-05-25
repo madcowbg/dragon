@@ -7,7 +7,7 @@ from alive_progress import alive_bar
 from lmdb import Transaction, Environment, _Database
 
 from lmdb_storage.roots import Roots
-from lmdb_storage.tree_structure import TreeObject, Objects, ObjectID, StoredObjects
+from lmdb_storage.tree_structure import TreeObject, Objects, ObjectID, StoredObjects, ObjectType
 from lmdb_storage.file_object import FileObject
 
 
@@ -145,7 +145,7 @@ def find_all_live[F](objects: Objects[F], root_ids: Collection[ObjectID]) -> Col
 
             bar()
             live_obj = objects[current_id]
-            if isinstance(live_obj, TreeObject):
+            if live_obj.object_type == ObjectType.TREE:
                 # add all children to queue
                 for child_id in live_obj.children.values():
                     if child_id not in live_ids:
@@ -153,5 +153,5 @@ def find_all_live[F](objects: Objects[F], root_ids: Collection[ObjectID]) -> Col
                         q.append(child_id)
             else:
                 # do nothing on files, just verify that they exist
-                assert isinstance(live_obj, FileObject)
+                assert live_obj.object_type == ObjectType.BLOB
     return live_ids

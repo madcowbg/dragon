@@ -2,7 +2,7 @@ import abc
 from typing import Callable, Dict
 
 from lmdb_storage.file_object import FileObject
-from lmdb_storage.tree_structure import TreeObject, ObjectID, Objects
+from lmdb_storage.tree_structure import TreeObject, ObjectID, Objects, ObjectType
 
 
 class ValueCalculator[R](abc.ABC):
@@ -20,11 +20,11 @@ class RecursiveSumCalculator(ValueCalculator[int | float]):
         self.value_getter = value_getter
 
     def calculate(self, calculator: "TreeCalculator[int | float]", objects: Objects[FileObject], root_obj: TreeObject | FileObject) -> int | float:
-        if isinstance(root_obj, FileObject):
-            return self.value_getter(root_obj)
-        else:
-            assert isinstance(root_obj, TreeObject)
+        if root_obj.object_type == ObjectType.TREE:
             return sum(calculator[child_id, objects] for child_id in root_obj.children.values())
+        else:
+            assert root_obj.object_type == ObjectType.BLOB
+            return self.value_getter(root_obj)
 
     def for_none(self, calculator: "TreeCalculator[int | float]") -> int | float:
         return 0

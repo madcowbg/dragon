@@ -1,7 +1,7 @@
 from typing import List
 
 from lmdb_storage.file_object import FileObject
-from lmdb_storage.tree_structure import Objects, ObjectID, TreeObject
+from lmdb_storage.tree_structure import Objects, ObjectID, TreeObject, ObjectType
 
 
 def get_child(objects: Objects, path: List[str], root_id: ObjectID | None) -> ObjectID | None:
@@ -10,11 +10,11 @@ def get_child(objects: Objects, path: List[str], root_id: ObjectID | None) -> Ob
     curr_id = root_id
     while curr_id is not None and idx < len(path):
         obj = objects[curr_id]
-        if isinstance(obj, TreeObject):
+        if obj.object_type == ObjectType.TREE:
             curr_id = obj.children.get(path[idx])
             idx += 1
         else:
-            assert isinstance(obj, FileObject)
+            assert obj.object_type == ObjectType.BLOB
             return None
 
     return curr_id
@@ -31,22 +31,18 @@ def graft_in_tree(
     donor_child_id = donor_child_obj.children.get(child_name) if isinstance(donor_child_obj, TreeObject) else None
 
     old_obj = objects[old_root_id] if old_root_id is not None else None
-    if isinstance(old_obj, TreeObject):
+    if old_obj and old_obj.object_type == ObjectType.TREE:
         old_child_id = old_obj.children.get(child_name)
     else:
-        assert old_root_id is None or isinstance(old_obj, FileObject)
+        assert old_root_id is None or (old_obj and old_obj.object_type == ObjectType.BLOB)
         old_child_id = None
 
     new_child_id = graft_in_tree(objects, old_child_id, path[1:], donor_child_id)
 
     if old_obj is None:
         return package_existing_as_tree_object(objects, child_name, new_child_id)
-    elif isinstance(old_obj, FileObject):
-        # was a file, we return new instead
-        return package_existing_as_tree_object(objects, child_name, new_child_id)
-    else:
+    elif old_obj.object_type == ObjectType.TREE:
         # is a tree object, then graft the result and return
-        assert isinstance(old_obj, TreeObject)
         if new_child_id is None:
             if child_name in old_obj.children:
                 del old_obj.children[child_name]
@@ -59,6 +55,11 @@ def graft_in_tree(
 
         objects[old_obj.id] = old_obj
         return old_obj.id
+    else:
+        assert old_obj.object_type == ObjectType.BLOB
+
+        # was a file, we return new instead
+        return package_existing_as_tree_object(objects, child_name, new_child_id)
 
 
 def package_existing_as_tree_object(objects: Objects, child_name: str, new_child_id: ObjectID | None):

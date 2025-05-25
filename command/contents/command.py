@@ -25,7 +25,7 @@ from lmdb_storage.pull_contents import merge_contents, commit_merged
 from lmdb_storage.roots import Root, Roots
 from lmdb_storage.tree_iteration import zip_trees_dfs
 from lmdb_storage.tree_operations import get_child, graft_in_tree
-from lmdb_storage.tree_structure import Objects, ObjectID, TreeObject, MaybeObjectID
+from lmdb_storage.tree_structure import Objects, ObjectID, TreeObject, MaybeObjectID, ObjectType
 from resolve_uuid import resolve_remote_uuid
 from util import format_size, custom_isabs, safe_hex
 
@@ -683,7 +683,7 @@ def dump_changed_files_info(objects, path_in_tree: List[str], old_desired_root_i
             objects, '/' + '/'.join(path_in_tree), [old_desired_id, new_desired_id], True):
         if new_id is not None:
             new_obj = objects[new_id]
-            if isinstance(new_obj, FileObject):
+            if new_obj.object_type == ObjectType.BLOB:
                 considered += 1
 
                 if old_id != new_id:
@@ -739,7 +739,7 @@ def dump_dropped_files_info(objects, path_in_tree: List[str], old_desired_root_i
             objects, '/' + '/'.join(path_in_tree), [old_desired_id, new_desired_id], True):
         if old_id is not None:
             old_obj = objects[old_id]
-            if isinstance(old_obj, FileObject):
+            if old_obj.object_type == ObjectType.BLOB:
                 assert new_id is None
                 cleaned_up += 1
                 out.write(f"DROP {file_path}\n")

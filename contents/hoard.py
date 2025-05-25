@@ -20,7 +20,7 @@ from lmdb_storage.operations.fast_association import FastAssociation
 from lmdb_storage.operations.util import ByRoot
 from lmdb_storage.tree_iteration import zip_trees_dfs
 from lmdb_storage.tree_operations import get_child
-from lmdb_storage.tree_structure import TreeObject, Objects, MaybeObjectID
+from lmdb_storage.tree_structure import TreeObject, Objects, MaybeObjectID, ObjectType
 from sql_util import SubfolderFilter
 from util import custom_isabs
 
@@ -87,6 +87,7 @@ class HoardContentsConfig:
         if 'max_size' not in remote["config"]:
             remote["config"]["max_size"] = max_size
             self.write()
+
 
 class HoardTree:
     def __init__(self, objects: "ReadonlyHoardFSObjects"):
@@ -186,9 +187,10 @@ class HoardFilesIterator(TreeGenerator[FileObject, Tuple[str, HoardFileProps]]):
 
         if file_obj is None:
             # fixme this is the legacy case where we iterate over current but not desired files. remove!
-            file_obj = next((f for root_name, f in original.available_items() if isinstance(f, FileObject)), None)
+            file_obj = next((f for root_name, f in original.available_items() if f.object_type == ObjectType.BLOB),
+                            None)
 
-        if not isinstance(file_obj, FileObject):
+        if not file_obj or file_obj.object_type != ObjectType.BLOB:
             logging.debug("Skipping path %s as it is not a FileObject", path)
             return
 
@@ -235,7 +237,7 @@ def hoard_file_props_from_tree(parent, file_path: FastPosixPath) -> HoardFilePro
         for _, root_id in root_ids:
             root_child_id = get_child(objects, file_path._rem, root_id)
             file_obj = objects[root_child_id] if root_child_id is not None else None
-            if isinstance(file_obj, FileObject):
+            if file_obj and file_obj.object_type == ObjectType.BLOB:
                 return HoardFileProps(parent, file_path, file_obj.size, file_obj.fasthash)
 
         raise ValueError("Should not have tried getting a nonexistent file!")
@@ -372,10 +374,11 @@ class ReadonlyHoardFSObjects:
         with self.parent.env.objects(write=False) as objects:
             path_id = get_child(objects, FastPosixPath(fullpath)._rem, hoard_root)
             path_obj = objects[path_id] if path_id else None
-            if isinstance(path_obj, TreeObject):
+            if path_obj and path_obj.object_type == ObjectType.TREE:
                 children = [(child_name, objects[child_id]) for child_name, child_id in path_obj.children.items()]
-                yield from [fullpath + "/" + child_name for child_name, child_obj in children if
-                            isinstance(child_obj, FileObject)]
+                yield from [
+                    fullpath + "/" + child_name for child_name, child_obj in children
+                    if child_obj.object_type == ObjectType.BLOB]
 
 
 class Query:

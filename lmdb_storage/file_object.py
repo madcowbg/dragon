@@ -18,6 +18,7 @@ class FileObject:
         self.fasthash = data[0]
         self.size = data[1]
         self.md5 = data[2]
+        self.object_type = ObjectType.BLOB
 
     @cached_property
     def serialized(self) -> bytes:

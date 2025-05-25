@@ -7,7 +7,7 @@ from lmdb_storage.file_object import FileObject
 from lmdb_storage.operations.fast_association import FastAssociation
 from lmdb_storage.operations.types import Transformation
 from lmdb_storage.operations.util import ByRoot, Transformed
-from lmdb_storage.tree_structure import Objects, TreeObject, ObjectID, MaybeObjectID
+from lmdb_storage.tree_structure import Objects, TreeObject, ObjectID, MaybeObjectID, ObjectType
 
 
 class TransformedRoots(FastAssociation[ObjectID]):
@@ -123,12 +123,12 @@ class ThreewayMerge(Transformation[FileObject, ThreewayMergeState, TransformedRo
     def drilldown_state(self, child_name: str, merge_state: ThreewayMergeState) -> ThreewayMergeState:
         base_obj = merge_state.base
         staging_obj = merge_state.staging
-        assert type(base_obj) in (NoneType, FileObject, TreeObject)
+        assert not base_obj or base_obj.object_type == ObjectType.BLOB or base_obj.object_type == ObjectType.TREE
         return ThreewayMergeState(
             merge_state.path + [child_name],
-            self.object_or_none(base_obj.children.get(child_name)) if isinstance(base_obj, TreeObject) else None,
+            self.object_or_none(base_obj.children.get(child_name)) if base_obj and base_obj.object_type == ObjectType.TREE else None,
             # fixme handle files
-            self.object_or_none(staging_obj.children.get(child_name)) if isinstance(staging_obj, TreeObject) else None)
+            self.object_or_none(staging_obj.children.get(child_name)) if staging_obj and staging_obj.object_type == ObjectType.TREE else None)
 
     def __init__(
             self, objects: Objects[FileObject], current_id: ObjectID | None, staging_id: ObjectID | None,
@@ -167,8 +167,8 @@ class ThreewayMerge(Transformation[FileObject, ThreewayMergeState, TransformedRo
         if base_original == staging_original:  # no diffs
             return TransformedRoots.HACK_create(original.map(lambda obj: obj.id))
 
-        assert staging_original is None or isinstance(staging_original, FileObject)
-        assert base_original is None or isinstance(base_original, FileObject)
+        assert not staging_original or staging_original.object_type == ObjectType.BLOB
+        assert not base_original or base_original.object_type == ObjectType.BLOB
 
         if staging_original and base_original:
             # left and right both exist, apply difference to the other roots

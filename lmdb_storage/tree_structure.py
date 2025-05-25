@@ -28,6 +28,7 @@ class ObjectType(enum.Enum):
 @dataclasses.dataclass
 class TreeObject:
     children: Dict[str, ObjectID]
+    object_type: ObjectType = ObjectType.TREE
 
     @cached_property
     def serialized(self) -> bytes:

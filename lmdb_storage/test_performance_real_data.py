@@ -10,7 +10,7 @@ from contents.hoard import HoardFilesIterator
 from dragon import TotalCommand
 from lmdb_storage.file_object import FileObject
 from lmdb_storage.object_store import ObjectStorage
-from lmdb_storage.tree_structure import TreeObject
+from lmdb_storage.tree_structure import TreeObject, ObjectType
 
 
 @unittest.skipUnless(os.getenv('RUN_LENGTHY_TESTS'), reason="Lengthy test")
@@ -24,9 +24,9 @@ class TestPerformance(IsolatedAsyncioTestCase):
             with env.objects(write=False) as objects:
                 for k, v in objects.txn.cursor():
                     value = objects[k]
-                    if isinstance(value, FileObject):
+                    if value.object_type == ObjectType.BLOB:
                         decoded_file += 1
-                    elif isinstance(value, TreeObject):
+                    elif value.object_type == ObjectType.TREE:
                         decoded_folder += 1
 
             sys.stdout.write(

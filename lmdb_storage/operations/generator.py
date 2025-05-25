@@ -6,7 +6,7 @@ from lmdb_storage.file_object import FileObject
 from lmdb_storage.operations.three_way_merge import TransformedRoots
 from lmdb_storage.operations.fast_association import FastAssociation
 from lmdb_storage.operations.util import ByRoot
-from lmdb_storage.tree_structure import Objects, TreeObject, ObjectID
+from lmdb_storage.tree_structure import Objects, TreeObject, ObjectID, ObjectType
 
 
 class TreeGenerator[F, R]:
@@ -29,8 +29,8 @@ class TreeGenerator[F, R]:
         return self.objects[obj_id] if obj_id is not None else None
 
     def _execute_recursively(self, merge_state: List[str], all_original: FastAssociation[TreeObject | FileObject]) -> Iterable[R]:
-        trees = all_original.filter(lambda v: type(v) is TreeObject)
-        files = all_original.filter(lambda v: type(v) is FileObject)
+        trees = all_original.filter(lambda v: v.object_type == ObjectType.TREE)
+        files = all_original.filter(lambda v: v.object_type == ObjectType.BLOB)
 
         if self.should_drill_down(merge_state, trees, files):
             all_children_names = list(sorted(set(

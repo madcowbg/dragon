@@ -32,7 +32,7 @@ class FastAssociation[V]:
         return FastAssociation[R](self._keys, [None if v is None else func(v) for v in self._values])
 
     def filter(self, func: Callable[[V], bool]) -> "FastAssociation[V]":
-        return FastAssociation[V](self._keys, [v if func(v) else None for v in self._values])
+        return FastAssociation[V](self._keys, [v if v is not None and func(v) else None for v in self._values])
 
     def values(self) -> List[V | None]:
         return [v for v in self._values if v is not None]
