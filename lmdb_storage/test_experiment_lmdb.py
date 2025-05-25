@@ -12,7 +12,7 @@ from alive_progress import alive_it
 
 from command.test_command_file_changing_flows import populate
 from command.test_hoard_command import populate_repotypes, init_complex_hoard
-from lmdb_storage.file_object import FileObject
+from lmdb_storage.file_object import BlobObject
 from lmdb_storage.object_store import ObjectStorage
 from lmdb_storage.operations.fast_association import FastAssociation
 from lmdb_storage.operations.types import Procedure
@@ -61,7 +61,7 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
 
                 root = ExpandableTreeObject.create(root_id, objects)
 
-                def all_files(tree: ExpandableTreeObject) -> Iterable[FileObject]:
+                def all_files(tree: ExpandableTreeObject) -> Iterable[BlobObject]:
                     yield from tree.files.values()
                     for subtree in tree.dirs.values():
                         yield from all_files(subtree)
@@ -128,13 +128,13 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
             right_id = env.roots(write=False)[right_uuid].staging
 
             with env.objects(write=True) as objects:
-                left_id = add_file_object(objects, left_id, "newdir/new.file".split("/"), FileObject.create("dasda", 1))
+                left_id = add_file_object(objects, left_id, "newdir/new.file".split("/"), BlobObject.create("dasda", 1))
                 old_left_id = left_id
                 left_id = add_file_object(objects, left_id, "wat/lat/new.file".split("/"),
-                                          FileObject.create("dasda", 2))
+                                          BlobObject.create("dasda", 2))
 
                 right_id = add_file_object(
-                    objects, right_id, "wat/zat/new.file".split("/"), FileObject.create("dadassda", 3))
+                    objects, right_id, "wat/zat/new.file".split("/"), BlobObject.create("dadassda", 3))
 
             with env.objects(write=False) as objects:
                 diffs = [
@@ -257,7 +257,7 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
         with ObjectStorage(self.obj_storage_path) as objs:
             with objs.objects(write=True) as objects:
                 tree_id = add_file_object(
-                    objects, None, "wat/da/faque.isit".split("/"), FileObject.create("dasda", 100))
+                    objects, None, "wat/da/faque.isit".split("/"), BlobObject.create("dasda", 100))
 
                 self.assertEqual([
                     ('$ROOT', 1),
@@ -266,7 +266,7 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
                     ('$ROOT/wat/da/faque.isit', 2)], dump_tree(objects, tree_id))
 
                 tree_id = add_file_object(
-                    objects, tree_id, "wat/is/dis.isit".split("/"), FileObject.create("dasda", 101))
+                    objects, tree_id, "wat/is/dis.isit".split("/"), BlobObject.create("dasda", 101))
                 self.assertEqual([
                     ('$ROOT', 1),
                     ('$ROOT/wat', 1),
@@ -276,7 +276,7 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
                     ('$ROOT/wat/is/dis.isit', 2)], dump_tree(objects, tree_id))
 
                 tree_id = add_file_object(
-                    objects, tree_id, "wat/da/another.isit".split("/"), FileObject.create("dasda", 100))
+                    objects, tree_id, "wat/da/another.isit".split("/"), BlobObject.create("dasda", 100))
                 tree_id = remove_file_object(objects, tree_id, "wat/da/faque.isit".split("/"))
                 self.assertEqual([
                     ('$ROOT', 1),
@@ -388,7 +388,7 @@ class PrettyPrintProcedure(Procedure):
         else:
             self.out.append("┃" * (len(state) - 1) + "┖" + state[-1])
 
-    def should_drill_down(self, state: List[str], trees: ByRoot[TreeObject], files: ByRoot[FileObject]) -> bool:
+    def should_drill_down(self, state: List[str], trees: ByRoot[TreeObject], files: ByRoot[BlobObject]) -> bool:
         return True
 
     @staticmethod
@@ -398,7 +398,7 @@ class PrettyPrintProcedure(Procedure):
         return "\n".join(reversed(pp.out))
 
 
-class PrettyPrintGenerator(TreeGenerator[FileObject, str]):
+class PrettyPrintGenerator(TreeGenerator[BlobObject, str]):
     def compute_on_level(self, state: List[str], original: FastAssociation[StoredObject]) -> Iterable[str]:
         if len(state) == 0:
             yield "Root"
@@ -406,7 +406,7 @@ class PrettyPrintGenerator(TreeGenerator[FileObject, str]):
             yield "┃" * (len(state) - 1) + "┖" + state[-1]
 
     def should_drill_down(self, state: List[str], trees: FastAssociation[TreeObject],
-                          files: FastAssociation[FileObject]) -> bool:
+                          files: FastAssociation[BlobObject]) -> bool:
         return True
 
     def __init__(self, objects: Objects):

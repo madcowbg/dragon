@@ -11,7 +11,7 @@ from unittest import TestCase
 
 import msgpack
 
-from lmdb_storage.file_object import FileObject
+from lmdb_storage.file_object import BlobObject
 from lmdb_storage.object_store import ObjectStorage
 
 random.seed(42)
@@ -120,10 +120,10 @@ class TestPerformance(TestCase):
         with env.objects(write=True) as objects:
             logging.info("Creating first tree from tuples...")
             first_id = objects.mktree_from_tuples(
-                [("/" + path + ".txt", FileObject.create(fasthash, size)) for path, fasthash, size in first_index])
+                [("/" + path + ".txt", BlobObject.create(fasthash, size)) for path, fasthash, size in first_index])
             logging.info("Creating second tree from tuples...")
             second_id = objects.mktree_from_tuples(
-                [("/" + path + ".txt", FileObject.create(fasthash, size)) for path, fasthash, size in
+                [("/" + path + ".txt", BlobObject.create(fasthash, size)) for path, fasthash, size in
                  second_index])
             logging.info("Done creating trees...")
 

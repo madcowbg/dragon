@@ -1,6 +1,6 @@
 from typing import List
 
-from lmdb_storage.file_object import FileObject
+from lmdb_storage.file_object import BlobObject
 from lmdb_storage.tree_structure import Objects, ObjectID, TreeObject, ObjectType
 
 

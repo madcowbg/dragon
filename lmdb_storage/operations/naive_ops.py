@@ -1,6 +1,6 @@
 from typing import List
 
-from lmdb_storage.file_object import FileObject
+from lmdb_storage.file_object import BlobObject
 from lmdb_storage.operations.types import Transformation
 from lmdb_storage.operations.util import ByRoot, Transformed
 from lmdb_storage.tree_structure import ObjectID, Objects, TreeObject, StoredObject
@@ -35,13 +35,13 @@ class TakeOneFile(Transformation[List[str], ObjectID]):
         """Take the first value that is a file object as the resolved combined value."""
         return merged.get_value()
 
-    def should_drill_down(self, state: List[str], trees: ByRoot[TreeObject], files: ByRoot[FileObject]) -> bool:
+    def should_drill_down(self, state: List[str], trees: ByRoot[TreeObject], files: ByRoot[BlobObject]) -> bool:
         return len(files) == 0  # as we prioritize taking the first file
 
     def create_merge_result(self) -> Transformed[ObjectID]:
         return TakeOneFile.TakeOneMergeResult(self.objects)
 
     def combine_non_drilldown(self, state: List[str], original: ByRoot[StoredObject]) -> ObjectID:
-        files = original.filter_type(FileObject)
+        files = original.filter_type(BlobObject)
         assert len(files.values()) > 0, len(files.values())
         return next(files.values().__iter__()).id

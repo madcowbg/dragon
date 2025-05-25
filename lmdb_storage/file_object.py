@@ -7,7 +7,7 @@ from propcache import cached_property
 from lmdb_storage.tree_structure import ObjectType, ObjectID, StoredObject
 
 
-class FileObject(StoredObject):
+class BlobObject(StoredObject):
     file_id: bytes
     fasthash: str
     md5: str
@@ -25,20 +25,20 @@ class FileObject(StoredObject):
         return msgpack.packb((ObjectType.BLOB.value, (self.fasthash, self.size, self.md5)))
 
     @staticmethod
-    def create(fasthash: str, size: int, md5: Optional[str] = None) -> "FileObject":
+    def create(fasthash: str, size: int, md5: Optional[str] = None) -> "BlobObject":
         file_packed = msgpack.packb((ObjectType.BLOB.value, (fasthash, size, md5)))
         file_id = hashlib.sha1(file_packed).digest()
-        return FileObject(file_id=file_id, data=(fasthash, size, md5))
+        return BlobObject(file_id=file_id, data=(fasthash, size, md5))
 
     @staticmethod
-    def load(file_id: bytes, data: bytes) -> "FileObject":
+    def load(file_id: bytes, data: bytes) -> "BlobObject":
         object_type, data = msgpack.unpackb(data)
         assert object_type == ObjectType.BLOB.value
-        return FileObject(file_id, data)
+        return BlobObject(file_id, data)
 
     @property
     def id(self) -> ObjectID:
         return self.file_id
 
-    def __eq__(self, other: "FileObject") -> bool:
-        return isinstance(other, FileObject) and self.file_id == other.file_id
+    def __eq__(self, other: "BlobObject") -> bool:
+        return isinstance(other, BlobObject) and self.file_id == other.file_id

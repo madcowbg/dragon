@@ -2,7 +2,7 @@ import abc
 from functools import lru_cache
 from typing import List, Iterable
 
-from lmdb_storage.file_object import FileObject
+from lmdb_storage.file_object import BlobObject
 from lmdb_storage.operations.three_way_merge import TransformedRoots
 from lmdb_storage.operations.fast_association import FastAssociation
 from lmdb_storage.operations.util import ByRoot
@@ -14,7 +14,7 @@ class TreeGenerator[F, R]:
 
     @abc.abstractmethod
     def should_drill_down(
-            self, state: List[str], trees: FastAssociation[TreeObject], files: FastAssociation[FileObject]) -> bool:
+            self, state: List[str], trees: FastAssociation[TreeObject], files: FastAssociation[BlobObject]) -> bool:
         pass
 
     @abc.abstractmethod

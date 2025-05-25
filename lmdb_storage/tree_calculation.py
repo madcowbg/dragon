@@ -1,7 +1,7 @@
 import abc
 from typing import Callable, Dict
 
-from lmdb_storage.file_object import FileObject
+from lmdb_storage.file_object import BlobObject
 from lmdb_storage.tree_structure import TreeObject, ObjectID, Objects, ObjectType, StoredObject
 
 
@@ -16,7 +16,7 @@ class ValueCalculator[R](abc.ABC):
 
 
 class RecursiveSumCalculator(ValueCalculator[int | float]):
-    def __init__(self, value_getter: Callable[[FileObject], int | float]):
+    def __init__(self, value_getter: Callable[[BlobObject], int | float]):
         self.value_getter = value_getter
 
     def calculate(self, calculator: "TreeCalculator[int | float]", objects: Objects, root_obj: StoredObject) -> int | float:

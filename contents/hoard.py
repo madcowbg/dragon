@@ -13,7 +13,7 @@ from command.fast_path import FastPosixPath
 from config import HoardConfig
 from contents.hoard_props import HoardFileStatus, HoardFileProps
 from contents.repo import RepoContentsConfig
-from lmdb_storage.file_object import FileObject
+from lmdb_storage.file_object import BlobObject
 from lmdb_storage.object_store import ObjectStorage
 from lmdb_storage.operations.generator import TreeGenerator
 from lmdb_storage.operations.fast_association import FastAssociation
@@ -174,7 +174,7 @@ def _filename(filepath: str) -> str:
 STATUSES_TO_FETCH = [HoardFileStatus.COPY, HoardFileStatus.GET, HoardFileStatus.MOVE]
 
 
-class HoardFilesIterator(TreeGenerator[FileObject, Tuple[str, HoardFileProps]]):
+class HoardFilesIterator(TreeGenerator[BlobObject, Tuple[str, HoardFileProps]]):
     def __init__(self, objects: Objects, parent: "HoardContents"):
         self.parent = parent
         self.objects = objects
@@ -183,7 +183,7 @@ class HoardFilesIterator(TreeGenerator[FileObject, Tuple[str, HoardFileProps]]):
             self, path: List[str], original: FastAssociation[StoredObject]
     ) -> Iterable[Tuple[FastPosixPath, HoardFileProps]]:
         path = FastPosixPath("/" + "/".join(path))
-        file_obj: FileObject | None = original.get_if_present("HOARD")
+        file_obj: BlobObject | None = original.get_if_present("HOARD")
 
         if file_obj is None:
             # fixme this is the legacy case where we iterate over current but not desired files. remove!
@@ -191,13 +191,13 @@ class HoardFilesIterator(TreeGenerator[FileObject, Tuple[str, HoardFileProps]]):
                             None)
 
         if not file_obj or file_obj.object_type != ObjectType.BLOB:
-            logging.debug("Skipping path %s as it is not a FileObject", path)
+            logging.debug("Skipping path %s as it is not a BlobObject", path)
             return
 
         yield path, HoardFileProps(
             self.parent, path, file_obj.size, file_obj.fasthash, by_root=original, file_id=file_obj.id)
 
-    def should_drill_down(self, path: List[str], trees: ByRoot[TreeObject], files: ByRoot[FileObject]) -> bool:
+    def should_drill_down(self, path: List[str], trees: ByRoot[TreeObject], files: ByRoot[BlobObject]) -> bool:
         return True
 
     @staticmethod
@@ -524,7 +524,7 @@ class HoardContents:
                 if non_none_type is TreeObject:
                     pass
                 else:
-                    assert non_none_type is FileObject
+                    assert non_none_type is BlobObject
                     file_ids = {o.id for o in desired_objs if o is not None}
                     if len(file_ids) > 1:
                         raise ValueError(f"Object at path {path} has multiple desired file versions: {file_ids}")

@@ -8,7 +8,7 @@ from lmdb import Transaction, Environment, _Database
 
 from lmdb_storage.roots import Roots
 from lmdb_storage.tree_structure import TreeObject, Objects, ObjectID, StoredObjects, ObjectType
-from lmdb_storage.file_object import FileObject
+from lmdb_storage.file_object import BlobObject
 
 
 class InconsistentObjectStorage(BaseException):
@@ -130,7 +130,7 @@ class ObjectStorage:
         return self._env.begin(db=self._dbs[db_name], write=write)
 
     def objects(self, write: bool) -> StoredObjects:
-        return StoredObjects(self, write, FileObject)
+        return StoredObjects(self, write, BlobObject)
 
     def roots(self, write: bool) -> Roots:
         return Roots(self, write)

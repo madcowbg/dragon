@@ -3,7 +3,7 @@ import dataclasses
 from types import NoneType
 from typing import List, Iterable, Tuple
 
-from lmdb_storage.file_object import FileObject
+from lmdb_storage.file_object import BlobObject
 from lmdb_storage.operations.fast_association import FastAssociation
 from lmdb_storage.operations.types import Transformation
 from lmdb_storage.operations.util import ByRoot, Transformed
@@ -47,19 +47,19 @@ class MergePreferences:
     @abc.abstractmethod
     def combine_both_existing(
             self, path: List[str], original_roots: ByRoot[StoredObject],
-            staging_original: FileObject, base_original: FileObject) -> TransformedRoots:
+            staging_original: BlobObject, base_original: BlobObject) -> TransformedRoots:
         pass
 
     @abc.abstractmethod
     def combine_base_only(
             self, path: List[str], repo_name: str, original_roots: ByRoot[StoredObject],
-            base_original: FileObject) -> TransformedRoots:
+            base_original: BlobObject) -> TransformedRoots:
         pass
 
     @abc.abstractmethod
     def combine_staging_only(
             self, path: List[str], repo_name, original_roots: ByRoot[StoredObject],
-            staging_original: FileObject) -> TransformedRoots:
+            staging_original: BlobObject) -> TransformedRoots:
         pass
 
     @abc.abstractmethod
@@ -74,8 +74,8 @@ class MergePreferences:
 @dataclasses.dataclass
 class ThreewayMergeState:
     path: List[str]
-    base: FileObject | TreeObject | None
-    staging: FileObject | TreeObject | None
+    base: BlobObject | TreeObject | None
+    staging: BlobObject | TreeObject | None
 
 
 class CombinedRoots(Transformed[ByRoot[ObjectID]]):
@@ -112,7 +112,7 @@ class CombinedRoots(Transformed[ByRoot[ObjectID]]):
 
 
 class ThreewayMerge(Transformation[ThreewayMergeState, TransformedRoots]):
-    def object_or_none(self, object_id: ObjectID) -> FileObject | TreeObject | None:
+    def object_or_none(self, object_id: ObjectID) -> BlobObject | TreeObject | None:
         return self.objects[object_id] if object_id is not None else None
 
     def initial_state(self, obj_ids: ByRoot[ObjectID]) -> ThreewayMergeState:
@@ -152,7 +152,7 @@ class ThreewayMerge(Transformation[ThreewayMergeState, TransformedRoots]):
             self.allowed_roots = None
 
     def should_drill_down(
-            self, state: ThreewayMergeState, trees: ByRoot[TreeObject], files: ByRoot[FileObject]) -> bool:
+            self, state: ThreewayMergeState, trees: ByRoot[TreeObject], files: ByRoot[BlobObject]) -> bool:
         # we have trees and the current and staging trees are different
         return len(trees) > 0 and state.base != state.staging
 

@@ -1,7 +1,7 @@
 import abc
 from typing import List
 
-from lmdb_storage.file_object import FileObject
+from lmdb_storage.file_object import BlobObject
 from lmdb_storage.operations.util import ByRoot, Transformed
 from lmdb_storage.tree_structure import Objects, TreeObject, ObjectID, StoredObject
 
@@ -15,7 +15,7 @@ class Transformation[S, R](abc.ABC):
         pass
 
     @abc.abstractmethod
-    def should_drill_down(self, state: S, trees: ByRoot[TreeObject], files: ByRoot[FileObject]) -> bool:
+    def should_drill_down(self, state: S, trees: ByRoot[TreeObject], files: ByRoot[BlobObject]) -> bool:
         pass
 
     @abc.abstractmethod
@@ -34,7 +34,7 @@ class Transformation[S, R](abc.ABC):
         all_original: ByRoot[StoredObject] = obj_ids.map(lambda obj_id: self.objects[obj_id])
 
         trees = all_original.filter_type(TreeObject)
-        files = all_original.filter_type(FileObject)
+        files = all_original.filter_type(BlobObject)
 
         if self.should_drill_down(merge_state, trees, files):
             all_children_names = list(sorted(set(

@@ -8,7 +8,7 @@ import rtoml
 from command.fast_path import FastPosixPath
 from contents.repo_props import FileDesc
 from exceptions import MissingRepoContents
-from lmdb_storage.file_object import FileObject
+from lmdb_storage.file_object import BlobObject
 from lmdb_storage.object_store import ObjectStorage
 from lmdb_storage.roots import Roots
 from lmdb_storage.tree_calculation import TreeCalculator, RecursiveSumCalculator
@@ -68,7 +68,7 @@ class RepoFSObjects:
         root_id = self.root_id
         with self.objects as objects:
             root_id = add_file_object(
-                objects, root_id, filepath.as_posix().split("/"), FileObject.create(fasthash, size))
+                objects, root_id, filepath.as_posix().split("/"), BlobObject.create(fasthash, size))
 
         self.roots["REPO"].current = root_id
 

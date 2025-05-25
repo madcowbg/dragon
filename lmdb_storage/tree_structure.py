@@ -8,7 +8,6 @@ import msgpack
 from lmdb import Transaction
 from propcache import cached_property
 
-
 ## LMDB object format
 #  object_id    blob
 #
@@ -61,11 +60,11 @@ class ExpandableTreeObject:
         self.objects = objects
         self.children: Dict[str, ObjectID] = data.children
 
-        self._files: Dict[str, "FileObject"] | None = None
+        self._files: Dict[str, "BlobObject"] | None = None
         self._dirs: Dict[str, ExpandableTreeObject] | None = None
 
     @property
-    def files(self) -> Dict[str, "FileObject"]:
+    def files(self) -> Dict[str, "BlobObject"]:
         if self._files is None:
             self._load()
         return self._files

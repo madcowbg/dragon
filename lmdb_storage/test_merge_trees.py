@@ -9,7 +9,7 @@ from lmdb import Transaction
 
 from command.test_command_file_changing_flows import populate
 from command.test_hoard_command import populate_repotypes, init_complex_hoard
-from lmdb_storage.file_object import FileObject
+from lmdb_storage.file_object import BlobObject
 from lmdb_storage.operations.naive_ops import TakeOneFile
 from lmdb_storage.operations.util import ObjectsByRoot, ByRoot
 from lmdb_storage.object_store import ObjectStorage
@@ -23,7 +23,7 @@ from lmdb_storage.tree_structure import ObjectID, Objects, do_nothing, TreeObjec
 class InMemoryObjectsExtension(Objects):
     def __init__(self, env: ObjectStorage) -> None:
         self.stored_objects = env.objects(write=False)
-        self.in_mem: Dict[ObjectID, FileObject | TreeObject] = dict()
+        self.in_mem: Dict[ObjectID, BlobObject | TreeObject] = dict()
 
     def __enter__(self) -> Objects:
         self.stored_objects.__enter__()
@@ -40,11 +40,11 @@ class InMemoryObjectsExtension(Objects):
     def __contains__(self, obj_id: bytes) -> bool:
         return obj_id in self.in_mem or obj_id in self.stored_objects
 
-    def __getitem__(self, obj_id: bytes) -> Union[FileObject, TreeObject, None]:
+    def __getitem__(self, obj_id: bytes) -> Union[BlobObject, TreeObject, None]:
         in_mem = self.in_mem.get(obj_id, None)
         return in_mem if in_mem else self.stored_objects[obj_id]
 
-    def __setitem__(self, obj_id: bytes, obj: Union[FileObject, TreeObject]):
+    def __setitem__(self, obj_id: bytes, obj: Union[BlobObject, TreeObject]):
         stored = self.stored_objects[obj_id]
         if stored is None:
             self.in_mem[obj_id] = obj
@@ -54,7 +54,7 @@ class InMemoryObjectsExtension(Objects):
     def __delitem__(self, obj_id: bytes) -> None:
         raise ValueError("Cannot delete InMemory objects")
 
-    def mktree_from_tuples(self, all_data: Iterable[Tuple[str, FileObject]], alive_it=do_nothing) -> bytes:
+    def mktree_from_tuples(self, all_data: Iterable[Tuple[str, BlobObject]], alive_it=do_nothing) -> bytes:
         pass
 
 
@@ -422,8 +422,8 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
             dump_diffs(objects, merged_ids.get_if_present('partial'), merged_ids.get_if_present('hoard')))
 
 
-def make_file(data: str) -> FileObject:
-    return FileObject.create(hashlib.md5(data.encode()).hexdigest(), len(data))
+def make_file(data: str) -> BlobObject:
+    return BlobObject.create(hashlib.md5(data.encode()).hexdigest(), len(data))
 
 
 def populate_trees(filepath: str) -> (ObjectStorage, ObjectID, ObjectID, ObjectID, ObjectID):
@@ -470,7 +470,7 @@ class NaiveMergePreferences(MergePreferences):
 
     def combine_both_existing(
             self, path: List[str], original_roots: ByRoot[StoredObject],
-            staging_original: FileObject, base_original: FileObject) -> TransformedRoots:
+            staging_original: BlobObject, base_original: BlobObject) -> TransformedRoots:
         result: TransformedRoots = TransformedRoots.wrap(self.empty_association.new())
         for merge_name in (self.where_to_apply_diffs(list(original_roots.assigned_keys()))):
             result.HACK_maybe_set_by_key(merge_name, staging_original.file_id)
@@ -478,14 +478,14 @@ class NaiveMergePreferences(MergePreferences):
 
     def combine_base_only(
             self, path: List[str], repo_name: str, original_roots: ByRoot[StoredObject],
-            base_original: FileObject) -> TransformedRoots:
+            base_original: BlobObject) -> TransformedRoots:
 
         return self.empty_association
 
     def combine_staging_only(
             self, path: List[str], repo_name: str, original_roots: ByRoot[StoredObject],
-            staging_original: FileObject) -> TransformedRoots:
-        assert type(staging_original) is FileObject
+            staging_original: BlobObject) -> TransformedRoots:
+        assert type(staging_original) is BlobObject
 
         result: TransformedRoots = TransformedRoots.wrap(self.empty_association.new())
         for merge_name in (self.where_to_apply_adds(list(original_roots.assigned_keys()))):
