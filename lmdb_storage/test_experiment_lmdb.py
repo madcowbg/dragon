@@ -19,8 +19,8 @@ from lmdb_storage.operations.types import Procedure
 from lmdb_storage.operations.generator import TreeGenerator
 from lmdb_storage.operations.util import ByRoot, ObjectsByRoot, remap
 from lmdb_storage.tree_iteration import dfs, zip_dfs
-from lmdb_storage.tree_structure import add_file_object, Objects, remove_file_object, ObjectType, \
-    ObjectID, TreeObject, MaybeObjectID, StoredObject
+from lmdb_storage.tree_structure import add_file_object, Objects, remove_file_object
+from lmdb_storage.tree_object import ObjectType, StoredObject, TreeObject, ObjectID, MaybeObjectID
 
 
 def dump_tree(objects: Objects, root_id, show_fasthash: bool = False):
@@ -62,7 +62,7 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
                 root = objects[root_id]
 
                 def all_files(tree: TreeObject) -> Iterable[BlobObject]:
-                    tree_children_objs = remap(tree.children, objects.__getitem__)
+                    tree_children_objs = dict([(k, objects[v]) for k, v in tree.children])
                     blob: BlobObject
                     yield from [blob for blob in tree_children_objs.values() if blob.object_type == ObjectType.BLOB]
                     for subtree in tree_children_objs.values():

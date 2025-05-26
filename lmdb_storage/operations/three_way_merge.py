@@ -1,13 +1,14 @@
 import abc
 import dataclasses
-from types import NoneType
-from typing import List, Iterable, Tuple
+from typing import List, Iterable, Tuple, Dict
 
 from lmdb_storage.file_object import BlobObject
+from lmdb_storage.object_serialization import construct_tree_object
 from lmdb_storage.operations.fast_association import FastAssociation
 from lmdb_storage.operations.types import Transformation
 from lmdb_storage.operations.util import ByRoot, Transformed
-from lmdb_storage.tree_structure import Objects, TreeObject, ObjectID, MaybeObjectID, ObjectType, StoredObject
+from lmdb_storage.tree_object import ObjectType, StoredObject, TreeObject, ObjectID, MaybeObjectID, TreeObjectBuilder
+from lmdb_storage.tree_structure import Objects
 
 
 class TransformedRoots(FastAssociation[ObjectID]):
@@ -83,32 +84,33 @@ class CombinedRoots(Transformed[ByRoot[ObjectID]]):
         self.objects = objects
 
         self.empty_association = empty_association
-        self._merged_children: FastAssociation[TreeObject] = empty_association.new()
+        self._merged_children: FastAssociation[TreeObjectBuilder] = empty_association.new()
 
     def add_for_child(self, child_name: str, merged_child_by_roots: TransformedRoots) -> None:
         if isinstance(merged_child_by_roots, TransformedRoots):
             # fixme remove this case
             for root_idx, obj_id in merged_child_by_roots.HACK_custom_available_items(self._merged_children._keys):
                 if self._merged_children[root_idx] is None:
-                    self._merged_children[root_idx] = TreeObject({})
+                    self._merged_children[root_idx] = {}
 
-                self._merged_children[root_idx].children[child_name] = obj_id
+                self._merged_children[root_idx][child_name] = obj_id
             return
 
         assert isinstance(merged_child_by_roots, FastAssociation), type(merged_child_by_roots)
         for root_idx, obj_id in merged_child_by_roots.available_items():
             if self._merged_children[root_idx] is None:
-                self._merged_children[root_idx] = TreeObject({})
+                self._merged_children[root_idx] = {}
 
-            self._merged_children[root_idx].children[child_name] = obj_id
+            self._merged_children[root_idx][child_name] = obj_id
 
     def get_value(self) -> FastAssociation[ObjectID]:
-        # store potential new objects
-        for _, child_tree in self._merged_children.available_items():
-            new_child_id = child_tree.id
-            self.objects[new_child_id] = child_tree
+        constructed = self._merged_children.map(construct_tree_object)
 
-        return self._merged_children.map(lambda obj: obj.id)
+        # store potential new objects
+        for _, child_tree in constructed.available_items():
+            self.objects[child_tree.id] = child_tree
+
+        return constructed.map(lambda obj: obj.id)
 
 
 class ThreewayMerge(Transformation[ThreewayMergeState, TransformedRoots]):
@@ -126,9 +128,9 @@ class ThreewayMerge(Transformation[ThreewayMergeState, TransformedRoots]):
         assert not base_obj or base_obj.object_type == ObjectType.BLOB or base_obj.object_type == ObjectType.TREE
         return ThreewayMergeState(
             merge_state.path + [child_name],
-            self.object_or_none(base_obj.children.get(child_name)) if base_obj and base_obj.object_type == ObjectType.TREE else None,
+            self.object_or_none(base_obj.get(child_name)) if base_obj and base_obj.object_type == ObjectType.TREE else None,
             # fixme handle files
-            self.object_or_none(staging_obj.children.get(child_name)) if staging_obj and staging_obj.object_type == ObjectType.TREE else None)
+            self.object_or_none(staging_obj.get(child_name)) if staging_obj and staging_obj.object_type == ObjectType.TREE else None)
 
     def __init__(
             self, objects: Objects, current_id: ObjectID | None, staging_id: ObjectID | None,

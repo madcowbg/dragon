@@ -4,7 +4,8 @@ import logging
 from config import HoardConfig
 from contents.hoard import HoardContents
 from contents.repo import RepoContents
-from lmdb_storage.tree_structure import add_object, MaybeObjectID
+from lmdb_storage.tree_object import MaybeObjectID
+from lmdb_storage.tree_structure import add_object
 
 
 def copy_local_staging_data_to_hoard(hoard: HoardContents, local: RepoContents, config: HoardConfig) -> MaybeObjectID:

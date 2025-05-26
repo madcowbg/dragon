@@ -13,7 +13,8 @@ from lmdb_storage.object_store import ObjectStorage
 from lmdb_storage.roots import Roots
 from lmdb_storage.tree_calculation import TreeCalculator, RecursiveSumCalculator
 from lmdb_storage.tree_iteration import dfs
-from lmdb_storage.tree_structure import Objects, ObjectID, ObjectType, add_file_object, remove_file_object
+from lmdb_storage.tree_structure import Objects, ObjectID, add_file_object, remove_file_object
+from lmdb_storage.tree_object import ObjectType
 
 
 class RepoFSObjects:

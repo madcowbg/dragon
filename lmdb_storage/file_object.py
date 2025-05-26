@@ -3,7 +3,7 @@ from typing import Optional
 
 import msgpack
 
-from lmdb_storage.tree_structure import ObjectType, ObjectID, StoredObject
+from lmdb_storage.tree_object import ObjectType, StoredObject, ObjectID
 
 
 class BlobObject(StoredObject):

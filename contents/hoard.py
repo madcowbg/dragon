@@ -20,7 +20,8 @@ from lmdb_storage.operations.generator import TreeGenerator
 from lmdb_storage.operations.util import ByRoot
 from lmdb_storage.tree_iteration import zip_trees_dfs
 from lmdb_storage.tree_operations import get_child
-from lmdb_storage.tree_structure import TreeObject, Objects, MaybeObjectID, ObjectType, StoredObject
+from lmdb_storage.tree_object import ObjectType, StoredObject, TreeObject, MaybeObjectID
+from lmdb_storage.tree_structure import Objects
 from util import custom_isabs
 
 HOARD_CONTENTS_LMDB_DIR = "hoard.contents.lmdb"
@@ -363,7 +364,7 @@ class ReadonlyHoardFSObjects:
             path_id = get_child(objects, FastPosixPath(fullpath)._rem, hoard_root)
             path_obj = objects[path_id] if path_id else None
             if isinstance(path_obj, TreeObject):
-                children = [(child_name, objects[child_id]) for child_name, child_id in path_obj.children.items()]
+                children = [(child_name, objects[child_id]) for child_name, child_id in path_obj.children]
                 yield from [fullpath + "/" + child_name for child_name, child_obj in children if
                             isinstance(child_obj, TreeObject)]
 
@@ -372,9 +373,10 @@ class ReadonlyHoardFSObjects:
         hoard_root = self.parent.env.roots(write=False)["HOARD"].desired
         with self.parent.env.objects(write=False) as objects:
             path_id = get_child(objects, FastPosixPath(fullpath)._rem, hoard_root)
-            path_obj = objects[path_id] if path_id else None
+            path_obj: StoredObject | None = objects[path_id] if path_id else None
             if path_obj and path_obj.object_type == ObjectType.TREE:
-                children = [(child_name, objects[child_id]) for child_name, child_id in path_obj.children.items()]
+                path_obj: TreeObject
+                children = [(child_name, objects[child_id]) for child_name, child_id in path_obj.children]
                 yield from [
                     fullpath + "/" + child_name for child_name, child_obj in children
                     if child_obj.object_type == ObjectType.BLOB]

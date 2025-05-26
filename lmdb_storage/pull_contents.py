@@ -6,7 +6,7 @@ from lmdb_storage.operations.util import ByRoot
 from lmdb_storage.object_store import ObjectStorage
 from lmdb_storage.roots import Root
 from lmdb_storage.operations.three_way_merge import ThreewayMerge, MergePreferences, TransformedRoots
-from lmdb_storage.tree_structure import ObjectID, MaybeObjectID
+from lmdb_storage.tree_object import MaybeObjectID, ObjectID
 
 
 def merge_contents(

@@ -6,7 +6,8 @@ from lmdb_storage.file_object import BlobObject
 from lmdb_storage.operations.three_way_merge import TransformedRoots
 from lmdb_storage.operations.fast_association import FastAssociation
 from lmdb_storage.operations.util import ByRoot
-from lmdb_storage.tree_structure import Objects, TreeObject, ObjectID, ObjectType, StoredObject
+from lmdb_storage.tree_structure import Objects, ObjectID
+from lmdb_storage.tree_object import ObjectType, StoredObject, TreeObject
 
 
 class TreeGenerator[F, R]:
@@ -34,10 +35,10 @@ class TreeGenerator[F, R]:
 
         if self.should_drill_down(merge_state, trees, files):
             all_children_names = list(sorted(set(
-                child_name for tree_obj in trees.values() for child_name in tree_obj.children)))
+                child_name for tree_obj in trees.values() for child_name, _ in tree_obj.children)))
 
             for child_name in all_children_names:
-                all_objects_in_child_name = trees.map(lambda obj: obj.children.get(child_name)).map(self.get_objects)
+                all_objects_in_child_name = trees.map(lambda obj: obj.get(child_name)).map(self.get_objects)
                 yield from self._execute_recursively(
                     merge_state + [child_name],
                     all_objects_in_child_name)

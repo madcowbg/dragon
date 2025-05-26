@@ -8,7 +8,8 @@ from lmdb import Transaction, Environment, _Database
 
 from lmdb_storage.object_serialization import read_stored_object, write_stored_object
 from lmdb_storage.roots import Roots
-from lmdb_storage.tree_structure import TreeObject, Objects, ObjectID, StoredObjects, ObjectType, StoredObject
+from lmdb_storage.tree_structure import Objects, ObjectID, StoredObjects
+from lmdb_storage.tree_object import ObjectType, StoredObject, TreeObject
 
 
 class InconsistentObjectStorage(BaseException):
@@ -148,7 +149,7 @@ def find_all_live(objects: Objects, root_ids: Collection[ObjectID]) -> Collectio
             if live_obj.object_type == ObjectType.TREE:
                 live_obj: TreeObject
                 # add all children to queue
-                for child_id in live_obj.children.values():
+                for _, child_id in live_obj.children:
                     if child_id not in live_ids:
                         live_ids.add(child_id)
                         q.append(child_id)

@@ -1,7 +1,9 @@
 from typing import List
 
 from lmdb_storage.file_object import BlobObject
-from lmdb_storage.tree_structure import Objects, ObjectID, TreeObject, ObjectType
+from lmdb_storage.object_serialization import construct_tree_object
+from lmdb_storage.tree_structure import Objects, ObjectID
+from lmdb_storage.tree_object import ObjectType, TreeObject, StoredObject
 
 
 def get_child(objects: Objects, path: List[str], root_id: ObjectID | None) -> ObjectID | None:
@@ -9,9 +11,10 @@ def get_child(objects: Objects, path: List[str], root_id: ObjectID | None) -> Ob
 
     curr_id = root_id
     while curr_id is not None and idx < len(path):
-        obj = objects[curr_id]
+        obj: StoredObject = objects[curr_id]
         if obj.object_type == ObjectType.TREE:
-            curr_id = obj.children.get(path[idx])
+            obj: TreeObject
+            curr_id = obj.get(path[idx])
             idx += 1
         else:
             assert obj.object_type == ObjectType.BLOB
@@ -28,12 +31,14 @@ def graft_in_tree(
     child_name = path[0]
 
     donor_child_obj = objects[donor_root_id] if donor_root_id is not None else None
-    donor_child_id = donor_child_obj.children.get(child_name) if isinstance(donor_child_obj, TreeObject) else None
+    donor_child_id = donor_child_obj.get(child_name) if isinstance(donor_child_obj, TreeObject) else None
 
-    old_obj = objects[old_root_id] if old_root_id is not None else None
+    old_obj: StoredObject = objects[old_root_id] if old_root_id is not None else None
     if old_obj and old_obj.object_type == ObjectType.TREE:
-        old_child_id = old_obj.children.get(child_name)
+        old_obj: TreeObject
+        old_child_id = old_obj.get(child_name)
     else:
+        old_obj: BlobObject
         assert old_root_id is None or (old_obj and old_obj.object_type == ObjectType.BLOB)
         old_child_id = None
 
@@ -42,21 +47,26 @@ def graft_in_tree(
     if old_obj is None:
         return package_existing_as_tree_object(objects, child_name, new_child_id)
     elif old_obj.object_type == ObjectType.TREE:
+        old_obj: TreeObject
+        created_data = dict(old_obj.children)
+
         # is a tree object, then graft the result and return
         if new_child_id is None:
-            if child_name in old_obj.children:
-                del old_obj.children[child_name]
+            if child_name in old_obj:
+                del created_data[child_name]
         else:
-            old_obj.children[child_name] = new_child_id
+            created_data[child_name] = new_child_id
 
-        if len(old_obj.children) == 0:
+        if len(created_data) == 0:
             # do not return empty folders
             return None
 
-        objects[old_obj.id] = old_obj
-        return old_obj.id
+        created_obj = construct_tree_object(created_data)
+        objects[created_obj.id] = created_obj
+        return created_obj.id
     else:
         assert old_obj.object_type == ObjectType.BLOB
+        old_obj: BlobObject
 
         # was a file, we return new instead
         return package_existing_as_tree_object(objects, child_name, new_child_id)
@@ -68,7 +78,7 @@ def package_existing_as_tree_object(objects: Objects, child_name: str, new_child
         return None
     else:
         # is here now, package into a new tree and then return
-        new_obj = TreeObject({child_name: new_child_id})
+        new_obj = construct_tree_object({child_name: new_child_id})
         objects[new_obj.id] = new_obj
         return new_obj.id
 

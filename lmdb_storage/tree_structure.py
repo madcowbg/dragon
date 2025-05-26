@@ -1,42 +1,10 @@
 import abc
-import dataclasses
-import enum
-import hashlib
-from typing import Dict, Iterable, Tuple, List, Callable, Union
+from typing import Iterable, Tuple, List, Callable, Union
 
-import msgpack
 from lmdb import Transaction
-from propcache import cached_property
 
-type ObjectID = bytes
-type MaybeObjectID = Union[ObjectID, None]
-
-
-class ObjectType(enum.Enum):
-    TREE = 1
-    BLOB = 2
-
-
-class StoredObject:
-    object_type: ObjectType
-    id: ObjectID
-
-
-@dataclasses.dataclass
-class TreeObject(StoredObject):
-    children: Dict[str, ObjectID]
-    object_type: ObjectType = ObjectType.TREE
-
-    @property
-    def id(self) -> bytes:
-        serialized = msgpack.packb((ObjectType.TREE.value, list(sorted(self.children.items()))))
-        return hashlib.sha1(serialized).digest()
-
-    def __eq__(self, other):
-        return isinstance(other, TreeObject) and self.children == other.children
-
-    def __hash__(self):
-        return self.children.__hash__()
+from lmdb_storage.object_serialization import construct_tree_object
+from lmdb_storage.tree_object import StoredObject, TreeObject, ObjectType, TreeObjectBuilder, ObjectID
 
 
 def do_nothing[T](x: T, *, title) -> T: return x
@@ -75,7 +43,7 @@ class Objects:
         # every element is a partially-constructed object
         # (name, partial TreeObject)
 
-        stack: List[Tuple[ObjPath, TreeObject]] = [([], TreeObject(dict()))]
+        stack: List[Tuple[ObjPath, TreeObjectBuilder]] = [([], dict())]
         for fullpath, file in alive_it(all_data, title="adding all data..."):
             assert fullpath == "" or fullpath[0] == "/", f"[{fullpath}] is not absolute path!"
             fullpath = fullpath.split("/")[1:]
@@ -92,14 +60,14 @@ class Objects:
             rel_path = fullpath[len(current_path):-1]
             for path_elem in rel_path:
                 current_path = current_path + [path_elem]
-                stack.append((current_path, TreeObject(dict())))
+                stack.append((current_path, dict()))
 
             # add file to current's children
             self[file.id] = file
 
-            top_obj_path, tree_obj = stack[-1]
+            top_obj_path, tree_obj_builder = stack[-1]
             assert ASSERTS_DISABLED or is_child_of(fullpath, top_obj_path) and len(top_obj_path) + 1 == len(fullpath)
-            tree_obj.children[file_name] = file.id
+            tree_obj_builder[file_name] = file.id
 
         pop_and_write_nonparents(self, stack, [])  # commits the stack
         assert len(stack) == 1
@@ -151,14 +119,14 @@ type ObjPath = List[str]
 ASSERTS_DISABLED = True
 
 
-def pop_and_write_nonparents(objects: Objects, stack: List[Tuple[ObjPath, TreeObject]], fullpath: ObjPath):
+def pop_and_write_nonparents(objects: Objects, stack: List[Tuple[ObjPath, TreeObjectBuilder]], fullpath: ObjPath):
     while not is_child_of(fullpath, stack[-1][0]):  # this is not a common ancestor
         child_id, child_path = pop_and_write_obj(stack, objects)
 
         # add to parent
         _, parent_obj = stack[-1]
         child_name = child_path[-1]
-        parent_obj.children[child_name] = child_id
+        parent_obj[child_name] = child_id
 
 
 def is_child_of(fullpath: ObjPath, parent: ObjPath) -> bool:
@@ -171,10 +139,12 @@ def is_child_of(fullpath: ObjPath, parent: ObjPath) -> bool:
     return True
 
 
-def pop_and_write_obj(stack: List[Tuple[ObjPath, TreeObject]], objects: Objects):
-    top_obj_path, tree_obj = stack.pop()
+
+def pop_and_write_obj(stack: List[Tuple[ObjPath, TreeObjectBuilder]], objects: Objects) -> Tuple[ObjectID, ObjPath]:
+    top_obj_path, tree_obj_builder = stack.pop()
 
     # store currently constructed object in tree
+    tree_obj = construct_tree_object(tree_obj_builder)
     obj_id = tree_obj.id
     objects[obj_id] = tree_obj
 
@@ -190,22 +160,29 @@ def add_object(objects: Objects, tree_id: ObjectID | None, path: ObjPath, obj_id
     if len(path) == 0:  # is here
         return obj_id
 
-    tree_obj = objects[tree_id] if tree_id is not None else TreeObject(dict())
-    assert isinstance(tree_obj, TreeObject)
+    if tree_id is not None:
+        current_tree_object: StoredObject = objects[tree_id]
+
+        assert current_tree_object.object_type == ObjectType.TREE
+        current_tree_object: TreeObject
+        tree_data: TreeObjectBuilder = dict(current_tree_object.children)
+    else:
+        tree_data = dict()
 
     sub_name = path[0]
     assert sub_name != ''
-    new_child_id = add_object(objects, tree_obj.children.get(sub_name, None), path[1:], obj_id)
+    new_child_id = add_object(objects, tree_data.get(sub_name, None), path[1:], obj_id)
 
     if new_child_id is None:
-        if sub_name in tree_obj.children:
-            del tree_obj.children[sub_name]
+        if sub_name in tree_data:
+            del tree_data[sub_name]
     else:
-        tree_obj.children[sub_name] = new_child_id
+        tree_data[sub_name] = new_child_id
 
-    if len(tree_obj.children) == 0:
+    if len(tree_data) == 0:
         return None
 
+    tree_obj = construct_tree_object(tree_data)
     new_tree_id = tree_obj.id
     if new_tree_id != tree_id:
         objects[new_tree_id] = tree_obj
@@ -217,15 +194,15 @@ def remove_file_object(objects: Objects, tree_id: ObjectID, filepath: ObjPath) -
     assert len(filepath) > 0
 
     sub_name = filepath[0]
-    tree_obj = objects[tree_id]
+    tree_obj_builder: TreeObjectBuilder = dict(objects[tree_id].children)
     if len(filepath) == 1:
-        tree_obj.children.pop(sub_name, None)
-    elif sub_name not in tree_obj.children:  # do nothing for empty folders
+        tree_obj_builder.pop(sub_name, None)
+    elif sub_name not in tree_obj_builder:  # do nothing for empty folders
         pass
     else:
-        tree_obj.children[sub_name] = remove_file_object(objects, tree_obj.children.get(sub_name, None), filepath[1:])
+        tree_obj_builder[sub_name] = remove_file_object(objects, tree_obj_builder.get(sub_name, None), filepath[1:])
 
-    new_tree_id = tree_obj.id
-    if new_tree_id != tree_id:
-        objects[new_tree_id] = tree_obj
-    return new_tree_id
+    new_tree = construct_tree_object(tree_obj_builder)
+    if new_tree.id != tree_id:
+        objects[new_tree.id] = new_tree
+    return new_tree.id

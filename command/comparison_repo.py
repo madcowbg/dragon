@@ -17,7 +17,8 @@ from contents.repo_props import RepoFileStatus, FileDesc
 from hashing import fast_hash_async
 from lmdb_storage.file_object import BlobObject
 from lmdb_storage.tree_iteration import zip_dfs
-from lmdb_storage.tree_structure import add_file_object, TreeObject
+from lmdb_storage.tree_structure import add_file_object
+from lmdb_storage.tree_object import TreeObject
 from util import group_to_dict, process_async
 
 type RepoDiffs = (FileNotInFilesystem | FileNotInRepo | RepoFileSame | RepoFileDifferent | ErrorReadingFilesystem)

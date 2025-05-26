@@ -1,7 +1,10 @@
+import hashlib
+from typing import Dict
+
 import msgpack
 
 from lmdb_storage.file_object import BlobObject
-from lmdb_storage.tree_structure import StoredObject, ObjectType, TreeObject
+from lmdb_storage.tree_object import ObjectType, StoredObject, TreeObject, TreeObjectBuilder
 
 
 ## LMDB object format
@@ -19,9 +22,16 @@ def read_stored_object(obj_id: bytes, obj_packed: bytes) -> StoredObject:
     if obj_data[0] == ObjectType.BLOB.value:
         return BlobObject(obj_id, obj_data[1])
     elif obj_data[0] == ObjectType.TREE.value:
-        return TreeObject(dict(obj_data[1]))
+        return TreeObject(obj_id, dict(obj_data[1]))
     else:
         raise ValueError(f"Unrecognized type {obj_data[0]}")
+
+
+
+def construct_tree_object(tree_obj_builder: TreeObjectBuilder) -> TreeObject:
+    assert isinstance(tree_obj_builder, Dict)
+    serialized = msgpack.packb((ObjectType.TREE.value, list(sorted(tree_obj_builder.items()))))
+    return TreeObject(hashlib.sha1(serialized).digest(), tree_obj_builder)
 
 
 def write_stored_object(obj: StoredObject) -> bytes:
@@ -30,6 +40,8 @@ def write_stored_object(obj: StoredObject) -> bytes:
         return msgpack.packb((ObjectType.BLOB.value, (obj.fasthash, obj.size, obj.md5)))
     elif obj.object_type == ObjectType.TREE:
         obj: TreeObject
-        return msgpack.packb((ObjectType.TREE.value, list(sorted(obj.children.items()))))
+        return msgpack.packb((ObjectType.TREE.value, list(sorted(obj.children))))
     else:
         raise ValueError(f"Unrecognized type {obj.object_type}")
+
+

@@ -11,7 +11,8 @@ from lmdb_storage.file_object import BlobObject
 from lmdb_storage.operations.three_way_merge import MergePreferences, TransformedRoots, CombinedRoots
 from lmdb_storage.operations.fast_association import FastAssociation
 from lmdb_storage.operations.util import ByRoot
-from lmdb_storage.tree_structure import TreeObject, ObjectID, Objects, StoredObject
+from lmdb_storage.tree_structure import ObjectID, Objects
+from lmdb_storage.tree_object import StoredObject, TreeObject
 
 
 class PullIntention(enum.Enum):

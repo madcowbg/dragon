@@ -9,7 +9,7 @@ from command.hoard import Hoard
 from contents.hoard import HoardFilesIterator
 from dragon import TotalCommand
 from lmdb_storage.object_store import ObjectStorage
-from lmdb_storage.tree_structure import ObjectType
+from lmdb_storage.tree_object import ObjectType
 
 
 @unittest.skipUnless(os.getenv('RUN_LENGTHY_TESTS'), reason="Lengthy test")

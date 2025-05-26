@@ -3,7 +3,8 @@ from typing import List
 
 from lmdb_storage.file_object import BlobObject
 from lmdb_storage.operations.util import ByRoot, Transformed
-from lmdb_storage.tree_structure import Objects, TreeObject, ObjectID, StoredObject
+from lmdb_storage.tree_structure import Objects, ObjectID
+from lmdb_storage.tree_object import StoredObject, TreeObject
 
 
 class Transformation[S, R](abc.ABC):
@@ -38,11 +39,11 @@ class Transformation[S, R](abc.ABC):
 
         if self.should_drill_down(merge_state, trees, files):
             all_children_names = list(sorted(set(
-                child_name for tree_obj in trees.values() for child_name in tree_obj.children)))
+                child_name for tree_obj in trees.values() for child_name, _ in tree_obj.children)))
 
             merge_result: Transformed[R] = self.create_merge_result()
             for child_name in all_children_names:
-                all_objects_in_child_name = trees.map(lambda obj: obj.children.get(child_name))
+                all_objects_in_child_name = trees.map(lambda obj: obj.get(child_name))
                 merged_child_by_roots: R = self._execute_recursively(
                     self.drilldown_state(child_name, merge_state),
                     all_objects_in_child_name)

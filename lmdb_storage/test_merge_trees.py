@@ -17,7 +17,8 @@ from lmdb_storage.test_experiment_lmdb import dump_tree, dump_diffs
 from lmdb_storage.operations.three_way_merge import ThreewayMerge, MergePreferences, TransformedRoots, CombinedRoots
 from lmdb_storage.operations.fast_association import FastAssociation
 from lmdb_storage.tree_iteration import zip_dfs
-from lmdb_storage.tree_structure import ObjectID, Objects, do_nothing, TreeObject, StoredObject
+from lmdb_storage.tree_structure import ObjectID, Objects, do_nothing
+from lmdb_storage.tree_object import StoredObject, TreeObject
 
 
 class InMemoryObjectsExtension(Objects):
@@ -60,8 +61,10 @@ class InMemoryObjectsExtension(Objects):
 
 class TestingMergingOfTrees(IsolatedAsyncioTestCase):
     def setUp(self):
-        self.tmpdir = "./tests"
-        self.obj_storage_path = f"{self.tmpdir}/test/example.lmdb"
+        self.tmpdir_obj = TemporaryDirectory(delete=True)
+        self.tmpdir = self.tmpdir_obj.name
+
+        self.obj_storage_path = f"{self.tmpdir}/hoard/hoard.contents.lmdb"
 
         pathlib.Path(self.obj_storage_path).parent.mkdir(parents=True, exist_ok=True)
 
@@ -77,9 +80,16 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
             root_ids = sorted(env.roots(write=False).all_live)
             self.assertEqual([
                 b'1ad9e0f92a8411689b1aee57f9ccf36c1f09a1ad',
+                b'1ad9e0f92a8411689b1aee57f9ccf36c1f09a1ad',
+                b'3a0889e00c0c4ace24843be76d59b3baefb16d77',
                 b'3a0889e00c0c4ace24843be76d59b3baefb16d77',
                 b'3d1726bd296f20d36cb9df60a0da4d4feae29248',
+                b'3d1726bd296f20d36cb9df60a0da4d4feae29248',
                 b'8da76083b9eab9f49945d8f2487df38ab909b7df',
+                b'8da76083b9eab9f49945d8f2487df38ab909b7df',
+                b'8da76083b9eab9f49945d8f2487df38ab909b7df',
+                b'f9bfc2be6cc201aa81b733b9d83c1030cc88bffe',
+                b'f9bfc2be6cc201aa81b733b9d83c1030cc88bffe',
                 b'f9bfc2be6cc201aa81b733b9d83c1030cc88bffe'], [binascii.hexlify(r) for r in root_ids])
 
             root_left_id = binascii.unhexlify(b'f9bfc2be6cc201aa81b733b9d83c1030cc88bffe')

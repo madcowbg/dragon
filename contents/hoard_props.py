@@ -5,7 +5,7 @@ from typing import Dict, List
 from command.fast_path import FastPosixPath
 from lmdb_storage.operations.fast_association import FastAssociation
 from lmdb_storage.tree_operations import get_child
-from lmdb_storage.tree_structure import ObjectID, MaybeObjectID, StoredObject
+from lmdb_storage.tree_object import StoredObject, ObjectID, MaybeObjectID
 
 
 class HoardFileStatus(enum.Enum):

@@ -1,7 +1,8 @@
 import enum
 from typing import Iterable, Callable, Tuple, List
 
-from lmdb_storage.tree_structure import ObjectID, Objects, TreeObject, ObjectType, StoredObject
+from lmdb_storage.tree_structure import ObjectID, Objects
+from lmdb_storage.tree_object import ObjectType, StoredObject, TreeObject
 
 type SkipFun = Callable[[], None]
 
@@ -31,7 +32,7 @@ def dfs(
     if should_skip:
         return
 
-    for child_name, child_id in obj.children.items():
+    for child_name, child_id in obj.children:
         yield from dfs(objects, path + "/" + child_name, child_id)
 
 
@@ -87,12 +88,12 @@ def zip_trees_dfs(
         if should_skip:
             return
 
-        child_names = set(sum([list(obj.children.keys()) for obj in all_objs if isinstance(obj, TreeObject)], []))
+        child_names = set(sum([[key for key, _ in obj.children] for obj in all_objs if isinstance(obj, TreeObject)], []))
 
         for child_name in sorted(child_names):
             yield from zip_trees_dfs(
                 objects, path + "/" + child_name,
-                [obj.children.get(child_name, None) if isinstance(obj, TreeObject) else None for obj in all_objs],
+                [obj.get(child_name) if isinstance(obj, TreeObject) else None for obj in all_objs],
                 drilldown_same)
     else:
         # only one or more filesfiles
