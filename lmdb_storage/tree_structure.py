@@ -27,12 +27,6 @@ class TreeObject(StoredObject):
     children: Dict[str, ObjectID]
     object_type: ObjectType = ObjectType.TREE
 
-    @staticmethod
-    def load(data: bytes) -> "TreeObject":
-        object_type, children_list = msgpack.unpackb(data)
-        assert object_type == ObjectType.TREE.value
-        return TreeObject(children=dict(children_list))
-
     @property
     def id(self) -> bytes:
         serialized = msgpack.packb((ObjectType.TREE.value, list(sorted(self.children.items()))))
@@ -40,6 +34,9 @@ class TreeObject(StoredObject):
 
     def __eq__(self, other):
         return isinstance(other, TreeObject) and self.children == other.children
+
+    def __hash__(self):
+        return self.children.__hash__()
 
 
 def do_nothing[T](x: T, *, title) -> T: return x
