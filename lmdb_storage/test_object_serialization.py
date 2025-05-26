@@ -78,25 +78,53 @@ class TestObjectSerialization(unittest.TestCase):
             b'\x92\x02\x93\xa7asdasda\x01\xa6asdfas')
         self.assertEqual(BlobObject(b"dude", ("asdasda", 1, "asdfas")), blob_obj)
 
-    def test_serialize_trees_v0(self):
+    def test_serialize_trees_v1(self):
         tree_obj = construct_tree_object({})
-        self.assertEqual(b'\x92\x01\x90', write_stored_object(tree_obj))
-        self.assertEqual(b'\xa8\x0f\x91\xbcH\x85\n\x1f\xb3E\x9b\xb7k\x9fc\x08\xd4\xd3W\x10', tree_obj.id)
+        self.assertEqual(b'\xff\x01\x01\x00\x00\x00\x00', write_stored_object(tree_obj))
+        self.assertEqual(b'\xc4s0}PV\x95\xcdq\x07Y-\xf0\xf6Pz\xf2A\xbf5', tree_obj.id)
 
         tree_obj = construct_tree_object({"some": b'whatthehell'})
-        self.assertEqual(b'\x92\x01\x91\x92\xa4some\xc4\x0bwhatthehell', write_stored_object(tree_obj))
-        self.assertEqual(b'\x89?a\xde\x13\x96\xaa\xce\xc88XC\xc7\xad!B!\x90\xca\x1f', tree_obj.id)
+        self.assertEqual(
+            b'\xff\x01\x01\x01\x00\x00\x00\x04\x00\x00\x00some\x0b\x00\x00\x00whatthehell',
+            write_stored_object(tree_obj))
+        self.assertEqual(b'\xef}2]\xb0y\xa3@\x98st\x84\x16x4\xa0k\x1c\xc66', tree_obj.id)
 
         tree_obj = construct_tree_object({"none": b'yeeeeah!', 'rock': b'and roll'})
-        self.assertEqual(b'\x92\x01\x92\x92\xa4none\xc4\x08yeeeeah!\x92\xa4rock\xc4\x08and roll',
-                         write_stored_object(tree_obj))
-        self.assertEqual(b'\xb7|\x1e"\x1a\x99f\x06Q\x8f\xdf\xa3\x80\xd8yj\xedN\xeb\xfa', tree_obj.id)
+        self.assertEqual(
+            (b'\xff\x01\x01\x02\x00\x00\x00\x04\x00\x00\x00none\x08\x00\x00\x00yeeeeah!\x04'
+             b'\x00\x00\x00rock\x08\x00\x00\x00and roll'),
+            write_stored_object(tree_obj))
+        self.assertEqual(b'175\xbb\xcb\xa5\xdc\x8fz\xb79\xe3JY\xb3\xe2\x99\x00\x93\xe3', tree_obj.id)
 
         tree_obj = construct_tree_object({"z": b'yeeeeah!', 'a': b'and roll'})
         self.assertEqual(
-            b'\x92\x01\x92\x92\xa1a\xc4\x08and roll\x92\xa1z\xc4\x08yeeeeah!',
+            (b'\xff\x01\x01\x02\x00\x00\x00\x01\x00\x00\x00a\x08\x00\x00\x00and roll'
+             b'\x01\x00\x00\x00z\x08\x00\x00\x00yeeeeah!'),
             write_stored_object(tree_obj))
-        self.assertEqual(b'Xh\xbcZ\xfb\xee\x04\x1b\xf6\x13QI\x19u\xd0L\x0f\x12\x14\x01', tree_obj.id)
+        self.assertEqual(b'\x95\x057\xe21\x8b\xb9f\x86\x80\xa3 @\x04]\xdc\xd6\x99\x90\r', tree_obj.id)
+
+    def test_deserialize_trees_v1(self):
+        tree_obj = read_stored_object(
+            b'\xc4s0}PV\x95\xcdq\x07Y-\xf0\xf6Pz\xf2A\xbf5',
+            b'\xff\x01\x01\x00\x00\x00\x00')
+        self.assertEqual(construct_tree_object({}), tree_obj)
+
+        tree_obj = read_stored_object(
+            b'\xef}2]\xb0y\xa3@\x98st\x84\x16x4\xa0k\x1c\xc66',
+            b'\xff\x01\x01\x01\x00\x00\x00\x04\x00\x00\x00some\x0b\x00\x00\x00whatthehell')
+        self.assertEqual(construct_tree_object({"some": b'whatthehell'}), tree_obj)
+
+        tree_obj = read_stored_object(
+            b'175\xbb\xcb\xa5\xdc\x8fz\xb79\xe3JY\xb3\xe2\x99\x00\x93\xe3',
+            (b'\xff\x01\x01\x02\x00\x00\x00\x04\x00\x00\x00none\x08\x00\x00\x00yeeeeah!\x04'
+             b'\x00\x00\x00rock\x08\x00\x00\x00and roll'))
+        self.assertEqual(construct_tree_object({"none": b'yeeeeah!', 'rock': b'and roll'}), tree_obj)
+
+        tree_obj = read_stored_object(
+            b'\x95\x057\xe21\x8b\xb9f\x86\x80\xa3 @\x04]\xdc\xd6\x99\x90\r',
+             (b'\xff\x01\x01\x02\x00\x00\x00\x01\x00\x00\x00a\x08\x00\x00\x00and roll'
+             b'\x01\x00\x00\x00z\x08\x00\x00\x00yeeeeah!'))
+        self.assertEqual(construct_tree_object({"z": b'yeeeeah!', 'a': b'and roll'}), tree_obj)
 
     def test_deserialize_trees_v0(self):
         tree_obj = read_stored_object(
