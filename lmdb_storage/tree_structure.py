@@ -39,45 +39,7 @@ class TreeObject(StoredObject):
         return hashlib.sha1(serialized).digest()
 
     def __eq__(self, other):
-        return isinstance(other, TreeObject) and self.id == other.id
-
-
-class ExpandableTreeObject:
-    def __init__(self, data: TreeObject, objects: "Objects"):
-        self.objects = objects
-        self.children: Dict[str, ObjectID] = data.children
-
-        self._files: Dict[str, "BlobObject"] | None = None
-        self._dirs: Dict[str, ExpandableTreeObject] | None = None
-
-    @property
-    def files(self) -> Dict[str, "BlobObject"]:
-        if self._files is None:
-            self._load()
-        return self._files
-
-    @property
-    def dirs(self) -> Dict[str, "ExpandableTreeObject"]:
-        if self._dirs is None:
-            self._load()
-        return self._dirs
-
-    def _load(self):
-        self._files = dict()
-        self._dirs = dict()
-
-        for name, obj_id in self.children.items():
-            obj = self.objects[obj_id]
-            if isinstance(obj, TreeObject):
-                self._dirs[name] = ExpandableTreeObject(obj, self.objects)
-            else:
-                self._files[name] = obj
-
-    @staticmethod
-    def create(obj_id: bytes, objects: "Objects") -> "ExpandableTreeObject":
-        tree_obj = objects[obj_id]
-        assert tree_obj.object_type == ObjectType.TREE
-        return ExpandableTreeObject(tree_obj, objects)
+        return isinstance(other, TreeObject) and self.children == other.children
 
 
 def do_nothing[T](x: T, *, title) -> T: return x

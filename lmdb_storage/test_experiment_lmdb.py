@@ -17,9 +17,9 @@ from lmdb_storage.object_store import ObjectStorage
 from lmdb_storage.operations.fast_association import FastAssociation
 from lmdb_storage.operations.types import Procedure
 from lmdb_storage.operations.generator import TreeGenerator
-from lmdb_storage.operations.util import ByRoot, ObjectsByRoot
+from lmdb_storage.operations.util import ByRoot, ObjectsByRoot, remap
 from lmdb_storage.tree_iteration import dfs, zip_dfs
-from lmdb_storage.tree_structure import ExpandableTreeObject, add_file_object, Objects, remove_file_object, ObjectType, \
+from lmdb_storage.tree_structure import add_file_object, Objects, remove_file_object, ObjectType, \
     ObjectID, TreeObject, MaybeObjectID, StoredObject
 
 
@@ -59,12 +59,16 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
             with env.objects(write=False) as objects:
                 root_id = env.roots(write=True)["HOARD"].desired
 
-                root = ExpandableTreeObject.create(root_id, objects)
+                root = objects[root_id]
 
-                def all_files(tree: ExpandableTreeObject) -> Iterable[BlobObject]:
-                    yield from tree.files.values()
-                    for subtree in tree.dirs.values():
-                        yield from all_files(subtree)
+                def all_files(tree: TreeObject) -> Iterable[BlobObject]:
+                    tree_children_objs = remap(tree.children, objects.__getitem__)
+                    blob: BlobObject
+                    yield from [blob for blob in tree_children_objs.values() if blob.object_type == ObjectType.BLOB]
+                    for subtree in tree_children_objs.values():
+                        if subtree.object_type == ObjectType.TREE:
+                            subtree: TreeObject
+                            yield from all_files(subtree)
 
                 all_files = list(alive_it(all_files(root), title="loading from lmdb..."))
                 logging.warning(f"# all_files: {len(all_files)}")
