@@ -17,7 +17,6 @@ from contents.repo_props import RepoFileStatus, FileDesc
 from hashing import fast_hash_async
 from lmdb_storage.file_object import BlobObject
 from lmdb_storage.tree_iteration import zip_dfs
-from lmdb_storage.tree_structure import add_file_object
 from lmdb_storage.tree_object import TreeObject
 from util import group_to_dict, process_async
 
@@ -236,9 +235,6 @@ class FilesystemState:
         assert not fullpath.is_absolute()
         self.all_files[fullpath] = BlobObject.create(file_desc.fasthash, file_desc.size)
 
-    def files_not_found(self) -> Iterable[FastPosixPath]:
-        return []  # do nothing ...
-
     def mark_error(self, fullpath: FastPosixPath, error: str):
         assert not fullpath.is_absolute()
         self.all_files[fullpath] = BlobObject.create("", -1)
@@ -295,18 +291,6 @@ class FilesystemState:
                 self.mark_error(file_path_local, str(e))
 
         await process_async(walk_filesystem(contents, hoard_ignore, repo_path), add_discovered_files, njobs=njobs)
-        for repo_file in alive_it(self.files_not_found(), title="Verifying unmatched files"):
-            try:
-                file_on_device = pathlib.Path(repo_path).joinpath(repo_file)
-                logging.debug(f"Checking {repo_file} for existence at {file_on_device}...")
-                if hoard_ignore.matches(pathlib.PurePosixPath(repo_file)) or not file_on_device.is_file():
-                    pass  # will yield as missing
-                else:
-                    filesystem_prop = await read_filesystem_desc(file_on_device)  # todo how likely are we to get here?
-                    self.mark_file(repo_file, filesystem_prop)
-            except OSError as e:
-                logging.error(e)
-                self.mark_error(repo_file, str(e))
 
         all_files_sorted = [("/" + filepath.as_posix(), fileobj) for filepath, fileobj in self.all_files.items()]
         with self.contents.objects as objects:
