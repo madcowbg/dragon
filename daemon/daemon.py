@@ -90,9 +90,7 @@ async def updater(
         logging.info(f"Working on {len(allowed_paths)} items")
 
         with connected_repo.open_contents(is_readonly=False) as contents:
-            logging.info("Start updating, setting is_dirty to TRUE")
-            contents.config.start_updating()
-
+            logging.info("Start updating...")
             logging.info(f"Bumped epoch to {contents.config.epoch}")
 
             with StringIO() as out:
@@ -103,9 +101,7 @@ async def updater(
 
                 logging.info(out.getvalue())
 
-            logging.info("Ends updating, setting is_dirty to FALSE")
             contents.config.end_updating()
-            assert not contents.config.is_dirty
 
         logging.debug("Sleeping between runs for %r seconds", between_runs_interval)
         await asyncio.sleep(between_runs_interval)
@@ -157,17 +153,13 @@ async def run_daemon(path: str, assume_current: bool = False, sleep_interval: fl
 
 async def refresh_all(connected_repo, hoard_ignore):
     with connected_repo.open_contents(is_readonly=False) as contents:
-        logging.info("Start updating, setting is_dirty to TRUE")
-        contents.config.start_updating()
-
+        logging.info("Start updating ...")
         with StringIO() as out:
             async for change in find_repo_changes(connected_repo.path, contents, hoard_ignore, RepoFileStatus.PRESENT):
                 _apply_repo_change_to_contents(change, contents, False, out)
             logging.info(out.getvalue())
 
-        logging.info("Ends updating, setting is_dirty to FALSE")
         contents.config.end_updating()
-        assert not contents.config.is_dirty
 
 
 if __name__ == '__main__':

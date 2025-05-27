@@ -109,15 +109,7 @@ class RepoContentsConfig:
     def updated(self) -> datetime:
         return datetime.fromisoformat(self.doc["last_updated"])
 
-    @property
-    def is_dirty(self) -> bool: return self.doc["is_updating"]
-
-    def start_updating(self):
-        self.doc["is_updating"] = True
-        self.write()
-
     def end_updating(self):
-        self.doc["is_updating"] = False
         self.doc["last_updated"] = datetime.now().isoformat()
         self.write()
 

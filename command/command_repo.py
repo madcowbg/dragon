@@ -65,9 +65,7 @@ class RepoCommand(object):
         hoard_ignore = HoardIgnore(DEFAULT_IGNORE_GLOBS)
 
         with contents:
-            logging.info("Start updating, setting is_dirty to TRUE")
-            contents.config.start_updating()
-
+            logging.info("Start updating...")
             logging.info("Reading filesystem state...")
             state = FilesystemState(contents)
             await state.read_state_from_filesystem(contents, hoard_ignore, self.repo.path)
@@ -96,9 +94,7 @@ class RepoCommand(object):
                 contents.fsobjects.roots["REPO"].current = state.state_root_id
                 out.write(f"current: {safe_hex(contents.fsobjects.root_id)}\n")
 
-                logging.info("Ends updating, setting is_dirty to FALSE")
                 contents.config.end_updating()
-                assert not contents.config.is_dirty
 
                 out.write(f"Refresh done!")
                 return out.getvalue()
