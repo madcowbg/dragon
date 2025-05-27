@@ -118,12 +118,6 @@ async def execute_pull(
         return
 
     with current_contents:
-        if current_contents.config.is_dirty:
-            logging.error(
-                f"{uuid} is_dirty = TRUE, so the refresh is not complete - can't use current repo.")
-            out.write(f"Skipping update as {uuid} is not fully calculated!\n")
-            return
-
         roots = hoard_contents.env.roots(False)
 
         abs_staging_root_id = copy_local_staging_data_to_hoard(hoard_contents, current_contents, hoard.config())

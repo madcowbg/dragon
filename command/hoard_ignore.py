@@ -1,7 +1,10 @@
 import pathlib
+import re
 from typing import List
 
-import command.fast_path
+from wcmatch import glob
+
+from command.fast_path import FastPosixPath
 
 DEFAULT_IGNORE_GLOBS = [
     r".hoard",
@@ -16,12 +19,15 @@ DEFAULT_IGNORE_GLOBS = [
 
 class HoardIgnore:
     def __init__(self, ignore_globs_list: List[str]):
-        self.ignore_globs_list = ignore_globs_list
+        translated = glob.translate(patterns=ignore_globs_list, flags=glob.IGNORECASE | glob.GLOBSTAR)
+        self.regex_globs_list = [re.compile(pattern) for pattern in translated[0]]
 
     def matches(self, fullpath: pathlib.PurePath) -> bool:
-        assert isinstance(fullpath, pathlib.PurePath)
-        for glob in self.ignore_globs_list:
-            if fullpath.full_match(glob, case_sensitive=False):
+        assert isinstance(fullpath, pathlib.PurePath) or isinstance(fullpath, FastPosixPath)
+
+        posix_path = fullpath.as_posix()
+
+        for regex in self.regex_globs_list:
+            if regex.match(posix_path):
                 return True
         return False
-

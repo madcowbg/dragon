@@ -19,6 +19,9 @@ class BlobObject(StoredObject):
         self.md5 = data[2]
         self.object_type = ObjectType.BLOB
 
+    def __str__(self) -> str:
+        return f"BlobObject[{self.file_id}, {self.fasthash}, {self.size}]"
+
     @staticmethod
     def create(fasthash: str, size: int, md5: Optional[str] = None) -> "BlobObject":
         file_packed = msgpack.packb((ObjectType.BLOB.value, (fasthash, size, md5)))

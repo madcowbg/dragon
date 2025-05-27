@@ -1343,10 +1343,14 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         self.assertEqual(fr"Added repo-partial-name[{partial_cave_cmd.current_uuid()}] at {tmpdir}\repo-partial!", res)
 
         res = await hoard_cmd.contents.pull(partial_cave_cmd.current_uuid())
-        self.assertEqual(f"Repo {partial_cave_cmd.current_uuid()} has no current contents available!\nDONE", res)
+        self.assertEqual((
+            f'Repo repo-partial-name[{partial_cave_cmd.current_uuid()}] has no current contents available!\n'
+            'DONE'), res)
 
         res = await hoard_cmd.contents.pull(all=True)
-        self.assertEqual(f"Repo {partial_cave_cmd.current_uuid()} has no current contents available!\nDONE", res)
+        self.assertEqual((
+            f'Repo repo-partial-name[{partial_cave_cmd.current_uuid()}] has no current contents available!\n'
+            'DONE'), res)
 
         res = await partial_cave_cmd.refresh(show_details=False)
         self.assertEqual('old: None\ncurrent: f9bfc2be6cc201aa81b733b9d83c1030cc88bffe\nRefresh done!', res)

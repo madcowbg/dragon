@@ -280,8 +280,6 @@ class HoardCommand(object):
             logging.info(f"Opening new contents of {remote_uuid}...")
             with self.hoard.connect_to_repo(remote_uuid, require_contents=False) \
                     .create_contents(remote_uuid) as current_contents:
-                current_contents.config.start_updating()
-
                 logging.info("Restoring config...")
                 hoard.config.restore_remote_config(current_contents.config)
 
