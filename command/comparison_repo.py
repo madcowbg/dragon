@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Iterable, Tuple, Dict, Optional, List, AsyncGenerator
 
 import aiofiles.os
+import rtoml
 from alive_progress import alive_it, alive_bar
 
 import command.fast_path
@@ -18,7 +19,7 @@ from hashing import fast_hash_async
 from lmdb_storage.file_object import BlobObject
 from lmdb_storage.tree_iteration import zip_dfs
 from lmdb_storage.tree_object import TreeObject
-from util import group_to_dict, process_async
+from util import group_to_dict, process_async, run_in_separate_loop
 
 type RepoDiffs = (FileNotInFilesystem | FileNotInRepo | RepoFileSame | RepoFileDifferent | ErrorReadingFilesystem)
 
@@ -67,7 +68,7 @@ class FileAdded:
     def __init__(
             self, relpath: FastPosixPath, size: int, fasthash: str, requested_status: RepoFileStatus):
         assert not relpath.is_absolute()
-        assert requested_status in (RepoFileStatus.PRESENT, )
+        assert requested_status in (RepoFileStatus.PRESENT,)
         self.relpath = relpath
 
         self.mtime = datetime.now()
@@ -224,6 +225,97 @@ class ErrorReadingFilesystem:
         self.repo_props = repo_props
 
 
+class FilesystemIndex:
+    def __init__(self, path: Path, hoard_ignore: HoardIgnore):
+        assert isinstance(path, Path)
+        self._root = path
+        self.index_filename = path.joinpath('.hoard').joinpath('filesystem-index.rtoml')
+        self.hoard_ignore = hoard_ignore
+
+    def __enter__(self):
+        self.index_filename.touch()
+        self.current_index_doc = rtoml.load(self.index_filename)
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        rtoml.dump(self.current_index_doc, self.index_filename)
+        return None
+
+    def update(self):
+        self.scan()
+        self.update_hashes()
+
+    def scan(self):
+        files: List[os.DirEntry] = list(alive_it(self.scan_dir(self._root), title="Scanning filesystem"))
+
+        existing_filenames = set()
+
+        mod_files = list()
+        del_files = list()
+        if "file_entries" not in self.current_index_doc:
+            self.current_index_doc["file_entries"] = dict()
+
+        file_entries = self.current_index_doc["file_entries"]
+        for entry in files:
+            assert entry.is_file()
+            stat = entry.stat()
+            rel_path = Path(entry.path).relative_to(self._root).as_posix()
+            if self.hoard_ignore.matches(pathlib.PurePosixPath(rel_path)):
+                logging.debug("Skipping %s because it is in ignored paths", rel_path)
+                continue
+            existing_filenames.add(rel_path)
+            if rel_path not in file_entries:
+                file_entries[rel_path] = {"mtime": stat.st_mtime, "size": stat.st_size, "md5": None, "fasthash": None}
+                mod_files.append(rel_path)
+            else:
+                old_entry = file_entries[rel_path]
+                if old_entry["size"] != stat.st_size or abs(old_entry["mtime"] - stat.st_mtime) > 1e-3:
+                    file_entries[rel_path] = {
+                        "mtime": stat.st_mtime, "size": stat.st_size, "md5": None, "fasthash": None}
+                    mod_files.append(rel_path)
+
+        for file_path, _ in file_entries.items():
+            if file_path not in existing_filenames:
+                del_files.append(file_path)
+
+        for del_file in del_files:
+            del file_entries[del_file]
+
+        logging.info(f"{len(existing_filenames)} files found, {len(mod_files)} are modified, {len(del_files)} are deleted.")
+
+    def update_hashes(self):
+        missing_fasthashes = [
+            Path(file_path) for file_path, file_obj_values in self.current_index_doc["file_entries"].items()
+            if file_obj_values["fasthash"] is None]
+
+        logging.info(f"Updating hashes for {len(missing_fasthashes)} files")
+        with alive_bar(len(missing_fasthashes), title="Computing hashes") as bar:
+            async def calc_fasthash(path: Path):
+                try:
+                    fasthash = await fast_hash_async(self._root.joinpath(path))
+                    self.current_index_doc["file_entries"][path.as_posix()]["fasthash"] = fasthash
+                except OSError as e:
+                    logging.error(f"Error while calcualting fasthash for file {path}")
+                    logging.error(e)
+                bar()
+
+            run_in_separate_loop(process_async(missing_fasthashes, calc_fasthash, njobs=8))
+
+    def scan_dir(self, path) -> Iterable[os.DirEntry]:
+        with os.scandir(path) as entries:
+            for entry in entries:
+                if entry.is_file():
+                    yield entry
+                elif entry.is_dir():
+                    yield from self.scan_dir(entry.path)
+
+    def items(self) -> Iterable[Tuple[str, BlobObject]]:
+        for file_path, file_data in self.current_index_doc.get("file_entries", {}).items():
+            fasthash = file_data["fasthash"]
+            size = file_data["size"]
+            yield "/" + file_path, BlobObject.create(fasthash if fasthash else None, size if fasthash is not None else -1)
+
+
 class FilesystemState:
     def __init__(self, contents: RepoContents):
         self.contents = contents
@@ -281,6 +373,17 @@ class FilesystemState:
 
     async def read_state_from_filesystem(
             self, contents: RepoContents, hoard_ignore: HoardIgnore, repo_path: str, njobs: int = 32):
+
+        with FilesystemIndex(Path(repo_path), hoard_ignore) as index:
+            index.update()
+
+            all_files_sorted = [(filepath, fileobj) for filepath, fileobj in index.items()]
+
+            with self.contents.objects as objects:
+                self.state_root_id = objects.mktree_from_tuples(all_files_sorted, alive_it)
+
+            return
+
         expected_cnt = contents.fsobjects.len_existing()
         all_files = list(walk_filesystem(hoard_ignore, repo_path, expected_cnt))
 

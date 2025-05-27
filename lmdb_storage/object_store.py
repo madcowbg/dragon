@@ -143,7 +143,7 @@ def store_backup_rotation(env: Environment):
     backup_dir.mkdir(parents=True, exist_ok=True)
     backups = list(sorted(backup_dir.glob("backup_*.lmdb")))
     if len(backups) >= MAX_BACKUPS:
-        for backup in backups[:-MAX_BACKUPS]:
+        for backup in backups[:-MAX_BACKUPS+1]:
             backup.unlink(missing_ok=True)
 
     curr_bup_len = len(list(backup_dir.glob("backup_*.lmdb")))

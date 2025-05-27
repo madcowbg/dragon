@@ -73,7 +73,8 @@ class TestRepoCommand(IsolatedAsyncioTestCase):
                 f'{current_uuid}.contents.lmdb-BAK',
                 f"{current_uuid}.contents.lmdb-lock",
                 f"{current_uuid}.toml",
-                'current.uuid']),
+                'current.uuid',
+                'filesystem-index.rtoml']),
             sorted(os.listdir(join(self.tmpdir.name, "repo", ".hoard"))))
 
     async def test_show_repo(self):
