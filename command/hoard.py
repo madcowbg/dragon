@@ -37,12 +37,12 @@ class Hoard:
             return False
 
     def open_contents(self, create_missing: bool = False) -> ReadonlyHoardContentsConn:
-        hoard_contents_lmdb_dir = os.path.join(self.hoardpath, HOARD_CONTENTS_LMDB_DIR)
+        hoard_contents_lmdb_file = os.path.join(self.hoardpath, HOARD_CONTENTS_LMDB_DIR)
         if not os.path.isfile(os.path.join(self.hoardpath, CONFIG_FILE)):
             raise ValueError(f"Hoard is not configured in {self.hoardpath}!")
-        if not os.path.isdir(hoard_contents_lmdb_dir) and not create_missing:
+        if not os.path.exists(hoard_contents_lmdb_file) and not create_missing:
             raise ValueError(
-                f"Hoard contents dir {hoard_contents_lmdb_dir} is not available,"
+                f"Hoard contents {hoard_contents_lmdb_file} is not available,"
                 f" but --create-missing = False")
         return ReadonlyHoardContentsConn(pathlib.Path(self.hoardpath), self.config(create=False))
 

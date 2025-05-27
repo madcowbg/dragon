@@ -39,7 +39,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         await cave_cmd.refresh(show_details=False)
 
         hoard_cmd = TotalCommand(path=join(self.tmpdir.name, "hoard")).hoard
-        hoard_cmd.init()
+        await hoard_cmd.init()
 
         hoard_cmd.add_remote(remote_path=join(self.tmpdir.name, "repo"), name="repo-in-local", mount_point="/")
 

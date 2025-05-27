@@ -42,7 +42,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         repo_uuid = cave_cmd.current_uuid()
 
         hoard_cmd = TotalCommand(path=join(self.tmpdir.name, "hoard")).hoard
-        hoard_cmd.init()
+        await hoard_cmd.init()
         res = hoard_cmd.remotes(hide_paths=True)
 
         self.assertEqual("0 total remotes.\nMounts:\nDONE", res.strip())
@@ -62,7 +62,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         await cave_cmd.refresh(show_details=False)
 
         hoard_cmd = TotalCommand(path=join(self.tmpdir.name, "hoard")).hoard
-        hoard_cmd.init()
+        await hoard_cmd.init()
         hoard_cmd.add_remote(remote_path=join(self.tmpdir.name, "repo"), name="repo-in-local", mount_point="/")
 
         repo_uuid = cave_cmd.current_uuid()
@@ -148,7 +148,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         repo_uuid2 = cave_cmd2.current_uuid()
 
         hoard_cmd = TotalCommand(path=join(self.tmpdir.name, "hoard")).hoard
-        hoard_cmd.init()
+        await hoard_cmd.init()
         hoard_cmd.add_remote(remote_path=join(self.tmpdir.name, "repo"), name="repo-in-local", mount_point="/")
         hoard_cmd.add_remote(
             remote_path=join(self.tmpdir.name, "repo-2"), name="repo-in-local-2", type=CaveType.BACKUP,
@@ -273,7 +273,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         await cave_cmd.refresh(show_details=False)
 
         hoard_cmd = TotalCommand(path=join(self.tmpdir.name, "hoard")).hoard
-        hoard_cmd.init()
+        await hoard_cmd.init()
         hoard_cmd.add_remote(remote_path=join(self.tmpdir.name, "repo"), name="repo-in-local", mount_point="/")
 
         repo_uuid = cave_cmd.current_uuid()
@@ -356,7 +356,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
 
     async def test_clone(self):
         hoard_cmd = TotalCommand(path=join(self.tmpdir.name, "hoard")).hoard
-        hoard_cmd.init()
+        await hoard_cmd.init()
 
         new_repo_path = join(self.tmpdir.name, "cloned-repo")
         os.mkdir(new_repo_path)
@@ -383,7 +383,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
 
     async def test_populate_one_repo_from_other_repo(self):
         hoard_cmd = TotalCommand(path=join(self.tmpdir.name, "hoard")).hoard
-        hoard_cmd.init()
+        await hoard_cmd.init()
 
         new_repo_path = join(self.tmpdir.name, "cloned-repo")
         os.mkdir(new_repo_path)
@@ -936,7 +936,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         await full_cave_cmd.refresh(show_details=False)
 
         hoard_cmd = TotalCommand(path=join(self.tmpdir.name, "hoard")).hoard
-        hoard_cmd.init()
+        await hoard_cmd.init()
 
         hoard_cmd.add_remote(
             remote_path=join(self.tmpdir.name, "repo-full"), name="repo-full-name", mount_point="/",
@@ -1044,7 +1044,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         await partial_cave_cmd.refresh(show_details=False)
 
         hoard_cmd = TotalCommand(path=join(self.tmpdir.name, "hoard")).hoard
-        hoard_cmd.init()
+        await hoard_cmd.init()
 
         hoard_cmd.add_remote(
             remote_path=join(self.tmpdir.name, "repo-partial"), name="repo-partial-name", mount_point="/first-point",
@@ -1327,7 +1327,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         tmpdir = self.tmpdir.name
 
         hoard_cmd = TotalCommand(path=join(tmpdir, "hoard")).hoard
-        hoard_cmd.init()
+        await hoard_cmd.init()
 
         res = hoard_cmd.add_remote(
             remote_path=join(tmpdir, "repo-partial"), name="repo-partial-name", mount_point="/",
@@ -1446,7 +1446,7 @@ async def init_complex_hoard(tmpdir: str):
     await incoming_cave_cmd.refresh(show_details=False)
 
     hoard_cmd = TotalCommand(path=join(tmpdir, "hoard")).hoard
-    hoard_cmd.init()
+    await hoard_cmd.init()
 
     hoard_cmd.add_remote(
         remote_path=join(tmpdir, "repo-partial"), name="repo-partial-name", mount_point="/",

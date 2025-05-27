@@ -44,9 +44,13 @@ class HoardCommand(object):
     def gui(self):
         start_hoard_explorer_gui(self.hoard.hoardpath)
 
-    def init(self):
+    async def init(self):
         logging.info(f"Reading or creating config...")
         self.hoard.config(True)
+
+        logging.info(f"Opening or creating contents...")
+        async with self.hoard.open_contents(create_missing=True).writeable():
+            logging.info(f"Opened contents!")
         return "DONE"
 
     def add_remote(

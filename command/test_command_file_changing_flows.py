@@ -1923,7 +1923,8 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         # simulate removing of epoch and data
         pathlib.Path(join(self.tmpdir.name, 'repo-full', '.hoard', f'{full_cave_cmd.current_uuid()}.contents')) \
             .unlink(missing_ok=True)
-        shutil.rmtree(join(self.tmpdir.name, 'repo-full', '.hoard', f'{full_cave_cmd.current_uuid()}.contents.lmdb'))
+        pathlib.Path(join(self.tmpdir.name, 'repo-full', '.hoard', f'{full_cave_cmd.current_uuid()}.contents.lmdb'))\
+            .unlink(missing_ok=True)
 
         res = await hoard_cmd.export_contents_to_repo(full_cave_cmd.current_uuid())
         self.assertEqual(

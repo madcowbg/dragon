@@ -554,7 +554,8 @@ class HoardCommandContents:
             logging.info("Pulling from all remotes!")
             remote_uuids = [r.uuid for r in config.remotes.all()]
         else:
-            assert remote is not None
+            if remote is None:
+                return f"Need to provide either a repo or --all."
             remote_uuids = [remote]
 
         if assume_current:

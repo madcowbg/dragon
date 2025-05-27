@@ -1,5 +1,7 @@
 import dataclasses
 import logging
+import os
+import shutil
 import sys
 from typing import Collection, Tuple, Dict
 
@@ -25,6 +27,23 @@ class EnvParams:
     max_dbs: int
 
 
+def maybe_migrate_storage(path):
+    logging.warning(f"File not found: {path}")
+    tmp_path = f"{path}-BAK"
+    if os.path.isdir(path) or os.path.isdir(tmp_path):
+        if os.path.isdir(path):
+            logging.error(f"Moving current path {path} to {tmp_path}")
+            shutil.move(path, tmp_path)
+
+        if os.path.isdir(tmp_path):
+            logging.error(f"Migrating from folder-based temp storage: {tmp_path}")
+            shutil.copy(f"{tmp_path}/data.mdb", path)
+
+        if not os.path.isfile(path):
+            logging.error("Migration was not successful! Exiting...")
+            raise ValueError(f"Could not migrate folder {path} to file. Either make sure it is")
+
+
 class ObjectEnvironmentCache:
     def __init__(self) -> None:
         self._cache: Dict[str, Tuple[EnvParams, Environment, Dict[str, _Database], int]] = dict()
@@ -36,7 +55,10 @@ class ObjectEnvironmentCache:
 
         if path not in self._cache:
             logging.info(f"### LMDB OPENING {path}\n")
-            env = lmdb.open(path, max_dbs=max_dbs, map_size=map_size, readonly=False)
+            if not os.path.isfile(path):
+                maybe_migrate_storage(path)
+
+            env = lmdb.open(path, max_dbs=max_dbs, map_size=map_size, readonly=False, subdir=False)
             self._cache[path] = (
                 env_params,
                 env,
@@ -112,8 +134,8 @@ def used_ratio(env: Environment):
 
 class ObjectStorage:
     def __init__(self, path: str, *, map_size: int | None = None, max_dbs=5):
-        self._env_params = EnvParams(path, map_size=None if map_size is None else min(MAX_MAP_SIZE, map_size),
-                                     max_dbs=max_dbs)
+        self._env_params = EnvParams(
+            path, map_size=None if map_size is None else min(MAX_MAP_SIZE, map_size), max_dbs=max_dbs)
 
     def __enter__(self):
         self._env, self._dbs = OBJECT_ENVIRONMENT_CACHE.obtain(

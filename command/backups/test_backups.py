@@ -24,7 +24,7 @@ async def init_complex_hoard(tmpdir: str):
     await incoming_cave_cmd.refresh(show_details=False)
 
     hoard_cmd = TotalCommand(path=join(tmpdir, "hoard")).hoard
-    hoard_cmd.init()
+    await hoard_cmd.init()
 
     hoard_cmd.add_remote(
         remote_path=join(tmpdir, "repo-partial"), name="repo-partial-name", mount_point="/",
