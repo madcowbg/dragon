@@ -1,5 +1,6 @@
 import dataclasses
 import logging
+import sys
 from typing import Collection, Tuple, Dict
 
 import lmdb
@@ -10,6 +11,7 @@ from lmdb_storage.object_serialization import read_stored_object, write_stored_o
 from lmdb_storage.roots import Roots
 from lmdb_storage.tree_structure import Objects, ObjectID, StoredObjects
 from lmdb_storage.tree_object import ObjectType, StoredObject, TreeObject
+from util import format_size
 
 
 class InconsistentObjectStorage(BaseException):
@@ -47,7 +49,8 @@ class ObjectEnvironmentCache:
 
         assert cached_params.path == path
         if env_params.map_size is not None and env_params.map_size != env.info()["map_size"]:
-            raise ValueError(f"Trying to access a database with different size to be set: {env_params.map_size} but stored is with {env.info()["map_size"]}!")
+            raise ValueError(
+                f"Trying to access a database with different size to be set: {env_params.map_size} but stored is with {env.info()["map_size"]}!")
 
         if env_params.max_dbs != cached_params.max_dbs:
             raise ValueError(
@@ -74,15 +77,48 @@ class ObjectEnvironmentCache:
         else:
             self._cache[path] = (cached_params, env, dbs, usage)
 
+
 OBJECT_ENVIRONMENT_CACHE = ObjectEnvironmentCache()
 MAX_MAP_SIZE = 1 << 30
 
+
+def used_size(env):
+    # +--------------------+---------------------------------------+
+    # | ``psize``          | Size of a database page in bytes.     |
+    # +--------------------+---------------------------------------+
+    # | ``depth``          | Height of the B-tree.                 |
+    # +--------------------+---------------------------------------+
+    # | ``branch_pages``   | Number of internal (non-leaf) pages.  |
+    # +--------------------+---------------------------------------+
+    # | ``leaf_pages``     | Number of leaf pages.                 |
+    # +--------------------+---------------------------------------+
+    # | ``overflow_pages`` | Number of overflow pages.             |
+    # +--------------------+---------------------------------------+
+    # | ``entries``        | Number of data items.                 |
+    # +--------------------+---------------------------------------+
+    stat = env.stat()
+    used_size = stat["psize"] * (stat["leaf_pages"] + stat["branch_pages"] + stat["overflow_pages"])
+    with env.begin(write=False) as txn:
+        for db_name, _ in txn.cursor():
+            dbi = env.open_db(db_name, txn=txn)
+            stat = txn.stat(dbi)
+            used_size += stat["psize"] * (stat["leaf_pages"] + stat["branch_pages"] + stat["overflow_pages"])
+    return used_size
+
+
+def used_ratio(env: Environment):
+    return used_size(env) / env.info()["map_size"]
+
+
 class ObjectStorage:
     def __init__(self, path: str, *, map_size: int | None = None, max_dbs=5):
-        self._env_params = EnvParams(path, map_size=None if map_size is None else min(MAX_MAP_SIZE, map_size), max_dbs=max_dbs)
+        self._env_params = EnvParams(path, map_size=None if map_size is None else min(MAX_MAP_SIZE, map_size),
+                                     max_dbs=max_dbs)
 
     def __enter__(self):
-        self._env, self._dbs = OBJECT_ENVIRONMENT_CACHE.obtain(self._env_params.path, max_dbs=self._env_params.max_dbs, map_size=self._env_params.map_size)
+        self._env, self._dbs = OBJECT_ENVIRONMENT_CACHE.obtain(
+            self._env_params.path, max_dbs=self._env_params.max_dbs, map_size=self._env_params.map_size)
+        self.maybe_gc()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -93,7 +129,22 @@ class ObjectStorage:
 
         return None
 
+    @property
+    def used_size(self) -> int:
+        return used_size(self._env)
+
+    @property
+    def used_ratio(self):
+        return used_ratio(self._env)
+
+    def maybe_gc(self):
+        if self.used_ratio > 0.8:
+            self.gc()
+
     def gc(self):
+        sys.stdout.write(f"Used space = {format_size(self.used_size)}\n")
+        sys.stdout.write(f"Used pct = {100 * self.used_ratio}\n")
+
         root_ids = self.roots(write=False).all_live
         logging.info(f"found {len(root_ids)} live top-level refs.")
 
