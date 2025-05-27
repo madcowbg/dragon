@@ -255,14 +255,17 @@ class FilesystemIndex:
         if "file_entries" not in self.current_index_doc:
             self.current_index_doc["file_entries"] = dict()
 
+        root_fpp = FastPosixPath(self._root)
         file_entries = self.current_index_doc["file_entries"]
-        for entry in files:
+        for entry in alive_it(files, title="Matching files"):
             assert entry.is_file()
             stat = entry.stat()
-            rel_path = Path(entry.path).relative_to(self._root).as_posix()
-            if self.hoard_ignore.matches(pathlib.PurePosixPath(rel_path)):
-                logging.debug("Skipping %s because it is in ignored paths", rel_path)
+            rel_path_fpp = FastPosixPath(Path(entry.path)).relative_to(root_fpp)
+            if self.hoard_ignore.matches(rel_path_fpp):
+                logging.debug("Skipping %s because it is in ignored paths", rel_path_fpp)
                 continue
+
+            rel_path = rel_path_fpp.simple
             existing_filenames.add(rel_path)
             if rel_path not in file_entries:
                 file_entries[rel_path] = {"mtime": stat.st_mtime, "size": stat.st_size, "md5": None, "fasthash": None}
