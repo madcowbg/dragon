@@ -134,7 +134,7 @@ def used_ratio(env: Environment):
     return used_size(env) / env.info()["map_size"]
 
 
-MAX_BACKUPS = 3
+MAX_BACKUPS = 5
 
 
 def store_backup_rotation(env: Environment):

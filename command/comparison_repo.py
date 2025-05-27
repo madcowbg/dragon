@@ -305,12 +305,16 @@ class FilesystemIndex:
             run_in_separate_loop(process_async(missing_fasthashes, calc_fasthash, njobs=8))
 
     def scan_dir(self, path) -> Iterable[os.DirEntry]:
-        with os.scandir(path) as entries:
-            for entry in entries:
-                if entry.is_file():
-                    yield entry
-                elif entry.is_dir():
-                    yield from self.scan_dir(entry.path)
+        try:
+            with os.scandir(path) as entries:
+                for entry in entries:
+                    if entry.is_file():
+                        yield entry
+                    elif entry.is_dir():
+                        yield from self.scan_dir(entry.path)
+        except PermissionError as e:
+            logging.error(f"Error while scanning directory {path}:")
+            logging.error(e)
 
     def items(self) -> Iterable[Tuple[str, BlobObject]]:
         for file_path, file_data in self.current_index_doc.get("file_entries", {}).items():
