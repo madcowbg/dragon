@@ -110,11 +110,11 @@ async def execute_pull(
         current_contents = connected_repo.open_contents(is_readonly=True)
     except MissingRepo as e:
         logging.error(e)
-        out.write(f"Repo {uuid} is not currently available!\n")
+        out.write(f"Repo {config.remotes[uuid].name}[{uuid}] is not currently available!\n")
         return
     except MissingRepoContents as e:
         logging.error(e)
-        out.write(f"Repo {uuid} has no current contents available!\n")
+        out.write(f"Repo {config.remotes[uuid].name}[{uuid}] has no current contents available!\n")
         return
 
     with current_contents:

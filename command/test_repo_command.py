@@ -68,7 +68,12 @@ class TestRepoCommand(IsolatedAsyncioTestCase):
 
         current_uuid = cave_cmd.current_uuid()
         self.assertEqual(
-            sorted([f"{current_uuid}.contents.lmdb", f"{current_uuid}.contents.lmdb-lock", f"{current_uuid}.toml", 'current.uuid']),
+            sorted([
+                f"{current_uuid}.contents.lmdb",
+                f'{current_uuid}.contents.lmdb-BAK',
+                f"{current_uuid}.contents.lmdb-lock",
+                f"{current_uuid}.toml",
+                'current.uuid']),
             sorted(os.listdir(join(self.tmpdir.name, "repo", ".hoard"))))
 
     async def test_show_repo(self):

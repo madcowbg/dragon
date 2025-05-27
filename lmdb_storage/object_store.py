@@ -3,6 +3,8 @@ import logging
 import os
 import shutil
 import sys
+from datetime import datetime
+from pathlib import Path
 from typing import Collection, Tuple, Dict
 
 import lmdb
@@ -29,19 +31,19 @@ class EnvParams:
 
 def maybe_migrate_storage(path):
     logging.warning(f"File not found: {path}")
-    tmp_path = f"{path}-BAK"
+    tmp_path = f"{path}-MIGRATION"
     if os.path.isdir(path) or os.path.isdir(tmp_path):
         if os.path.isdir(path):
             logging.error(f"Moving current path {path} to {tmp_path}")
             shutil.move(path, tmp_path)
 
-        if os.path.isdir(tmp_path):
+        if os.path.isdir(tmp_path) and os.path.isfile(f"{tmp_path}/data.mdb"):
             logging.error(f"Migrating from folder-based temp storage: {tmp_path}")
             shutil.copy(f"{tmp_path}/data.mdb", path)
 
         if not os.path.isfile(path):
             logging.error("Migration was not successful! Exiting...")
-            raise ValueError(f"Could not migrate folder {path} to file. Either make sure it is")
+            raise ValueError(f"Could not migrate folder {path} to file. Fix it manually!")
 
 
 class ObjectEnvironmentCache:
@@ -132,6 +134,30 @@ def used_ratio(env: Environment):
     return used_size(env) / env.info()["map_size"]
 
 
+MAX_BACKUPS = 3
+
+
+def store_backup_rotation(env: Environment):
+    lmdb_path = env.path()
+    backup_dir = Path(lmdb_path + "-BAK")
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    backups = list(sorted(backup_dir.glob("backup_*.lmdb")))
+    if len(backups) >= MAX_BACKUPS:
+        for backup in backups[:-MAX_BACKUPS]:
+            backup.unlink(missing_ok=True)
+
+    curr_bup_len = len(list(backup_dir.glob("backup_*.lmdb")))
+    if curr_bup_len >= MAX_BACKUPS:
+        logging.error("Too many backups, but will store anyway.")
+
+    timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_file = backup_dir.joinpath(f"backup_{timestamp_str}.lmdb")
+    logging.info(f"Storing backup as {backup_file}")
+    backup_file.unlink(missing_ok=True)
+
+    env.copy(backup_file.as_posix(), compact=True)
+
+
 class ObjectStorage:
     def __init__(self, path: str, *, map_size: int | None = None, max_dbs=5):
         self._env_params = EnvParams(
@@ -184,6 +210,8 @@ class ObjectStorage:
                         bar()
 
             self.validate_storage(objects, root_ids)
+
+        store_backup_rotation(self._env)
 
     def validate_storage(self, objects, root_ids):
         for root_id in root_ids:
