@@ -281,16 +281,21 @@ class FilesystemState:
 
     async def read_state_from_filesystem(
             self, contents: RepoContents, hoard_ignore: HoardIgnore, repo_path: str, njobs: int = 32):
-        async def add_discovered_files(file_path_full: pathlib.Path):
-            file_path_local = FastPosixPath(file_path_full.relative_to(repo_path))
-            try:
-                filesystem_prop = await read_filesystem_desc(file_path_full)
-                self.mark_file(file_path_local, filesystem_prop)
-            except OSError as e:
-                logging.error(e)
-                self.mark_error(file_path_local, str(e))
+        expected_cnt = contents.fsobjects.len_existing()
+        all_files = list(walk_filesystem(hoard_ignore, repo_path, expected_cnt))
 
-        await process_async(walk_filesystem(contents, hoard_ignore, repo_path), add_discovered_files, njobs=njobs)
+        with alive_bar(total=expected_cnt, title="Reading hashes...") as bar:
+            async def add_discovered_files(file_path_full: pathlib.Path):
+                file_path_local = FastPosixPath(file_path_full.relative_to(repo_path))
+                try:
+                    filesystem_prop = await read_filesystem_desc(file_path_full)
+                    self.mark_file(file_path_local, filesystem_prop)
+                except OSError as e:
+                    logging.error(e)
+                    self.mark_error(file_path_local, str(e))
+                bar()
+
+            await process_async(all_files, add_discovered_files, njobs=njobs)
 
         all_files_sorted = [("/" + filepath.as_posix(), fileobj) for filepath, fileobj in self.all_files.items()]
         with self.contents.objects as objects:
@@ -307,8 +312,8 @@ async def compute_difference_between_contents_and_filesystem(
         yield diff
 
 
-def walk_filesystem(contents, hoard_ignore, repo_path) -> Iterable[pathlib.Path]:
-    with alive_bar(total=contents.fsobjects.len_existing(), title="Walking filesystem") as bar:
+def walk_filesystem(hoard_ignore, repo_path, expected_cnt) -> Iterable[pathlib.Path]:
+    with alive_bar(total=expected_cnt, title="Walking filesystem") as bar:
         for file_path_full, dir_path_full in walk_repo(repo_path, hoard_ignore):
             if file_path_full is not None:
                 assert dir_path_full is None
