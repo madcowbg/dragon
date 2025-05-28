@@ -284,7 +284,8 @@ class FilesystemIndex:
         for del_file in del_files:
             del file_entries[del_file]
 
-        logging.info(f"{len(existing_filenames)} files found, {len(mod_files)} are modified, {len(del_files)} are deleted.")
+        logging.info(
+            f"{len(existing_filenames)} files found, {len(mod_files)} are modified, {len(del_files)} are deleted.")
 
     def update_hashes(self):
         missing_fasthashes = [
@@ -320,7 +321,8 @@ class FilesystemIndex:
         for file_path, file_data in self.current_index_doc.get("file_entries", {}).items():
             fasthash = file_data["fasthash"]
             size = file_data["size"]
-            yield "/" + file_path, FileObject.create(fasthash if fasthash else None, size if fasthash is not None else -1)
+            yield "/" + file_path, FileObject.create(fasthash if fasthash else None,
+                                                     size if fasthash is not None else -1)
 
 
 class FilesystemState:
@@ -478,15 +480,15 @@ def _apply_repo_change_to_contents(
     elif isinstance(change, FileMoved):
         contents.fsobjects.mark_moved(
             change.missing_relpath, change.moved_to_relpath,
-            size=change.size, mtime=change.mtime, fasthash=change.moved_file_hash)
+            FileObject.create(size=change.size, fasthash=change.moved_file_hash))
 
         print_maybe(f"MOVED {change.missing_relpath.as_posix()} TO {change.moved_to_relpath.as_posix()}")
     elif isinstance(change, FileAdded):
-        contents.fsobjects.add_file(change.relpath, size=change.size, fasthash=change.fasthash)
+        contents.fsobjects.add_file(change.relpath, FileObject.create(size=change.size, fasthash=change.fasthash))
 
         print_maybe(f"{change.requested_status.value.upper()}_FILE {change.relpath.as_posix()}")
     elif isinstance(change, FileModified):
-        contents.fsobjects.add_file(change.relpath, size=change.size, fasthash=change.fasthash)
+        contents.fsobjects.add_file(change.relpath, FileObject.create(size=change.size, fasthash=change.fasthash))
 
         print_maybe(f"MODIFIED_FILE {change.relpath.as_posix()}")
     else:

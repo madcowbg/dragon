@@ -66,22 +66,22 @@ class RepoFSObjects:
                         FastPosixPath(fullpath).relative_to("/"),
                         FileDesc(obj.size, obj.fasthash, None))
 
-    def add_file(self, filepath: FastPosixPath, size: int, fasthash: str) -> None:
+    def add_file(self, filepath: FastPosixPath, file_obj: FileObject) -> None:
         root_id = self.root_id
         with self.objects as objects:
             root_id = add_file_object(
-                objects, root_id, filepath.as_posix().split("/"), FileObject.create(fasthash, size))
+                objects, root_id, filepath.as_posix().split("/"), file_obj)
 
         self.roots["REPO"].current = root_id
 
-    def mark_moved(self, from_file: FastPosixPath, to_file: FastPosixPath, size: int, mtime: float, fasthash: str):
+    def mark_moved(self, from_file: FastPosixPath, to_file: FastPosixPath, file_obj: FileObject):
         assert not from_file.is_absolute()
         assert not to_file.is_absolute()
 
         self.mark_removed(from_file)
 
         # add the new file
-        self.add_file(to_file, size, fasthash)
+        self.add_file(to_file, file_obj)
 
     def mark_removed(self, path: FastPosixPath):
         assert not path.is_absolute()

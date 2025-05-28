@@ -21,6 +21,7 @@ from contents.hoard_props import HoardFileProps
 from exceptions import MissingRepo
 from gui.hoard_explorer import start_hoard_explorer_gui
 from hashing import fast_hash
+from lmdb_storage.file_object import FileObject
 from lmdb_storage.tree_iteration import dfs
 from lmdb_storage.tree_object import ObjectType
 from lmdb_storage.tree_operations import get_child, remove_child
@@ -297,8 +298,7 @@ class HoardCommand(object):
                             f"Restoring description of file {hoard_file} to {local_path_obj}...")
                         current_contents.fsobjects.add_file(
                             local_path_obj.as_pure_path,
-                            size=hoard_props.size,
-                            fasthash=hoard_props.fasthash)
+                            FileObject.create(size=hoard_props.size, fasthash=hoard_props.fasthash))
                         out.write(f"PRESENT {local_path_obj}\n")
 
                     current_contents.config.end_updating()
