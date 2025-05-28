@@ -4,15 +4,14 @@ from typing import List
 
 from command.content_prefs import ContentPrefs
 from command.fast_path import FastPosixPath
-from config import HoardRemotes, CaveType
-from contents.hoard import HoardContents
+from config import CaveType
 from contents.repo_props import FileDesc
 from lmdb_storage.file_object import BlobObject
-from lmdb_storage.operations.three_way_merge import MergePreferences, TransformedRoots, CombinedRoots
 from lmdb_storage.operations.fast_association import FastAssociation
+from lmdb_storage.operations.three_way_merge import MergePreferences, TransformedRoots
 from lmdb_storage.operations.util import ByRoot
-from lmdb_storage.tree_structure import ObjectID, Objects
-from lmdb_storage.tree_object import StoredObject, TreeObject
+from lmdb_storage.tree_object import StoredObject
+from lmdb_storage.tree_structure import ObjectID
 
 
 class PullIntention(enum.Enum):
@@ -60,9 +59,6 @@ class PullMergePreferences(MergePreferences):
 
         result_roots = tuple(set(self.roots_to_merge))
         self.empty_association = FastAssociation(result_roots, (None,) * len(result_roots))
-
-    def create_result(self, objects: Objects):
-        return CombinedRoots(self.empty_association, objects)
 
     def where_to_apply_adds(self, path: List[str], staging_original: BlobObject) -> List[str]:
         file_path = FastPosixPath("/" + "/".join(path))

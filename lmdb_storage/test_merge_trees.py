@@ -10,15 +10,15 @@ from lmdb import Transaction
 from command.test_command_file_changing_flows import populate
 from command.test_hoard_command import populate_repotypes, init_complex_hoard
 from lmdb_storage.file_object import BlobObject
-from lmdb_storage.operations.naive_ops import TakeOneFile
-from lmdb_storage.operations.util import ObjectsByRoot, ByRoot
 from lmdb_storage.object_store import ObjectStorage
-from lmdb_storage.test_experiment_lmdb import dump_tree, dump_diffs
-from lmdb_storage.operations.three_way_merge import ThreewayMerge, MergePreferences, TransformedRoots, CombinedRoots
 from lmdb_storage.operations.fast_association import FastAssociation
+from lmdb_storage.operations.naive_ops import TakeOneFile
+from lmdb_storage.operations.three_way_merge import ThreewayMerge, MergePreferences, TransformedRoots
+from lmdb_storage.operations.util import ObjectsByRoot, ByRoot
+from lmdb_storage.test_experiment_lmdb import dump_tree, dump_diffs
 from lmdb_storage.tree_iteration import zip_dfs
-from lmdb_storage.tree_structure import ObjectID, Objects, do_nothing
 from lmdb_storage.tree_object import StoredObject, TreeObject
+from lmdb_storage.tree_structure import ObjectID, Objects, do_nothing
 
 
 class InMemoryObjectsExtension(Objects):
@@ -469,9 +469,6 @@ class NaiveMergePreferences(MergePreferences):
         self.allowed_roots = list(allowed_roots)
         self.empty_association = FastAssociation(self.allowed_roots, (None,) * len(self.allowed_roots))
 
-    def create_result(self, objects: Objects):
-        return CombinedRoots(self.empty_association, objects)
-
     def where_to_apply_diffs(self, original_roots: List[str]) -> List[str]:
         return list(set(original_roots + self.to_modify))
 
@@ -488,13 +485,13 @@ class NaiveMergePreferences(MergePreferences):
 
     def combine_base_only(
             self, path: List[str], repo_name: str, original_roots: ByRoot[StoredObject],
-            base_original: BlobObject) -> TransformedRoots:
+            base_original: BlobObject) -> FastAssociation[ObjectID]:
 
         return self.empty_association
 
     def combine_staging_only(
             self, path: List[str], repo_name: str, original_roots: ByRoot[StoredObject],
-            staging_original: BlobObject) -> TransformedRoots:
+            staging_original: BlobObject) -> FastAssociation[ObjectID]:
         assert type(staging_original) is BlobObject
 
         result: TransformedRoots = TransformedRoots.wrap(self.empty_association.new())
@@ -502,5 +499,5 @@ class NaiveMergePreferences(MergePreferences):
             result.HACK_maybe_set_by_key(merge_name, staging_original.file_id)
         return result
 
-    def merge_missing(self, path: List[str], original_roots: ByRoot[StoredObject]) -> TransformedRoots:
+    def merge_missing(self, path: List[str], original_roots: ByRoot[StoredObject]) -> FastAssociation[ObjectID]:
         return TransformedRoots.HACK_create(original_roots.map(lambda obj: obj.id))

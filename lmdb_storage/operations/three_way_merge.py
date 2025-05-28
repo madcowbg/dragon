@@ -44,6 +44,7 @@ class TransformedRoots(FastAssociation[ObjectID]):
 
 
 class MergePreferences:
+    empty_association: FastAssociation
 
     @abc.abstractmethod
     def combine_both_existing(
@@ -67,50 +68,12 @@ class MergePreferences:
     def merge_missing(self, path: List[str], original_roots: ByRoot[StoredObject]) -> TransformedRoots:
         pass
 
-    @abc.abstractmethod
-    def create_result(self, objects: Objects):
-        pass
-
 
 @dataclasses.dataclass
 class ThreewayMergeState:
     path: List[str]
     base: BlobObject | TreeObject | None
     staging: BlobObject | TreeObject | None
-
-
-class CombinedRoots(Transformed[ByRoot[ObjectID]]):
-    def __init__(self, empty_association: FastAssociation[ObjectID], objects: Objects):
-        self.objects = objects
-
-        self.empty_association = empty_association
-        self._merged_children: FastAssociation[TreeObjectBuilder] = empty_association.new()
-
-    def add_for_child(self, child_name: str, merged_child_by_roots: TransformedRoots) -> None:
-        if isinstance(merged_child_by_roots, TransformedRoots):
-            # fixme remove this case
-            for root_idx, obj_id in merged_child_by_roots.HACK_custom_available_items(self._merged_children._keys):
-                if self._merged_children[root_idx] is None:
-                    self._merged_children[root_idx] = {}
-
-                self._merged_children[root_idx][child_name] = obj_id
-            return
-
-        assert isinstance(merged_child_by_roots, FastAssociation), type(merged_child_by_roots)
-        for root_idx, obj_id in merged_child_by_roots.available_items():
-            if self._merged_children[root_idx] is None:
-                self._merged_children[root_idx] = {}
-
-            self._merged_children[root_idx][child_name] = obj_id
-
-    def get_value(self) -> FastAssociation[ObjectID]:
-        constructed = self._merged_children.map(construct_tree_object)
-
-        # store potential new objects
-        for _, child_tree in constructed.available_items():
-            self.objects[child_tree.id] = child_tree
-
-        return constructed.map(lambda obj: obj.id)
 
 
 class ThreewayMerge(Transformation[ThreewayMergeState, TransformedRoots]):
@@ -128,9 +91,11 @@ class ThreewayMerge(Transformation[ThreewayMergeState, TransformedRoots]):
         assert not base_obj or base_obj.object_type == ObjectType.BLOB or base_obj.object_type == ObjectType.TREE
         return ThreewayMergeState(
             merge_state.path + [child_name],
-            self.object_or_none(base_obj.get(child_name)) if base_obj and base_obj.object_type == ObjectType.TREE else None,
+            self.object_or_none(
+                base_obj.get(child_name)) if base_obj and base_obj.object_type == ObjectType.TREE else None,
             # fixme handle files
-            self.object_or_none(staging_obj.get(child_name)) if staging_obj and staging_obj.object_type == ObjectType.TREE else None)
+            self.object_or_none(
+                staging_obj.get(child_name)) if staging_obj and staging_obj.object_type == ObjectType.TREE else None)
 
     def __init__(
             self, objects: Objects, current_id: ObjectID | None, staging_id: ObjectID | None,
@@ -145,7 +110,7 @@ class ThreewayMerge(Transformation[ThreewayMergeState, TransformedRoots]):
 
         self.allowed_roots = None  # fixme pass as argument maybe
 
-    def execute(self, obj_ids: ByRoot[ObjectID]) -> TransformedRoots:
+    def execute(self, obj_ids: ByRoot[ObjectID]) -> FastAssociation[ObjectID]:
         assert self.allowed_roots is None
         self.allowed_roots = obj_ids.allowed_roots
         try:
@@ -158,11 +123,8 @@ class ThreewayMerge(Transformation[ThreewayMergeState, TransformedRoots]):
         # we have trees and the current and staging trees are different
         return len(trees) > 0 and state.base != state.staging
 
-    def create_merge_result(self) -> Transformed[ByRoot[ObjectID]]:
-        return self.merge_prefs.create_result(self.objects)
-
     def combine_non_drilldown(
-            self, state: ThreewayMergeState, original: ByRoot[StoredObject]) -> TransformedRoots:
+            self, state: ThreewayMergeState, original: ByRoot[StoredObject]) -> FastAssociation[ObjectID]:
         # we are on file level
         base_original = state.base
         staging_original = state.staging
@@ -189,12 +151,31 @@ class ThreewayMerge(Transformation[ThreewayMergeState, TransformedRoots]):
             return self.merge_prefs.merge_missing(state.path, original)
 
     def combine(
-            self, state: ThreewayMergeState, merged: CombinedRoots,
+            self, state: ThreewayMergeState, merged: Dict[str, FastAssociation[ObjectID]],
             original: ByRoot[StoredObject]) -> FastAssociation[ObjectID]:
-        # tree-level, just return the merged
-        # # fixme this is needed because empty folders get dropped in "merged" - should fix that problem
-        # merged = merged.copy()
-        # for root_name, original_obj in original.items():
-        #     if merged.get_if_present(root_name) is None:
-        #         merged[root_name] = original_obj.id
-        return merged.get_value()
+
+        merged_children: FastAssociation[TreeObjectBuilder] = self.merge_prefs.empty_association.new()
+
+        for child_name, merged_child_by_roots in merged.items():
+            if isinstance(merged_child_by_roots, TransformedRoots):
+                # fixme remove this case, needed to reduce the available items
+                for root_idx, obj_id in merged_child_by_roots.HACK_custom_available_items(merged_children._keys):
+                    if merged_children[root_idx] is None:
+                        merged_children[root_idx] = {}
+
+                    merged_children[root_idx][child_name] = obj_id
+            else:
+                assert isinstance(merged_child_by_roots, FastAssociation), type(merged_child_by_roots)
+                for root_idx, obj_id in merged_child_by_roots.available_items():
+                    if merged_children[root_idx] is None:
+                        merged_children[root_idx] = {}
+
+                    merged_children[root_idx][child_name] = obj_id
+
+        constructed = merged_children.map(construct_tree_object)
+
+        # store potential new objects
+        for _, child_tree in constructed.available_items():
+            self.objects[child_tree.id] = child_tree
+
+        return constructed.map(lambda obj: obj.id)
