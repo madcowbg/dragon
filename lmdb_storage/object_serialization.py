@@ -4,7 +4,7 @@ from typing import Dict, Tuple, Iterable
 
 import msgpack
 
-from lmdb_storage.file_object import BlobObject
+from lmdb_storage.file_object import BlobObject, FileObject
 from lmdb_storage.tree_object import ObjectType, StoredObject, TreeObject, TreeObjectBuilder, ObjectID
 
 
@@ -36,7 +36,8 @@ def read_stored_object(obj_id: bytes, obj_packed: bytes) -> StoredObject:
     if version == BlobStorageFormat.V0:
         obj_data = msgpack.loads(obj_packed)  # fixme make this faster by extracting type away
         if obj_data[0] == ObjectType.BLOB.value:
-            return BlobObject(obj_id, obj_data[1])
+            assert len(obj_data[1]) == 3, len(obj_data[1])
+            return FileObject(obj_id, obj_data[1])
         elif obj_data[0] == ObjectType.TREE.value:
             return TreeObject(obj_id, dict(obj_data[1]))
         else:
@@ -57,7 +58,7 @@ def construct_tree_object(tree_obj_builder: TreeObjectBuilder) -> TreeObject:
 
 def write_stored_object(obj: StoredObject) -> bytes:
     if obj.object_type == ObjectType.BLOB:
-        obj: BlobObject
+        assert isinstance(obj, FileObject)
         return msgpack.packb((ObjectType.BLOB.value, (obj.fasthash, obj.size, obj.md5)))
     elif obj.object_type == ObjectType.TREE:
         obj: TreeObject

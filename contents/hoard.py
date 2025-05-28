@@ -13,7 +13,7 @@ from command.fast_path import FastPosixPath
 from config import HoardConfig
 from contents.hoard_props import HoardFileStatus, HoardFileProps
 from contents.repo import RepoContentsConfig
-from lmdb_storage.file_object import BlobObject
+from lmdb_storage.file_object import BlobObject, FileObject
 from lmdb_storage.object_store import ObjectStorage
 from lmdb_storage.operations.fast_association import FastAssociation
 from lmdb_storage.operations.generator import TreeGenerator
@@ -194,7 +194,7 @@ class HoardFilesIterator(TreeGenerator[BlobObject, Tuple[str, HoardFileProps]]):
             logging.debug("Skipping path %s as it is not a BlobObject", path)
             return
 
-        file_obj: BlobObject
+        assert isinstance(file_obj, FileObject)
         yield path, HoardFileProps(
             self.parent, path, file_obj.size, file_obj.fasthash, by_root=original, file_id=file_obj.id)
 
@@ -230,8 +230,10 @@ def hoard_file_props_from_tree(parent, file_path: FastPosixPath) -> HoardFilePro
     hoard_root, root_ids = find_roots(parent)
     with parent.env.objects(write=False) as objects:
         hoard_child_id = get_child(objects, file_path._rem, hoard_root)
-        file_obj = objects[hoard_child_id] if hoard_child_id is not None else None
+        file_obj: StoredObject | None = objects[hoard_child_id] if hoard_child_id is not None else None
         if file_obj is not None:
+            assert isinstance(file_obj, FileObject)
+            file_obj: FileObject
             return HoardFileProps(parent, file_path, file_obj.size, file_obj.fasthash)
 
         # fixme this is the legacy case where we iterate over current but not desired files. remove!
@@ -239,7 +241,7 @@ def hoard_file_props_from_tree(parent, file_path: FastPosixPath) -> HoardFilePro
             root_child_id = get_child(objects, file_path._rem, root_id)
             file_obj = objects[root_child_id] if root_child_id is not None else None
             if file_obj and file_obj.object_type == ObjectType.BLOB:
-                file_obj: BlobObject
+                assert isinstance(file_obj, FileObject)
                 return HoardFileProps(parent, file_path, file_obj.size, file_obj.fasthash)
 
         raise ValueError("Should not have tried getting a nonexistent file!")
@@ -527,7 +529,7 @@ class HoardContents:
                 if non_none_type is TreeObject:
                     pass
                 else:
-                    assert non_none_type is BlobObject
+                    assert non_none_type is FileObject
                     file_ids = {o.id for o in desired_objs if o is not None}
                     if len(file_ids) > 1:
                         raise ValueError(f"Object at path {path} has multiple desired file versions: {file_ids}")

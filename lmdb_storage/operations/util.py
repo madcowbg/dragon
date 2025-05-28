@@ -50,7 +50,7 @@ class ByRoot[V]:
     def filter_type[T](self, selected_type: Type[T], exclude: bool = False):
         return ByRoot[T](
             self.allowed_roots,
-            remap(self._roots_to_object, lambda obj: obj if (exclude ^ (type(obj) is selected_type)) else None).items())
+            remap(self._roots_to_object, lambda obj: obj if (exclude ^ (isinstance(obj, selected_type))) else None).items())
 
     def __add__(self, other: "ByRoot[V]") -> "ByRoot[V]":
         assert isinstance(other, ByRoot)

@@ -1,6 +1,6 @@
 import unittest
 
-from lmdb_storage.file_object import BlobObject
+from lmdb_storage.file_object import FileObject
 from lmdb_storage.object_serialization import write_stored_object, read_stored_object, construct_tree_object, \
     find_object_data_version, BlobStorageFormat
 from lmdb_storage.tree_object import TreeObject
@@ -25,23 +25,23 @@ class TestObjectSerialization(unittest.TestCase):
             find_object_data_version(b'\x92\x01\x92\x92\xa1a\xc4\x08and roll\x92\xa1z\xc4\x08yeeeeah!'))
 
     def test_serialize_files_v0(self):
-        blob_obj = BlobObject.create("asdasda", 1, None)
+        blob_obj = FileObject.create("asdasda", 1, None)
         self.assertEqual(b'\x92\x02\x93\xa7asdasda\x01\xc0', write_stored_object(blob_obj))
         self.assertEqual(b'\n\x94\xfb\x8bt*c}B3S-"\xeb8\xe2\x80\x90\x00\xbd', blob_obj.id)
 
-        blob_obj = BlobObject.create("asdasda", 1, "asdfas")
+        blob_obj = FileObject.create("asdasda", 1, "asdfas")
         self.assertEqual(b'\x92\x02\x93\xa7asdasda\x01\xa6asdfas', write_stored_object(blob_obj))
         self.assertEqual(b'\xc3c\x01\n\xd7\xe1\xe1\x8e\x8f\r\xb9\x0b&\x01C\x16\xe6\xcf\xa5\t', blob_obj.id)
 
-        blob_obj = BlobObject.create("", -5, "asdfas")
+        blob_obj = FileObject.create("", -5, "asdfas")
         self.assertEqual(b'\x92\x02\x93\xa0\xfb\xa6asdfas', write_stored_object(blob_obj))
         self.assertEqual(b'\x9b\x97fcCm\xbeS&\x15\x85\rBA:\xbee\xc8]\x96', blob_obj.id)
 
-        blob_obj = BlobObject.create("asdfas", -5, "")
+        blob_obj = FileObject.create("asdfas", -5, "")
         self.assertEqual(b'\x92\x02\x93\xa6asdfas\xfb\xa0', write_stored_object(blob_obj))
         self.assertEqual(b'Pq\x81\x17\xff\x11\xa7Y7\xedX\xa0.\xa8\xbd\xb5\xaaK\xa0\xb5', blob_obj.id)
 
-        blob_obj = BlobObject.create("asdfas", 756181684685, "")
+        blob_obj = FileObject.create("asdfas", 756181684685, "")
         self.assertEqual(
             b'\x92\x02\x93\xa6asdfas\xcf\x00\x00\x00\xb0\x0f\xf0\xd1\xcd\xa0', write_stored_object(blob_obj))
         self.assertEqual(b"H\xc4C\xbd\x0b\xf3'\xf7\xcdp\xdeO\x05\x8f\xf0%\xec\t\xc9f", blob_obj.id)
@@ -50,33 +50,33 @@ class TestObjectSerialization(unittest.TestCase):
         blob_obj = read_stored_object(
             b'\n\x94\xfb\x8bt*c}B3S-"\xeb8\xe2\x80\x90\x00\xbd',
             b'\x92\x02\x93\xa7asdasda\x01\xc0')
-        self.assertEqual(BlobObject.create("asdasda", 1, None), blob_obj)
+        self.assertEqual(FileObject.create("asdasda", 1, None), blob_obj)
 
         blob_obj = read_stored_object(
             b'\xc3c\x01\n\xd7\xe1\xe1\x8e\x8f\r\xb9\x0b&\x01C\x16\xe6\xcf\xa5\t',
             b'\x92\x02\x93\xa7asdasda\x01\xa6asdfas')
-        self.assertEqual(BlobObject.create("asdasda", 1, "asdfas"), blob_obj)
+        self.assertEqual(FileObject.create("asdasda", 1, "asdfas"), blob_obj)
 
         blob_obj = read_stored_object(
             b'\x9b\x97fcCm\xbeS&\x15\x85\rBA:\xbee\xc8]\x96',
             b'\x92\x02\x93\xa0\xfb\xa6asdfas')
-        self.assertEqual(BlobObject.create("", -5, "asdfas"), blob_obj)
+        self.assertEqual(FileObject.create("", -5, "asdfas"), blob_obj)
 
         blob_obj = read_stored_object(
             b"H\xc4C\xbd\x0b\xf3'\xf7\xcdp\xdeO\x05\x8f\xf0%\xec\t\xc9f",
             b'\x92\x02\x93\xa6asdfas\xcf\x00\x00\x00\xb0\x0f\xf0\xd1\xcd\xa0')
-        self.assertEqual(BlobObject.create("asdfas", 756181684685, ""), blob_obj)
+        self.assertEqual(FileObject.create("asdfas", 756181684685, ""), blob_obj)
 
     def test_deserialize_files_hacked_ids_v0(self):
         blob_obj = read_stored_object(
             b'alabala',
             b'\x92\x02\x93\xa7asdasda\x01\xc0')
-        self.assertEqual(BlobObject(b'alabala', ("asdasda", 1, None)), blob_obj)
+        self.assertEqual(FileObject(b'alabala', ("asdasda", 1, None)), blob_obj)
 
         blob_obj = read_stored_object(
             b'sweet',
             b'\x92\x02\x93\xa7asdasda\x01\xa6asdfas')
-        self.assertEqual(BlobObject(b"dude", ("asdasda", 1, "asdfas")), blob_obj)
+        self.assertEqual(FileObject(b"dude", ("asdasda", 1, "asdfas")), blob_obj)
 
     def test_serialize_trees_v0(self):
         tree_obj = construct_tree_object({})

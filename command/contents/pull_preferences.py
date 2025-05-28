@@ -6,7 +6,7 @@ from command.content_prefs import ContentPrefs
 from command.fast_path import FastPosixPath
 from config import CaveType
 from contents.repo_props import FileDesc
-from lmdb_storage.file_object import BlobObject
+from lmdb_storage.file_object import FileObject
 from lmdb_storage.operations.fast_association import FastAssociation
 from lmdb_storage.operations.three_way_merge import MergePreferences, TransformedRoots
 from lmdb_storage.operations.util import ByRoot
@@ -60,7 +60,7 @@ class PullMergePreferences(MergePreferences):
         result_roots = tuple(set(self.roots_to_merge))
         self.empty_association = FastAssociation(result_roots, (None,) * len(result_roots))
 
-    def where_to_apply_adds(self, path: List[str], staging_original: BlobObject) -> List[str]:
+    def where_to_apply_adds(self, path: List[str], staging_original: FileObject) -> List[str]:
         file_path = FastPosixPath("/" + "/".join(path))
         file_desc = FileDesc(staging_original.size, staging_original.fasthash, None)  # fixme add md5
         repos_to_add = self.content_prefs.repos_to_add(
@@ -72,7 +72,7 @@ class PullMergePreferences(MergePreferences):
 
     def combine_both_existing(
             self, path: List[str], original_roots: ByRoot[StoredObject],
-            staging_original: BlobObject, base_original: BlobObject) -> TransformedRoots:
+            staging_original: FileObject, base_original: FileObject) -> TransformedRoots:
         original_roots = original_roots.subset(self.roots_to_merge)
 
         if staging_original.file_id == base_original.file_id:
@@ -101,7 +101,7 @@ class PullMergePreferences(MergePreferences):
 
     def combine_base_only(
             self, path: List[str], repo_name: str, original_roots: ByRoot[StoredObject],
-            base_original: BlobObject) -> TransformedRoots:
+            base_original: FileObject) -> TransformedRoots:
         original_roots = original_roots.subset(self.roots_to_merge)
 
         if self.remote_type == CaveType.BACKUP:  # fixme use PullPreferences
@@ -121,7 +121,7 @@ class PullMergePreferences(MergePreferences):
 
     def combine_staging_only(
             self, path: List[str], repo_name: str, original_roots: ByRoot[StoredObject],
-            staging_original: BlobObject) -> TransformedRoots:
+            staging_original: FileObject) -> TransformedRoots:
         original_roots = original_roots.subset(self.roots_to_merge)
 
         hoard_object = original_roots.get_if_present("HOARD")
@@ -150,7 +150,7 @@ class PullMergePreferences(MergePreferences):
 
     def add_or_update_object(
             self, original_roots: ByRoot[StoredObject], path: List[str],
-            staging_original: BlobObject) -> TransformedRoots:
+            staging_original: FileObject) -> TransformedRoots:
         result: ByRoot[ObjectID] = original_roots.new()
         for merge_name in self.where_to_apply_adds(path, staging_original) + list(original_roots.assigned_keys()):
             result[merge_name] = staging_original.file_id

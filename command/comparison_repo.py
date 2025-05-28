@@ -16,7 +16,7 @@ from command.hoard_ignore import HoardIgnore
 from contents.repo import RepoContents
 from contents.repo_props import RepoFileStatus, FileDesc
 from hashing import fast_hash_async
-from lmdb_storage.file_object import BlobObject
+from lmdb_storage.file_object import BlobObject, FileObject
 from lmdb_storage.tree_iteration import zip_dfs
 from lmdb_storage.tree_object import TreeObject
 from util import group_to_dict, process_async, run_in_separate_loop
@@ -320,7 +320,7 @@ class FilesystemIndex:
         for file_path, file_data in self.current_index_doc.get("file_entries", {}).items():
             fasthash = file_data["fasthash"]
             size = file_data["size"]
-            yield "/" + file_path, BlobObject.create(fasthash if fasthash else None, size if fasthash is not None else -1)
+            yield "/" + file_path, FileObject.create(fasthash if fasthash else None, size if fasthash is not None else -1)
 
 
 class FilesystemState:
@@ -332,11 +332,11 @@ class FilesystemState:
 
     def mark_file(self, fullpath: FastPosixPath, file_desc: FileDesc) -> None:
         assert not fullpath.is_absolute()
-        self.all_files[fullpath] = BlobObject.create(file_desc.fasthash, file_desc.size)
+        self.all_files[fullpath] = FileObject.create(file_desc.fasthash, file_desc.size)
 
     def mark_error(self, fullpath: FastPosixPath, error: str):
         assert not fullpath.is_absolute()
-        self.all_files[fullpath] = BlobObject.create("", -1)
+        self.all_files[fullpath] = FileObject.create("", -1)
 
         assert not fullpath.is_absolute()
 

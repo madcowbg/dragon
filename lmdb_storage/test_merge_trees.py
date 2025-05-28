@@ -9,7 +9,7 @@ from lmdb import Transaction
 
 from command.test_command_file_changing_flows import populate
 from command.test_hoard_command import populate_repotypes, init_complex_hoard
-from lmdb_storage.file_object import BlobObject
+from lmdb_storage.file_object import BlobObject, FileObject
 from lmdb_storage.object_store import ObjectStorage
 from lmdb_storage.operations.fast_association import FastAssociation
 from lmdb_storage.operations.naive_ops import TakeOneFile
@@ -432,8 +432,8 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
             dump_diffs(objects, merged_ids.get_if_present('partial'), merged_ids.get_if_present('hoard')))
 
 
-def make_file(data: str) -> BlobObject:
-    return BlobObject.create(hashlib.md5(data.encode()).hexdigest(), len(data))
+def make_file(data: str) -> FileObject:
+    return FileObject.create(hashlib.md5(data.encode()).hexdigest(), len(data))
 
 
 def populate_trees(filepath: str) -> (ObjectStorage, ObjectID, ObjectID, ObjectID, ObjectID):
@@ -477,7 +477,7 @@ class NaiveMergePreferences(MergePreferences):
 
     def combine_both_existing(
             self, path: List[str], original_roots: ByRoot[StoredObject],
-            staging_original: BlobObject, base_original: BlobObject) -> TransformedRoots:
+            staging_original: FileObject, base_original: FileObject) -> TransformedRoots:
         result: TransformedRoots = TransformedRoots.wrap(self.empty_association.new())
         for merge_name in (self.where_to_apply_diffs(list(original_roots.assigned_keys()))):
             result.HACK_maybe_set_by_key(merge_name, staging_original.file_id)
@@ -485,14 +485,14 @@ class NaiveMergePreferences(MergePreferences):
 
     def combine_base_only(
             self, path: List[str], repo_name: str, original_roots: ByRoot[StoredObject],
-            base_original: BlobObject) -> FastAssociation[ObjectID]:
+            base_original: FileObject) -> FastAssociation[ObjectID]:
 
         return self.empty_association
 
     def combine_staging_only(
             self, path: List[str], repo_name: str, original_roots: ByRoot[StoredObject],
-            staging_original: BlobObject) -> FastAssociation[ObjectID]:
-        assert type(staging_original) is BlobObject
+            staging_original: FileObject) -> FastAssociation[ObjectID]:
+        assert isinstance(staging_original, FileObject)
 
         result: TransformedRoots = TransformedRoots.wrap(self.empty_association.new())
         for merge_name in (self.where_to_apply_adds(list(original_roots.assigned_keys()))):
