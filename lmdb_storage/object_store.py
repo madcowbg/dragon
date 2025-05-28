@@ -186,8 +186,10 @@ class ObjectStorage(TransactionCreator):
         return used_ratio(self._env)
 
     def maybe_gc(self):
-        if self.used_ratio > 0.8:
+        if self.used_ratio > 0.6:
             self.gc()
+            if self.used_ratio > 0.4:
+                logging.error("Even after GC usage is more than 40%. Can fill up.")
 
     def gc(self):
         sys.stdout.write(f"Used space = {format_size(self.used_size)}\n")

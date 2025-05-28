@@ -2,7 +2,7 @@ import logging
 from io import StringIO
 from typing import Dict, Tuple, Callable
 
-from alive_progress import alive_it
+from alive_progress import alive_it, alive_bar
 
 import command.fast_path
 from command.content_prefs import BackupSet, MIN_REPO_PERC_FREE
@@ -12,8 +12,15 @@ from command.tree_operations import add_to_desired_tree, \
     remove_from_desired_tree
 from config import HoardRemote
 from contents.hoard_props import HoardFileStatus, HoardFileProps
+from lmdb_storage.file_object import BlobObject
+from lmdb_storage.object_serialization import construct_tree_object
+from lmdb_storage.operations.types import Transformation
+from lmdb_storage.operations.util import ByRoot
+from lmdb_storage.tree_iteration import zip_trees_dfs
+from lmdb_storage.tree_object import ObjectID, StoredObject, TreeObject, MaybeObjectID
+from lmdb_storage.tree_structure import Objects
 from resolve_uuid import resolve_remote_uuid
-from util import format_size, format_percent, group_to_dict
+from util import format_size, format_percent, group_to_dict, safe_hex
 
 
 class HoardCommandBackups:
@@ -203,13 +210,62 @@ class HoardCommandBackups:
                             out.write(f"Skipping {remote.name}!")
                             continue
 
-                        out.write(f"Unassigning from {remote.name}:\n")
+                        repo_root = hoard.env.roots(write=False)[remote.uuid]
+                        out.write(f"Unassigning from {remote.name} [{safe_hex(repo_root.desired)[:6]}]:\n")
+                        with hoard.env.objects(write=True) as objects:
 
-                        for hoard_file, hoard_props in hoard.fsobjects.to_get_in_repo(remote.uuid):
-                            assert hoard_props.get_status(remote.uuid) == HoardFileStatus.GET
+                            new_root_id = SelectOnlyExisting(objects).execute(ByRoot(
+                                ["acceptable", "actual"],
+                                {"acceptable": repo_root.current, "actual": repo_root.desired}.items()))
 
-                            remove_from_desired_tree(hoard, remote.uuid, hoard_file.simple)
+                            for file_path, (new_id, old_id), _ in \
+                                    zip_trees_dfs(objects, "", [new_root_id, repo_root.desired], False):
+                                assert old_id is not None, f"Can't happen when filtering, {file_path}!"
+                                old = objects[old_id]
+                                if isinstance(old, BlobObject):
+                                    if new_id != old_id:
+                                        assert new_id is None
+                                        out.write(f"WONT_GET {file_path}\n")
 
-                            out.write(f"WONT_GET {hoard_file.as_posix()}\n")
+                        repo_root = hoard.env.roots(write=True)[remote.uuid]
+                        out.write(
+                            f"Desired root for {remote.name} is {safe_hex(new_root_id)[:6]} <- {safe_hex(repo_root.desired)[:6]}\n")
+                        repo_root.desired = new_root_id
 
                 return out.getvalue()
+
+
+class SelectOnlyExisting(Transformation[None, MaybeObjectID]):
+    def __init__(self, objects: Objects):
+        self.objects = objects
+
+    def combine(self, state: None, merged: Dict[str, MaybeObjectID], original: ByRoot[StoredObject]) -> MaybeObjectID:
+        merged = dict((c, v) for c, v in merged.items() if v is not None)
+        if len(merged) == 0:
+            return None # skipping empty folders
+
+        new_tree_node = construct_tree_object(merged)
+
+        self.objects[new_tree_node.id] = new_tree_node
+
+        return new_tree_node.id
+
+    def should_drill_down(self, state: None, trees: ByRoot[TreeObject], files: ByRoot[BlobObject]) -> bool:
+        return len(trees) > 0
+
+    def combine_non_drilldown(self, state: None, original: ByRoot[StoredObject]) -> MaybeObjectID:
+        acceptable_obj = original.get_if_present("acceptable")
+        if acceptable_obj is None:
+            return None
+
+        actual_obj = original.get_if_present("actual")
+        if acceptable_obj == actual_obj:
+            return actual_obj.id
+
+        return None
+
+    def initial_state(self, obj_ids: ByRoot[ObjectID]) -> None:
+        pass
+
+    def drilldown_state(self, child_name: str, merge_state: None) -> None:
+        pass

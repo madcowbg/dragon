@@ -717,9 +717,10 @@ class TestBackups(IsolatedAsyncioTestCase):
         res = await hoard_cmd.backups.unassign(all_unavailable=True)
         self.assertEqual([
             'Remote backup-1 is available, will not unassign',
-            'Unassigning from backup-2:',
+            'Unassigning from backup-2 [e4eef2]:',
             'WONT_GET /test.me.4',
-            'WONT_GET /test.me.5'], res.splitlines())
+            'WONT_GET /test.me.5',
+            'Desired root for backup-2 is 6ef88c <- e4eef2'], res.splitlines())
 
         res = await hoard_cmd.backups.assign(available_only=True)
         self.assertEqual([
@@ -752,9 +753,10 @@ class TestBackups(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.backups.unassign(repo="backup-1")
         self.assertEqual([
-            'Unassigning from backup-1:',
+            'Unassigning from backup-1 [3bd084]:',
             'WONT_GET /wat/test.me.2',
             'WONT_GET /wat/test.me.6',
+            'Desired root for backup-1 is 1388f4 <- 3bd084',
             'Skipping backup-2!'], res.splitlines())
 
         res = await hoard_cmd.backups.assign(available_only=False)
