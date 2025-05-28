@@ -7,27 +7,27 @@ from lmdb_storage.tree_object import ObjectType, StoredObject, ObjectID
 
 
 class BlobObject(StoredObject):
-    file_id: bytes
-
-    def __init__(self, file_id: bytes) -> None:
-        self.file_id = file_id
+    def __init__(self, id: bytes) -> None:
+        self._file_id = id
         self.object_type = ObjectType.BLOB
 
     def __str__(self) -> str:
-        return f"BlobObject[{self.file_id}]"
+        return f"BlobObject[{self._file_id}]"
 
     @property
     def id(self) -> ObjectID:
-        return self.file_id
+        return self._file_id
 
 
 class FileObject(BlobObject):
+    file_id: bytes
     fasthash: str
     md5: str
     size: int
 
     def __init__(self, file_id: bytes, data: Tuple[str, int, str]) -> None:
         super().__init__(file_id)
+        self.file_id = file_id
         self.fasthash = data[0]
         self.size = data[1]
         self.md5 = data[2]
