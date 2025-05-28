@@ -89,7 +89,7 @@ class PullMergePreferences(MergePreferences):
             logging.error("Ignoring changes to %s coming from a backup repo!", path)
 
             result: ByRoot[ObjectID] = original_roots.map(lambda obj: obj.id)
-            return result  # ignore changes coming from backups
+            return TransformedRoots.HACK_create(result)  # ignore changes coming from backups
 
         if self.remote_type == CaveType.INCOMING:  # fixme use PullPreferences
             # fixme lower
