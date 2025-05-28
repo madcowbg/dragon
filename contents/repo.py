@@ -61,6 +61,7 @@ class RepoFSObjects:
         with self.objects as objects:
             for fullpath, obj_type, obj_id, obj, _ in dfs(objects, "", root_id):
                 if obj_type == ObjectType.BLOB:
+                    obj: BlobObject
                     yield (
                         FastPosixPath(fullpath).relative_to("/"),
                         FileDesc(obj.size, obj.fasthash, None))

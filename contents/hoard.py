@@ -187,13 +187,14 @@ class HoardFilesIterator(TreeGenerator[BlobObject, Tuple[str, HoardFileProps]]):
 
         if file_obj is None:
             # fixme this is the legacy case where we iterate over current but not desired files. remove!
-            file_obj = next((f for root_name, f in original.available_items() if f.object_type == ObjectType.BLOB),
-                            None)
+            file_obj: BlobObject | None = next(
+                (f for root_name, f in original.available_items() if f.object_type == ObjectType.BLOB), None)
 
         if not file_obj or file_obj.object_type != ObjectType.BLOB:
             logging.debug("Skipping path %s as it is not a BlobObject", path)
             return
 
+        file_obj: BlobObject
         yield path, HoardFileProps(
             self.parent, path, file_obj.size, file_obj.fasthash, by_root=original, file_id=file_obj.id)
 
@@ -238,6 +239,7 @@ def hoard_file_props_from_tree(parent, file_path: FastPosixPath) -> HoardFilePro
             root_child_id = get_child(objects, file_path._rem, root_id)
             file_obj = objects[root_child_id] if root_child_id is not None else None
             if file_obj and file_obj.object_type == ObjectType.BLOB:
+                file_obj: BlobObject
                 return HoardFileProps(parent, file_path, file_obj.size, file_obj.fasthash)
 
         raise ValueError("Should not have tried getting a nonexistent file!")

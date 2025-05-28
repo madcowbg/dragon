@@ -30,8 +30,8 @@ class TreeGenerator[F, R]:
         return self.objects[obj_id] if obj_id is not None else None
 
     def _execute_recursively(self, merge_state: List[str], all_original: FastAssociation[StoredObject]) -> Iterable[R]:
-        trees = all_original.filter(lambda v: v.object_type == ObjectType.TREE)
-        files = all_original.filter(lambda v: v.object_type == ObjectType.BLOB)
+        trees: FastAssociation[TreeObject] = all_original.filter(lambda v: v.object_type == ObjectType.TREE)
+        files: FastAssociation[BlobObject] = all_original.filter(lambda v: v.object_type == ObjectType.BLOB)
 
         if self.should_drill_down(merge_state, trees, files):
             all_children_names = list(sorted(set(

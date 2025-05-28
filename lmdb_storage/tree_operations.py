@@ -38,7 +38,7 @@ def graft_in_tree(
         old_obj: TreeObject
         old_child_id = old_obj.get(child_name)
     else:
-        old_obj: BlobObject
+        old_obj: BlobObject | None
         assert old_root_id is None or (old_obj and old_obj.object_type == ObjectType.BLOB)
         old_child_id = None
 

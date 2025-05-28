@@ -132,7 +132,9 @@ class ThreewayMerge(Transformation[ThreewayMergeState, TransformedRoots]):
             return TransformedRoots.HACK_create(original.map(lambda obj: obj.id))
 
         assert not staging_original or staging_original.object_type == ObjectType.BLOB
+        staging_original: BlobObject | None
         assert not base_original or base_original.object_type == ObjectType.BLOB
+        base_original: BlobObject | None
 
         if staging_original and base_original:
             # left and right both exist, apply difference to the other roots

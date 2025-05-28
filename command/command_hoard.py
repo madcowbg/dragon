@@ -22,9 +22,9 @@ from exceptions import MissingRepo
 from gui.hoard_explorer import start_hoard_explorer_gui
 from hashing import fast_hash
 from lmdb_storage.tree_iteration import dfs
+from lmdb_storage.tree_object import ObjectType
 from lmdb_storage.tree_operations import get_child, remove_child
 from lmdb_storage.tree_structure import ObjectID, add_object
-from lmdb_storage.tree_object import ObjectType
 from resolve_uuid import resolve_remote_uuid
 from util import group_to_dict, run_in_separate_loop, safe_hex
 
