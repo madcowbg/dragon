@@ -76,18 +76,24 @@ class Objects:
         return obj_id
 
 
+class TransactionCreator:
+    @abc.abstractmethod
+    def begin(self, db_name: str, write: bool) -> Transaction: pass
+
+
 class StoredObjects(Objects):
     def __init__(
-            self, storage: "ObjectStorage", write: bool,
+            self, storage: TransactionCreator, db_name: str, write: bool,
             object_reader: Callable[[ObjectID, bytes], StoredObject],
             object_writer: Callable[[StoredObject], bytes]):
-        self.storage = storage
+        self._storage = storage
+        self.db_name = db_name
         self.write = write
         self._object_reader = object_reader
         self._object_writer = object_writer
 
     def __enter__(self):
-        self.txn = self.storage.begin(db_name="objects", write=self.write)
+        self.txn = self._storage.begin(db_name=self.db_name, write=self.write)
         self.txn.__enter__()
         return self
 
@@ -137,7 +143,6 @@ def is_child_of(fullpath: ObjPath, parent: ObjPath) -> bool:
         if fullpath[i] != parent[i]:
             return False
     return True
-
 
 
 def pop_and_write_obj(stack: List[Tuple[ObjPath, TreeObjectBuilder]], objects: Objects) -> Tuple[ObjectID, ObjPath]:

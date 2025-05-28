@@ -13,7 +13,7 @@ from lmdb import Transaction, Environment, _Database
 
 from lmdb_storage.object_serialization import read_stored_object, write_stored_object
 from lmdb_storage.roots import Roots
-from lmdb_storage.tree_structure import Objects, ObjectID, StoredObjects
+from lmdb_storage.tree_structure import Objects, ObjectID, StoredObjects, TransactionCreator
 from lmdb_storage.tree_object import ObjectType, StoredObject, TreeObject
 from util import format_size
 
@@ -143,7 +143,7 @@ def store_backup_rotation(env: Environment):
     backup_dir.mkdir(parents=True, exist_ok=True)
     backups = list(sorted(backup_dir.glob("backup_*.lmdb")))
     if len(backups) >= MAX_BACKUPS:
-        for backup in backups[:-MAX_BACKUPS+1]:
+        for backup in backups[:-MAX_BACKUPS + 1]:
             backup.unlink(missing_ok=True)
 
     curr_bup_len = len(list(backup_dir.glob("backup_*.lmdb")))
@@ -158,7 +158,7 @@ def store_backup_rotation(env: Environment):
     env.copy(backup_file.as_posix(), compact=True)
 
 
-class ObjectStorage:
+class ObjectStorage(TransactionCreator):
     def __init__(self, path: str, *, map_size: int | None = None, max_dbs=5):
         self._env_params = EnvParams(
             path, map_size=None if map_size is None else min(MAX_MAP_SIZE, map_size), max_dbs=max_dbs)
@@ -232,7 +232,8 @@ class ObjectStorage:
         return self._env.begin(db=self._dbs[db_name], write=write)
 
     def objects(self, write: bool) -> StoredObjects:
-        return StoredObjects(self, write, read_stored_object, write_stored_object)
+        return StoredObjects(
+            self, db_name="objects", write=write, object_reader=read_stored_object, object_writer=write_stored_object)
 
     def roots(self, write: bool) -> Roots:
         return Roots(self, write)
@@ -258,3 +259,5 @@ def find_all_live(objects: Objects, root_ids: Collection[ObjectID]) -> Collectio
                 # do nothing on files, just verify that they exist
                 assert live_obj.object_type == ObjectType.BLOB
     return live_ids
+
+
