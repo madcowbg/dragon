@@ -8,13 +8,13 @@ import rtoml
 from command.fast_path import FastPosixPath
 from contents.repo_props import FileDesc
 from exceptions import MissingRepoContents
-from lmdb_storage.file_object import BlobObject, FileObject
+from lmdb_storage.file_object import FileObject
 from lmdb_storage.object_store import ObjectStorage
 from lmdb_storage.roots import Roots
-from lmdb_storage.tree_calculation import TreeCalculator, RecursiveSumCalculator
+from lmdb_storage.tree_calculation import StoredTreeCalculator, RecursiveStoredTreeSumCalculator
 from lmdb_storage.tree_iteration import dfs
-from lmdb_storage.tree_structure import Objects, ObjectID, add_file_object, remove_file_object
 from lmdb_storage.tree_object import ObjectType
+from lmdb_storage.tree_structure import Objects, ObjectID, add_file_object, remove_file_object
 
 
 class RepoFSObjects:
@@ -23,18 +23,18 @@ class RepoFSObjects:
             self.objects = objects
             self.root_id = roots["REPO"].current
 
-            self.count_aggregator = TreeCalculator[int](RecursiveSumCalculator(lambda file_obj: 1))
-            self.size_aggregator = TreeCalculator[int](RecursiveSumCalculator(lambda file_obj: file_obj.size))
+            self.count_aggregator = StoredTreeCalculator[int](
+                objects, RecursiveStoredTreeSumCalculator(lambda file_obj: 1))
+            self.size_aggregator = StoredTreeCalculator[int](
+                objects, RecursiveStoredTreeSumCalculator(lambda file_obj: file_obj.size))
 
         @property
         def num_files(self) -> int:
-            with self.objects as objects:
-                return self.count_aggregator[self.root_id, objects]
+            return self.count_aggregator[self.root_id]
 
         @property
         def total_size(self) -> int:
-            with self.objects as objects:
-                return self.size_aggregator[self.root_id, objects]
+            return self.size_aggregator[self.root_id]
 
     def __init__(self, objects: Objects, roots: Roots, config: "RepoContentsConfig"):
         self.objects = objects
