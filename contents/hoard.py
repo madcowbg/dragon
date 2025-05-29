@@ -1,4 +1,5 @@
 import logging
+import logging
 import os
 import pathlib
 import sys
@@ -12,14 +13,15 @@ import rtoml
 from command.fast_path import FastPosixPath
 from config import HoardConfig
 from contents.hoard_props import HoardFileStatus, HoardFileProps
-from contents.recursive_stats_calc import UsedSize, UsedSizeCalculator, NodeID
+from contents.recursive_stats_calc import UsedSizeCalculator, NodeID, QueryStatsCalculator, composite_from_roots, \
+    drilldown, FolderStats, SizeCountPresenceStatsCalculator, SizeCountPresenceStats
 from contents.repo import RepoContentsConfig
 from lmdb_storage.file_object import BlobObject, FileObject
 from lmdb_storage.object_store import ObjectStorage
 from lmdb_storage.operations.fast_association import FastAssociation
 from lmdb_storage.operations.generator import TreeGenerator
 from lmdb_storage.operations.util import ByRoot
-from lmdb_storage.tree_calculation import CachedCalculator
+from lmdb_storage.tree_calculation import CachedCalculator, ValueCalculator
 from lmdb_storage.tree_iteration import zip_trees_dfs
 from lmdb_storage.tree_object import ObjectType, StoredObject, TreeObject, MaybeObjectID
 from lmdb_storage.tree_operations import get_child
@@ -253,6 +255,8 @@ class ReadonlyHoardFSObjects:
     def __init__(self, parent: "HoardContents"):
         self.parent = parent
 
+        self._size_and_count_agg = CachedCalculator(SizeCountPresenceStatsCalculator(self.parent))
+
     @cached_property
     async def tree(self) -> HoardTree:
         return HoardTree(self)
@@ -313,27 +317,29 @@ class ReadonlyHoardFSObjects:
                     yield path, props
 
     def status_by_uuid(self, folder_path: FastPosixPath | None) -> Dict[str, Dict[str, Dict[str, Any]]]:
-        simple_folder_trailing_slash = folder_path.simple + "/" if folder_path is not None else "/"
-
-        # fixme this could be done faster by directly drilling down to the folder with size aggregator
         stats: Dict[str, Dict[str, Dict[str, Any]]] = dict()
-        for path, props in HoardFilesIterator.all(self.parent):
-            if path.simple.startswith(simple_folder_trailing_slash):
-                for uuid, _ in props.presence.items():
-                    if uuid not in stats:
-                        stats[uuid] = {"total": {"nfiles": 0, "size": 0}}
-                    stats[uuid]["total"]["nfiles"] += 1
-                    stats[uuid]["total"]["size"] += props.size
 
-        for path, props in HoardFilesIterator.all(self.parent):
-            if path.simple.startswith(simple_folder_trailing_slash):
-                for uuid, status in props.presence.items():
-                    if uuid not in stats:
-                        stats[uuid] = dict()
-                    if status.value not in stats[uuid]:
-                        stats[uuid][status.value] = {"nfiles": 0, "size": 0}
-                    stats[uuid][status.value]["nfiles"] += 1
-                    stats[uuid][status.value]["size"] += props.size
+        node_id = composite_from_roots(self.parent)
+        path_node_id = drilldown(self.parent, node_id, folder_path._rem if folder_path is not None else [])
+        if path_node_id is None:
+            logging.error(f"Requesting info for missing folder path {folder_path}?!")
+            node_stats = SizeCountPresenceStats()
+        else:
+            node_stats: SizeCountPresenceStats = self._size_and_count_agg[path_node_id]
+
+        for remote in self.parent.hoard_config.remotes.all():
+            stats_for_remote = node_stats.for_remote(remote.uuid)
+            if stats_for_remote.total.nfiles == 0:
+                continue  # fixme ugly hack
+
+            stats[remote.uuid] = {"total": {
+                "nfiles": stats_for_remote.total.nfiles,
+                "size": stats_for_remote.total.size}}
+
+            for status, remote_stats in stats_for_remote.presence.items():
+                stats[remote.uuid][status.value] = {
+                    "nfiles": remote_stats.nfiles,
+                    "size": remote_stats.size}
 
         return stats
 

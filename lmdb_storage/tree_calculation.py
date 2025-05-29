@@ -41,7 +41,7 @@ class RecursiveCalculator[T, I, R](ValueCalculator[I, R]):
     def calculate(self, calculator: "CachedCalculator[T, R]", item: T) -> R:
         if self.reader.is_compound(item):
             return self.aggregate(
-                (child_name, calculator[child_id]) for child_name, child_id in self.reader.children(item))
+                (child_name, calculator[child_node_at_path]) for child_name, child_node_at_path in self.reader.children(item))
         else:
             assert self.reader.is_atom(item)
             return self.value_getter(self.reader.convert(item))
