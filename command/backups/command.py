@@ -135,6 +135,7 @@ class HoardCommandBackups:
                     out.write(
                         f"set: {backup_set.mounted_at} with {len(backup_set.available_backups)}/{len(backup_set.backups)} media\n")
 
+                    tree_ops = 0
                     print(f"Considering backup set at {backup_set.mounted_at} with {len(backup_set.backups)} media")
                     hoard_file: command.fast_path.FastPosixPath
                     for hoard_file, hoard_props in alive_it(
@@ -154,6 +155,10 @@ class HoardCommandBackups:
                         logging.info(f"Backing up {hoard_file} to {[r.uuid for r in new_repos_to_backup_to]}")
                         for repo in new_repos_to_backup_to:
                             add_to_desired_tree(hoard, repo.uuid, hoard_file.simple, hoard_props)
+                            tree_ops += 1
+                            if tree_ops % 5000 == 0:
+                                logging.warn(f"gc-ing at # of tree ops {tree_ops}. FIXME reimplement faster")
+                                hoard.env.gc(silent=True)  # fixme reimplement logic with tree operation instead
 
                         for repo in new_repos_to_backup_to:
                             added_cnt[repo] = added_cnt.get(repo, 0) + 1

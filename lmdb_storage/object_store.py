@@ -191,7 +191,7 @@ class ObjectStorage(TransactionCreator):
             if self.used_ratio > 0.4:
                 logging.error("Even after GC usage is more than 40%. Can fill up.")
 
-    def gc(self):
+    def gc(self, silent: bool = False):
         sys.stdout.write(f"Used space = {format_size(self.used_size)}\n")
         sys.stdout.write(f"Used pct = {100 * self.used_ratio}\n")
 
@@ -205,11 +205,18 @@ class ObjectStorage(TransactionCreator):
 
         logging.info(f"retaining {len(live_ids)} live objects.")
         with self.objects(write=True) as objects:
-            with alive_bar(title="deleting objects") as bar:
+            if not silent:
+                ab = alive_bar(title="deleting objects")
+                bar = ab.__enter__()
+            try:
                 for obj_id, _ in objects.txn.cursor():
                     if obj_id not in live_ids:
                         del objects[obj_id]
-                        bar()
+                        if not silent:
+                            bar()
+            finally:
+                if not silent:
+                    ab.__exit__(None, None, None)
 
             self.validate_storage(objects, root_ids)
 
