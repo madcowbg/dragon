@@ -5,7 +5,7 @@ from typing import Iterable, Tuple, Dict, List
 from msgspec import msgpack
 
 from command.fast_path import FastPosixPath
-from contents.hoard_props import HoardFileProps, HoardFileStatus
+from contents.hoard_props import HoardFileStatus, compute_status
 from lmdb_storage.file_object import BlobObject, FileObject
 from lmdb_storage.operations.util import remap
 from lmdb_storage.tree_calculation import RecursiveReader, RecursiveCalculator, CachedCalculator
@@ -151,6 +151,12 @@ class CompositeNodeID:
 
         return child_node
 
+    def __hash__(self) -> int:
+        return hash(self.hashed)
+
+    def __eq__(self, other) -> bool:
+        return isinstance(other, CompositeNodeID) and self.hashed == other.hashed
+
 
 class QueryStats:
     pass
@@ -168,20 +174,20 @@ class FolderStats(QueryStats):
     count_non_deleted: int | None
 
 
-@dataclasses.dataclass
-class NodeAtPath:
-    path: List[str]
-    node_id: CompositeNodeID
+class HoardFilePresence:
+    def __init__(self, file_obj: FileObject, node_id: CompositeNodeID):
+        self.file_obj = file_obj
+        self.presence = None
 
-    def __eq__(self, other):
-        return isinstance(other, NodeAtPath) and other.path == self.path and other.node_id.hashed == self.node_id.hashed
+        hoard_id = node_id._hoard_obj_id
+        self.presence = dict()
+        for uuid, (current_id, desired_id) in node_id._roots.items():
+            status = compute_status(hoard_id, current_id, desired_id)
+            if status is not None:
+                self.presence[uuid] = status
 
-    def __hash__(self) -> int:
-        return hash(self.node_id.hashed) + sum(hash(child) for child in self.path)
 
-
-# fixme returning hoard file props is deficient, better just return stats or whatever
-class CompositeTreeReader(RecursiveReader[NodeAtPath, HoardFileProps | None]):
+class CompositeTreeReader(RecursiveReader[CompositeNodeID, HoardFilePresence | None]):
     def __init__(self, parent: "HoardContents"):
         self.parent = parent
 
@@ -192,39 +198,36 @@ class CompositeTreeReader(RecursiveReader[NodeAtPath, HoardFileProps | None]):
         with self.parent.env.objects(write=False) as objects:
             return objects[obj_id]
 
-    def convert(self, node_at_path: NodeAtPath) -> HoardFileProps | None:
-        path = FastPosixPath("/" + "/".join(node_at_path.path))
-        file_obj: BlobObject | None = self.get_if_present(node_at_path.node_id._hoard_obj_id)
+    def convert(self, node: CompositeNodeID) -> HoardFilePresence | None:
+        file_obj: BlobObject | None = self.get_if_present(node._hoard_obj_id)
 
         if file_obj is None:
             # fixme this is the legacy case where we iterate over current but not desired files, required by hoard file props. remove!
-            existing_current = (self.get_if_present(root_ids[0]) for root_ids in node_at_path.node_id._roots.values())
+            existing_current = (self.get_if_present(root_ids[0]) for root_ids in node._roots.values())
 
             file_obj: BlobObject | None = next((obj for obj in existing_current if obj is not None), None)
 
         if not file_obj or file_obj.object_type != ObjectType.BLOB:
-            logging.debug("Error - path %s as it is not a BlobObject", path)
+            logging.debug("Error - path %s as it is not a BlobObject", node)
             return None  # assert False, f"Error - path {path} as it is not a BlobObject"
 
         assert isinstance(file_obj, FileObject)
-        # fixme uses slow path
-        return HoardFileProps(self.parent, path, file_obj.size, file_obj.fasthash, by_root=None, file_id=file_obj.id)
+        return HoardFilePresence(file_obj, node)
 
-    def children(self, obj: NodeAtPath) -> Iterable[Tuple[str, NodeAtPath]]:
+    def children(self, obj: CompositeNodeID) -> Iterable[Tuple[str, CompositeNodeID]]:
         with self.parent.env.objects(write=False) as objects:
             return [
-                (child_name, NodeAtPath(obj.path + [child_name], child_obj))
-                for child_name, child_obj in obj.node_id.children(objects)]
+                (child_name, child_obj)
+                for child_name, child_obj in obj.children(objects)]
 
-    def is_compound(self, obj: NodeAtPath) -> bool:
+    def is_compound(self, obj: CompositeNodeID) -> bool:
         return self.convert(obj) is None  # len(list(self.children(obj))) == 0
 
-    def is_atom(self, obj: NodeAtPath) -> bool:
+    def is_atom(self, obj: CompositeNodeID) -> bool:
         return not self.is_compound(obj)
 
 
-# fixme reimplement without HoardFileProps
-def calc_query_stats(props: HoardFileProps) -> FileStats:
+def calc_query_stats(props: HoardFilePresence) -> FileStats:
     presence = props.presence
     is_deleted = len([uuid for uuid, status in presence.items() if status != HoardFileStatus.CLEANUP]) == 0
     num_sources = len(
@@ -234,7 +237,7 @@ def calc_query_stats(props: HoardFileProps) -> FileStats:
     return FileStats(is_deleted, num_sources, used_size)
 
 
-class QueryStatsCalculator(RecursiveCalculator[NodeAtPath, HoardFileProps, QueryStats]):
+class QueryStatsCalculator(RecursiveCalculator[CompositeNodeID, HoardFilePresence, QueryStats]):
     def aggregate(self, items: Iterable[Tuple[str, QueryStats]]) -> FolderStats:
         count_non_deleted = 0
         for _, child in items:
@@ -248,7 +251,7 @@ class QueryStatsCalculator(RecursiveCalculator[NodeAtPath, HoardFileProps, Query
 
         return FolderStats(count_non_deleted)
 
-    def for_none(self, calculator: "CachedCalculator[HoardFileProps, QueryStats]") -> QueryStats:
+    def for_none(self, calculator: "CachedCalculator[HoardFilePresence, QueryStats]") -> QueryStats:
         return FolderStats(count_non_deleted=0)
 
     def __init__(self, contents: "HoardContent"):
@@ -263,30 +266,28 @@ def child_names(obj: StoredObject) -> List[str]:
     return list(n for n, _ in obj.children) if obj and obj.object_type == ObjectType.TREE else []
 
 
-def composite_from_roots(contents: "HoardContents") -> NodeAtPath:
+def composite_from_roots(contents: "HoardContents") -> CompositeNodeID:
     roots = contents.env.roots(write=False)
     result = CompositeNodeID(roots["HOARD"].desired)
 
     for remote in contents.hoard_config.remotes.all():
         result.set_root_current(remote.uuid, roots[remote.uuid].current)
         result.set_root_desired(remote.uuid, roots[remote.uuid].desired)
-    return NodeAtPath([], result)
+    return result
 
 
-def drilldown(contents: "HoardContents", node_at_path: NodeAtPath, path: List[str]) -> NodeAtPath | None:
+def drilldown(contents: "HoardContents", node_at_path: CompositeNodeID, path: List[str]) -> CompositeNodeID | None:
     with contents.env.objects(write=False) as objects:
-        current_node_id = node_at_path.node_id
-        current_path = node_at_path.path
+        current_node_id = node_at_path
         if current_node_id is None:
             return None
 
         for child in path:
             current_node_id = current_node_id.get_child(objects, child)
-            current_path = current_path + [child]
             if current_node_id is None:
                 return None
 
-        return NodeAtPath(current_path, current_node_id)
+        return current_node_id
 
 
 @dataclasses.dataclass()
@@ -336,17 +337,18 @@ class SizeCountPresenceStats:
         return self
 
 
-def calc_size_count_stats(props: HoardFileProps) -> SizeCountPresenceStats:
+def calc_size_count_stats(props: HoardFilePresence) -> SizeCountPresenceStats:
     result = SizeCountPresenceStats()
     presence = props.presence
     for uuid, status in presence.items():
-        result.for_remote(uuid).total = SizeCount(1, props.size)
-        result.for_remote(uuid).presence = {status: SizeCount(1, props.size)}
+        single_file_stat = SizeCount(1, props.file_obj.size)
+        result.for_remote(uuid).total = single_file_stat
+        result.for_remote(uuid).presence = {status: single_file_stat}
 
     return result
 
 
-class SizeCountPresenceStatsCalculator(RecursiveCalculator[NodeAtPath, HoardFileProps, SizeCountPresenceStats]):
+class SizeCountPresenceStatsCalculator(RecursiveCalculator[CompositeNodeID, HoardFilePresence, SizeCountPresenceStats]):
     def aggregate(self, items: Iterable[Tuple[str, SizeCountPresenceStats]]) -> SizeCountPresenceStats:
         result = SizeCountPresenceStats()
 
@@ -354,8 +356,8 @@ class SizeCountPresenceStatsCalculator(RecursiveCalculator[NodeAtPath, HoardFile
             result += child_result
         return result
 
-    def for_none(self,
-                 calculator: "CachedCalculator[HoardFileProps, SizeCountPresenceStats]") -> SizeCountPresenceStats:
+    def for_none(
+            self, calculator: "CachedCalculator[HoardFilePresence, SizeCountPresenceStats]") -> SizeCountPresenceStats:
         return SizeCountPresenceStats()
 
     def __init__(self, contents: "HoardContent"):
