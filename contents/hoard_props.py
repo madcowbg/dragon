@@ -21,7 +21,8 @@ def compute_status(
         hoard_sub_id: ObjectID | None, sub_id_in_remote_current: ObjectID | None,
         sub_id_in_remote_desired: ObjectID | None) -> HoardFileStatus | None:
     if hoard_sub_id is None:  # is a deleted file
-        if sub_id_in_remote_desired is not None or sub_id_in_remote_current is not None:
+        assert sub_id_in_remote_desired is None, "Can't have a desired file that is not in the hoard"
+        if sub_id_in_remote_current is not None:
             return HoardFileStatus.CLEANUP
         return None
     elif sub_id_in_remote_current is not None:  # file is in current
@@ -90,7 +91,13 @@ class HoardFileProps:
                         presents[uuid] = [None, value]
                     else:
                         presents[uuid][1] = value
-            return dict((uuid, compute_status(hoard_id, current_id, desired_id)) for uuid, (current_id, desired_id) in presents.items())
+
+            result = dict()
+            for uuid, (current_id, desired_id) in presents.items():
+                status = compute_status(hoard_id, current_id, desired_id)
+                if status is not None:
+                    result[uuid] = status
+            return result
 
         result = dict()
         with self.parent.env.objects(write=False) as objects:
