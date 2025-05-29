@@ -1,16 +1,15 @@
 import dataclasses
 import logging
+from abc import abstractmethod
 from typing import Iterable, Tuple, Dict, List
 
 from msgspec import msgpack
 
-from command.fast_path import FastPosixPath
 from contents.hoard_props import HoardFileStatus, compute_status
 from lmdb_storage.file_object import BlobObject, FileObject
 from lmdb_storage.operations.util import remap
 from lmdb_storage.tree_calculation import RecursiveReader, RecursiveCalculator, CachedCalculator
-from lmdb_storage.tree_object import TreeObject, ObjectType, MaybeObjectID, StoredObject
-from lmdb_storage.tree_structure import Objects
+from lmdb_storage.tree_object import TreeObject, ObjectType, MaybeObjectID, StoredObject, ObjectID
 
 type NodeID = Tuple[MaybeObjectID, MaybeObjectID]
 type NodeObj = Tuple[StoredObject | None, StoredObject | None]
@@ -93,6 +92,15 @@ class UsedSizeCalculator(RecursiveCalculator[NodeID, NodeObj, UsedSize]):
         super().__init__(get_used_size, CurrentAndDesiredReader(contents))
 
 
+class ObjectReader:
+    @abstractmethod
+    def read(self, object_id: ObjectID) -> StoredObject:
+        pass
+
+    def maybe_read(self, object_id: MaybeObjectID) -> StoredObject | None:
+        return self.read(object_id) if object_id else None
+
+
 class CompositeNodeID:
     def __init__(self, hoard_obj_id: MaybeObjectID) -> None:
         self._hoard_obj_id = hoard_obj_id
@@ -122,10 +130,10 @@ class CompositeNodeID:
                        if oids[0] is not None or oids[1] is not None)))
         return self._hashed
 
-    def children(self, objects: Objects) -> Iterable[Tuple[str, "CompositeNodeID"]]:
-        hoard_obj = objects[self._hoard_obj_id] if self._hoard_obj_id is not None else None
-        current_roots = remap(self._roots, lambda oids: objects[oids[0]] if oids[0] is not None else None)
-        desired_roots = remap(self._roots, lambda oids: objects[oids[1]] if oids[1] is not None else None)
+    def children(self, objects: ObjectReader) -> Iterable[Tuple[str, "CompositeNodeID"]]:
+        hoard_obj = objects.maybe_read(self._hoard_obj_id)
+        current_roots = remap(self._roots, lambda oids: objects.read(oids[0]) if oids[0] is not None else None)
+        desired_roots = remap(self._roots, lambda oids: objects.read(oids[1]) if oids[1] is not None else None)
         children_names = set(
             child_names(hoard_obj)
             + sum((child_names(obj) for obj in current_roots.values()), [])
@@ -136,16 +144,17 @@ class CompositeNodeID:
             if child_node is not None:
                 yield child_name, child_node
 
-    def get_child(self, objects: Objects, child_name) -> "CompositeNodeID":
-        hoard_obj = objects[self._hoard_obj_id] if self._hoard_obj_id is not None else None
+    def get_child(self, objects: ObjectReader, child_name) -> "CompositeNodeID":
+        assert isinstance(objects, ObjectReader)
+        hoard_obj = objects.maybe_read(self._hoard_obj_id)
         child_node = CompositeNodeID(get_child_if_exists(child_name, hoard_obj))
 
         for uuid, roots_ids in self._roots.items():
-            current_child = get_child_if_exists(child_name, objects[roots_ids[0]]) if roots_ids[0] is not None else None
+            current_child = get_child_if_exists(child_name, objects.maybe_read(roots_ids[0]))
             if current_child is not None:
                 child_node.set_root_current(uuid, current_child)
 
-            desired_child = get_child_if_exists(child_name, objects[roots_ids[1]]) if roots_ids[1] is not None else None
+            desired_child = get_child_if_exists(child_name, objects.maybe_read(roots_ids[1]))
             if desired_child is not None:
                 child_node.set_root_desired(uuid, desired_child)
 
@@ -187,23 +196,28 @@ class HoardFilePresence:
                 self.presence[uuid] = status
 
 
+class CachedReader(ObjectReader):
+    def __init__(self, parent: "HoardContents") -> None:
+        self.parent = parent
+        self._cache = dict()
+
+    def read(self, object_id: ObjectID) -> StoredObject:
+        if object_id not in self._cache:
+            with self.parent.env.objects(write=False) as objects:
+                self._cache[object_id] = objects[object_id]
+        return self._cache[object_id]
+
+
 class CompositeTreeReader(RecursiveReader[CompositeNodeID, HoardFilePresence | None]):
     def __init__(self, parent: "HoardContents"):
-        self.parent = parent
-
-    def get_if_present(self, obj_id: MaybeObjectID) -> StoredObject | None:
-        if obj_id is None:
-            return None
-
-        with self.parent.env.objects(write=False) as objects:
-            return objects[obj_id]
+        self._reader = CachedReader(parent)
 
     def convert(self, node: CompositeNodeID) -> HoardFilePresence | None:
-        file_obj: BlobObject | None = self.get_if_present(node._hoard_obj_id)
+        file_obj: BlobObject | None = self._reader.maybe_read(node._hoard_obj_id)
 
         if file_obj is None:
             # fixme this is the legacy case where we iterate over current but not desired files, required by hoard file props. remove!
-            existing_current = (self.get_if_present(root_ids[0]) for root_ids in node._roots.values())
+            existing_current = (self._reader.maybe_read(root_ids[0]) for root_ids in node._roots.values())
 
             file_obj: BlobObject | None = next((obj for obj in existing_current if obj is not None), None)
 
@@ -215,10 +229,9 @@ class CompositeTreeReader(RecursiveReader[CompositeNodeID, HoardFilePresence | N
         return HoardFilePresence(file_obj, node)
 
     def children(self, obj: CompositeNodeID) -> Iterable[Tuple[str, CompositeNodeID]]:
-        with self.parent.env.objects(write=False) as objects:
-            return [
-                (child_name, child_obj)
-                for child_name, child_obj in obj.children(objects)]
+        return [
+            (child_name, child_obj)
+            for child_name, child_obj in obj.children(self._reader)]
 
     def is_compound(self, obj: CompositeNodeID) -> bool:
         return self.convert(obj) is None  # len(list(self.children(obj))) == 0
@@ -278,12 +291,18 @@ def composite_from_roots(contents: "HoardContents") -> CompositeNodeID:
 
 def drilldown(contents: "HoardContents", node_at_path: CompositeNodeID, path: List[str]) -> CompositeNodeID | None:
     with contents.env.objects(write=False) as objects:
+        class TmpReader(ObjectReader):
+            def read(self, object_id: ObjectID) -> StoredObject:
+                return objects[object_id]
+
+        reader = TmpReader()
+
         current_node_id = node_at_path
         if current_node_id is None:
             return None
 
         for child in path:
-            current_node_id = current_node_id.get_child(objects, child)
+            current_node_id = current_node_id.get_child(reader, child)
             if current_node_id is None:
                 return None
 
