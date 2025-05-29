@@ -1,82 +1,94 @@
 import abc
-from typing import Callable, Dict
+from typing import Callable, Dict, Iterable, Tuple
 
-from lmdb_storage.file_object import BlobObject
-from lmdb_storage.tree_structure import ObjectID, Objects
 from lmdb_storage.tree_object import ObjectType, StoredObject, TreeObject
+from lmdb_storage.tree_structure import ObjectID, Objects
 
 
-class ValueCalculator[T, O, R](abc.ABC):
+class ValueCalculator[T, R](abc.ABC):
     @abc.abstractmethod
-    def calculate(self, calculator: "TreeCalculator[T, R]", obj: O) -> R:
+    def calculate(self, calculator: "CachedCalculator[T, R]", obj: T) -> R:
         pass
 
     @abc.abstractmethod
-    def for_none(self, calculator: "TreeCalculator[T, R]") -> R:
+    def for_none(self, calculator: "CachedCalculator[T, R]") -> R:
         pass
 
 
-class CompoundObj[T]:
-    children: Dict[str, T]
+class RecursiveReader[T, I]:
+    @abc.abstractmethod
+    def convert(self, obj: T) -> I:
+        pass
+
+    @abc.abstractmethod
+    def children(self, obj: T) -> Iterable[Tuple[str, T]]:
+        pass
+
+    @abc.abstractmethod
+    def is_compound(self, obj: T) -> bool:
+        pass
+
+    @abc.abstractmethod
+    def is_atom(self, obj: T) -> bool:
+        pass
 
 
-class RecursiveSumCalculator[K, S, A](ValueCalculator[K, S, int | float]):
-    def __init__(self, value_getter: Callable[[A], int | float]):
+class RecursiveCalculator[T, I, R](ValueCalculator[I, R]):
+    def __init__(self, value_getter: Callable[[T], R], reader: RecursiveReader[T, I]):
         self.value_getter = value_getter
+        self.reader = reader
 
-    def calculate(self, calculator: "TreeCalculator[S, int | float]", obj: S) -> int | float:
-        if self.is_compound(obj):
-            obj: CompoundObj[K]
-            return sum(calculator[child_id] for _, child_id in obj.children)
+    def calculate(self, calculator: "CachedCalculator[T, R]", item: T) -> R:
+        if self.reader.is_compound(item):
+            return self.aggregate(
+                (child_name, calculator[child_id]) for child_name, child_id in self.reader.children(item))
         else:
-            assert self.is_atom(obj)
-            return self.value_getter(obj)
+            assert self.reader.is_atom(item)
+            return self.value_getter(self.reader.convert(item))
 
-    def for_none(self, calculator: "TreeCalculator[S, int | float]") -> int | float:
+    @abc.abstractmethod
+    def aggregate(self, items: Iterable[Tuple[str, R]]) -> R:
+        pass
+
+
+class RecursiveSumCalculator[T, I](RecursiveCalculator[T, I, int | float]):
+    def aggregate(self, items: Iterable[Tuple[str, int | float]]) -> int | float:
+        return sum(v for _, v in items)
+
+    def for_none(self, calculator: "CachedCalculator[T, int | float]") -> int | float:
         return 0
 
-    @abc.abstractmethod
-    def is_compound(self, obj: StoredObject) -> bool:
-        pass
 
-    @abc.abstractmethod
-    def is_atom(self, obj: StoredObject) -> bool:
-        pass
+class TreeReader(RecursiveReader[ObjectID, StoredObject]):
+    def __init__(self, objects: Objects):
+        self.objects = objects
+
+    def convert(self, obj: ObjectID) -> StoredObject:
+        with self.objects as objects:
+            return objects[obj]
+
+    def is_compound(self, item: ObjectID) -> bool:
+        return self.convert(item).object_type == ObjectType.TREE
+
+    def is_atom(self, item: ObjectID) -> bool:
+        return self.convert(item).object_type == ObjectType.BLOB
+
+    def children(self, item: ObjectID) -> Iterable[Tuple[str, ObjectID]]:
+        loaded_obj: StoredObject = self.convert(item)
+        assert loaded_obj.object_type == ObjectType.TREE
+        loaded_obj: TreeObject
+        return loaded_obj.children
 
 
-class RecursiveStoredTreeSumCalculator[K, A](RecursiveSumCalculator[K, StoredObject, int | float]):
-    def is_compound(self, obj: StoredObject) -> bool:
-        return obj.object_type == ObjectType.TREE
-
-    def is_atom(self, obj: StoredObject) -> bool:
-        return obj.object_type == ObjectType.BLOB
-
-
-class TreeCalculator[T, R]:
-    def __init__(self, calculator: ValueCalculator[ObjectID, T, R]):
+class CachedCalculator[T, R]:
+    def __init__(self, calculator: ValueCalculator[T, R]):
         self.calculator = calculator
         self._cache: Dict[ObjectID | None, R] = dict()
 
-    def __getitem__(self, root_id: ObjectID) -> R:
-        if root_id not in self._cache:
-            if root_id is not None:
-                root_obj = self.compute_object(root_id)
-                self._cache[root_id] = self.calculator.calculate(self, root_obj)
+    def __getitem__(self, item: T) -> R:
+        if item not in self._cache:
+            if item is not None:
+                self._cache[item] = self.calculator.calculate(self, item)
             else:
-                self._cache[root_id] = self.calculator.for_none(self)
-        return self._cache[root_id]
-
-    @abc.abstractmethod
-    def compute_object(self, root_id: ObjectID) -> T:
-        pass
-
-
-class StoredTreeCalculator[R](TreeCalculator[StoredObject, R]):
-    def __init__(self, objects: Objects, calculator: ValueCalculator[ObjectID, StoredObject, R]):
-        super().__init__(calculator)
-        self.objects = objects
-
-    def compute_object(self, root_id):
-        with self.objects as objects:
-            root_obj = objects[root_id]
-        return root_obj
+                self._cache[item] = self.calculator.for_none(self)
+        return self._cache[item]

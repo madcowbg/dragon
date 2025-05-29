@@ -11,10 +11,10 @@ from exceptions import MissingRepoContents
 from lmdb_storage.file_object import FileObject
 from lmdb_storage.object_store import ObjectStorage
 from lmdb_storage.roots import Roots
-from lmdb_storage.tree_calculation import StoredTreeCalculator, RecursiveStoredTreeSumCalculator
+from lmdb_storage.tree_calculation import CachedCalculator, RecursiveSumCalculator, TreeReader
 from lmdb_storage.tree_iteration import dfs
-from lmdb_storage.tree_object import ObjectType
-from lmdb_storage.tree_structure import Objects, ObjectID, add_file_object, remove_file_object
+from lmdb_storage.tree_object import ObjectType, StoredObject
+from lmdb_storage.tree_structure import Objects, ObjectID, add_file_object, remove_file_object, StoredObjects
 
 
 class RepoFSObjects:
@@ -23,10 +23,10 @@ class RepoFSObjects:
             self.objects = objects
             self.root_id = roots["REPO"].current
 
-            self.count_aggregator = StoredTreeCalculator[int](
-                objects, RecursiveStoredTreeSumCalculator(lambda file_obj: 1))
-            self.size_aggregator = StoredTreeCalculator[int](
-                objects, RecursiveStoredTreeSumCalculator(lambda file_obj: file_obj.size))
+            self.count_aggregator = CachedCalculator[ObjectID, int](
+                RecursiveSumCalculator[ObjectID, StoredObject](lambda file_obj: 1, TreeReader(objects)))
+            self.size_aggregator = CachedCalculator[ObjectID, int](
+                RecursiveSumCalculator[ObjectID, StoredObject](lambda file_obj: file_obj.size, TreeReader(objects)))
 
         @property
         def num_files(self) -> int:
