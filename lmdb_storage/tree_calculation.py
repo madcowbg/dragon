@@ -34,7 +34,7 @@ class RecursiveReader[T, I]:
 
 
 class RecursiveCalculator[T, I, R](ValueCalculator[I, R]):
-    def __init__(self, value_getter: Callable[[T], R], reader: RecursiveReader[T, I]):
+    def __init__(self, value_getter: Callable[[I], R], reader: RecursiveReader[T, I]):
         self.value_getter = value_getter
         self.reader = reader
 
