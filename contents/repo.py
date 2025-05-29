@@ -11,7 +11,8 @@ from exceptions import MissingRepoContents
 from lmdb_storage.file_object import FileObject
 from lmdb_storage.object_store import ObjectStorage
 from lmdb_storage.roots import Roots
-from lmdb_storage.tree_calculation import CachedCalculator, RecursiveSumCalculator, TreeReader
+from lmdb_storage.tree_calculation import RecursiveSumCalculator, TreeReader
+from lmdb_storage.cached_calcs import CachedCalculator
 from lmdb_storage.tree_iteration import dfs
 from lmdb_storage.tree_object import ObjectType, StoredObject
 from lmdb_storage.tree_structure import Objects, ObjectID, add_file_object, remove_file_object, StoredObjects

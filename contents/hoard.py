@@ -16,12 +16,12 @@ from contents.hoard_props import HoardFileStatus, HoardFileProps
 from contents.recursive_stats_calc import UsedSizeCalculator, NodeID, QueryStatsCalculator, composite_from_roots, \
     drilldown, FolderStats, SizeCountPresenceStatsCalculator, SizeCountPresenceStats
 from contents.repo import RepoContentsConfig
+from lmdb_storage.cached_calcs import CachedCalculator, AppCachedCalculator
 from lmdb_storage.file_object import BlobObject, FileObject
 from lmdb_storage.object_store import ObjectStorage
 from lmdb_storage.operations.fast_association import FastAssociation
 from lmdb_storage.operations.generator import TreeGenerator
 from lmdb_storage.operations.util import ByRoot
-from lmdb_storage.tree_calculation import CachedCalculator, ValueCalculator
 from lmdb_storage.tree_iteration import zip_trees_dfs
 from lmdb_storage.tree_object import ObjectType, StoredObject, TreeObject, MaybeObjectID
 from lmdb_storage.tree_operations import get_child
@@ -255,7 +255,9 @@ class ReadonlyHoardFSObjects:
     def __init__(self, parent: "HoardContents"):
         self.parent = parent
 
-        self._size_and_count_agg = CachedCalculator(SizeCountPresenceStatsCalculator(self.parent))
+        self._size_and_count_agg = AppCachedCalculator(
+            SizeCountPresenceStatsCalculator(self.parent),
+            SizeCountPresenceStats)
 
     @cached_property
     async def tree(self) -> HoardTree:
@@ -323,7 +325,7 @@ class ReadonlyHoardFSObjects:
         path_node_id = drilldown(self.parent, node_id, folder_path._rem if folder_path is not None else [])
         if path_node_id is None:
             logging.error(f"Requesting info for missing folder path {folder_path}?!")
-            node_stats = SizeCountPresenceStats()
+            node_stats = SizeCountPresenceStats(0)
         else:
             node_stats: SizeCountPresenceStats = self._size_and_count_agg[path_node_id]
 

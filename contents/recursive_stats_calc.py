@@ -1,14 +1,16 @@
 import dataclasses
+import hashlib
 import logging
 from abc import abstractmethod
-from typing import Iterable, Tuple, Dict, List
+from functools import cached_property
+from typing import Iterable, Tuple, Dict, List, Any
 
-from msgspec import msgpack
+from msgspec import msgpack, Struct
 
 from contents.hoard_props import HoardFileStatus, compute_status
 from lmdb_storage.file_object import BlobObject, FileObject
 from lmdb_storage.operations.util import remap
-from lmdb_storage.tree_calculation import RecursiveReader, RecursiveCalculator, CachedCalculator
+from lmdb_storage.tree_calculation import RecursiveReader, RecursiveCalculator, StatGetter
 from lmdb_storage.tree_object import TreeObject, ObjectType, MaybeObjectID, StoredObject, ObjectID
 
 type NodeID = Tuple[MaybeObjectID, MaybeObjectID]
@@ -85,7 +87,7 @@ class UsedSizeCalculator(RecursiveCalculator[NodeID, NodeObj, UsedSize]):
     def aggregate(self, items: Iterable[Tuple[str, UsedSize]]) -> UsedSize:
         return UsedSize(sum(v.value for _, v in items))
 
-    def for_none(self, calculator: "CachedCalculator[NodeObj, UsedSize]") -> UsedSize:
+    def for_none(self, calculator: "StatGetter[NodeObj, UsedSize]") -> UsedSize:
         return UsedSize(0)
 
     def __init__(self, contents: "HoardContent"):
@@ -124,10 +126,11 @@ class CompositeNodeID:
     @property
     def hashed(self) -> bytes:
         if self._hashed is None:
-            self._hashed = msgpack.encode((
+            packed = msgpack.encode((
                 self._hoard_obj_id,
                 sorted((name, oids) for name, oids in self._roots.items()
                        if oids[0] is not None or oids[1] is not None)))
+            self._hashed = hashlib.md5(packed).digest()
         return self._hashed
 
     def children(self, objects: ObjectReader) -> Iterable[Tuple[str, "CompositeNodeID"]]:
@@ -264,7 +267,7 @@ class QueryStatsCalculator(RecursiveCalculator[CompositeNodeID, HoardFilePresenc
 
         return FolderStats(count_non_deleted)
 
-    def for_none(self, calculator: "CachedCalculator[HoardFilePresence, QueryStats]") -> QueryStats:
+    def for_none(self, calculator: "StatGetter[HoardFilePresence, QueryStats]") -> QueryStats:
         return FolderStats(count_non_deleted=0)
 
     def __init__(self, contents: "HoardContent"):
@@ -336,10 +339,13 @@ class SizeCountPresenceForRemoteStats:
             self.presence[status] += size_count
 
 
-@dataclasses.dataclass()
-class SizeCountPresenceStats:
-    def __init__(self):
-        self._per_remote: Dict[str, SizeCountPresenceForRemoteStats] = dict()
+class SizeCountPresenceStats(Struct):
+    @classmethod
+    def should_store(cls, item: "SizeCountPresenceStats") -> bool:
+        return item.total > 100
+
+    total: int
+    _per_remote: Dict[str, SizeCountPresenceForRemoteStats] = dict()
 
     def for_remote(self, uuid: str) -> SizeCountPresenceForRemoteStats:
         if uuid not in self._per_remote:
@@ -350,14 +356,15 @@ class SizeCountPresenceStats:
         return self._per_remote.keys()
 
     def __iadd__(self, other):
-        assert isinstance(other, SizeCountPresenceStats)
+        assert isinstance(other, SizeCountPresenceStats), other
+        self.total += other.total
         for remote, stat in other._per_remote.items():
             self.for_remote(remote).add(stat)
         return self
 
 
 def calc_size_count_stats(props: HoardFilePresence) -> SizeCountPresenceStats:
-    result = SizeCountPresenceStats()
+    result = SizeCountPresenceStats(1)
     presence = props.presence
     for uuid, status in presence.items():
         single_file_stat = SizeCount(1, props.file_obj.size)
@@ -369,15 +376,18 @@ def calc_size_count_stats(props: HoardFilePresence) -> SizeCountPresenceStats:
 
 class SizeCountPresenceStatsCalculator(RecursiveCalculator[CompositeNodeID, HoardFilePresence, SizeCountPresenceStats]):
     def aggregate(self, items: Iterable[Tuple[str, SizeCountPresenceStats]]) -> SizeCountPresenceStats:
-        result = SizeCountPresenceStats()
+        result = SizeCountPresenceStats(0)
 
         for _, child_result in items:
             result += child_result
         return result
 
-    def for_none(
-            self, calculator: "CachedCalculator[HoardFilePresence, SizeCountPresenceStats]") -> SizeCountPresenceStats:
-        return SizeCountPresenceStats()
+    def for_none(self, calculator: "StatGetter[HoardFilePresence, SizeCountPresenceStats]") -> SizeCountPresenceStats:
+        return SizeCountPresenceStats(0)
 
     def __init__(self, contents: "HoardContent"):
         super().__init__(calc_size_count_stats, CompositeTreeReader(contents))
+
+    @cached_property
+    def stat_cache_key(self) -> bytes:
+        return "SizeCountPresenceStats-V01".encode("UTF-8")

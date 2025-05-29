@@ -1,17 +1,22 @@
 import abc
-from typing import Callable, Dict, Iterable, Tuple
+from abc import abstractmethod
+from typing import Callable, Iterable, Tuple
 
 from lmdb_storage.tree_object import ObjectType, StoredObject, TreeObject
 from lmdb_storage.tree_structure import ObjectID, Objects
 
 
+class StatGetter[T, R]:
+    @abstractmethod
+    def __getitem__(self, item: T) -> R: pass
+
 class ValueCalculator[T, R](abc.ABC):
     @abc.abstractmethod
-    def calculate(self, calculator: "CachedCalculator[T, R]", obj: T) -> R:
+    def calculate(self, calculator: StatGetter[T, R], obj: T) -> R:
         pass
 
     @abc.abstractmethod
-    def for_none(self, calculator: "CachedCalculator[T, R]") -> R:
+    def for_none(self, calculator: StatGetter[T, R]) -> R:
         pass
 
 
@@ -38,10 +43,11 @@ class RecursiveCalculator[T, I, R](ValueCalculator[I, R]):
         self.value_getter = value_getter
         self.reader = reader
 
-    def calculate(self, calculator: "CachedCalculator[T, R]", item: T) -> R:
+    def calculate(self, calculator: "StatGetter[T, R]", item: T) -> R:
         if self.reader.is_compound(item):
             return self.aggregate(
-                (child_name, calculator[child_node_at_path]) for child_name, child_node_at_path in self.reader.children(item))
+                (child_name, calculator[child_node_at_path]) for child_name, child_node_at_path in
+                self.reader.children(item))
         else:
             assert self.reader.is_atom(item)
             return self.value_getter(self.reader.convert(item))
@@ -55,7 +61,7 @@ class RecursiveSumCalculator[T, I](RecursiveCalculator[T, I, int | float]):
     def aggregate(self, items: Iterable[Tuple[str, int | float]]) -> int | float:
         return sum(v for _, v in items)
 
-    def for_none(self, calculator: "CachedCalculator[T, int | float]") -> int | float:
+    def for_none(self, calculator: "StatGetter[T, int | float]") -> int | float:
         return 0
 
 
@@ -79,16 +85,3 @@ class TreeReader(RecursiveReader[ObjectID, StoredObject]):
         loaded_obj: TreeObject
         return loaded_obj.children
 
-
-class CachedCalculator[T, R]:
-    def __init__(self, calculator: ValueCalculator[T, R]):
-        self.calculator = calculator
-        self._cache: Dict[ObjectID | None, R] = dict()
-
-    def __getitem__(self, item: T) -> R:
-        if item not in self._cache:
-            if item is not None:
-                self._cache[item] = self.calculator.calculate(self, item)
-            else:
-                self._cache[item] = self.calculator.for_none(self)
-        return self._cache[item]
