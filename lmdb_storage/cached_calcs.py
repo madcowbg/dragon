@@ -1,3 +1,4 @@
+import logging
 import random
 import sys
 from typing import Dict, Any
@@ -35,6 +36,9 @@ def app_stats_cache() -> StatsCache:
     return APP_STATS_CACHE
 
 
+APP_CACHE_LOG_RATIO = 1000
+
+
 class AppCachedCalculator[T, R](StatGetter[T, R]):
     def __init__(self, calculator: ValueCalculator[T, R], result_type: type[R]):
         self.calculator = calculator
@@ -56,8 +60,8 @@ class AppCachedCalculator[T, R](StatGetter[T, R]):
                 item_key = self.calculator.stat_cache_key + item.hashed
                 cached_blob = self._cache_reader.get(item_key)
 
-                if random.randint(0, 999) == 0:
-                    sys.stdout.write(f"used%: {used_ratio(self._stats_cache._env)}\n")
+                if random.randint(0, APP_CACHE_LOG_RATIO - 1) == 0:
+                    logging.warn(f"calculating stats, used%: {used_ratio(self._stats_cache._env)}\n")
 
                 if cached_blob is not None:
                     self._cache[item] = msgpack.decode(cached_blob, type=self._result_type)
