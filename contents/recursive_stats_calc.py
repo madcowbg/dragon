@@ -1,9 +1,9 @@
 import dataclasses
 import hashlib
 import logging
-from abc import abstractmethod
+from abc import abstractmethod, ABC
 from functools import cached_property
-from typing import Iterable, Tuple, Dict, List, Any
+from typing import Iterable, Tuple, Dict, List
 
 from msgspec import msgpack, Struct
 
@@ -13,20 +13,45 @@ from lmdb_storage.operations.util import remap
 from lmdb_storage.tree_calculation import RecursiveReader, RecursiveCalculator, StatGetter
 from lmdb_storage.tree_object import TreeObject, ObjectType, MaybeObjectID, StoredObject, ObjectID
 
-type NodeID = Tuple[MaybeObjectID, MaybeObjectID]
+
+class HashableKey:
+    @property
+    @abstractmethod
+    def hashed(self) -> bytes: pass
+
+
+class Storeable:
+    @abstractmethod
+    def should_store(self) -> bool:    pass
+
+
+@dataclasses.dataclass(frozen=True)
+class NodeID(HashableKey):
+    current: MaybeObjectID
+    desired: MaybeObjectID
+
+    @cached_property
+    def hashed(self) -> bytes:
+        return msgpack.encode((self.current, self.desired))
+
+
 type NodeObj = Tuple[StoredObject | None, StoredObject | None]
 
 
-class UsedSize:
-    def __init__(self, value: int):
-        self.value = value
+@dataclasses.dataclass(frozen=True)
+class UsedSize(Storeable):
+    used_size: int
+    count: int
+
+    def should_store(self) -> bool:
+        return self.count > 100
 
 
 def get_used_size(obj: NodeObj) -> UsedSize:
     """ Returns the larger of the desired or the current size for that object. Assumes they are blobs"""
     assert not obj[0] or obj[0].object_type == ObjectType.BLOB
     assert not obj[1] or obj[1].object_type == ObjectType.BLOB
-    return UsedSize(max(obj[0].size if obj[0] else 0, obj[1].size if obj[1] else 0))
+    return UsedSize(max(obj[0].size if obj[0] else 0, obj[1].size if obj[1] else 0), 1)
 
 
 class CurrentAndDesiredReader(RecursiveReader[NodeID, NodeObj]):
@@ -35,35 +60,35 @@ class CurrentAndDesiredReader(RecursiveReader[NodeID, NodeObj]):
 
     def convert(self, obj: NodeID) -> NodeObj:
         with self.contents.env.objects(write=False) as objects:
-            return objects[obj[0]] if obj[0] else None, objects[obj[1]] if obj[1] else None
+            return objects[obj.current] if obj.current else None, objects[obj.desired] if obj.desired else None
 
     def children(self, obj: NodeID) -> Iterable[Tuple[str, NodeID]]:
         left, right = self.convert(obj)
 
         if left is None:
             assert isinstance(right, TreeObject)
-            yield from [(child_name, (None, right_child)) for child_name, right_child in right.children]
+            yield from [(child_name, NodeID(None, right_child)) for child_name, right_child in right.children]
             return
 
         if left.object_type == ObjectType.BLOB:
-            yield "$LEFT$", (obj[0], None)  # returns left blob
+            yield "$LEFT$", NodeID(obj.current, None)  # returns left blob
 
             assert isinstance(right, TreeObject)
-            yield from [(child_name, (None, right_child)) for child_name, right_child in right.children]
+            yield from [(child_name, NodeID(None, right_child)) for child_name, right_child in right.children]
             return
 
         assert left.object_type == ObjectType.TREE
 
         if right is None:
             assert isinstance(left, TreeObject)
-            yield from [(child_name, (left_child, None)) for child_name, left_child in left.children]
+            yield from [(child_name, NodeID(left_child, None)) for child_name, left_child in left.children]
             return
 
         if right.object_type == ObjectType.BLOB:
-            yield "$RIGHT", (None, obj[1])  # returns right blob
+            yield "$RIGHT", NodeID(None, obj.desired)  # returns right blob
 
             assert isinstance(left, TreeObject)
-            yield from [(child_name, (left_child, None)) for child_name, left_child in left.children]
+            yield from [(child_name, NodeID(left_child, None)) for child_name, left_child in left.children]
             return
 
         assert right.object_type == ObjectType.TREE
@@ -71,7 +96,7 @@ class CurrentAndDesiredReader(RecursiveReader[NodeID, NodeObj]):
         right_map = dict(right.children)
         all_children = sorted(set(list(left_map.keys()) + list(right_map.keys())))
         for child_name in all_children:
-            yield child_name, (left_map.get(child_name), right_map.get(child_name))
+            yield child_name, NodeID(left_map.get(child_name), right_map.get(child_name))
 
     def is_compound(self, obj: NodeID) -> bool:
         left, right = self.convert(obj)
@@ -85,13 +110,21 @@ class CurrentAndDesiredReader(RecursiveReader[NodeID, NodeObj]):
 
 class UsedSizeCalculator(RecursiveCalculator[NodeID, NodeObj, UsedSize]):
     def aggregate(self, items: Iterable[Tuple[str, UsedSize]]) -> UsedSize:
-        return UsedSize(sum(v.value for _, v in items))
+        used_size, count = 0, 0
+        for _, v in items:
+            used_size += v.used_size
+            count += v.count
+        return UsedSize(used_size, count)
 
     def for_none(self, calculator: "StatGetter[NodeObj, UsedSize]") -> UsedSize:
-        return UsedSize(0)
+        return UsedSize(0, 0)
 
     def __init__(self, contents: "HoardContent"):
         super().__init__(get_used_size, CurrentAndDesiredReader(contents))
+
+    @cached_property
+    def stat_cache_key(self) -> bytes:
+        return "UsedSizeCalculator-V01".encode()
 
 
 class ObjectReader:
@@ -103,7 +136,7 @@ class ObjectReader:
         return self.read(object_id) if object_id else None
 
 
-class CompositeNodeID:
+class CompositeNodeID(HashableKey):
     def __init__(self, hoard_obj_id: MaybeObjectID) -> None:
         self._hoard_obj_id = hoard_obj_id
         self._roots: Dict[str, List[MaybeObjectID]] = {}
@@ -170,25 +203,29 @@ class CompositeNodeID:
         return isinstance(other, CompositeNodeID) and self.hashed == other.hashed
 
 
-class QueryStats:
-    pass
-
-
 @dataclasses.dataclass
-class FileStats(QueryStats):
+class FileStats:
     is_deleted: bool
     num_sources: int
     used_size: int
 
 
 @dataclasses.dataclass
-class FolderStats(QueryStats):
+class FolderStats:
     count: int
     used_size: int
 
     count_non_deleted: int
     num_without_sources: int
 
+
+@dataclasses.dataclass
+class QueryStats(Storeable, ABC):
+    file: FileStats | None = None
+    folder: FolderStats | None = None
+
+    def should_store(self) -> bool:
+        return self.folder and self.folder.count > 100
 
 class HoardFilePresence:
     def __init__(self, file_obj: FileObject, node_id: CompositeNodeID):
@@ -247,46 +284,52 @@ class CompositeTreeReader(RecursiveReader[CompositeNodeID, HoardFilePresence | N
         return not self.is_compound(obj)
 
 
-def calc_query_stats(props: HoardFilePresence) -> FileStats:
+def calc_query_stats(props: HoardFilePresence) -> QueryStats:
     presence = props.presence
     is_deleted = len([uuid for uuid, status in presence.items() if status != HoardFileStatus.CLEANUP]) == 0
     num_sources = len(
         [uuid for uuid, status in presence.items() if status in (HoardFileStatus.AVAILABLE, HoardFileStatus.MOVE)])
     used_size = props.file_obj.size
 
-    return FileStats(is_deleted, num_sources, used_size)
+    return QueryStats(file=FileStats(is_deleted, num_sources, used_size))
 
 
 class QueryStatsCalculator(RecursiveCalculator[CompositeNodeID, HoardFilePresence, QueryStats]):
-    def aggregate(self, items: Iterable[Tuple[str, QueryStats]]) -> FolderStats:
+    def aggregate(self, items: Iterable[Tuple[str, QueryStats]]) -> QueryStats:
         count = 0
         used_size = 0
         count_non_deleted = 0
         num_without_sources = 0
         for _, child in items:
-            if isinstance(child, FileStats):
+            if child.file:
+                assert not child.folder
                 count += 1
-                used_size += child.used_size
-                if not child.is_deleted:
+                used_size += child.file.used_size
+                if not child.file.is_deleted:
                     count_non_deleted += 1
-                if child.num_sources == 0:
+                if child.file.num_sources == 0:
                     num_without_sources += 1
-            elif isinstance(child, FolderStats):
-                count += child.count
-                used_size += child.used_size
-                count_non_deleted += child.count_non_deleted
-                num_without_sources += child.num_without_sources
+            elif child.folder:
+                count += child.folder.count
+                used_size += child.folder.used_size
+                count_non_deleted += child.folder.count_non_deleted
+                num_without_sources += child.folder.num_without_sources
             else:
                 raise ValueError(f"Unrecognized child type: {child}")
 
-        return FolderStats(
-            count=count, used_size=used_size, count_non_deleted=count_non_deleted, num_without_sources=num_without_sources)
+        return QueryStats(folder=FolderStats(
+            count=count, used_size=used_size, count_non_deleted=count_non_deleted,
+            num_without_sources=num_without_sources))
 
     def for_none(self, calculator: "StatGetter[HoardFilePresence, QueryStats]") -> QueryStats:
-        return FolderStats(0,0,0,0)
+        return QueryStats(folder=FolderStats(0, 0, 0, 0))
 
     def __init__(self, contents: "HoardContent"):
         super().__init__(calc_query_stats, CompositeTreeReader(contents))
+
+    @cached_property
+    def stat_cache_key(self) -> bytes:
+        return "QueryStatsCalculator-V01".encode()
 
 
 def get_child_if_exists(child_name: str, hoard_obj: StoredObject | None):
@@ -354,10 +397,9 @@ class SizeCountPresenceForRemoteStats:
             self.presence[status] += size_count
 
 
-class SizeCountPresenceStats(Struct):
-    @classmethod
-    def should_store(cls, item: "SizeCountPresenceStats") -> bool:
-        return item.total > 100
+class SizeCountPresenceStats(Struct, Storeable):
+    def should_store(self) -> bool:
+        return self.total > 100
 
     total: int
     _per_remote: Dict[str, SizeCountPresenceForRemoteStats] = dict()

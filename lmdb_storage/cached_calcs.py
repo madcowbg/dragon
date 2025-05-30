@@ -4,7 +4,7 @@ from typing import Dict, Any
 
 from msgspec import msgpack
 
-from contents.recursive_stats_calc import CompositeNodeID
+from contents.recursive_stats_calc import CompositeNodeID, HashableKey
 from lmdb_storage.object_store import used_ratio
 from lmdb_storage.stats_cache import StatsCache
 from lmdb_storage.tree_calculation import StatGetter, ValueCalculator
@@ -51,26 +51,26 @@ class AppCachedCalculator[T, R](StatGetter[T, R]):
     def __getitem__(self, item: T) -> R:
         if item not in self._cache:
             if item is not None:
-                if isinstance(item, CompositeNodeID):
-                    item_key = self.calculator.stat_cache_key + item.hashed
-                    cached_blob = self._cache_reader.get(item_key)
+                assert isinstance(item, HashableKey)
 
-                    if random.randint(0, 999) == 0:
-                        sys.stdout.write(f"used%: {used_ratio(self._stats_cache._env)}\n")
+                item_key = self.calculator.stat_cache_key + item.hashed
+                cached_blob = self._cache_reader.get(item_key)
 
-                    if cached_blob is not None:
-                        self._cache[item] = msgpack.decode(cached_blob, type=self._result_type)
+                if random.randint(0, 999) == 0:
+                    sys.stdout.write(f"used%: {used_ratio(self._stats_cache._env)}\n")
+
+                if cached_blob is not None:
+                    self._cache[item] = msgpack.decode(cached_blob, type=self._result_type)
 
                 if item not in self._cache:
                     self._cache[item] = self.calculator.calculate(self, item)
 
-                if isinstance(item, CompositeNodeID):
-                    result = self._cache[item]
+                result = self._cache[item]
 
-                    if self._result_type.should_store(result):
-                        cached_blob = msgpack.encode(result)
-                        with self._stats_cache.begin(write=True) as cache:
-                            cache.put(item_key, cached_blob)
+                if result.should_store():
+                    cached_blob = msgpack.encode(result)
+                    with self._stats_cache.begin(write=True) as cache:
+                        cache.put(item_key, cached_blob)
             else:
                 self._cache[item] = self.calculator.for_none(self)
         return self._cache[item]

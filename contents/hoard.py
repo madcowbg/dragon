@@ -14,7 +14,7 @@ from command.fast_path import FastPosixPath
 from config import HoardConfig
 from contents.hoard_props import HoardFileStatus, HoardFileProps
 from contents.recursive_stats_calc import UsedSizeCalculator, NodeID, QueryStatsCalculator, composite_from_roots, \
-    drilldown, FolderStats, SizeCountPresenceStatsCalculator, SizeCountPresenceStats, FileStats, QueryStats
+    drilldown, FolderStats, SizeCountPresenceStatsCalculator, SizeCountPresenceStats, FileStats, QueryStats, UsedSize
 from contents.repo import RepoContentsConfig
 from lmdb_storage.cached_calcs import CachedCalculator, AppCachedCalculator
 from lmdb_storage.file_object import BlobObject, FileObject
@@ -400,8 +400,8 @@ class Query:
     def __init__(self, parent: "HoardContents"):
         self.parent = parent
 
-        self._repo_stats_agg = CachedCalculator(UsedSizeCalculator(parent))
-        self._file_and_folder_stats = CachedCalculator(QueryStatsCalculator(parent))
+        self._repo_stats_agg = AppCachedCalculator(UsedSizeCalculator(parent), UsedSize)
+        self._file_and_folder_stats = AppCachedCalculator(QueryStatsCalculator(parent), QueryStats)
 
     def count_non_deleted(self, folder_name: FastPosixPath) -> int:
         stats = self._get_folder_stats(folder_name)
@@ -410,18 +410,18 @@ class Query:
     def _get_folder_stats(self, folder_name: FastPosixPath) -> FolderStats:
         stats = self._get_stats(folder_name)
 
-        if not isinstance(stats, FolderStats):
+        if not stats.folder:
             raise ValueError(f"Received info for file at {folder_name}?!")
 
-        return stats
+        return stats.folder
 
     def _get_file_stats(self, file_name: FastPosixPath) -> FileStats:
         stats = self._get_stats(file_name)
 
-        if not isinstance(stats, FileStats):
+        if not stats.file:
             raise ValueError(f"Received info for folder at {file_name}?!")
 
-        return stats
+        return stats.file
 
     def _get_stats(self, folder_name: FastPosixPath) -> QueryStats:
         assert folder_name.is_absolute()
@@ -452,8 +452,8 @@ class Query:
 
     def used_size(self, repo_uuid: str) -> int:
         repo_root = self.parent.env.roots(write=False)[repo_uuid]
-        repo_root_node: NodeID = (repo_root.desired, repo_root.current)
-        return self._repo_stats_agg[repo_root_node].value
+        repo_root_node: NodeID = NodeID(repo_root.desired, repo_root.current)
+        return self._repo_stats_agg[repo_root_node].used_size
 
 
 STATUSES_THAT_USE_SIZE = [HoardFileStatus.AVAILABLE, HoardFileStatus.GET, HoardFileStatus.COPY, HoardFileStatus.CLEANUP]
