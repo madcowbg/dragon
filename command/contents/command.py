@@ -22,15 +22,12 @@ from contents.recursive_stats_calc import NodeID, NodeObj, CurrentAndDesiredRead
 from contents.repo import RepoContents
 from exceptions import MissingRepoContents, MissingRepo
 from lmdb_storage.cached_calcs import CachedCalculator
-from lmdb_storage.file_object import BlobObject
 from lmdb_storage.operations.three_way_merge import TransformedRoots
-from lmdb_storage.operations.types import Transformation
-from lmdb_storage.operations.util import ByRoot
 from lmdb_storage.pull_contents import merge_contents, commit_merged
 from lmdb_storage.roots import Root, Roots
 from lmdb_storage.tree_calculation import RecursiveCalculator, StatGetter
 from lmdb_storage.tree_iteration import zip_trees_dfs
-from lmdb_storage.tree_object import ObjectType, TreeObject, ObjectID, MaybeObjectID, StoredObject
+from lmdb_storage.tree_object import ObjectType, TreeObject, ObjectID, MaybeObjectID
 from lmdb_storage.tree_operations import get_child, graft_in_tree
 from lmdb_storage.tree_structure import Objects
 from resolve_uuid import resolve_remote_uuid
