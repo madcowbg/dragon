@@ -166,7 +166,13 @@ class ObjectStorage(TransactionCreator):
     def __enter__(self):
         self._env, self._dbs = OBJECT_ENVIRONMENT_CACHE.obtain(
             self._env_params.path, max_dbs=self._env_params.max_dbs, map_size=self._env_params.map_size)
-        self.maybe_gc()
+        if self.used_ratio > 0.6:
+            logging.warn(f"Start cleaning with used ratio of {self.used_ratio}.")
+            self._env.set_mapsize(self._env_params.map_size * 2)
+            self.gc()
+            self._env.set_mapsize(self._env_params.map_size)
+            logging.warn(f"Ended cleaning with used ratio of {self.used_ratio}.")
+
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
