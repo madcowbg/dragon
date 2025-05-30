@@ -91,6 +91,9 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             'REPO_MARK_FILE_AVAILABLE /wat/test.me.twice',
             'HOARD_FILE_ADDED /wat/test.me.twice'], res.splitlines())
 
+        res = await hoard_cmd.contents.tree_differences("repo-in-local")
+        self.assertEqual(['Tree Differences up to level 3:', '/: GET: 1', 'DONE'], res.splitlines())
+
         res = await hoard_cmd.contents.pull("repo-in-local")
         self.assertEqual((
             'Pulling repo-in-local...\n'
@@ -120,6 +123,9 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             'Remote repo-in-local current=72174f staging=72174f desired=72174f\n'
             'Status of repo-in-local:\n'
             'DONE'), res.strip())
+
+        res = await hoard_cmd.contents.tree_differences("repo-in-local")
+        self.assertEqual(['Tree Differences up to level 3:', 'DONE'], res.splitlines())
 
         res = await hoard_cmd.contents.pending_pull("repo-in-local")
         self.assertEqual([
@@ -212,6 +218,15 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             'MODIFIED /wat/test.me.different\n'
             'MISSING /wat/test.me.once\n'
             'DONE'), res.strip())
+
+        res = await hoard_cmd.contents.tree_differences("repo-in-local-2")
+        self.assertEqual([
+            'Tree Differences up to level 3:',
+            '/[D]: GET: 1, CHANGE: 1',
+            ' wat[D]: GET: 1, CHANGE: 1',
+            '  test.me.different: CHANGE: 1',
+            '  test.me.once: GET: 1',
+            'DONE'], res.splitlines())
 
         res = await hoard_cmd.contents.pending_pull("repo-in-local-2")
         self.assertEqual([
@@ -357,6 +372,9 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             "Sync'ed repo-in-local to hoard!\n"
             'DONE'), res)
 
+        res = await hoard_cmd.contents.tree_differences("repo-in-local")
+        self.assertEqual(['Tree Differences up to level 3:', 'DONE'], res.splitlines())
+
         self.assertEqual((
             'Root: 4504c1f3941271cfc96da6bcf8d5f4198c2f4132\n'
             'Remote repo-in-local current=4504c1 staging=4504c1 desired=4504c1\n'
@@ -436,6 +454,16 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             'MISSING /wat/test.me.once\n'
             'MISSING /wat/test.me.twice\n'
             'DONE'), res)
+
+        res = await hoard_cmd.contents.tree_differences(new_uuid)
+        self.assertEqual([
+            'Tree Differences up to level 3:',
+            '/[D]: GET: 3',
+            ' wat[D]: GET: 3',
+            '  test.me.different: GET: 1',
+            '  test.me.once: GET: 1',
+            '  test.me.twice: GET: 1',
+            'DONE'], res.splitlines())
 
         res = await hoard_cmd.contents.pending_pull(new_uuid)
         self.assertEqual([
@@ -595,6 +623,9 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             "Sync'ed repo-full-name to hoard!\n"
             'DONE'), res.strip())
 
+        res = await hoard_cmd.contents.tree_differences("repo-full-name")
+        self.assertEqual(['Tree Differences up to level 3:', 'DONE'], res.splitlines())
+
         res = await hoard_cmd.contents.pull("repo-full-name", ignore_epoch=True)  # does nothing ...
         self.assertEqual((
             'Pulling repo-full-name...\n'
@@ -645,6 +676,17 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             'After: Hoard [8da760], repo [curr: 3d1726, stg: 3d1726, des: None]\n'
             "Sync'ed repo-incoming-name to hoard!\n"
             'DONE'), res.strip())
+
+        res = await hoard_cmd.contents.tree_differences("repo-incoming-name")
+        self.assertEqual([
+            'Tree Differences up to level 3:',
+            '/[D]: DELETE: 4',
+            ' test.me.4: DELETE: 1',
+            ' test.me.5: DELETE: 1',
+            ' wat[D]: DELETE: 2',
+            '  test.me.3: DELETE: 1',
+            '  test.me.6: DELETE: 1',
+            'DONE'], res.splitlines())
 
         res = await incoming_cave_cmd.refresh(show_details=False)
         self.assertEqual((
@@ -828,6 +870,18 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             'After: Hoard [8da760], repo [curr: 3d1726, stg: 3d1726, des: None]\n'
             "Sync'ed repo-incoming-name to hoard!\n"
             'DONE'), res)
+
+        res = await hoard_cmd.contents.tree_differences("repo-partial-name")
+        self.assertEqual(['Tree Differences up to level 3:', 'DONE'], res.splitlines())
+
+        res = await hoard_cmd.contents.tree_differences("repo-full-name")
+        self.assertEqual([
+            'Tree Differences up to level 3:',
+            '/[D]: GET: 2',
+            ' test.me.5: GET: 1',
+            ' wat[D]: GET: 1',
+            '  test.me.6: GET: 1',
+            'DONE'], res.splitlines())
 
         res = await hoard_cmd.contents.status(hide_disk_sizes=True)
         self.assertEqual([
@@ -1099,6 +1153,9 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             'After: Hoard [cfe6f4], repo [curr: cfe6f4, stg: cfe6f4, des: cfe6f4]\n'
             "Sync'ed repo-partial-name to hoard!\n"
             'DONE'), res.strip())
+
+        res = await hoard_cmd.contents.tree_differences("repo-partial-name")
+        self.assertEqual(['Tree Differences up to level 3:', 'DONE'], res.splitlines())
 
         res = hoard_cmd.remotes(hide_paths=True)
         self.assertEqual(
@@ -1413,6 +1470,9 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             remote_path=join(tmpdir, "repo-full"), name="repo-full-name", mount_point="/",
             type=CaveType.PARTIAL, fetch_new=True)
         self.assertEqual(f"Added repo-full-name[{full_cave_cmd.current_uuid()}] at {join(tmpdir, 'repo-full')}!", res)
+
+        res = await hoard_cmd.contents.tree_differences("repo-full-name")
+        self.assertEqual(['Tree Differences up to level 3:', '/: GET: 1', 'DONE'], res.splitlines())
 
         res = await hoard_cmd.contents.pull(all=True)
         self.assertEqual((

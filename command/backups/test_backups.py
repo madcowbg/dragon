@@ -159,6 +159,17 @@ class TestBackups(IsolatedAsyncioTestCase):
             "TO_CLEANUP (is in 0) /wat/test.me.6\n"
             "DONE", res)
 
+        res = await hoard_cmd.contents.tree_differences("repo-incoming-name")
+        self.assertEqual([
+            'Tree Differences up to level 3:',
+            '/[D]: DELETE: 4',
+            ' test.me.4: DELETE: 1',
+            ' test.me.5: DELETE: 1',
+            ' wat[D]: DELETE: 2',
+            '  test.me.3: DELETE: 1',
+            '  test.me.6: DELETE: 1',
+            'DONE'], res.splitlines())
+
         await partial_cave_cmd.refresh(show_details=False)
         await full_cave_cmd.refresh(show_details=False)
         await incoming_cave_cmd.refresh(show_details=False)

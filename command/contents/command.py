@@ -1,7 +1,8 @@
+import dataclasses
 import logging
 import sys
 from io import StringIO
-from typing import List, Dict, Any, Optional, Callable, Awaitable, Tuple, TextIO
+from typing import List, Dict, Any, Optional, Callable, Awaitable, Tuple, TextIO, Iterable
 
 import humanize
 from alive_progress import alive_it
@@ -17,17 +18,23 @@ from command.tree_operations import remove_from_desired_tree
 from config import CaveType, HoardRemote, HoardConfig
 from contents.hoard import HoardContents, HoardFile, HoardDir
 from contents.hoard_props import HoardFileStatus, HoardFileProps
+from contents.recursive_stats_calc import NodeID, NodeObj, CurrentAndDesiredReader
 from contents.repo import RepoContents
 from exceptions import MissingRepoContents, MissingRepo
+from lmdb_storage.cached_calcs import CachedCalculator
+from lmdb_storage.file_object import BlobObject
 from lmdb_storage.operations.three_way_merge import TransformedRoots
+from lmdb_storage.operations.types import Transformation
+from lmdb_storage.operations.util import ByRoot
 from lmdb_storage.pull_contents import merge_contents, commit_merged
 from lmdb_storage.roots import Root, Roots
+from lmdb_storage.tree_calculation import RecursiveCalculator, StatGetter
 from lmdb_storage.tree_iteration import zip_trees_dfs
-from lmdb_storage.tree_object import ObjectType, TreeObject, ObjectID, MaybeObjectID
+from lmdb_storage.tree_object import ObjectType, TreeObject, ObjectID, MaybeObjectID, StoredObject
 from lmdb_storage.tree_operations import get_child, graft_in_tree
 from lmdb_storage.tree_structure import Objects
 from resolve_uuid import resolve_remote_uuid
-from util import format_size, custom_isabs, safe_hex
+from util import format_size, custom_isabs, safe_hex, format_count
 
 
 def _file_stats(props: HoardFileProps) -> str:
@@ -253,7 +260,7 @@ def pull_prefs_to_restore_from_hoard(remote_uuid: str, remote_type: CaveType) ->
                            force_reset_with_local_contents=False, remote_type=remote_type)
 
 
-async def print_pending_to_pull(
+async def print_pending_pull(
         hoard_contents: HoardContents, content_prefs: ContentPrefs, current_contents: RepoContents,
         preferences: PullPreferences, repo_staging_id: MaybeObjectID, out):
     with StringIO() as other_out:
@@ -275,6 +282,78 @@ async def print_pending_to_pull(
 
         # raise ValueError()
         print_differences(hoard_contents, hoard_root, repo_root, merged_ids, repo_staging_id, out)
+
+        logging.debug(other_out.getvalue())
+
+
+def print_differences_of_desired_vs_current(
+        hoard_contents: HoardContents, uuid: str, max_depth: int, show_size: bool, out: TextIO):
+    with StringIO() as other_out:
+        roots = hoard_contents.env.roots(write=False)
+        repo_root = roots[uuid]
+
+        @dataclasses.dataclass()
+        class Difference:
+            to_obtain: int = 0
+            to_delete: int = 0
+            to_change: int = 0
+            children: List[Tuple[str, "Difference"]] | None = None
+
+        type MaybeDifference = Difference | None
+
+        def get_current_file_differences(node_obj: NodeObj) -> MaybeDifference:
+            current, desired = node_obj
+            if current is None:
+                return Difference(to_obtain=desired.size if show_size else 1)
+            if desired is None:
+                return Difference(to_delete=current.size if show_size else 1)
+            if current != desired:
+                return Difference(to_change=desired.size if show_size else 1)
+            assert current == desired
+            return None
+
+        class DifferencesCalculator(RecursiveCalculator[NodeID, NodeObj, MaybeDifference]):
+            def __init__(self, value_getter: Callable[[NodeObj], Difference]):
+                super().__init__(value_getter, CurrentAndDesiredReader(hoard_contents))
+
+            def aggregate(self, items: Iterable[Tuple[str, MaybeDifference]]) -> MaybeDifference:
+                items = list(items)
+                result = Difference(
+                    to_obtain=sum(i.to_obtain for _, i in items if i),
+                    to_delete=sum(i.to_delete for _, i in items if i),
+                    to_change=sum(i.to_change for _, i in items if i),
+                    children=[(name, i) for name, i in items if i])
+                return result if result.to_change + result.to_delete + result.to_obtain > 0 else None
+
+            def for_none(self, calculator: StatGetter[NodeID, NodeObj]) -> MaybeDifference:
+                return None
+
+        agg = CachedCalculator(DifferencesCalculator(get_current_file_differences))
+        computed: Difference = agg[NodeID(repo_root.current, repo_root.desired)]
+
+        def write_out(depth: int, current_name: str, current_diff: Difference) -> None:
+            if current_diff is None:
+                return
+
+            as_str = []
+            if current_diff.to_obtain > 0:
+                as_str.append(f"GET: {format_count(current_diff.to_obtain)}")
+            if current_diff.to_delete > 0:
+                as_str.append(f"DELETE: {format_count(current_diff.to_delete)}")
+            if current_diff.to_change > 0:
+                as_str.append(f"CHANGE: {format_count(current_diff.to_change)}")
+
+            out.write(f'{" " * depth}{current_name}{"[D]" if current_diff.children else ""}: {", ".join(as_str)}\n')
+
+            if depth >= max_depth:
+                return
+
+            if current_diff.children is not None:
+                for child_name, child_diff in current_diff.children:
+                    write_out(depth + 1, child_name, child_diff)
+
+        out.write(f"Tree Differences up to level {max_depth}:\n")
+        write_out(0, "/", computed)
 
         logging.debug(other_out.getvalue())
 
@@ -352,6 +431,18 @@ class HoardCommandContents:
     def __init__(self, hoard: Hoard):
         self.hoard = hoard
 
+    async def tree_differences(self, remote: str, max_depth: int = 3, show_size: bool = False):
+        config = self.hoard.config()
+        remote_uuid = resolve_remote_uuid(config, remote)
+
+        logging.info(f"Loading hoard TOML...")
+        async with self.hoard.open_contents(create_missing=False) as hoard_contents:
+            with StringIO() as out:
+                print_differences_of_desired_vs_current(hoard_contents, remote_uuid, max_depth, show_size, out)
+
+                out.write("DONE\n")
+                return out.getvalue()
+
     async def pending_pull(self, remote: str):
         config = self.hoard.config()
         remote_uuid = resolve_remote_uuid(config, remote)
@@ -376,7 +467,7 @@ class HoardCommandContents:
                     abs_staging_root_id = copy_local_staging_data_to_hoard(
                         hoard_contents, current_contents, self.hoard.config())
 
-                    await print_pending_to_pull(
+                    await print_pending_pull(
                         hoard_contents, content_prefs, current_contents, preferences, abs_staging_root_id, out)
 
                     return out.getvalue()

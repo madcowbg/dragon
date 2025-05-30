@@ -1225,6 +1225,20 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             '|repo-partial-name        |        13|          |         5|         8|\n'),
             res)
 
+        res = await hoard_cmd.contents.tree_differences("repo-backup-name")
+        self.assertEqual([
+            'Tree Differences up to level 3:',
+            '/[D]: GET: 6',
+            ' lets_get_it_started[D]: GET: 3',
+            '  test.me.2-butnew: GET: 1',
+            '  test.me.2-butsecond: GET: 1',
+            '  test.me.4-renamed: GET: 1',
+            ' test.me.1: GET: 1',
+            ' test.me.added: GET: 1',
+            ' wat[D]: GET: 1',
+            '  test.me.3: GET: 1',
+            'DONE'], res.splitlines())
+
         res = await hoard_cmd.files.pending(backup_cave_cmd.current_uuid())
         self.assertEqual(
             'repo-backup-name:\n'
@@ -1238,6 +1252,20 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             ' repo-copy-name has 6 files\n'
             ' repo-full-name has 6 files\n'
             'DONE', res)
+
+        res = await hoard_cmd.contents.tree_differences("repo-backup-name")
+        self.assertEqual([
+            'Tree Differences up to level 3:',
+            '/[D]: GET: 6',
+            ' lets_get_it_started[D]: GET: 3',
+            '  test.me.2-butnew: GET: 1',
+            '  test.me.2-butsecond: GET: 1',
+            '  test.me.4-renamed: GET: 1',
+            ' test.me.1: GET: 1',
+            ' test.me.added: GET: 1',
+            ' wat[D]: GET: 1',
+            '  test.me.3: GET: 1',
+            'DONE'], res.splitlines())
 
         res = await hoard_cmd.files.push(copy_cave_cmd.current_uuid())
         self.assertEqual((
@@ -1623,6 +1651,21 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             '|repo-full-name           |        47|        47|          |          |\n'
             '|repo-partial-name        |        13|          |         5|         8|\n'), res)
 
+        res = await hoard_cmd.contents.tree_differences("repo-backup-name")
+        self.assertEqual([
+            'Tree Differences up to level 3:',
+            '/[D]: GET: 4, DELETE: 2, CHANGE: 1',
+            ' lets_get_it_started[D]: GET: 3',
+            '  test.me.2-butnew: GET: 1',
+            '  test.me.2-butsecond: GET: 1',
+            '  test.me.4-renamed: GET: 1',
+            ' test.me.1: CHANGE: 1',
+            ' test.me.4: DELETE: 1',
+            ' test.me.added: GET: 1',
+            ' wat[D]: DELETE: 1',
+            '  test.me.2: DELETE: 1',
+            'DONE'], res.splitlines())
+
         res = await hoard_cmd.files.pending(backup_cave_cmd.current_uuid())
         self.assertEqual((
             'repo-backup-name:\n'
@@ -1666,6 +1709,21 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'old: a80f91bc48850a1fb3459bb76b9f6308d4d35710\n'
             'current: 01152ae75c4fbc81c40b8e9eba8ce23ab770630e\n'
             'Refresh done!'), res)
+
+        res = await hoard_cmd.contents.tree_differences("repo-backup-name")
+        self.assertEqual([
+            'Tree Differences up to level 3:',
+            '/[D]: GET: 4, DELETE: 2, CHANGE: 1',
+            ' lets_get_it_started[D]: GET: 3',
+            '  test.me.2-butnew: GET: 1',
+            '  test.me.2-butsecond: GET: 1',
+            '  test.me.4-renamed: GET: 1',
+            ' test.me.1: CHANGE: 1',
+            ' test.me.4: DELETE: 1',
+            ' test.me.added: GET: 1',
+            ' wat[D]: DELETE: 1',
+            '  test.me.2: DELETE: 1',
+            'DONE'], res.splitlines())
 
         res = await hoard_cmd.files.push(backup_cave_cmd.current_uuid())
         self.assertEqual((
@@ -1779,6 +1837,14 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'After: Hoard [1d6997], repo [curr: 563f87, stg: 563f87, des: 7d1569]\n'
             "Sync'ed repo-partial-name to hoard!\n"
             'DONE'), res)
+
+        res = await hoard_cmd.contents.tree_differences("repo-partial-name")
+        self.assertEqual([
+            'Tree Differences up to level 3:',
+            '/[D]: DELETE: 1',
+            ' wat[D]: DELETE: 1',
+            '  test.me.2: DELETE: 1',
+            'DONE'], res.splitlines())
 
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual([
@@ -1923,7 +1989,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         # simulate removing of epoch and data
         pathlib.Path(join(self.tmpdir.name, 'repo-full', '.hoard', f'{full_cave_cmd.current_uuid()}.contents')) \
             .unlink(missing_ok=True)
-        pathlib.Path(join(self.tmpdir.name, 'repo-full', '.hoard', f'{full_cave_cmd.current_uuid()}.contents.lmdb'))\
+        pathlib.Path(join(self.tmpdir.name, 'repo-full', '.hoard', f'{full_cave_cmd.current_uuid()}.contents.lmdb')) \
             .unlink(missing_ok=True)
 
         res = await hoard_cmd.export_contents_to_repo(full_cave_cmd.current_uuid())
