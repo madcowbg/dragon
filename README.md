@@ -49,24 +49,24 @@ There has got to be a better way, and [**Dragon**](https://github.com/madcowbg/d
 
 # Usage
 
-TODO
+`dragon hoard contents status` - creates a table summarizing the status of the current hoard, and what each repo is
+currently sheduled to get, copy and cleanup.
 
-# Screenshots
+`dragon hoard contents pull REPO` - execute pull of the contents of `REPO`, so that we can determine what we want to put
+in the hoard and what to discard.
 
-`dragon hoard status` - creates a table summarizing the status of the current hoard, and what each repo is currently
-sheduled to
-get, copy and cleanup.
-
-`dragon hoard sync-contents REPO` - execute file synchronization between repositories, aiming to fill `REPO` with all
+`dragon hoard files push REPO` - execute file synchronization between repositories, aiming to fill `REPO` with all
 files that it requests to get or copy.
-
-<img src="doc/status-example-with-sync.png"/>
 
 `dragon hoard gui` - runs a Textual-based GUI exploring a hoard's contents.
 
-Hoard explorer - showing all the files that are being tracked.
+# Screenshots
+
+<img src="doc/status-example-with-sync.png"/>
+
+Hoard explorer GUI - showing all the files that are being tracked.
 
 <img src="doc/hoard-explorer-gui-example-hoard-explorer.png"/>
 
-Cave operations - showing what sync operations are scheduled to be executed.
+Cave operations GUI - showing what sync operations are scheduled to be executed.
 <img src="doc/hoard-explorer-gui-example-cave-ops.png"/>
