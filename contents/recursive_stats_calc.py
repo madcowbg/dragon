@@ -183,7 +183,11 @@ class FileStats(QueryStats):
 
 @dataclasses.dataclass
 class FolderStats(QueryStats):
-    count_non_deleted: int | None
+    count: int
+    used_size: int
+
+    count_non_deleted: int
+    num_without_sources: int
 
 
 class HoardFilePresence:
@@ -248,27 +252,38 @@ def calc_query_stats(props: HoardFilePresence) -> FileStats:
     is_deleted = len([uuid for uuid, status in presence.items() if status != HoardFileStatus.CLEANUP]) == 0
     num_sources = len(
         [uuid for uuid, status in presence.items() if status in (HoardFileStatus.AVAILABLE, HoardFileStatus.MOVE)])
-    used_size = props.size
+    used_size = props.file_obj.size
 
     return FileStats(is_deleted, num_sources, used_size)
 
 
 class QueryStatsCalculator(RecursiveCalculator[CompositeNodeID, HoardFilePresence, QueryStats]):
     def aggregate(self, items: Iterable[Tuple[str, QueryStats]]) -> FolderStats:
+        count = 0
+        used_size = 0
         count_non_deleted = 0
+        num_without_sources = 0
         for _, child in items:
             if isinstance(child, FileStats):
+                count += 1
+                used_size += child.used_size
                 if not child.is_deleted:
                     count_non_deleted += 1
+                if child.num_sources == 0:
+                    num_without_sources += 1
             elif isinstance(child, FolderStats):
+                count += child.count
+                used_size += child.used_size
                 count_non_deleted += child.count_non_deleted
+                num_without_sources += child.num_without_sources
             else:
                 raise ValueError(f"Unrecognized child type: {child}")
 
-        return FolderStats(count_non_deleted)
+        return FolderStats(
+            count=count, used_size=used_size, count_non_deleted=count_non_deleted, num_without_sources=num_without_sources)
 
     def for_none(self, calculator: "StatGetter[HoardFilePresence, QueryStats]") -> QueryStats:
-        return FolderStats(count_non_deleted=0)
+        return FolderStats(0,0,0,0)
 
     def __init__(self, contents: "HoardContent"):
         super().__init__(calc_query_stats, CompositeTreeReader(contents))

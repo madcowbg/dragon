@@ -27,36 +27,23 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         async with hoard_cmd.hoard.open_contents(create_missing=False) as hoard_contents:
             query = hoard_contents.fsobjects.query
             file_paths = [path.as_posix() for path, _ in hoard_contents.fsobjects]
-            paths = [".", "wat", "/", "/wat", "/wat/nonexistent.file", '/wat/test.me.6']
+            folder_paths = ["/", "/wat"]
+            paths = folder_paths + [ "/wat/nonexistent.file", '/wat/test.me.6']
 
-            count_nondeleted = dict((path, query.count_non_deleted(FastPosixPath(path))) for path in paths)
+            count_nondeleted = dict((path, query.count_non_deleted(FastPosixPath(path))) for path in folder_paths)
             self.assertEqual({
-                '.': 6,
-                '/': 0,
-                '/wat': 3,
-                '/wat/nonexistent.file': 0,
-                '/wat/test.me.6': 0,
-                'wat': 0},
+                '/': 6, '/wat': 3},
                 count_nondeleted)
 
-            count_without_src = dict((path, query.num_without_source(FastPosixPath(path))) for path in paths)
+            count_without_src = dict((path, query.num_without_source(FastPosixPath(path))) for path in folder_paths)
             self.assertEqual({
-                '.': 2,
-                '/': 0,
-                '/wat': 1,
-                '/wat/nonexistent.file': 0,
-                '/wat/test.me.6': 0,
-                'wat': 0},
+                '/': 2, '/wat': 1},
                 count_without_src)
 
-            stats_in_folder = dict((path, query.stats_in_folder(FastPosixPath(path))) for path in paths)
+            stats_in_folder = dict((path, query.stats_in_folder(FastPosixPath(path))) for path in folder_paths)
             self.assertEqual({
-                '.': (6, 47),
-                '/': (0, 0),
-                '/wat': (3, 25),
-                '/wat/nonexistent.file': (0, 0),
-                '/wat/test.me.6': (0, 0),
-                'wat': (0, 0)}, stats_in_folder)
+                '/': (6, 47),
+                '/wat': (3, 25),}, stats_in_folder)
 
             used_size = dict(
                 (repo.name, query.used_size(repo.uuid)) for repo in hoard_contents.hoard_config.remotes.all())

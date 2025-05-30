@@ -14,7 +14,7 @@ from command.fast_path import FastPosixPath
 from config import HoardConfig
 from contents.hoard_props import HoardFileStatus, HoardFileProps
 from contents.recursive_stats_calc import UsedSizeCalculator, NodeID, QueryStatsCalculator, composite_from_roots, \
-    drilldown, FolderStats, SizeCountPresenceStatsCalculator, SizeCountPresenceStats
+    drilldown, FolderStats, SizeCountPresenceStatsCalculator, SizeCountPresenceStats, FileStats, QueryStats
 from contents.repo import RepoContentsConfig
 from lmdb_storage.cached_calcs import CachedCalculator, AppCachedCalculator
 from lmdb_storage.file_object import BlobObject, FileObject
@@ -400,49 +400,55 @@ class Query:
     def __init__(self, parent: "HoardContents"):
         self.parent = parent
 
-        # fixme replace with live aggregator
-        self.file_stats = dict()
-        for path, props in HoardFilesIterator.all(self.parent):
-            presence = props.presence
-            self.file_stats[path.simple] = {
-                "is_deleted": len(
-                    [uuid for uuid, status in presence.items() if status != HoardFileStatus.CLEANUP]) == 0,
-                "num_sources": len([uuid for uuid, status in presence.items() if
-                                    status in (HoardFileStatus.AVAILABLE, HoardFileStatus.MOVE)]),
-                "used_size": props.size
-            }
         self._repo_stats_agg = CachedCalculator(UsedSizeCalculator(parent))
+        self._file_and_folder_stats = CachedCalculator(QueryStatsCalculator(parent))
 
     def count_non_deleted(self, folder_name: FastPosixPath) -> int:
-        count = 0
-        for path, stats in self.file_stats.items():
-            if path.startswith(folder_name.simple + "/") and not stats["is_deleted"]:
-                count += 1
-        return count
+        stats = self._get_folder_stats(folder_name)
+        return stats.count_non_deleted
+
+    def _get_folder_stats(self, folder_name: FastPosixPath) -> FolderStats:
+        stats = self._get_stats(folder_name)
+
+        if not isinstance(stats, FolderStats):
+            raise ValueError(f"Received info for file at {folder_name}?!")
+
+        return stats
+
+    def _get_file_stats(self, file_name: FastPosixPath) -> FileStats:
+        stats = self._get_stats(file_name)
+
+        if not isinstance(stats, FileStats):
+            raise ValueError(f"Received info for folder at {file_name}?!")
+
+        return stats
+
+    def _get_stats(self, folder_name: FastPosixPath) -> QueryStats:
+        assert folder_name.is_absolute()
+        node_id = composite_from_roots(self.parent)
+        path_node_id = drilldown(self.parent, node_id, folder_name._rem)
+
+        assert path_node_id is not None
+        stats = self._file_and_folder_stats[path_node_id]
+        return stats
 
     def num_without_source(self, folder_name: FastPosixPath) -> int:
-        count = 0
-        for path, stats in self.file_stats.items():
-            if path.startswith(folder_name.simple + "/") and stats["num_sources"] == 0:
-                count += 1
-        return count
+        assert folder_name.is_absolute()
+        stats = self._get_folder_stats(folder_name)
+        return stats.num_without_sources
 
     def is_deleted(self, file_name: FastPosixPath) -> bool:
-        assert file_name.simple in self.file_stats, f"{file_name.simple} is missing from stats"
-        return self.file_stats[file_name.simple]["is_deleted"]
+        assert file_name.is_absolute()
+        return self._get_file_stats(file_name).is_deleted
 
-    def num_sources(self, file_name: FastPosixPath) -> bool:
-        assert file_name.simple in self.file_stats, f"{file_name.simple} is missing from stats"
-        return self.file_stats[file_name.simple]["num_sources"]
+    def num_sources(self, file_name: FastPosixPath) -> int:
+        assert file_name.is_absolute()
+        return self._get_file_stats(file_name).num_sources
 
     def stats_in_folder(self, folder_path: FastPosixPath):
-        count, used_size = 0, 0
-        # fixme replace with size aggregator
-        for path, stats in self.file_stats.items():
-            if path.startswith(folder_path.simple + "/"):
-                used_size += stats["used_size"]
-                count += 1
-        return count, used_size
+        assert folder_path.is_absolute()
+        stats = self._get_folder_stats(folder_path)
+        return stats.count, stats.used_size
 
     def used_size(self, repo_uuid: str) -> int:
         repo_root = self.parent.env.roots(write=False)[repo_uuid]
