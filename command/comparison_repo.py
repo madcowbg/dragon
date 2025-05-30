@@ -226,6 +226,8 @@ class ErrorReadingFilesystem:
 
 
 class FilesystemIndex:
+    CURRENT_VERSION = "v1"
+
     def __init__(self, path: Path, hoard_ignore: HoardIgnore):
         assert isinstance(path, Path)
         self._root = path
@@ -235,6 +237,9 @@ class FilesystemIndex:
     def __enter__(self):
         self.index_filename.touch()
         self.current_index_doc = rtoml.load(self.index_filename)
+        if self.current_index_doc.get("CURRENT_VERSION") != FilesystemIndex.CURRENT_VERSION:
+            # discard old version indexes
+            self.current_index_doc = {"CURRENT_VERSION": FilesystemIndex.CURRENT_VERSION}
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -268,13 +273,13 @@ class FilesystemIndex:
             rel_path = rel_path_fpp.simple
             existing_filenames.add(rel_path)
             if rel_path not in file_entries:
-                file_entries[rel_path] = {"mtime": stat.st_mtime, "size": stat.st_size, "md5": None, "fasthash": None}
+                file_entries[rel_path] = {"mtime": stat.st_mtime, "size": stat.st_size}
                 mod_files.append(rel_path)
             else:
                 old_entry = file_entries[rel_path]
                 if old_entry["size"] != stat.st_size or abs(old_entry["mtime"] - stat.st_mtime) > 1e-3:
                     file_entries[rel_path] = {
-                        "mtime": stat.st_mtime, "size": stat.st_size, "md5": None, "fasthash": None}
+                        "mtime": stat.st_mtime, "size": stat.st_size}
                     mod_files.append(rel_path)
 
         for file_path, _ in file_entries.items():
@@ -290,7 +295,7 @@ class FilesystemIndex:
     def update_hashes(self):
         missing_fasthashes = [
             Path(file_path) for file_path, file_obj_values in self.current_index_doc["file_entries"].items()
-            if file_obj_values["fasthash"] is None]
+            if "fasthash" not in file_obj_values]
 
         logging.info(f"Updating hashes for {len(missing_fasthashes)} files")
         with alive_bar(len(missing_fasthashes), title="Computing hashes") as bar:
@@ -319,10 +324,16 @@ class FilesystemIndex:
 
     def items(self) -> Iterable[Tuple[str, BlobObject]]:
         for file_path, file_data in self.current_index_doc.get("file_entries", {}).items():
+            if "fasthash" not in file_data:
+                yield "/" + file_path, FileObject.create(None, -1)
+                continue
+
             fasthash = file_data["fasthash"]
+            assert fasthash is not None and fasthash != 'null'
+            assert "fasthash" in file_data, file_data
+
             size = file_data["size"]
-            yield "/" + file_path, FileObject.create(fasthash if fasthash else None,
-                                                     size if fasthash is not None else -1)
+            yield "/" + file_path, FileObject.create(fasthash, size)
 
 
 class FilesystemState:

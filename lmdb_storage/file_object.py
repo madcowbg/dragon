@@ -1,4 +1,5 @@
 import hashlib
+import logging
 from typing import Optional, Tuple
 
 import msgpack
@@ -27,6 +28,8 @@ class FileObject(BlobObject):
 
     def __init__(self, file_id: bytes, data: Tuple[str, int, str]) -> None:
         super().__init__(file_id)
+        assert data[0] is not None and data[0] != 'null', f"INVALID FASTHASH FOR {file_id}!"
+
         self.file_id = file_id
         self.fasthash = data[0]
         self.size = data[1]

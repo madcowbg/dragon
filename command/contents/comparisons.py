@@ -18,8 +18,13 @@ def copy_local_staging_data_to_hoard(hoard: HoardContents, local: RepoContents, 
         f"in hoard: {binascii.hexlify(current_root).decode() if current_root is not None else 'None'} "
         f"vs index: {binascii.hexlify(staging_root_id).decode()}")
 
-    # ensures we have the same tree
-    hoard.env.copy_trees_from(local.env, [staging_root_id])
+    try:
+        # ensures we have the same tree
+        hoard.env.copy_trees_from(local.env, [staging_root_id])
+    except AssertionError as error:
+        logging.error(f"Failed while trying to copy from {config.remotes[local.uuid].name}[{local.uuid}]")
+        logging.error(error)
+        raise error
 
     with hoard.env.objects(write=True) as objects:
         abs_staging_root_id = add_object(
