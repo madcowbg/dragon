@@ -428,7 +428,12 @@ class Query:
         return count
 
     def is_deleted(self, file_name: FastPosixPath) -> bool:
+        assert file_name.simple in self.file_stats, f"{file_name.simple} is missing from stats"
         return self.file_stats[file_name.simple]["is_deleted"]
+
+    def num_sources(self, file_name: FastPosixPath) -> bool:
+        assert file_name.simple in self.file_stats, f"{file_name.simple} is missing from stats"
+        return self.file_stats[file_name.simple]["num_sources"]
 
     def stats_in_folder(self, folder_path: FastPosixPath):
         count, used_size = 0, 0
