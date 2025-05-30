@@ -3,7 +3,7 @@ import os
 import pathlib
 import shutil
 from io import StringIO
-from typing import Dict, List, Tuple, TextIO
+from typing import Dict, List, Tuple, TextIO, Any
 
 from alive_progress import alive_bar, alive_it
 
@@ -22,16 +22,25 @@ from exceptions import MissingRepo
 from gui.hoard_explorer import start_hoard_explorer_gui
 from hashing import fast_hash
 from lmdb_storage.file_object import FileObject
+from lmdb_storage.operations.util import remap
 from lmdb_storage.tree_iteration import dfs
 from lmdb_storage.tree_object import ObjectType
 from lmdb_storage.tree_operations import get_child, remove_child
 from lmdb_storage.tree_structure import ObjectID, add_object
 from resolve_uuid import resolve_remote_uuid
-from util import group_to_dict, run_in_separate_loop, safe_hex
+from util import group_to_dict, run_in_separate_loop, safe_hex, format_size
 
 
 def path_in_local(hoard_file: str, mounted_at: str) -> str:
     return pathlib.Path(hoard_file).relative_to(mounted_at).as_posix()
+
+
+def fasthash_len_distribution(existing_fasthashes: Dict[str, List[Any]]) -> list[tuple[int, int]]:
+    fasthashes_by_fasthash_length = group_to_dict(existing_fasthashes.items(), key=lambda g: len(g[0]))
+    fasthashes_len_distrib = list(sorted(
+        (length, sum(len(fl) for fl in file_lists))
+        for length, file_lists in fasthashes_by_fasthash_length.items()))
+    return fasthashes_len_distrib
 
 
 class HoardCommand(object):
@@ -167,17 +176,66 @@ class HoardCommand(object):
                         repo_health[repo][num_copies] = 0
                     repo_health[repo][num_copies] += 1
 
+            existing_fasthashes: Dict[str, List[Tuple[str, FastPosixPath, FileObject]]] = dict()
+            for repo in hoard.hoard_config.remotes.all():
+                for path, file in hoard.fsobjects.current_at_repo(repo.uuid):
+                    if file.fasthash not in existing_fasthashes:
+                        existing_fasthashes[file.fasthash] = []
+
+                    existing_fasthashes[file.fasthash].append((repo.uuid, path, file))
+
+            hoard_fasthashes: Dict[str, List[Tuple[FastPosixPath, FileObject]]] = dict()
+            for path, file in hoard.fsobjects.desired_hoard():
+                if file.fasthash not in hoard_fasthashes:
+                    hoard_fasthashes[file.fasthash] = []
+
+                hoard_fasthashes[file.fasthash].append((path, file))
+
             with StringIO() as out:
                 out.write("Health stats:\n")
                 out.write(f"{len(config.remotes)} total remotes.\n")
                 for remote in config.remotes.all():
-                    name_prefix = f"[{remote.name}] " if remote.name != "INVALID" else ""
+                    name_prefix = f"[{remote.name}]" if remote.name != "INVALID" else ""
                     out.write(
-                        f"  {name_prefix}{remote.uuid}: {repo_health.get(remote.uuid, {}).get(1, 0)} with no other copy\n")
+                        f"  {name_prefix}: {repo_health.get(remote.uuid, {}).get(1, 0)} with no other copy\n")
 
                 out.write("Hoard health stats:\n")
                 for num, files in sorted(health_files.items()):
                     out.write(f"  {num} copies: {len(files)} files\n")
+
+                out.write("Fasthash health stats:\n")
+                out.write(f" #existing fasthashes = {len(existing_fasthashes)}\n")
+                for l, c in fasthash_len_distribution(existing_fasthashes):
+                    out.write(f"  len {l} -> {c}\n")
+
+                out.write(f" #hoard fasthashes = {len(hoard_fasthashes)}\n")
+                for l, c in fasthash_len_distribution(hoard_fasthashes):
+                    out.write(f"  len {l} -> {c}\n")
+
+                existing_but_not_in_hoard = set(existing_fasthashes.keys()) - set(hoard_fasthashes.keys())
+                out.write(f" #existing but not in hoard: {len(existing_but_not_in_hoard)}\n")
+                hoard_but_not_existing = set(existing_fasthashes.keys()) - set(hoard_fasthashes.keys())
+                out.write(
+                    f" #hoard but not existing: {len(hoard_but_not_existing)} "
+                    f"{"BAD!" if len(hoard_but_not_existing) > 0 else ""}\n")
+
+                num_copies_of_hoard_filehashes = dict(
+                    (fasthash, len(existing_fasthashes[fasthash])) for fasthash in hoard_fasthashes)
+                count_to_lfc = group_to_dict(num_copies_of_hoard_filehashes.items(), lambda fc: fc[1])
+                for count, lfc in sorted(count_to_lfc.items()):
+                    existing_sizes = [existing_fasthashes[fasthash][0][2].size for fasthash, _ in lfc]
+                    total_sizes = [sum(file_copy[2].size for file_copy in existing_fasthashes[fasthash]) for fasthash, _ in lfc]
+
+                    set_sizes = set(existing_sizes)
+                    assert len(set_sizes) > 0
+
+                    if len(set_sizes) == 1:
+                        size_est = f"{format_size(sum(total_sizes))} = {len(lfc)} x {count} x {format_size(min(set_sizes))}"
+                    else:
+                        size_est = (
+                            f"{format_size(sum(total_sizes))} = {len(lfc)} x {count} x ({format_size(min(set_sizes))} ~ {format_size(max(set_sizes))})")
+                    out.write(f"  {count} copies - {len(lfc)} hashes, space est: {size_est}\n")
+
                 out.write("DONE")
                 return out.getvalue()
 

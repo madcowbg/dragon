@@ -22,7 +22,7 @@ from lmdb_storage.object_store import ObjectStorage
 from lmdb_storage.operations.fast_association import FastAssociation
 from lmdb_storage.operations.generator import TreeGenerator
 from lmdb_storage.operations.util import ByRoot
-from lmdb_storage.tree_iteration import zip_trees_dfs
+from lmdb_storage.tree_iteration import zip_trees_dfs, dfs
 from lmdb_storage.tree_object import ObjectType, StoredObject, TreeObject, MaybeObjectID
 from lmdb_storage.tree_operations import get_child
 from lmdb_storage.tree_structure import Objects
@@ -394,6 +394,22 @@ class ReadonlyHoardFSObjects:
                 yield from [
                     fullpath + "/" + child_name for child_name, child_obj in children
                     if child_obj.object_type == ObjectType.BLOB]
+
+    def current_at_repo(self, uuid: str) -> Iterable[Tuple[FastPosixPath, FileObject]]:
+        current_root_id = self.parent.env.roots(write=False)[uuid].current
+
+        yield from self._yield_all_files_in_tree(current_root_id)
+
+    def desired_hoard(self) -> Iterable[Tuple[FastPosixPath, FileObject]]:
+        hoard_desired_id = self.parent.env.roots(write=False)["HOARD"].desired
+        yield from self._yield_all_files_in_tree(hoard_desired_id)
+
+    def _yield_all_files_in_tree(self, current_root_id: MaybeObjectID) -> Iterable[Tuple[FastPosixPath, FileObject]]:
+        with self.parent.env.objects(write=False) as objects:
+            for path, object_type, obj_id, obj, _ in dfs(objects, "", current_root_id):
+                if object_type == ObjectType.BLOB:
+                    assert isinstance(obj, FileObject)
+                    yield FastPosixPath(path), obj
 
 
 class Query:

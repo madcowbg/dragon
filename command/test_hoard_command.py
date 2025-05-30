@@ -244,11 +244,21 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         res = await hoard_cmd.health()
         self.assertEqual(
             "Health stats:\n2 total remotes.\n"
-            f"  [repo-in-local] {repo_uuid}: 2 with no other copy\n"
-            f"  [repo-in-local-2] {repo_uuid2}: 0 with no other copy\n"
+            f"  [repo-in-local]: 2 with no other copy\n"
+            f"  [repo-in-local-2]: 0 with no other copy\n"
             "Hoard health stats:\n"
             "  1 copies: 2 files\n"
-            "  2 copies: 1 files\nDONE", res)
+            "  2 copies: 1 files\n"
+            'Fasthash health stats:\n'
+            ' #existing fasthashes = 4\n'
+            '  len 32 -> 8\n'
+            ' #hoard fasthashes = 3\n'
+            '  len 32 -> 6\n'
+            ' #existing but not in hoard: 1\n'
+            ' #hoard but not existing: 1 BAD!\n'
+            '  1 copies - 2 hashes, space est: 13 = 2 x 1 x (5 ~ 8)\n'
+            '  2 copies - 1 hashes, space est: 12 = 1 x 2 x 6\n'
+            "DONE", res)
 
         res = await cave_cmd2.refresh()
         self.assertEqual((
@@ -370,8 +380,13 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         self.assertEqual(
             "Health stats:\n"
             "1 total remotes.\n"
-            f"  [cloned-repo] {new_uuid}: 0 with no other copy\n"
+            f"  [cloned-repo]: 0 with no other copy\n"
             "Hoard health stats:\n"
+            'Fasthash health stats:\n'
+            ' #existing fasthashes = 0\n'
+            ' #hoard fasthashes = 0\n'
+            ' #existing but not in hoard: 0\n'
+            ' #hoard but not existing: 0 \n'
             "DONE", res)
 
         res = await hoard_cmd.contents.differences(new_uuid)
@@ -925,6 +940,28 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             'repo-backup/wat/test.me.6'], dump_file_list(self.tmpdir.name, 'repo-backup'))
 
         self.assertEqual([], dump_file_list(self.tmpdir.name, 'repo-incoming'))
+
+        res = await hoard_cmd.health()
+        self.assertEqual((
+            'Health stats:\n'
+            '4 total remotes.\n'
+            '  [repo-partial-name]: 0 with no other copy\n'
+            '  [repo-full-name]: 0 with no other copy\n'
+            '  [repo-backup-name]: 0 with no other copy\n'
+            '  [repo-incoming-name]: 0 with no other copy\n'
+            'Hoard health stats:\n'
+            '  2 copies: 4 files\n'
+            '  3 copies: 2 files\n'
+            'Fasthash health stats:\n'
+            ' #existing fasthashes = 6\n'
+            '  len 32 -> 12\n'
+            ' #hoard fasthashes = 6\n'
+            '  len 32 -> 12\n'
+            ' #existing but not in hoard: 0\n'
+            ' #hoard but not existing: 0 \n'
+            '  2 copies - 4 hashes, space est: 66 = 4 x 2 x (5 ~ 11)\n'
+            '  3 copies - 2 hashes, space est: 42 = 2 x 3 x (6 ~ 8)\n'
+            'DONE'), res)
 
     async def test_partial_cloning(self):
         populate_repotypes(self.tmpdir.name)
