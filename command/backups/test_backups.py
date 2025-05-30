@@ -473,9 +473,9 @@ class TestBackups(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull(all=True)
         self.assertEqual((
-            'Skipping update as staging has not changed: 418ef1\n'
-            'Skipping update as staging has not changed: 94524f\n'
-            'Skipping update as staging has not changed: a513af\n'
+            'Skipping update as repo-partial-name.staging has not changed: 418ef1\n'
+            'Skipping update as repo-full-name.staging has not changed: 94524f\n'
+            'Skipping update as repo-incoming-name.staging has not changed: a513af\n'
             'Pulling backup-1...\n'
             'Before: Hoard [c8405b] <- repo [curr: None, stg: 1388f4, des: None]\n'
             'REPO_MARK_FILE_AVAILABLE /test.me.1\n'
@@ -671,9 +671,9 @@ class TestBackups(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull(all=True)
         self.assertEqual([
-            'Skipping update as staging has not changed: 418ef1',
-            'Skipping update as staging has not changed: 94524f',
-            'Skipping update as staging has not changed: a513af',
+            'Skipping update as repo-partial-name.staging has not changed: 418ef1',
+            'Skipping update as repo-full-name.staging has not changed: 94524f',
+            'Skipping update as repo-incoming-name.staging has not changed: a513af',
             'Pulling backup-1...',
             'Before: Hoard [c8405b] <- repo [curr: None, stg: 1388f4, des: None]',
             'REPO_MARK_FILE_AVAILABLE /test.me.1',

@@ -123,7 +123,8 @@ async def execute_pull(
         abs_staging_root_id = copy_local_staging_data_to_hoard(hoard_contents, current_contents, hoard.config())
         past_staging = roots[uuid].staging
         if not ignore_epoch and abs_staging_root_id == past_staging:
-            out.write(f"Skipping update as staging has not changed: {safe_hex(past_staging)[:6]}\n")
+            out.write(
+                f"Skipping update as {config.remotes[uuid].name}.staging has not changed: {safe_hex(past_staging)[:6]}\n")
             return
 
         logging.info(f"Saving config of remote {uuid}...")

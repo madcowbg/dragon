@@ -165,7 +165,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
                     ('/wat/test.me.twice', 6, 1, '1881f6f9784fb08bf6690e9763b76ac3')])
 
         res = await hoard_cmd.contents.pull("repo-in-local")
-        self.assertEqual('Skipping update as staging has not changed: 72174f\nDONE', res)
+        self.assertEqual('Skipping update as repo-in-local.staging has not changed: 72174f\nDONE', res)
 
         res = await hoard_cmd.contents.pull("repo-in-local-2")
         self.assertEqual((
@@ -601,7 +601,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             'DONE'), res.strip())
 
         res = await hoard_cmd.contents.pull("repo-backup-name")  # does nothing
-        self.assertEqual('Skipping update as staging has not changed: 3a0889\nDONE', res.strip())
+        self.assertEqual('Skipping update as repo-backup-name.staging has not changed: 3a0889\nDONE', res.strip())
 
         res = await hoard_cmd.contents.ls(skip_folders=True)
         self.assertEqual((
@@ -1379,7 +1379,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
 
         res = await hoard_cmd.contents.pull(all=True)
         self.assertEqual((
-            'Skipping update as staging has not changed: f9bfc2\n'
+            'Skipping update as repo-partial-name.staging has not changed: f9bfc2\n'
             'Pulling repo-full-name...\n'
             'Before: Hoard [f9bfc2] <- repo [curr: None, stg: 1ad9e0, des: None]\n'
             'REPO_MARK_FILE_AVAILABLE /test.me.1\n'
