@@ -1,15 +1,26 @@
 import logging
 import random
-import sys
-from typing import Dict, Any
+from typing import Dict, Any, Callable
 
 from msgspec import msgpack
 
-from contents.recursive_stats_calc import CompositeNodeID, HashableKey
+from contents.recursive_stats_calc import HashableKey
 from lmdb_storage.object_store import used_ratio
 from lmdb_storage.stats_cache import StatsCache
 from lmdb_storage.tree_calculation import StatGetter, ValueCalculator
 from lmdb_storage.tree_object import ObjectID
+
+
+class Calculator[T, R](StatGetter[T, R]):
+    def __init__(self, calculator: ValueCalculator[T, R], callback: Callable[[], None] | None = None):
+        self.calculator = calculator
+        self.callback = callback
+
+    def __getitem__(self, item: T | None) -> R:
+        result = self.calculator.calculate(self, item) if item is not None else self.calculator.for_none(self)
+        if self.callback:
+            self.callback()
+        return result
 
 
 class CachedCalculator[T, R](StatGetter[T, R]):

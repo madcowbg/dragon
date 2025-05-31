@@ -27,7 +27,7 @@ class HoardCommandBackups:
     def __init__(self, hoard: Hoard):
         self.hoard = hoard
 
-    async def health(self):  # fixme rewrite output as table
+    async def health(self):
         logging.info("Loading config")
         config = self.hoard.config()
         pathing = HoardPathing(config, self.hoard.paths())

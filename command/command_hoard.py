@@ -3,7 +3,7 @@ import os
 import pathlib
 import shutil
 from io import StringIO
-from typing import Dict, List, Tuple, TextIO, Any
+from typing import Dict, List, Tuple, TextIO, Any, Iterable
 
 from alive_progress import alive_bar, alive_it
 
@@ -18,13 +18,16 @@ from command.repo import ProspectiveRepo
 from config import HoardRemote, CavePath, CaveType, ConnectionSpeed, ConnectionLatency
 from contents.hoard import HoardContents
 from contents.hoard_props import HoardFileProps
+from contents.recursive_stats_calc import CachedReader, CompositeNodeID, NodeID, CompositeTreeReader, \
+    composite_from_roots
 from exceptions import MissingRepo
 from gui.hoard_explorer import start_hoard_explorer_gui
 from hashing import fast_hash
+from lmdb_storage.cached_calcs import CachedCalculator, Calculator
 from lmdb_storage.file_object import FileObject
-from lmdb_storage.operations.util import remap
+from lmdb_storage.tree_calculation import RecursiveCalculator, StatGetter
 from lmdb_storage.tree_iteration import dfs
-from lmdb_storage.tree_object import ObjectType
+from lmdb_storage.tree_object import ObjectType, TreeObject
 from lmdb_storage.tree_operations import get_child, remove_child
 from lmdb_storage.tree_structure import ObjectID, add_object
 from resolve_uuid import resolve_remote_uuid
@@ -160,29 +163,27 @@ class HoardCommand(object):
 
             repo_health: Dict[str, Dict[int, int]] = dict()
             health_files: Dict[int, List[FastPosixPath]] = dict()
-            for file, props in hoard.fsobjects:
-                assert isinstance(props, HoardFileProps)
+            with alive_bar(title="Iterating hoard...") as bar:
+                for file, props in hoard.fsobjects:
+                    assert isinstance(props, HoardFileProps)
 
-                num_copies = len(props.available_at)
-                if num_copies not in health_files:
-                    health_files[num_copies] = []
-                health_files[num_copies].append(file)
+                    num_copies = len(props.available_at)
+                    if num_copies not in health_files:
+                        health_files[num_copies] = []
+                    health_files[num_copies].append(file)
 
-                # count how many files are uniquely stored here
-                for repo in props.available_at:
-                    if repo not in repo_health:
-                        repo_health[repo] = dict()
-                    if num_copies not in repo_health[repo]:
-                        repo_health[repo][num_copies] = 0
-                    repo_health[repo][num_copies] += 1
+                    # count how many files are uniquely stored here
+                    for repo in props.available_at:
+                        if repo not in repo_health:
+                            repo_health[repo] = dict()
+                        if num_copies not in repo_health[repo]:
+                            repo_health[repo][num_copies] = 0
+                        repo_health[repo][num_copies] += 1
+                    bar()
 
-            existing_fasthashes: Dict[str, List[Tuple[str, FastPosixPath, FileObject]]] = dict()
-            for repo in hoard.hoard_config.remotes.all():
-                for path, file in hoard.fsobjects.current_at_repo(repo.uuid):
-                    if file.fasthash not in existing_fasthashes:
-                        existing_fasthashes[file.fasthash] = []
-
-                    existing_fasthashes[file.fasthash].append((repo.uuid, path, file))
+            with alive_bar(title="Reading all hashes") as bar:
+                existing_hashes_calc = Calculator(HashesCalculator(hoard), bar)
+                existing_fast_hashes = existing_hashes_calc[composite_from_roots(hoard)]
 
             hoard_fasthashes: Dict[str, List[Tuple[FastPosixPath, FileObject]]] = dict()
             for path, file in hoard.fsobjects.desired_hoard():
@@ -204,27 +205,28 @@ class HoardCommand(object):
                     out.write(f"  {num} copies: {len(files)} files\n")
 
                 out.write("Fasthash health stats:\n")
-                out.write(f" #existing fasthashes = {len(existing_fasthashes)}\n")
-                for l, c in fasthash_len_distribution(existing_fasthashes):
+                out.write(f" #existing fasthashes = {len(existing_fast_hashes)}\n")
+                for l, c in fasthash_len_distribution(existing_fast_hashes):
                     out.write(f"  len {l} -> {c}\n")
 
                 out.write(f" #hoard fasthashes = {len(hoard_fasthashes)}\n")
                 for l, c in fasthash_len_distribution(hoard_fasthashes):
                     out.write(f"  len {l} -> {c}\n")
 
-                existing_but_not_in_hoard = set(existing_fasthashes.keys()) - set(hoard_fasthashes.keys())
+                existing_but_not_in_hoard = set(existing_fast_hashes.keys()) - set(hoard_fasthashes.keys())
                 out.write(f" #existing but not in hoard: {len(existing_but_not_in_hoard)}\n")
-                hoard_but_not_existing = set(existing_fasthashes.keys()) - set(hoard_fasthashes.keys())
+                hoard_but_not_existing = set(existing_fast_hashes.keys()) - set(hoard_fasthashes.keys())
                 out.write(
                     f" #hoard but not existing: {len(hoard_but_not_existing)} "
                     f"{"BAD!" if len(hoard_but_not_existing) > 0 else ""}\n")
 
                 num_copies_of_hoard_filehashes = dict(
-                    (fasthash, len(existing_fasthashes[fasthash])) for fasthash in hoard_fasthashes)
+                    (fasthash, len(existing_fast_hashes[fasthash])) for fasthash in hoard_fasthashes)
                 count_to_lfc = group_to_dict(num_copies_of_hoard_filehashes.items(), lambda fc: fc[1])
                 for count, lfc in sorted(count_to_lfc.items()):
-                    existing_sizes = [existing_fasthashes[fasthash][0][2].size for fasthash, _ in lfc]
-                    total_sizes = [sum(file_copy[2].size for file_copy in existing_fasthashes[fasthash]) for fasthash, _ in lfc]
+                    existing_sizes = [existing_fast_hashes[fasthash][0][2].size for fasthash, _ in lfc]
+                    total_sizes = [sum(file_copy[2].size for file_copy in existing_fast_hashes[fasthash]) for fasthash, _
+                                   in lfc]
 
                     set_sizes = set(existing_sizes)
                     assert len(set_sizes) > 0
@@ -495,3 +497,44 @@ def move_paths(
                         f"{from_path.joinpath(current_path).as_posix()}=>{to_path.joinpath(current_path).as_posix()}\n")
 
     return new_root_id
+
+
+type ReversedPath = List[str]
+type Hashes = Dict[str, List[Tuple[str, ReversedPath, FileObject]]] | None
+
+
+def read_hashes_for_node(reader: CachedReader, node_id: CompositeNodeID) -> Hashes | None:
+    result: Hashes = dict()
+    for uuid, file_id in node_id.current_trees():
+        file_obj = reader.read(file_id)
+        if file_obj.object_type != ObjectType.BLOB:
+            assert isinstance(file_obj, TreeObject)
+            continue
+
+        assert isinstance(file_obj, FileObject)
+
+        if file_obj.fasthash not in result:
+            result[file_obj.fasthash] = [(uuid, [], file_obj)]
+        else:
+            result[file_obj.fasthash].append((uuid, [], file_obj))
+
+    return result if len(result) > 0 else None
+
+
+class HashesCalculator(RecursiveCalculator[NodeID, Hashes, Hashes]):
+    def __init__(self, hoard_contents: HoardContents):
+        super().__init__(lambda h: h, CompositeTreeReader(hoard_contents, read_hashes_for_node))
+
+    def aggregate(self, items: Iterable[Tuple[str, Hashes]]) -> Hashes:
+        result: Hashes = dict()
+        for child_name, hashes_in_child in items:
+            for fasthash, upfs in hashes_in_child.items():
+                for uuid, path, file_id in upfs:
+                    if fasthash not in result:
+                        result[fasthash] = []
+                    path.append(child_name)  # fixme convert to linked list, as this mutates intermediate results
+                    result[fasthash].append((uuid, path, file_id))
+        return result
+
+    def for_none(self, calculator: StatGetter[NodeID, Hashes]) -> Hashes:
+        return dict()

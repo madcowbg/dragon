@@ -202,6 +202,9 @@ class CompositeNodeID(HashableKey):
     def __eq__(self, other) -> bool:
         return isinstance(other, CompositeNodeID) and self.hashed == other.hashed
 
+    def current_trees(self) -> Iterable[Tuple[str, ObjectID]]:
+        return ((uuid, objs[0]) for uuid, objs in self._roots.items() if objs[0] is not None)
+
 
 @dataclasses.dataclass
 class FileStats:
