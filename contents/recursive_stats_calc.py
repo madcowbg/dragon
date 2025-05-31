@@ -3,7 +3,7 @@ import hashlib
 import logging
 from abc import abstractmethod, ABC
 from functools import cached_property
-from typing import Iterable, Tuple, Dict, List
+from typing import Iterable, Tuple, Dict, List, Callable
 
 from msgspec import msgpack, Struct
 
@@ -227,6 +227,7 @@ class QueryStats(Storeable, ABC):
     def should_store(self) -> bool:
         return self.folder and self.folder.count > 100
 
+
 class HoardFilePresence:
     def __init__(self, file_obj: FileObject, node_id: CompositeNodeID):
         self.file_obj = file_obj
@@ -252,25 +253,30 @@ class CachedReader(ObjectReader):
         return self._cache[object_id]
 
 
-class CompositeTreeReader(RecursiveReader[CompositeNodeID, HoardFilePresence | None]):
-    def __init__(self, parent: "HoardContents"):
+def read_hoard_file_presence(reader: CachedReader, node_id: CompositeNodeID) -> HoardFilePresence | None:
+    file_obj: BlobObject | None = reader.maybe_read(node_id._hoard_obj_id)
+
+    if file_obj is None:
+        # fixme this is the legacy case where we iterate over current but not desired files, required by hoard file props. remove!
+        existing_current = (reader.maybe_read(root_ids[0]) for root_ids in node_id._roots.values())
+
+        file_obj: BlobObject | None = next((obj for obj in existing_current if obj is not None), None)
+
+    if not file_obj or file_obj.object_type != ObjectType.BLOB:
+        logging.debug("Error - path %s as it is not a BlobObject", node_id)
+        return None  # assert False, f"Error - path {path} as it is not a BlobObject"
+
+    assert isinstance(file_obj, FileObject)
+    return HoardFilePresence(file_obj, node_id)
+
+
+class CompositeTreeReader[T](RecursiveReader[CompositeNodeID, HoardFilePresence | None]):
+    def __init__(self, parent: "HoardContents", converter: Callable[[CachedReader, CompositeNodeID], T]):
         self._reader = CachedReader(parent)
+        self._converter = converter
 
     def convert(self, node: CompositeNodeID) -> HoardFilePresence | None:
-        file_obj: BlobObject | None = self._reader.maybe_read(node._hoard_obj_id)
-
-        if file_obj is None:
-            # fixme this is the legacy case where we iterate over current but not desired files, required by hoard file props. remove!
-            existing_current = (self._reader.maybe_read(root_ids[0]) for root_ids in node._roots.values())
-
-            file_obj: BlobObject | None = next((obj for obj in existing_current if obj is not None), None)
-
-        if not file_obj or file_obj.object_type != ObjectType.BLOB:
-            logging.debug("Error - path %s as it is not a BlobObject", node)
-            return None  # assert False, f"Error - path {path} as it is not a BlobObject"
-
-        assert isinstance(file_obj, FileObject)
-        return HoardFilePresence(file_obj, node)
+        return self._converter(self._reader, node)
 
     def children(self, obj: CompositeNodeID) -> Iterable[Tuple[str, CompositeNodeID]]:
         return [
@@ -325,7 +331,7 @@ class QueryStatsCalculator(RecursiveCalculator[CompositeNodeID, HoardFilePresenc
         return QueryStats(folder=FolderStats(0, 0, 0, 0))
 
     def __init__(self, contents: "HoardContent"):
-        super().__init__(calc_query_stats, CompositeTreeReader(contents))
+        super().__init__(calc_query_stats, CompositeTreeReader[HoardFilePresence | None](contents, read_hoard_file_presence))
 
     @cached_property
     def stat_cache_key(self) -> bytes:
@@ -443,7 +449,7 @@ class SizeCountPresenceStatsCalculator(RecursiveCalculator[CompositeNodeID, Hoar
         return SizeCountPresenceStats(0)
 
     def __init__(self, contents: "HoardContent"):
-        super().__init__(calc_size_count_stats, CompositeTreeReader(contents))
+        super().__init__(calc_size_count_stats, CompositeTreeReader[HoardFilePresence|None](contents, read_hoard_file_presence))
 
     @cached_property
     def stat_cache_key(self) -> bytes:
