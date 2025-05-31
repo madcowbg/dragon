@@ -2,7 +2,7 @@ import hashlib
 from unittest import TestCase
 
 
-class BloomFilter:
+class BloomFilter256:
     def __init__(self):
         self.max_size = 8
         self.data: bytes = bytearray(self.max_size * 8)
@@ -26,7 +26,7 @@ class BloomFilter:
 
 class StringBloomFilter:
     def __init__(self):
-        self.filter = BloomFilter()
+        self.filter = BloomFilter256()
 
     def __iadd__(self, item: str) -> "StringBloomFilter":
         assert isinstance(item, str)
@@ -53,7 +53,7 @@ class TestBloomFilters(TestCase):
     def test_create_bloom_filter(self):
         value_hash = hashlib.md5("alpha".encode()).digest()
 
-        f = BloomFilter()
+        f = BloomFilter256()
         self.assertEqual(0, f.bit_count())
 
         f.add(value_hash)
