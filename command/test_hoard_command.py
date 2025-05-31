@@ -270,7 +270,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             ' #hoard fasthashes = 3\n'
             '  len 32 -> 6\n'
             ' #existing but not in hoard: 1\n'
-            ' #hoard but not existing: 1 BAD!\n'
+            ' #hoard but not existing: 0\n'
             '  1 copies - 2 hashes, space est: 13 = 2 x 1 x (5 ~ 8)\n'
             '  2 copies - 1 hashes, space est: 12 = 1 x 2 x 6\n'
             "DONE", res)
@@ -404,7 +404,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             ' #existing fasthashes = 0\n'
             ' #hoard fasthashes = 0\n'
             ' #existing but not in hoard: 0\n'
-            ' #hoard but not existing: 0 \n'
+            ' #hoard but not existing: 0\n'
             "DONE", res)
 
         res = await hoard_cmd.contents.differences(new_uuid)
@@ -1012,7 +1012,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             ' #hoard fasthashes = 6\n'
             '  len 32 -> 12\n'
             ' #existing but not in hoard: 0\n'
-            ' #hoard but not existing: 0 \n'
+            ' #hoard but not existing: 0\n'
             '  2 copies - 4 hashes, space est: 66 = 4 x 2 x (5 ~ 11)\n'
             '  3 copies - 2 hashes, space est: 42 = 2 x 3 x (6 ~ 8)\n'
             'DONE'), res)

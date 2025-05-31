@@ -23,7 +23,7 @@ from contents.recursive_stats_calc import CachedReader, CompositeNodeID, NodeID,
 from exceptions import MissingRepo
 from gui.hoard_explorer import start_hoard_explorer_gui
 from hashing import fast_hash
-from lmdb_storage.cached_calcs import CachedCalculator, Calculator
+from lmdb_storage.cached_calcs import Calculator
 from lmdb_storage.file_object import FileObject
 from lmdb_storage.tree_calculation import RecursiveCalculator, StatGetter
 from lmdb_storage.tree_iteration import dfs
@@ -215,18 +215,18 @@ class HoardCommand(object):
 
                 existing_but_not_in_hoard = set(existing_fast_hashes.keys()) - set(hoard_fasthashes.keys())
                 out.write(f" #existing but not in hoard: {len(existing_but_not_in_hoard)}\n")
-                hoard_but_not_existing = set(existing_fast_hashes.keys()) - set(hoard_fasthashes.keys())
+                hoard_but_not_existing = set(hoard_fasthashes.keys()) - set(existing_fast_hashes.keys())
                 out.write(
-                    f" #hoard but not existing: {len(hoard_but_not_existing)} "
-                    f"{"BAD!" if len(hoard_but_not_existing) > 0 else ""}\n")
+                    f" #hoard but not existing: {len(hoard_but_not_existing)}"
+                    f"{" BAD!" if len(hoard_but_not_existing) > 0 else ""}\n")
 
                 num_copies_of_hoard_filehashes = dict(
                     (fasthash, len(existing_fast_hashes[fasthash])) for fasthash in hoard_fasthashes)
                 count_to_lfc = group_to_dict(num_copies_of_hoard_filehashes.items(), lambda fc: fc[1])
                 for count, lfc in sorted(count_to_lfc.items()):
                     existing_sizes = [existing_fast_hashes[fasthash][0][2].size for fasthash, _ in lfc]
-                    total_sizes = [sum(file_copy[2].size for file_copy in existing_fast_hashes[fasthash]) for fasthash, _
-                                   in lfc]
+                    total_sizes = [
+                        sum(file_copy[2].size for file_copy in existing_fast_hashes[fasthash]) for fasthash, _ in lfc]
 
                     set_sizes = set(existing_sizes)
                     assert len(set_sizes) > 0
