@@ -1,4 +1,6 @@
 import hashlib
+import timeit
+from array import array
 from unittest import TestCase
 
 
@@ -33,42 +35,62 @@ class BloomFilterM:
         assert not (m & (m - 1)), f"{m} is not a power of 2!"
 
         self.max_size_bits = m
-        self.max_size_b = m >> 3
+        self.max_size_l = m >> 5
 
         # address_size is number of bytes to use
-        self.hash_size = (((self.max_size_bits - 1).bit_length() - 1) >> 3) + 1
+        self.hash_size = (((self.max_size_bits - 1).bit_length() - 1) >> 5) + 1
+        assert self.hash_size == 1
 
-        self.data: bytes = bytearray(self.max_size_b)
+        self.data: array = array("L", bytearray(self.max_size_l * 4))
+
+        self.k = 4
 
     def add(self, item: bytes) -> None:
-        assert len(item) == 16, f"item must be a hash of 16 bytes!, is {item.hex()}"
-        hash_mask = self.max_size_b - 1
-        mod_mask = len(item) - 1
-        for i in range(len(item)):
-            b = 0
-            to_j = i + self.hash_size
-            j = i
-            while j < to_j:
-                b = (b << 8) | item[j & mod_mask]
-                j += 1
+        item_long = array("L", item)
 
-            # assert b % 8 == b & 0x07
-            # assert b // 8 == b >> 3
-            # assert (b // 8) & hash_mask == (b // 8) % self.max_size_b
-            self.data[(b >> 3) & hash_mask] |= 1 << (b & 0x07)  # efficient way to get lower bytes
+        assert len(item_long) == 4, f"item must be a hash of 16 bytes!, is {item.hex()}"
+        hash_mask = self.max_size_l - 1
+        mod_mask = len(item_long) - 1
+        slow_case = self.hash_size > 1
+
+        for i in range(4):
+            if slow_case:
+                b = 0
+                to_j = i + self.hash_size
+                j = i
+                while j < to_j:
+                    b = (b << 32) | item_long[j & mod_mask]
+                    j += 1
+            else:
+                b = item_long[i]
+
+            # assert b % 32 == b & 0x1f
+            # assert b // 32 == b >> 5
+            # assert (b // 32) & hash_mask == (b // 32) % self.max_size_l
+            self.data[(b >> 5) & hash_mask] |= 1 << (b & 0x1f)  # efficient way to get lower bytes
 
     def contains(self, item: bytes) -> bool:
-        assert len(item) == 16, f"item must be a hash of 16 bytes!, is {item.hex()}"
-        hash_mask = self.max_size_b - 1
-        mod_mask = len(item) - 1
+        item_long = array("L", item)
 
-        for i in range(len(item)):
-            b = 0
-            for j in range(self.hash_size):
-                b = (b << 8) | item[(i + j) & mod_mask]
+        assert len(item_long) == 4, f"item must be a hash of 16 bytes!, is {item.hex()}"
+        hash_mask = self.max_size_l - 1
+        mod_mask = len(item_long) - 1
 
-            if ~self.data[(b >> 3) & hash_mask] & (1 << (b & 0x07)):
+        slow_case = self.hash_size > 1
+        for i in range(4):
+            if slow_case:
+                b = 0
+                to_j = i + self.hash_size
+                j = i
+                while j < to_j:
+                    b = (b << 32) | item_long[j & mod_mask]
+                    j += 1
+            else:
+                b = item_long[i]
+
+            if ~self.data[(b >> 5) & hash_mask] & (1 << (b & 0x1f)):
                 return False
+
         return True
 
     def bit_count(self):
@@ -123,7 +145,7 @@ class TestBloomFilters(TestCase):
         self.assertEqual(0, f.bit_count())
 
         f.add(value_hash)
-        self.assertEqual(15, f.bit_count())
+        self.assertEqual(4, f.bit_count())
 
         self.assertTrue(f.contains(value_hash))
 
@@ -182,27 +204,34 @@ class TestBloomFilters(TestCase):
             f |= v
             fillrate.append(f.bit_count())
 
-        self.assertEqual([64, 500, 840, 1101, 1300, 1463, 1587, 1680], fillrate[3::4 * 8])
+        self.assertEqual([16, 140, 256, 360, 463, 552, 641, 729], fillrate[3::4 * 8])
 
         for v in values:
             self.assertTrue(v in f)
 
         false_positives = [f"not {i}" in f for i in range(5000)]
-        self.assertEqual(451, sum(false_positives))  # about 9.76% false positives is expected
-
+        self.assertEqual(114, sum(false_positives))  # about 2.55% false positives is expected
 
     def test_fill_m_filter_to_capacity_larger(self):
         values = [f"{i}" for i in range(500000)]
-        fillrate = list()
 
+        start = timeit.default_timer()
         f = StringBloomFilter(8 * (1 << 19))
         for v in values:
             f |= v
+        end = timeit.default_timer()
+        print(f"creation time: {end - start}s")
 
-        self.assertEqual(3571738, f.bit_count())
+        self.assertEqual(1591150, f.bit_count())
 
+        start = timeit.default_timer()
         for v in values:
             self.assertTrue(v in f)
+        end = timeit.default_timer()
+        print(f"check time: {end - start}s")
 
-        false_positives = [f"not {i}" in f for i in range(5000)]
-        self.assertEqual(378, sum(false_positives))
+        start = timeit.default_timer()
+        false_positives = [f"not {i}" in f for i in range(500000)]
+        self.assertEqual(10319, sum(false_positives))
+        end = timeit.default_timer()
+        print(f"check nonexistent positives: {end - start}s")
