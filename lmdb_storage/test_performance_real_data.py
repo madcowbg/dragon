@@ -1,4 +1,5 @@
 import os
+import random
 import sys
 import unittest
 from datetime import datetime
@@ -56,8 +57,7 @@ def fast_dfs(
     if should_skip:
         return
 
-    for child_idx, child_name in enumerate(obj.sorted_children_names):
-        child_id = obj.get(child_name)
+    for child_idx, (child_name, child_id) in enumerate(obj.children):
         yield from fast_dfs(objects, compressed_path + varint.encode(child_idx), child_id)
 
 
@@ -86,10 +86,10 @@ def _decode_path(packed_lookup_data, idx):
     return idx, path
 
 
-class LookupTable:
-    def __init__(self, packed_lookup_data: bytes):
+class LookupTable[LookupData]:
+    def __init__(self, packed_lookup_data: bytes, reader: Callable[[bytes, int], LookupData]):
         idx = 0
-        lookup_table: Dict[int, List[int] | List[List[int]]] = dict()
+        lookup_table: Dict[int, List[int] | List[LookupData]] = dict()
         while idx < len(packed_lookup_data):
             prefix = int.from_bytes(packed_lookup_data[idx:idx + 4], signed=False)
             assert type(prefix) is int
@@ -100,21 +100,22 @@ class LookupTable:
             else:
                 lookup_table[prefix].append(idx)
 
-            cnt, idx = decode_buffer(packed_lookup_data, idx) # find size of path
+            cnt, idx = decode_buffer(packed_lookup_data, idx)  # find size of path
             idx += cnt
 
         self._lookup_table = lookup_table
         self._packed_lookup_data = packed_lookup_data
 
         self._decoded_lookup_data = dict()
+        self._reader = reader
 
-    def __getitem__(self, obj_id: ObjectID) -> Iterable[List[int]]:
+    def __getitem__(self, obj_id: ObjectID) -> Iterable[LookupData]:
         return self.with_prefix(int.from_bytes(obj_id[:4], signed=False))
 
-    def with_prefix(self, hash_prefix: int) -> Iterable[List[int]]:
+    def with_prefix(self, hash_prefix: int) -> Iterable[LookupData]:
         idxs = self._lookup_table[hash_prefix]
         if isinstance(idxs[0], int):  # convert the list of ints to the list of unpacked paths
-            idxs = [_decode_path(self._packed_lookup_data, idx)[1] for idx in idxs]
+            idxs = [self._reader(self._packed_lookup_data, idx)[1] for idx in idxs]
             self._lookup_table[hash_prefix] = idxs
         return idxs
 
@@ -132,15 +133,16 @@ def follow_path(objects: Callable[[ObjectID], StoredObject], root_id: ObjectID, 
         assert isinstance(current_obj, TreeObject)
         current_obj: TreeObject
 
-        child_name = current_obj.sorted_children_names[pi]
-        current_id = current_obj.get(child_name)
+        child_name, current_id = current_obj.children[pi]
 
     current_obj = objects(current_id)
     assert isinstance(current_obj, FileObject)
     return current_obj
 
 
-def find_paths(read_with_cache, lookup_table, root_id, obj_id) -> Iterable[FileObject]:
+def find_paths(
+        read_with_cache: Callable[[ObjectID], StoredObject], lookup_table: LookupTable[List[int]],
+        root_id: ObjectID, obj_id: ObjectID) -> Iterable[Tuple[List[int], FileObject]]:
     if obj_id not in lookup_table:
         return
 
@@ -149,7 +151,7 @@ def find_paths(read_with_cache, lookup_table, root_id, obj_id) -> Iterable[FileO
         c_obj = follow_path(read_with_cache, root_id, c_path)
 
         if c_obj.file_id == obj_id:
-            yield c_path
+            yield c_path, c_obj
 
 
 @unittest.skipUnless(os.getenv('RUN_LENGTHY_TESTS'), reason="Lengthy test")
@@ -192,7 +194,7 @@ class TestPerformance(IsolatedAsyncioTestCase):
                 sys.stdout.write(f"decoded_files: {files}, {format_size(len(packed_lookup_data) // files)} per file\n")
 
                 start = default_timer()
-                lookup_table = LookupTable(packed_lookup_data)
+                lookup_table = LookupTable[List[int]](packed_lookup_data, _decode_path)
                 sys.stdout.write(f"\nread lookup table time: {default_timer() - start}s\n")
                 sys.stdout.write(
                     f"decoded_entries: {files}, size {format_size(len(packed_lookup_data) // files)} per file.\n")
@@ -204,11 +206,11 @@ class TestPerformance(IsolatedAsyncioTestCase):
 
                 assert int.from_bytes(current_obj.file_id[:4], signed=False) == hash_prefix
 
-                start = default_timer()
                 files = 0
                 collisions = 0
 
                 cache = dict()
+
                 def read_with_cache(obj_id: ObjectID) -> StoredObject:
                     if obj_id not in cache:
                         new_val = objects[obj_id]
@@ -217,7 +219,31 @@ class TestPerformance(IsolatedAsyncioTestCase):
                     else:
                         return cache[obj_id]
 
+                # start = default_timer()
+                # files = 0
+                # for tmp_path, obj_type, obj_id, stored_obj, _ in fast_dfs(objects, bytearray(), root_id):
+                #     if obj_type == ObjectType.BLOB:
+                #         files += 1
+                #         candidates = lookup_table[obj_id]
+                #
+                #         for c_path in candidates:
+                #             c_obj = follow_path(read_with_cache, root_id, c_path)
+                #
+                # time = default_timer() - start
+                # sys.stdout.write(f"\nheating cache: {time}s, {1000 * (time / files)}ms per file\n")
+
+                start = default_timer()
+                files = 0
+                all_files = list()
                 for tmp_path, obj_type, obj_id, stored_obj, _ in fast_dfs(objects, bytearray(), root_id):
+                    if obj_type == ObjectType.BLOB:
+                        all_files.append(obj_id)
+                #
+                # random.shuffle(all_files)
+                #
+                # for file_id in sorted(all_files):
+                for file_id in all_files:
+                    obj_type = objects[file_id].object_type
                     if obj_type == ObjectType.BLOB:
                         files += 1
 
@@ -226,13 +252,14 @@ class TestPerformance(IsolatedAsyncioTestCase):
                         candidates = lookup_table[obj_id]
                         found = 0
                         for c_path in candidates:
+                            pass
                             c_obj = follow_path(read_with_cache, root_id, c_path)
 
                             if c_obj.file_id == obj_id:
                                 found += 1
                             else:
                                 collisions += 1
-                        assert found > 0
+                        assert found > 0, "All hoard files should be found!"
 
                 time = default_timer() - start
                 sys.stdout.write(f"\nlooked up all hashes: {time}s, {1000 * (time / files)}ms per file\n")
@@ -245,11 +272,10 @@ class TestPerformance(IsolatedAsyncioTestCase):
                 for k, v in objects.txn.cursor():
                     value = objects[k]
                     if value.object_type == ObjectType.BLOB:
+                        paths_and_files = list(find_paths(read_with_cache, lookup_table, root_id, k))
+                        paths_in_hoard += len(paths_and_files)
 
-                        paths = list(find_paths(read_with_cache, lookup_table, root_id, k))
-                        paths_in_hoard += len(paths)
-
-                        if len(paths) == 0:
+                        if len(paths_and_files) == 0:
                             files_not_in_hoard += 1
                         else:
                             files_in_hoard += 1
