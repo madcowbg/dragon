@@ -30,12 +30,14 @@ class BloomFilter256:
 
 
 class BloomFilterM:
-    def __init__(self, m):
+    def __init__(self, m: int, compression: int = 0):
         assert m >= 8
         assert not (m & (m - 1)), f"{m} is not a power of 2!"
 
+        self.compression = compression
+
         self.max_size_bits = m
-        self.max_size_l = m >> 5
+        self.max_size_l = m >> (5 + compression)
 
         # address_size is number of bytes to use
         self.hash_size = (((self.max_size_bits - 1).bit_length() - 1) >> 5) + 1
@@ -52,6 +54,7 @@ class BloomFilterM:
         hash_mask = self.max_size_l - 1
         mod_mask = len(item_long) - 1
         slow_case = self.hash_size > 1
+        byte_addr_plus_offset = 5 + self.compression
 
         for i in range(4):
             if slow_case:
@@ -67,7 +70,8 @@ class BloomFilterM:
             # assert b % 32 == b & 0x1f
             # assert b // 32 == b >> 5
             # assert (b // 32) & hash_mask == (b // 32) % self.max_size_l
-            self.data[(b >> 5) & hash_mask] |= 1 << (b & 0x1f)  # efficient way to get lower bytes
+
+            self.data[(b >> byte_addr_plus_offset) & hash_mask] |= 1 << (b & 0x1f)  # efficient way to get lower bytes
 
     def contains(self, item: bytes) -> bool:
         item_long = array("L", item)
@@ -75,8 +79,9 @@ class BloomFilterM:
         assert len(item_long) == 4, f"item must be a hash of 16 bytes!, is {item.hex()}"
         hash_mask = self.max_size_l - 1
         mod_mask = len(item_long) - 1
-
         slow_case = self.hash_size > 1
+        byte_addr_plus_offset = 5 + self.compression
+
         for i in range(4):
             if slow_case:
                 b = 0
@@ -88,7 +93,7 @@ class BloomFilterM:
             else:
                 b = item_long[i]
 
-            if ~self.data[(b >> 5) & hash_mask] & (1 << (b & 0x1f)):
+            if ~self.data[(b >> byte_addr_plus_offset) & hash_mask] & (1 << (b & 0x1f)):
                 return False
 
         return True
@@ -96,10 +101,25 @@ class BloomFilterM:
     def bit_count(self):
         return sum(b.bit_count() for b in self.data)
 
+    def compress(self, compression: int):
+        assert compression >= 0
+        compressed = BloomFilterM(m=self.max_size_bits, compression=compression)
+        rate_to_compact = compression - self.compression
+        assert rate_to_compact >= 0
+
+        for i in range(len(self.data)):
+            compressed.data[i >> rate_to_compact] |= self.data[i]
+
+        return compressed
+
 
 class StringBloomFilter:
-    def __init__(self, m: int = None):
-        self.filter = BloomFilterM(m) if m is not None else BloomFilter256()
+    def __init__(self, m: int = None, compression: int = 0, filter: BloomFilterM | BloomFilter256 | None = None):
+        if filter is not None:
+            assert m is None
+            self.filter = filter
+        else:
+            self.filter = BloomFilterM(m, compression) if m is not None else BloomFilter256()
 
     def __iadd__(self, item: str) -> "StringBloomFilter":
         assert isinstance(item, str)
@@ -117,6 +137,11 @@ class StringBloomFilter:
 
     def bit_count(self) -> int:
         return self.filter.bit_count()
+
+    def compress(self, compression: int):
+        assert compression >= 0
+        assert isinstance(self.filter, BloomFilterM)
+        return StringBloomFilter(filter=self.filter.compress(compression))
 
 
 class TestBloomFilters(TestCase):
@@ -235,3 +260,120 @@ class TestBloomFilters(TestCase):
         self.assertEqual(10319, sum(false_positives))
         end = timeit.default_timer()
         print(f"check nonexistent positives: {end - start}s")
+
+    def test_fill_with_compression_works_about_the_same(self):
+        values = [f"{i}" for i in range(256)]
+        fillrate = list()
+
+        f = StringBloomFilter(256 * 8 * 16, compression=4)
+
+        for v in values:
+            f |= v
+            fillrate.append(f.bit_count())
+
+        self.assertEqual([16, 135, 251, 363, 468, 561, 644, 726], fillrate[3::4 * 8])
+        self.assertEqual(256 / 4, len(f.filter.data))
+
+        for v in values:
+            self.assertTrue(v in f)
+
+        false_positives = [f"not {i}" in f for i in range(5000)]
+        self.assertEqual(125, sum(false_positives))  # about 2.55% false positives is expected
+
+    def test_fill_with_compression_is_same_as_without(self):
+        values = [f"{i}" for i in range(256)]
+
+        fillrate = list()
+        f = StringBloomFilter(256 * 8 * 16)
+        for v in values:
+            f |= v
+            fillrate.append(f.bit_count())
+
+        compressed_f = f.compress(4)
+        self.assertEqual(256 // 4, len(compressed_f.filter.data))
+
+        fillrate = list()
+        total_f = StringBloomFilter(256 * 8 * 16, compression=4)
+        for v in values:
+            total_f |= v
+            fillrate.append(total_f.bit_count())
+
+        self.assertEqual([16, 135, 251, 363, 468, 561, 644, 726], fillrate[3::4 * 8])
+        self.assertEqual(256 / 4, len(total_f.filter.data))
+
+        self.assertEqual(compressed_f.filter.data, total_f.filter.data)
+
+        false_positives = [f"not {i}" in compressed_f for i in range(5000)]
+        self.assertEqual(125, sum(false_positives))  # about 2.55% false positives is expected
+
+        differences_in_unequal = [(f"not {i}" in compressed_f) != (f"not {i}" in total_f) for i in range(5000)]
+        self.assertEqual(0, sum(differences_in_unequal))  # they should be identical
+
+    def test_compress_twice_produces_same_filter(self):
+        values = [f"{i}" for i in range(256)]
+
+        fillrate = list()
+        f = StringBloomFilter(256 * 8 * 16)
+        for v in values:
+            f |= v
+            fillrate.append(f.bit_count())
+
+        compressed_f = f.compress(2)
+        self.assertEqual(256 * 4 // 4, len(compressed_f.filter.data))
+
+        compressed_f = compressed_f.compress(4)
+        self.assertEqual(256 // 4, len(compressed_f.filter.data))
+
+        fillrate = list()
+        total_f = StringBloomFilter(256 * 8 * 16, compression=4)
+        for v in values:
+            total_f |= v
+            fillrate.append(total_f.bit_count())
+
+        self.assertEqual([16, 135, 251, 363, 468, 561, 644, 726], fillrate[3::4 * 8])
+        self.assertEqual(256 / 4, len(total_f.filter.data))
+
+        self.assertEqual(compressed_f.filter.data, total_f.filter.data)
+
+        false_positives = [f"not {i}" in compressed_f for i in range(5000)]
+        self.assertEqual(125, sum(false_positives))  # about 2.55% false positives is expected
+
+        differences_in_unequal = [(f"not {i}" in compressed_f) != (f"not {i}" in total_f) for i in range(5000)]
+        self.assertEqual(0, sum(differences_in_unequal))  # they should be identical
+
+    def test_compression_speed(self):
+        values = [f"{i}" for i in range(100)]
+
+        start = timeit.default_timer()
+        f = StringBloomFilter(8 * (1 << 20)) # 1m elements
+        for v in values:
+            f |= v
+        end = timeit.default_timer()
+        print(f"creation time: {end - start}s")
+
+        start = timeit.default_timer()
+        for _ in range(20):
+            compressed = f
+            for i in range(10):
+                compressed = compressed.compress(i)
+            for v in values:
+                self.assertTrue(v in f)
+
+        end = timeit.default_timer()
+        print(f"compression time for 20*10 times: {end - start}s")
+
+        start = timeit.default_timer()
+        for _ in range(100):
+            compressed = f.compress(9)
+
+        end = timeit.default_timer()
+        print(f"compression time for 1000 cycles by 1024 times: {end - start}s")
+
+        start = timeit.default_timer()
+        for _ in range(100):
+            compressed = f.compress(1)
+
+        end = timeit.default_timer()
+        print(f"compression time for 1000 cycles by 2 times: {end - start}s")
+
+        self.assertEqual(388, f.compress(10).bit_count())
