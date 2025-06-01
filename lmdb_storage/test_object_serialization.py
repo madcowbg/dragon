@@ -123,22 +123,22 @@ class TestObjectSerialization(unittest.TestCase):
         tree_obj = read_stored_object(
             b'yeah',
             b'\x92\x01\x90')
-        self.assertEqual(TreeObject(b'yeah', {}), tree_obj)
+        self.assertEqual(TreeObject(b'yeah', []), tree_obj)
 
         tree_obj = read_stored_object(
             b'oooh baby',
             b'\x92\x01\x91\x92\xa4some\xc4\x0bwhatthehell')
-        self.assertEqual(TreeObject(b'oooh baby', {"some": b'whatthehell'}), tree_obj)
+        self.assertEqual(TreeObject(b'oooh baby', sorted({"some": b'whatthehell'}.items())), tree_obj)
 
         tree_obj = read_stored_object(
             b'taka nidei',
             b'\x92\x01\x92\x92\xa4none\xc4\x08yeeeeah!\x92\xa4rock\xc4\x08and roll')
-        self.assertEqual(TreeObject(b'taka nidei', {"none": b'yeeeeah!', 'rock': b'and roll'}), tree_obj)
+        self.assertEqual(TreeObject(b'taka nidei', sorted({"none": b'yeeeeah!', 'rock': b'and roll'}.items())), tree_obj)
 
         tree_obj = read_stored_object(
             b'',
             b'\x92\x01\x92\x92\xa1a\xc4\x08and roll\x92\xa1z\xc4\x08yeeeeah!')
-        self.assertEqual(TreeObject(b'', {"z": b'yeeeeah!', 'a': b'and roll'}), tree_obj)
+        self.assertEqual(TreeObject(b'', sorted({"z": b'yeeeeah!', 'a': b'and roll'}.items())), tree_obj)
 
 
 if __name__ == '__main__':

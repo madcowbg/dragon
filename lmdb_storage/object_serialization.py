@@ -39,21 +39,22 @@ def read_stored_object(obj_id: bytes, obj_packed: bytes) -> StoredObject:
             assert len(obj_data[1]) == 3, len(obj_data[1])
             return FileObject(obj_id, obj_data[1])
         elif obj_data[0] == ObjectType.TREE.value:
-            return TreeObject(obj_id, dict(obj_data[1]))
+            return TreeObject(obj_id, obj_data[1])
         else:
             raise ValueError(f"Unrecognized type {obj_data[0]}")
     else:
         raise NotImplementedError(f"Not implemented version {version}")
 
 
-def _serialize_tree_object(tree_obj_builder: Iterable[Tuple[str, ObjectID]]):
-    return msgpack.packb((ObjectType.TREE.value, list(sorted(tree_obj_builder))))
+def _serialize_tree_object(tree_obj_items: Iterable[Tuple[str, ObjectID]]):
+    return msgpack.packb((ObjectType.TREE.value, tree_obj_items))
 
 
 def construct_tree_object(tree_obj_builder: TreeObjectBuilder) -> TreeObject:
     assert isinstance(tree_obj_builder, Dict)
-    serialized = _serialize_tree_object(tree_obj_builder.items())
-    return TreeObject(hashlib.sha1(serialized).digest(), tree_obj_builder)
+    sorted_items = list(sorted(tree_obj_builder.items()))
+    serialized = _serialize_tree_object(sorted_items)
+    return TreeObject(hashlib.sha1(serialized).digest(), sorted_items)
 
 
 def write_stored_object(obj: StoredObject) -> bytes:

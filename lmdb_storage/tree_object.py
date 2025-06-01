@@ -20,21 +20,18 @@ type TreeObjectBuilder = Dict[str, ObjectID]
 class TreeObject(StoredObject):
     object_type: ObjectType = ObjectType.TREE
 
-    def __init__(self, id: ObjectID, children: Dict[str, ObjectID]):
+    def __init__(self, id: ObjectID, sorted_children_pairs: List[Tuple[str, ObjectID]]):
         self._id = id
-        self._children = children
+        self._sorted_children = sorted_children_pairs
+        self._children = dict(self._sorted_children)
 
     @property
     def id(self) -> bytes:
         return self._id
 
     @property
-    def children(self) -> Iterable[Tuple[str, ObjectID]]:
-        return self._children.items()
-
-    @cached_property
-    def sorted_children_names(self) -> List[str]:
-        return sorted(self._children.keys())
+    def children(self) -> List[Tuple[str, ObjectID]]:
+        return self._sorted_children
 
     def get(self, child_name: str) -> MaybeObjectID:
         return self._children.get(child_name)
@@ -43,7 +40,7 @@ class TreeObject(StoredObject):
         return child_name in self._children
 
     def __eq__(self, other):
-        return isinstance(other, TreeObject) and self.children == other.children
+        return isinstance(other, TreeObject) and self._children == other._children
 
     def __hash__(self):
         return self.children.__hash__()
