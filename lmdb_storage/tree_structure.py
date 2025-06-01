@@ -92,6 +92,8 @@ class StoredObjects(Objects):
         self._object_reader = object_reader
         self._object_writer = object_writer
 
+        self._cache = dict()
+
     def __enter__(self):
         self.txn = self._storage.begin(db_name=self.db_name, write=self.write)
         self.txn.__enter__()

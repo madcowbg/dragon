@@ -1,5 +1,6 @@
 import enum
-from typing import Dict, Iterable, Tuple, Union
+from functools import cached_property
+from typing import Dict, Iterable, Tuple, Union, List
 
 type ObjectID = bytes
 type MaybeObjectID = Union[ObjectID, None]
@@ -30,6 +31,10 @@ class TreeObject(StoredObject):
     @property
     def children(self) -> Iterable[Tuple[str, ObjectID]]:
         return self._children.items()
+
+    @cached_property
+    def sorted_children_names(self) -> List[str]:
+        return sorted(self._children.keys())
 
     def get(self, child_name: str) -> MaybeObjectID:
         return self._children.get(child_name)
