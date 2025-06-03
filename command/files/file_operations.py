@@ -22,26 +22,12 @@ from util import to_mb, format_size
 
 
 async def _fetch_files_in_repo(
-        content_prefs: ContentPrefs, hoard: HoardContents, repo_uuid: str, pathing: HoardPathing,
+        content_prefs: ContentPrefs, moves_and_copies: MovesAndCopies, hoard: HoardContents, repo_uuid: str, pathing: HoardPathing,
         out: StringIO, progress_bar):
     files_to_fetch = sorted(hoard.fsobjects.to_fetch(repo_uuid))
     total_size = sum(f[1].size for f in files_to_fetch)
 
     with progress_bar(to_mb(total_size), unit="MB", title="Fetching files") as bar:
-        async def _execute_get(hoard_file: str, hoard_props: HoardFileProps):
-            hoard_filepath = pathing.in_hoard(FastPosixPath(hoard_file))
-            local_filepath = hoard_filepath.at_local(repo_uuid)
-            logging.debug(f"restoring {hoard_file} to {local_filepath}...")
-            success, fullpath = await _restore_from_another_repo(
-                hoard_filepath, repo_uuid, hoard_props, pathing._config, pathing._paths)
-            if success:
-                add_to_current_tree(hoard, repo_uuid, hoard_file, hoard_props)
-
-                return f"+ {local_filepath}\n"
-            else:
-                logging.error("error restoring file!")
-                return f"E {local_filepath}\n"
-
         class Copier:
             def __init__(self):
                 self.current_size = 0
@@ -59,6 +45,7 @@ async def _fetch_files_in_repo(
                     assert goal_status != HoardFileStatus.UNKNOWN
 
                     if goal_status == HoardFileStatus.COPY:
+                        raise NotImplementedError()
                         candidates_to_copy = content_prefs.files_to_copy.get(hoard_props.fasthash, [])
                         logging.info(f"# of candidates to copy: {len(candidates_to_copy)}")
 
@@ -74,6 +61,7 @@ async def _fetch_files_in_repo(
                             logging.error("error restoring file from local copy!")
                             return f"E {local_filepath}\n"
                     elif goal_status == HoardFileStatus.MOVE:
+                        raise NotImplementedError()
                         to_be_moved_from = hoard_props.get_move_file(repo_uuid)
 
                         local_filepath_from = pathing.in_hoard(FastPosixPath(to_be_moved_from)).at_local(
@@ -100,11 +88,25 @@ async def _fetch_files_in_repo(
                     else:
                         assert goal_status == HoardFileStatus.GET, f"Unexpected status {goal_status.value}"
 
-                        return await _execute_get(hoard_file, hoard_props)
+                        return await self._execute_get(hoard_file, hoard_props)
                 finally:
                     self.current_size += hoard_props.size
                     bar(to_mb(self.current_size) - self.current_size_mb)
                     self.current_size_mb = to_mb(self.current_size)
+
+            async def _execute_get(self, hoard_file: str, hoard_props: HoardFileProps):
+                hoard_filepath = pathing.in_hoard(FastPosixPath(hoard_file))
+                local_filepath = hoard_filepath.at_local(repo_uuid)
+                logging.debug(f"restoring {hoard_file} to {local_filepath}...")
+                success, fullpath = await _restore_from_another_repo(
+                    hoard_filepath, repo_uuid, hoard_props, pathing._config, pathing._paths)
+                if success:
+                    add_to_current_tree(hoard, repo_uuid, hoard_file, hoard_props)
+
+                    return f"+ {local_filepath}\n"
+                else:
+                    logging.error("error restoring file!")
+                    return f"E {local_filepath}\n"
 
         copier = Copier()
         outputs = [await copier.copy_or_get_file(*fa) for fa in files_to_fetch]
