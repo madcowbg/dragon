@@ -72,12 +72,7 @@ FIRST_VALUE: Callable[[Cursor, Row], Any] = lambda cursor, row: row[0] if row is
 def format_percent(num: float): return f"{100 * num:.1f}%"
 
 
-T = TypeVar('T')
-C = TypeVar('C')
-U = TypeVar('U')
-
-
-def group_to_dict(
+def group_to_dict[T, C, U, R](
         objs: Iterable[T], key: Callable[[T], R],
         map_to: Callable[[T], U] = (lambda x: x),
         order_by: Callable[[T], C] = str) -> Dict[R, List[U]]:
@@ -98,7 +93,7 @@ def pretty_truncate(text: str, size: int) -> str:
     return text[:left_len] + "..." + text[-(size - 3 - left_len):]
 
 
-async def process_async(data: Iterable[T], func: Callable[[T], Coroutine], njobs):
+async def process_async[T](data: Iterable[T], func: Callable[[T], Coroutine], njobs):
     async with TaskGroup() as tg_walking:
         q = asyncio.Queue(maxsize=njobs)
 
