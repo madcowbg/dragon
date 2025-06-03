@@ -20,13 +20,13 @@ from contents.repo import RepoContentsConfig
 from lmdb_storage.cached_calcs import AppCachedCalculator
 from lmdb_storage.file_object import BlobObject, FileObject
 from lmdb_storage.lookup_tables import LookupTable, compute_lookup_table, decode_bytes_to_intpath, \
-    compute_difference_lookup_table
+    compute_difference_lookup_table, CompressedPath
 from lmdb_storage.object_store import ObjectStorage
 from lmdb_storage.operations.fast_association import FastAssociation
 from lmdb_storage.operations.generator import TreeGenerator
 from lmdb_storage.operations.util import ByRoot
 from lmdb_storage.tree_iteration import zip_trees_dfs, dfs, DiffType, zip_dfs
-from lmdb_storage.tree_object import ObjectType, StoredObject, TreeObject, MaybeObjectID
+from lmdb_storage.tree_object import ObjectType, StoredObject, TreeObject, MaybeObjectID, ObjectID
 from lmdb_storage.tree_operations import get_child
 from lmdb_storage.tree_structure import Objects
 from util import custom_isabs
@@ -254,6 +254,41 @@ def hoard_file_props_from_tree(parent, file_path: FastPosixPath) -> HoardFilePro
         raise ValueError("Should not have tried getting a nonexistent file!")
 
 
+class MovesAndCopies:
+    def __init__(self, parent: "HoardContents") -> None:
+        self.parent = parent
+
+        roots = self.parent.env.roots(write=False)
+
+        with parent.env.objects(write=False) as objects:
+            self._lookup_current: Dict[str, LookupTable[CompressedPath]] = dict(
+                (remote.uuid, LookupTable[CompressedPath](
+                    compute_lookup_table(objects, roots[remote.uuid].current), decode_bytes_to_intpath))
+                for remote in parent.hoard_config.remotes.all())
+            self._lookup_desired_but_not_current: Dict[str, LookupTable[CompressedPath]] = dict(
+                (remote.uuid, LookupTable[CompressedPath](
+                    compute_difference_lookup_table(
+                        objects, roots[remote.uuid].desired, roots[remote.uuid].current),
+                    decode_bytes_to_intpath))
+                for remote in parent.hoard_config.remotes.all())
+
+    def get_moves(self, in_uuid: str, desired_id: ObjectID) -> List[CompressedPath]:
+        return self._lookup_current[in_uuid][desired_id]
+
+    def get_remote_copies(self, skip_uuid: str, desired_id: ObjectID) -> Iterable[Tuple[str, List[CompressedPath]]]:
+        for uuid in self._lookup_current.keys():
+            if uuid == skip_uuid:
+                continue
+
+            existing_paths = list(self._lookup_current[uuid][desired_id])
+            if len(existing_paths) > 0:
+                yield uuid, existing_paths
+
+    def whereis_needed(self, current_id: ObjectID) -> Iterable[Tuple[str, List[CompressedPath]]]:
+        for uuid, lookup_table in self._lookup_desired_but_not_current.items():
+            paths_needing_to_get = list(lookup_table[current_id])
+            if len(paths_needing_to_get) > 0:
+                yield uuid, paths_needing_to_get
 
 
 class ReadonlyHoardFSObjects:
@@ -350,20 +385,9 @@ class ReadonlyHoardFSObjects:
                     "size": remote_stats.size}
 
         if extended:
+            moves_and_copies = MovesAndCopies(self.parent)
+
             with self.parent.env.objects(write=False) as objects:
-                roots = self.parent.env.roots(write=False)
-                lookups_existing = dict(
-                    (remote.uuid, LookupTable(
-                        compute_lookup_table(objects, roots[remote.uuid].current), decode_bytes_to_intpath))
-                    for remote in self.parent.hoard_config.remotes.all())
-
-                lookups_to_get = dict(
-                    (remote.uuid, LookupTable(
-                        compute_difference_lookup_table(
-                            objects, roots[remote.uuid].desired, roots[remote.uuid].current),
-                        decode_bytes_to_intpath))
-                    for remote in self.parent.hoard_config.remotes.all())
-
                 for remote in self.parent.hoard_config.remotes.all():
                     if remote.uuid not in stats:
                         continue  # won't extend missing  fixme is ugly hack
@@ -389,20 +413,21 @@ class ReadonlyHoardFSObjects:
                                 assert desired_obj.object_type == ObjectType.BLOB
                                 desired_obj: FileObject
 
-                                paths_to_copy_or_move_from_repo = lookups_existing[remote.uuid][desired_id]
-                                if len(paths_to_copy_or_move_from_repo) > 0:
+                                paths_to_move_inside_repo = moves_and_copies.get_moves(remote.uuid, desired_id)
+                                if len(paths_to_move_inside_repo) > 0:
                                     # can be moved/copied in repo
                                     can_be_moved_cnt += 1
                                     can_be_moved_size += desired_obj.size
 
-                                for uuid in lookups_existing.keys():
-                                    if uuid == remote.uuid:
-                                        continue
-                                    paths_to_copy_or_move_from_repo = lookups_existing[uuid][desired_id]
-                                    if len(paths_to_copy_or_move_from_repo) > 0:
-                                        can_be_copied_cnt += 1
-                                        can_be_copied_size += desired_obj.size
-                                        break # no more iteration, we've found where to get them from
+                                for uuid, requested_paths in moves_and_copies.get_remote_copies(
+                                        remote.uuid, desired_id):
+                                    assert len(requested_paths) > 0
+
+                                    can_be_copied_cnt += 1
+                                    can_be_copied_size += desired_obj.size
+
+                                    break  # we know that it is desired
+
                             elif diff_type == DiffType.RIGHT_MISSING:
                                 # file is missing from desired, so supposed to be cleaned up
                                 assert current_id is not None and desired_id is None
@@ -410,37 +435,33 @@ class ReadonlyHoardFSObjects:
 
                                 if current_obj.object_type == ObjectType.TREE:
                                     continue  # skip trees
-
                                 current_obj: FileObject
 
                                 needed_in_places = 0
-                                for uuid in lookups_to_get.keys():
-                                    paths_needing_to_get = lookups_to_get[uuid][current_id]
-                                    if len(paths_needing_to_get) > 0:
-                                        needed_in_places += len(paths_needing_to_get)
+                                for uuid, paths_needing_to_get in moves_and_copies.whereis_needed(current_id):
+                                    assert len(paths_needing_to_get) > 0
+                                    needed_in_places += len(paths_needing_to_get)
 
                                 if needed_in_places > 0:
                                     needed_to_get_cnt += 1
                                     needed_to_get_size += current_obj.size
 
-
                     assert HoardFileStatus.MOVE.value not in stats[remote.uuid]
                     if can_be_moved_cnt > 0:
                         stats[remote.uuid][HoardFileStatus.MOVE.value] = {
-                            "nfiles":  can_be_moved_cnt,
-                            "size":  can_be_moved_size}
+                            "nfiles": can_be_moved_cnt,
+                            "size": can_be_moved_size}
 
                     assert HoardFileStatus.COPY.value not in stats[remote.uuid]
                     if can_be_copied_cnt > 0:
                         stats[remote.uuid][HoardFileStatus.COPY.value] = {
-                            "nfiles":  can_be_copied_cnt,
-                            "size":  can_be_copied_size}
+                            "nfiles": can_be_copied_cnt,
+                            "size": can_be_copied_size}
 
                     if needed_to_get_cnt > 0:
                         stats[remote.uuid][HoardFileStatus.RESERVED.value] = {
-                            "nfiles":  needed_to_get_cnt,
-                            "size":  needed_to_get_size}
-
+                            "nfiles": needed_to_get_cnt,
+                            "size": needed_to_get_size}
 
         return stats
 

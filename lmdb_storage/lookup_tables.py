@@ -78,10 +78,13 @@ def fast_zip_left_dfs(
         yield compressed_path, left_obj, right_obj, CANT_SKIP
 
 
-def decode_bytes_to_intpath(packed_lookup_data: bytes, idx: int) -> Tuple[int, List[int]]:
+type CompressedPath = List[int]
+
+
+def decode_bytes_to_intpath(packed_lookup_data: bytes, idx: int) -> Tuple[int, CompressedPath]:
     cnt, idx = decode_buffer(packed_lookup_data, idx)
     last_idx = idx + cnt  # that's how much we have to decode
-    path: List[int] = list()
+    path: CompressedPath = list()
     while idx < last_idx:
         path_part, idx = decode_buffer(packed_lookup_data, idx)
         path.append(path_part)
@@ -152,7 +155,9 @@ class LookupTable[LookupData]:
             yield get_path_string(self.root_id, path, objects)
 
 
-def get_path_string(root_id: ObjectID, path: List[int], objects: Callable[[ObjectID], StoredObject]) -> FastPosixPath:
+def get_path_string(
+        root_id: ObjectID, path: CompressedPath,
+        objects: Callable[[ObjectID], StoredObject]) -> FastPosixPath:
     result = []
     current_id = root_id
     for pi in path:
@@ -186,7 +191,8 @@ def compute_lookup_table(objects: Objects, root_id: MaybeObjectID) -> bytearray:
     return packed_lookup_data
 
 
-def compute_difference_lookup_table(objects: Objects, existing_in: MaybeObjectID, missing_in: MaybeObjectID) -> bytearray:
+def compute_difference_lookup_table(
+        objects: Objects, existing_in: MaybeObjectID, missing_in: MaybeObjectID) -> bytearray:
     """Computes what files need to be deleted."""
     if existing_in is None:
         return bytearray()
