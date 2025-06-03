@@ -508,18 +508,18 @@ class HoardCommandContents:
                 HoardFileStatus.CLEANUP.value) if s in available_states)]
             with StringIO() as out:
                 out.write(f"Root: {safe_hex(hoard.env.roots(False)['HOARD'].desired)}\n")
-                out.write(f"|{'Num Files':<25}|")
+                out.write(f"|{'Num Files':<20}|")
                 if not hide_time:
                     out.write(f"{'updated':>20}|")
                 if not hide_disk_sizes:
                     out.write(f"{'max':>8}|")
 
                 for col in all_stats:
-                    out.write(f"{col:<10}|")
+                    out.write(f"{col[:6]:<6}|")
                 out.write("\n")
 
                 for name, uuid, updated_maybe, uuid_stats in statuses_sorted:
-                    out.write(f"|{name:<25}|")
+                    out.write(f"|{name:<20}|")
                     if not hide_time:
                         updated = humanize.naturaltime(updated_maybe) if updated_maybe is not None else "never"
                         out.write(f"{updated:>20}|")
@@ -527,23 +527,23 @@ class HoardCommandContents:
                         out.write(f"{format_size(hoard.config.max_size(uuid)):>8}|")
 
                     for stat in all_stats:
-                        nfiles = uuid_stats[stat]["nfiles"] if stat in uuid_stats else ""
-                        out.write(f"{nfiles:>10}|")
+                        nfiles = format_count(uuid_stats[stat]["nfiles"]) if stat in uuid_stats else ""
+                        out.write(f"{nfiles:>6}|")
                     out.write("\n")
 
                 out.write("\n")
 
-                out.write(f"|{'Size':<25}|")
+                out.write(f"|{'Size':<20}|")
                 if not hide_time:
                     out.write(f"{'updated':>20}|")
                 if not hide_disk_sizes:
                     out.write(f"{'max':>8}|")
 
                 for col in all_stats:
-                    out.write(f"{col:<10}|")
+                    out.write(f"{col[:6]:<6}|")
                 out.write("\n")
                 for name, uuid, updated_maybe, uuid_stats in statuses_sorted:
-                    out.write(f"|{name:<25}|")
+                    out.write(f"|{name:<20}|")
                     if not hide_time:
                         updated = humanize.naturaltime(updated_maybe) if updated_maybe is not None else "never"
                         out.write(f"{updated:>20}|")
@@ -551,7 +551,7 @@ class HoardCommandContents:
                         out.write(f"{format_size(hoard.config.max_size(uuid)):>8}|")
                     for stat in all_stats:
                         size = format_size(uuid_stats[stat]["size"]) if stat in uuid_stats else ""
-                        out.write(f"{size:>10}|")
+                        out.write(f"{size:>6}|")
                     out.write("\n")
 
                 return out.getvalue()
