@@ -499,7 +499,7 @@ class HoardCommandContents:
         config = self.hoard.config()
         async with self.hoard.open_contents(create_missing=False) as hoard:
             statuses: Dict[str, Dict[str, Dict[str, Any]]] = hoard.fsobjects.status_by_uuid(
-                FastPosixPath(path) if path else None)
+                FastPosixPath(path) if path else None, extended=True)
             available_states, statuses_sorted = augment_statuses(config, hoard, show_empty, statuses)
 
             all_stats = ["total", *(s for s in (

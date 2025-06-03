@@ -4,7 +4,7 @@ from typing import Iterable, Tuple, List, Callable, Dict
 from command.fast_path import FastPosixPath
 from lmdb_storage.file_object import FileObject
 from lmdb_storage.tree_iteration import SkipFun, CANT_SKIP
-from lmdb_storage.tree_object import ObjectType, ObjectID, StoredObject, TreeObject
+from lmdb_storage.tree_object import ObjectType, ObjectID, StoredObject, TreeObject, MaybeObjectID
 from lmdb_storage.tree_structure import Objects
 from util import format_size
 from varint import encode, decode_buffer
@@ -49,25 +49,33 @@ def decode_bytes_to_intpath(packed_lookup_data: bytes, idx: int) -> Tuple[int, L
     return idx, path
 
 
+def _read_packed[LookupData](packed_lookup_data) -> Tuple[Dict[bytes, List[int] | List[LookupData]], MaybeObjectID]:
+    if len(packed_lookup_data) == 0:
+        return dict(), None
+
+    root_id = bytes(packed_lookup_data[:20])
+    idx = 20
+    lookup_table: Dict[bytes, List[int] | List[LookupData]] = dict()
+    while idx < len(packed_lookup_data):
+        prefix = bytes(packed_lookup_data[idx:idx + 20])
+        assert type(prefix) is bytes
+        idx += 20
+
+        if prefix not in lookup_table:
+            lookup_table[prefix] = [idx]
+        else:
+            lookup_table[prefix].append(idx)
+
+        cnt, idx = decode_buffer(packed_lookup_data, idx)  # find size of path
+        idx += cnt
+    return lookup_table, root_id
+
+
 class LookupTable[LookupData]:
     def __init__(self, packed_lookup_data: bytes, reader: Callable[[bytes, int], LookupData]):
-        self.root_id = bytes(packed_lookup_data[:20])
+        lookup_table, root_id = _read_packed(packed_lookup_data)
 
-        idx = 20
-        lookup_table: Dict[bytes, List[int] | List[LookupData]] = dict()
-        while idx < len(packed_lookup_data):
-            prefix = bytes(packed_lookup_data[idx:idx + 20])
-            assert type(prefix) is bytes
-            idx += 20
-
-            if prefix not in lookup_table:
-                lookup_table[prefix] = [idx]
-            else:
-                lookup_table[prefix].append(idx)
-
-            cnt, idx = decode_buffer(packed_lookup_data, idx)  # find size of path
-            idx += cnt
-
+        self.root_id = root_id
         self._lookup_table = lookup_table
         self._packed_lookup_data = packed_lookup_data
 
@@ -77,8 +85,11 @@ class LookupTable[LookupData]:
     def __len__(self) -> int:
         return len(self._lookup_table)
 
-    def __getitem__(self, obj_id: bytearray | bytes) -> Iterable[LookupData]:
+    def __getitem__(self, obj_id: bytearray | bytes) -> List[LookupData]:
         hash_prefix = bytes(obj_id) if isinstance(obj_id, bytearray) else obj_id
+        if hash_prefix not in self._lookup_table:
+            return []
+
         idxs = self._lookup_table[hash_prefix]
         if isinstance(idxs[0], int):  # convert the list of ints to the list of unpacked paths
             idxs = [self._reader(self._packed_lookup_data, idx)[1] for idx in idxs]
@@ -115,7 +126,10 @@ def get_path_string(root_id: ObjectID, path: List[int], objects: Callable[[Objec
     return FastPosixPath(True, '', result)
 
 
-def compute_lookup_table(objects: Objects, root_id: ObjectID) -> bytearray:
+def compute_lookup_table(objects: Objects, root_id: MaybeObjectID) -> bytearray:
+    if root_id is None:
+        return bytearray()
+
     files = 0
     packed_lookup_data = bytearray(root_id)
     tmp_path: bytearray
@@ -125,5 +139,6 @@ def compute_lookup_table(objects: Objects, root_id: ObjectID) -> bytearray:
             assert len(obj_id) == 20
             packed_lookup_data += obj_id + encode(len(tmp_path)) + tmp_path
 
-    sys.stdout.write(f"decoded_files: {files}, {format_size(len(packed_lookup_data) // files)} per file\n")
+    sys.stdout.write(
+        f"decoded_files: {files}, {format_size(len(packed_lookup_data) // files) if files > 0 else 0} per file\n")
     return packed_lookup_data
