@@ -67,8 +67,7 @@ async def copy_or_get(
         success, restored_file = await _restore_file(candidate_path_on_device, fullpath_to_restore, file_obj)
         if success:
             add_to_current_tree_file_obj(hoard, restore_to_uuid, hoard_path.as_pure_path.as_posix(), file_obj)
-            return f"+ {local_path_to_restore}\n"
-            # return f"LOCAL_COPY {hoard_path.as_pure_path}\n" fixme
+            return f"LOCAL_COPY {local_path_to_restore}\n"
 
     remote_candidates: Dict[str, list[FastPosixPath]] = dict(moves_and_copies.get_remote_copies_expanded(
         restore_to_uuid, file_obj.file_id))
@@ -79,11 +78,10 @@ async def copy_or_get(
             success, restored_file = await _restore_file(candidate_path_on_device, fullpath_to_restore, file_obj)
             if success:
                 add_to_current_tree_file_obj(hoard, restore_to_uuid, hoard_path.as_pure_path.as_posix(), file_obj)
-                return f"+ {local_path_to_restore}\n"
-                # return f"REMOTE_COPY {hoard_path.as_pure_path}\n" fixme
+                return f"REMOTE_COPY [{hoard.remote_name(candidate_uuid)}] {local_path_to_restore}\n"
 
     logging.error(f"Did not succeed restoring {hoard_path}!")
-    return f"E {local_path_to_restore}\n"
+    return f"ERROR_RESTORING {local_path_to_restore}\n"
 
 
 def _cleanup_files_in_repo(

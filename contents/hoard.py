@@ -703,3 +703,6 @@ class HoardContents:
 
                     if hoard_root_idx is not None and desired_objs[hoard_root_idx] is None:
                         raise ValueError(f"File at path {path} is not in hoard root!")
+
+    def remote_name(self, candidate_uuid) -> str:
+        return self.hoard_config.remotes[candidate_uuid].name

@@ -182,8 +182,8 @@ class TestBackups(IsolatedAsyncioTestCase):
             'Remote repo-partial-name current=418ef1 staging=418ef1 desired=418ef1\n'
             'repo-partial-name:\n'
             'repo-full-name:\n'
-            '+ test.me.5\n'
-            '+ wat/test.me.6\n'
+            'REMOTE_COPY [repo-incoming-name] test.me.5\n'
+            'REMOTE_COPY [repo-incoming-name] wat/test.me.6\n'
             'repo-incoming-name:\n'
             'repo-partial-name:\n'
             'repo-full-name:\n'
@@ -382,18 +382,18 @@ class TestBackups(IsolatedAsyncioTestCase):
             'Remote repo-partial-name current=418ef1 staging=418ef1 desired=418ef1',
             'repo-partial-name:',
             'repo-full-name:',
-            '+ test.me.5',
-            '+ wat/test.me.6',
+            'REMOTE_COPY [repo-incoming-name] test.me.5',
+            'REMOTE_COPY [repo-incoming-name] wat/test.me.6',
             'repo-incoming-name:',
             'backup-1:',
-            '+ wat/test.me.6',
+            'REMOTE_COPY [repo-incoming-name] wat/test.me.6',
             'backup-2:',
-            '+ test.me.5',
-            '+ wat/test.me.2',
+            'REMOTE_COPY [repo-incoming-name] test.me.5',
+            'REMOTE_COPY [repo-partial-name] wat/test.me.2',
             'backup-3:',
-            '+ test.me.4',
+            'REMOTE_COPY [repo-full-name] test.me.4',
             'backup-4:',
-            '+ wat/test.me.3',
+            'REMOTE_COPY [repo-full-name] wat/test.me.3',
             'repo-partial-name:',
             'repo-full-name:',
             'repo-incoming-name:',

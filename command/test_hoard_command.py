@@ -481,9 +481,9 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             'Remote cloned-repo current=None staging=None desired=72174f\n'
             'Remote repo-in-local current=72174f staging=72174f desired=72174f\n'
             'cloned-repo:\n'
-            '+ test.me.different\n'
-            '+ test.me.once\n'
-            '+ test.me.twice\n'
+            'REMOTE_COPY [repo-in-local] test.me.different\n'
+            'REMOTE_COPY [repo-in-local] test.me.once\n'
+            'REMOTE_COPY [repo-in-local] test.me.twice\n'
             'cloned-repo:\n'
             'After:\n'
             'Remote cloned-repo current=72174f staging=None desired=72174f\n'
@@ -771,8 +771,8 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             'Remote repo-incoming-name current=3d1726 staging=3d1726 desired=None\n'
             'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
             'repo-full-name:\n'
-            '+ test.me.5\n'
-            '+ wat/test.me.6\n'
+            'REMOTE_COPY [repo-incoming-name] test.me.5\n'
+            'REMOTE_COPY [repo-incoming-name] wat/test.me.6\n'
             'repo-full-name:\n'
             'After:\n'
             'Remote repo-backup-name current=3a0889 staging=3a0889 desired=8da760\n'
@@ -934,13 +934,13 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2',
             'repo-partial-name:',
             'repo-full-name:',
-            '+ test.me.5',
-            '+ wat/test.me.6',
+            'REMOTE_COPY [repo-incoming-name] test.me.5',
+            'REMOTE_COPY [repo-incoming-name] wat/test.me.6',
             'repo-backup-name:',
-            '+ test.me.4',
-            '+ test.me.5',
-            '+ wat/test.me.2',
-            '+ wat/test.me.6',
+            'REMOTE_COPY [repo-full-name] test.me.4',
+            'REMOTE_COPY [repo-incoming-name] test.me.5',
+            'REMOTE_COPY [repo-partial-name] wat/test.me.2',
+            'REMOTE_COPY [repo-incoming-name] wat/test.me.6',
             'repo-incoming-name:',
             'repo-partial-name:',
             'repo-full-name:',
@@ -1085,7 +1085,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             'Remote repo-cloned-wat current=None staging=None desired=31a330\n'
             'Remote repo-full-name current=d48f4e staging=d48f4e desired=d48f4e\n'
             'repo-cloned-wat:\n'
-            '+ inner/another.file\n'
+            'REMOTE_COPY [repo-full-name] inner/another.file\n'
             'repo-cloned-wat:\n'
             'After:\n'
             'Remote repo-cloned-wat current=31a330 staging=None desired=31a330\n'
@@ -1114,8 +1114,8 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             'Remote repo-cloned-wat current=31a330 staging=None desired=8ab884\n'
             'Remote repo-full-name current=d48f4e staging=d48f4e desired=d48f4e\n'
             'repo-cloned-wat:\n'
-            '+ test.me.2\n'
-            '+ test.me.3\n'
+ 'REMOTE_COPY [repo-full-name] test.me.2\n'
+ 'REMOTE_COPY [repo-full-name] test.me.3\n'
             'repo-cloned-wat:\n'
             'After:\n'
             'Remote repo-cloned-wat current=8ab884 staging=None desired=8ab884\n'
@@ -1324,7 +1324,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             'Remote repo-incoming-name current=None staging=None desired=None\n'
             'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2\n'
             'repo-backup-name:\n'
-            '+ wat/test.me.2\n'
+            'REMOTE_COPY [repo-partial-name] wat/test.me.2\n'
             'repo-backup-name:\n'
             'd wat/test.me.3\n'
             'After:\n'
@@ -1403,7 +1403,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             'Remote repo-incoming-name current=None staging=None desired=None\n'
             'Remote repo-partial-name current=57a93f staging=57a93f desired=f9bfc2\n'
             'repo-partial-name:\n'
-            '+ wat/test.me.2\n'
+ 'REMOTE_COPY [repo-backup-name] wat/test.me.2\n'
             'repo-partial-name:\n'
             'After:\n'
             'Remote repo-backup-name current=f9bfc2 staging=3a0889 desired=f9bfc2\n'
