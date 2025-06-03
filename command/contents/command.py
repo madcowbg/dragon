@@ -14,7 +14,7 @@ from command.contents.pull_preferences import PullPreferences, PullIntention
 from command.fast_path import FastPosixPath
 from command.hoard import Hoard
 from command.pathing import HoardPathing
-from command.tree_operations import DEPRECATED_remove_from_desired_tree
+from command.pending_file_ops import HACK_create_from_hoard_props
 from config import CaveType, HoardRemote, HoardConfig
 from contents.hoard import HoardContents, HoardFile, HoardDir
 from contents.hoard_props import HoardFileStatus, HoardFileProps
@@ -22,6 +22,7 @@ from contents.recursive_stats_calc import NodeID, NodeObj, CurrentAndDesiredRead
 from contents.repo import RepoContents
 from exceptions import MissingRepoContents, MissingRepo
 from lmdb_storage.cached_calcs import CachedCalculator
+from lmdb_storage.deferred_operations import remove_from_desired_tree, HoardDeferredOperations
 from lmdb_storage.operations.three_way_merge import TransformedRoots
 from lmdb_storage.pull_contents import merge_contents, commit_merged
 from lmdb_storage.roots import Root, Roots
@@ -799,7 +800,9 @@ async def execute_drop(
     for hoard_file, hoard_props in alive_it([s async for s in hoard.fsobjects.in_folder(path_in_hoard)]):
         assert isinstance(hoard_props, HoardFileProps)
 
-        DEPRECATED_remove_from_desired_tree(hoard, repo_uuid, hoard_file)
+        remove_from_desired_tree(hoard, repo_uuid, hoard_file.as_posix(), HACK_create_from_hoard_props(hoard_props))
+
+    HoardDeferredOperations(hoard).apply_deferred_queue()
 
     new_desired_id = hoard.env.roots(write=False)[repo_uuid].desired
 

@@ -1,5 +1,4 @@
 import logging
-import logging
 import os
 import pathlib
 import sys
@@ -608,45 +607,6 @@ class Query:
 
 
 STATUSES_THAT_USE_SIZE = [HoardFileStatus.AVAILABLE, HoardFileStatus.GET, HoardFileStatus.COPY, HoardFileStatus.CLEANUP]
-
-
-class ReadonlyHoardContentsConn:
-    def __init__(self, folder: pathlib.Path, config: HoardConfig):
-        self.folder = folder
-        self.config = config
-
-    async def __aenter__(self) -> "HoardContents":
-        self.contents = HoardContents(self.folder, True, self.config)
-        return self.contents
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        self.contents.close(False)
-        return None
-
-    def writeable(self):
-        return HoardContentsConn(self.folder, self.config)
-
-
-class HoardContentsConn:
-    def __init__(self, folder: pathlib.Path, config: HoardConfig):
-        self.config = config
-
-        toml_filename = os.path.join(folder, HOARD_CONTENTS_TOML)
-        if not os.path.isfile(toml_filename):
-            with open(toml_filename, "w") as f:
-                rtoml.dump({
-                    "updated": datetime.now().isoformat()
-                }, f)
-
-        self.folder = folder
-
-    async def __aenter__(self) -> "HoardContents":
-        self.contents = HoardContents(self.folder, False, self.config)
-        return self.contents
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        self.contents.close(True)
-        return None
 
 
 class HoardContents:

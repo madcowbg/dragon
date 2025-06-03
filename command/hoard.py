@@ -5,7 +5,8 @@ from typing import List
 
 from command.repo import ConnectedRepo
 from config import HoardConfig, HoardPaths
-from contents.hoard import ReadonlyHoardContentsConn, HOARD_CONTENTS_LMDB_DIR
+from contents.hoard import HOARD_CONTENTS_LMDB_DIR
+from contents.hoard_connection import ReadonlyHoardContentsConn
 from exceptions import RepoOpeningFailed
 from resolve_uuid import load_config, load_paths, CONFIG_FILE
 

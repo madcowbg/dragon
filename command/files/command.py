@@ -9,6 +9,7 @@ from command.files.file_operations import _fetch_files_in_repo, _cleanup_files_i
 from command.hoard import Hoard
 from command.pathing import HoardPathing
 from command.pending_file_ops import get_pending_operations, CopyFile, GetFile, CleanupFile, MoveFile, RetainFile
+from lmdb_storage.deferred_operations import HoardDeferredOperations
 from config import HoardConfig
 from contents.hoard import MovesAndCopies
 from contents.hoard_props import HoardFileStatus
@@ -100,6 +101,9 @@ async def execute_files_push(config: HoardConfig, hoard: Hoard, repo_uuids: List
 
             await _fetch_files_in_repo(moves_and_copies_before_fetching, hoard_contents, repo_uuid, pathing, out, progress_bar)
 
+        logging.info("Applying deferred operations after potentially getting a lot of files.")
+        HoardDeferredOperations(hoard_contents).apply_deferred_queue()
+
         logging.info("Finding files that need copy - will not cleanup them!")
         moves_and_copies_for_cleanup = MovesAndCopies(hoard_contents)
         logging.info("try cleaning unneeded files, per repo")
@@ -108,6 +112,9 @@ async def execute_files_push(config: HoardConfig, hoard: Hoard, repo_uuids: List
             out.write(f"{config.remotes[repo_uuid].name}:\n")
 
             _cleanup_files_in_repo(moves_and_copies_for_cleanup, hoard_contents, repo_uuid, pathing, out, progress_bar)
+
+        logging.info("Applying deferred operations after cleanup.")
+        HoardDeferredOperations(hoard_contents).apply_deferred_queue()
 
         out.write(f"After:\n")
         dump_remotes(config, hoard_contents, out)

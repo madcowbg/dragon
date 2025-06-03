@@ -66,7 +66,9 @@ class ObjectEnvironmentCache:
                 env,
                 {
                     "objects": env.open_db("objects".encode()),
-                    "repos": env.open_db("repos".encode())},
+                    "repos": env.open_db("repos".encode()),
+                    "deferred_ops": env.open_db("deferred_ops".encode()),
+                },
                 0)
 
         cached_params, env, dbs, usage = self._cache[path]
