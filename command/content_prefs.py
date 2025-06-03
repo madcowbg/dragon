@@ -202,27 +202,6 @@ class ContentPrefs:
             yield from map(
                 lambda remote: remote.uuid, b.repos_to_backup_to(hoard_file, hoard_props, local_props.size, True))
 
-    def can_cleanup(
-            self, hoard_file: FastPosixPath, hoard_props: HoardFileProps, repo_uuid: str, out: StringIO) -> bool:
-        to_be_got = hoard_props.by_status(HoardFileStatus.GET)
-        is_available = hoard_props.by_status(HoardFileStatus.AVAILABLE)
-
-        local_file_to_delete = self.pathing.in_hoard(hoard_file).at_local(repo_uuid).as_pure_path.as_posix()
-
-        if hoard_props.fasthash in self.files_to_copy:  # fixme that copy functionality is kinda pointless and complicating
-            logging.info(f"file with fasthash {hoard_props.fasthash} to be copied, retaining")
-            out.write(f"~h {local_file_to_delete}\n")
-            return False
-
-        required_min_copies = self.config.remotes[repo_uuid].min_copies_before_cleanup
-        if len(to_be_got) > 0 and len(is_available) < required_min_copies:
-            logging.info(
-                f"file needs to be copied in {len(to_be_got)} places, "
-                f"has {len(is_available)} < {required_min_copies} - will retain here.")
-            return False
-
-        return True
-
     @cached_property
     def files_to_copy(self) -> Dict[str, List[str]]:
         return _find_files_to_copy(self.hoard)

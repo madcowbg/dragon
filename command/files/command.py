@@ -104,15 +104,13 @@ async def execute_files_push(config: HoardConfig, hoard: Hoard, repo_uuids: List
             await _fetch_files_in_repo(content_prefs, hoard_contents, repo_uuid, pathing, out, progress_bar)
 
         logging.info("Finding files that need copy - will not cleanup them!")
-        content_prefs_after = ContentPrefs(config, pathing, hoard_contents, hoard.available_remotes()) # fixme remove
-        logging.info(f"Found {len(content_prefs_after.files_to_copy)} hashes to copy, won't cleanup them.")
         moves_and_copies = MovesAndCopies(hoard_contents)
         logging.info("try cleaning unneeded files, per repo")
         for repo_uuid in repo_uuids:
             logging.info(f"cleaning repo {config.remotes[repo_uuid].name}")
             out.write(f"{config.remotes[repo_uuid].name}:\n")
 
-            await _cleanup_files_in_repo(content_prefs_after, moves_and_copies, hoard_contents, repo_uuid, pathing, out, progress_bar)
+            await _cleanup_files_in_repo(moves_and_copies, hoard_contents, repo_uuid, pathing, out, progress_bar)
 
         out.write(f"After:\n")
         dump_remotes(config, hoard_contents, out)

@@ -115,8 +115,7 @@ async def _fetch_files_in_repo(
 
 
 async def _cleanup_files_in_repo(
-        content_prefs: ContentPrefs, moves_and_copies: MovesAndCopies, hoard: HoardContents, repo_uuid: str,
-        pathing: HoardPathing,
+        moves_and_copies: MovesAndCopies, hoard: HoardContents, repo_uuid: str, pathing: HoardPathing,
         out: StringIO, progress_bar):
     files_to_cleanup = sorted(hoard.fsobjects.to_cleanup(repo_uuid))
     with progress_bar(to_mb(sum(f[1].size for f in files_to_cleanup)), unit="MB", title="Cleaning files") as bar:
@@ -137,11 +136,7 @@ async def _cleanup_files_in_repo(
                 if len(moves_and_copies.get_existing_paths_in_uuid(uuid, file_obj.id)) == 0)
             logging.debug(f"Needed in {len(where_is_needed)} repos that would prevent this to be deleted.")
 
-            legacy_can_cleanup = content_prefs.can_cleanup(hoard_file, hoard_props, repo_uuid, out)
-
             if len(where_is_needed_but_not_in_repo) == 0:
-                assert legacy_can_cleanup
-
                 logging.info("file doesn't need to be copied anymore, cleaning")
                 remove_from_current_tree(hoard, repo_uuid, hoard_file)
 
@@ -165,9 +160,6 @@ async def _cleanup_files_in_repo(
                     hoard.hoard_config.remotes[uuid].name for uuid in where_is_needed_but_not_in_repo.keys())
                 out.write(
                     f"NEEDS_MORE_COPIES ({len(where_is_needed_but_not_in_repo)}) {repo_names} {local_path.as_pure_path.as_posix()}\n")
-
-                if legacy_can_cleanup:
-                    logging.error(f"Change in behavior for {hoard_file}: now can't delete!!!")
 
                 logging.info(
                     f"file {hoard_file} needs to be copied to {len(where_is_needed_but_not_in_repo)} repos, skipping")
