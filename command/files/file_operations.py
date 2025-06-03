@@ -107,13 +107,21 @@ async def _fetch_files_in_repo(
                 else:
                     logging.error("error restoring file!")
                     return f"E {local_filepath}\n"
-
-        copier = Copier()
-        outputs = [await copier.copy_or_get_file(*fa) for fa in files_to_fetch]
+        if False:
+            outputs = [await move_copy_or_get(hoard_path, hoard_props) for hoard_path, hoard_props in files_to_fetch]
+        else:
+            copier = Copier()
+            outputs = [await copier.copy_or_get_file(hoard_path, hoard_props) for hoard_path, hoard_props in files_to_fetch]
 
         for line in outputs:
             if line is not None:
                 out.write(line)
+
+async def move_copy_or_get(hoard_path: str, hoard_props: HoardFileProps) -> str | None:
+    if hoard_props.size > (5 * (1 << 30)):  # >5G
+        logging.warning(f"Copying large file {format_size(hoard_props.size)}: {hoard_path}")
+
+    raise NotImplementedError()
 
 
 async def _cleanup_files_in_repo(
