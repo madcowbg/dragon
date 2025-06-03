@@ -14,7 +14,7 @@ from command.contents.pull_preferences import PullPreferences, PullIntention
 from command.fast_path import FastPosixPath
 from command.hoard import Hoard
 from command.pathing import HoardPathing
-from command.tree_operations import remove_from_desired_tree
+from command.tree_operations import DEPRECATED_remove_from_desired_tree
 from config import CaveType, HoardRemote, HoardConfig
 from contents.hoard import HoardContents, HoardFile, HoardDir
 from contents.hoard_props import HoardFileStatus, HoardFileProps
@@ -799,7 +799,7 @@ async def execute_drop(
     for hoard_file, hoard_props in alive_it([s async for s in hoard.fsobjects.in_folder(path_in_hoard)]):
         assert isinstance(hoard_props, HoardFileProps)
 
-        remove_from_desired_tree(hoard, repo_uuid, hoard_file)
+        DEPRECATED_remove_from_desired_tree(hoard, repo_uuid, hoard_file)
 
     new_desired_id = hoard.env.roots(write=False)[repo_uuid].desired
 

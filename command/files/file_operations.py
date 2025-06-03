@@ -10,7 +10,7 @@ import aioshutil
 from command.fast_path import FastPosixPath
 from command.pathing import HoardPathing
 from command.pending_file_ops import HACK_create_from_hoard_props
-from command.tree_operations import remove_from_current_tree, add_to_current_tree_file_obj
+from command.tree_operations import DEPRECATED_remove_from_current_tree, DEPRECATED_add_to_current_tree_file_obj
 from config import HoardPaths
 from contents.hoard import HoardContents, MovesAndCopies
 from contents.hoard_props import HoardFileProps, HoardFileStatus
@@ -66,7 +66,7 @@ async def copy_or_get(
 
         success, restored_file = await _restore_file(candidate_path_on_device, fullpath_to_restore, file_obj)
         if success:
-            add_to_current_tree_file_obj(hoard, restore_to_uuid, hoard_path.as_pure_path.as_posix(), file_obj)
+            DEPRECATED_add_to_current_tree_file_obj(hoard, restore_to_uuid, hoard_path.as_pure_path.as_posix(), file_obj)
             return f"LOCAL_COPY {local_path_to_restore}\n"
 
     remote_candidates: Dict[str, list[FastPosixPath]] = dict(moves_and_copies.get_remote_copies_expanded(
@@ -77,7 +77,7 @@ async def copy_or_get(
             logging.debug(f"Preparing to copy remote %s to %s...", expanded_path, candidate_path_on_device)
             success, restored_file = await _restore_file(candidate_path_on_device, fullpath_to_restore, file_obj)
             if success:
-                add_to_current_tree_file_obj(hoard, restore_to_uuid, hoard_path.as_pure_path.as_posix(), file_obj)
+                DEPRECATED_add_to_current_tree_file_obj(hoard, restore_to_uuid, hoard_path.as_pure_path.as_posix(), file_obj)
                 return f"REMOTE_COPY [{hoard.remote_name(candidate_uuid)}] {local_path_to_restore}\n"
 
     logging.error(f"Did not succeed restoring {hoard_path}!")
@@ -108,7 +108,7 @@ def _cleanup_files_in_repo(
 
             if len(where_is_needed_but_not_in_repo) == 0:
                 logging.info("file doesn't need to be copied anymore, cleaning")
-                remove_from_current_tree(hoard, repo_uuid, hoard_file)
+                DEPRECATED_remove_from_current_tree(hoard, repo_uuid, hoard_file)
 
                 logging.info(f"deleting {local_path.on_device_path()}...")
 

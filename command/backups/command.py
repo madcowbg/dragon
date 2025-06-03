@@ -8,8 +8,8 @@ import command.fast_path
 from command.content_prefs import BackupSet, MIN_REPO_PERC_FREE
 from command.hoard import Hoard
 from command.pathing import HoardPathing
-from command.tree_operations import add_to_desired_tree, \
-    remove_from_desired_tree
+from command.tree_operations import DEPRECATED_add_to_desired_tree, \
+    DEPRECATED_remove_from_desired_tree
 from config import HoardRemote
 from contents.hoard_props import HoardFileStatus, HoardFileProps
 from lmdb_storage.file_object import BlobObject
@@ -107,7 +107,7 @@ class HoardCommandBackups:
                         logging.info(f"Cleaning up {hoard_file} from {[r.uuid for r in repos_to_clean_from]}")
 
                         for repo in repos_to_clean_from:
-                            remove_from_desired_tree(hoard, repo.uuid, hoard_file)
+                            DEPRECATED_remove_from_desired_tree(hoard, repo.uuid, hoard_file)
 
                         for repo in repos_to_clean_from:
                             removed_cnt[repo] = removed_cnt.get(repo, 0) + 1
@@ -154,7 +154,7 @@ class HoardCommandBackups:
 
                         logging.info(f"Backing up {hoard_file} to {[r.uuid for r in new_repos_to_backup_to]}")
                         for repo in new_repos_to_backup_to:
-                            add_to_desired_tree(hoard, repo.uuid, hoard_file.simple, hoard_props)
+                            DEPRECATED_add_to_desired_tree(hoard, repo.uuid, hoard_file.simple, hoard_props)
                             tree_ops += 1
                             if tree_ops % 5000 == 0:
                                 logging.warn(f"gc-ing at # of tree ops {tree_ops}. FIXME reimplement faster")
