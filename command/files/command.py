@@ -1,14 +1,11 @@
 import logging
 from io import StringIO
-
 from typing import Optional, List, Dict
 
 from alive_progress import alive_bar
 
-from command.content_prefs import ContentPrefs
 from command.contents.command import dump_remotes
 from command.files.file_operations import _fetch_files_in_repo, _cleanup_files_in_repo
-
 from command.hoard import Hoard
 from command.pathing import HoardPathing
 from command.pending_file_ops import get_pending_operations, CopyFile, GetFile, CleanupFile, MoveFile, RetainFile
@@ -93,8 +90,7 @@ async def execute_files_push(config: HoardConfig, hoard: Hoard, repo_uuids: List
         out.write(f"Before push:\n")
         dump_remotes(config, hoard_contents, out)
 
-        content_prefs = ContentPrefs(config, pathing, hoard_contents, hoard.available_remotes())
-        moves_and_copies = MovesAndCopies(hoard_contents)
+        moves_and_copies_before_fetching = MovesAndCopies(hoard_contents)
         logging.info("try getting all requested files, per repo")
 
         logging.info("Finding files that need copy, for easy lookup")
@@ -102,16 +98,16 @@ async def execute_files_push(config: HoardConfig, hoard: Hoard, repo_uuids: List
             logging.info(f"fetching for {config.remotes[repo_uuid].name}")
             out.write(f"{config.remotes[repo_uuid].name}:\n")
 
-            await _fetch_files_in_repo(content_prefs, moves_and_copies, hoard_contents, repo_uuid, pathing, out, progress_bar)
+            await _fetch_files_in_repo(moves_and_copies_before_fetching, hoard_contents, repo_uuid, pathing, out, progress_bar)
 
         logging.info("Finding files that need copy - will not cleanup them!")
-        moves_and_copies = MovesAndCopies(hoard_contents)
+        moves_and_copies_for_cleanup = MovesAndCopies(hoard_contents)
         logging.info("try cleaning unneeded files, per repo")
         for repo_uuid in repo_uuids:
             logging.info(f"cleaning repo {config.remotes[repo_uuid].name}")
             out.write(f"{config.remotes[repo_uuid].name}:\n")
 
-            await _cleanup_files_in_repo(moves_and_copies, hoard_contents, repo_uuid, pathing, out, progress_bar)
+            _cleanup_files_in_repo(moves_and_copies_for_cleanup, hoard_contents, repo_uuid, pathing, out, progress_bar)
 
         out.write(f"After:\n")
         dump_remotes(config, hoard_contents, out)

@@ -1,16 +1,12 @@
 import logging
-from io import StringIO
-
-from propcache import cached_property
-
-from command.fast_path import FastPosixPath
 from typing import List, Optional, Generator, Dict
 
+from command.fast_path import FastPosixPath
 from command.pathing import HoardPathing, is_path_available
 from config import HoardRemote, HoardConfig, CaveType
 from contents.hoard import HoardContents
-from contents.repo_props import FileDesc
 from contents.hoard_props import HoardFileStatus, HoardFileProps
+from contents.repo_props import FileDesc
 from util import format_percent, format_size
 
 MIN_REPO_PERC_FREE = 0.02
@@ -167,7 +163,8 @@ class BackupSet:
         return good_remotes
 
     @staticmethod
-    def all(config: HoardConfig, pathing: HoardPathing, hoard: HoardContents, available_remotes: List[str]) -> List["BackupSet"]:
+    def all(config: HoardConfig, pathing: HoardPathing, hoard: HoardContents, available_remotes: List[str]) -> List[
+        "BackupSet"]:
         sets: Dict[FastPosixPath, List[HoardRemote]] = dict()
         for remote in config.remotes.all():
             if remote.type == CaveType.BACKUP:
@@ -177,7 +174,8 @@ class BackupSet:
         return [BackupSet(mounted_at, s, pathing, hoard, available_remotes) for mounted_at, s in sets.items()]
 
 
-STATUSES_DECLARED_TO_FETCH = [HoardFileStatus.GET, HoardFileStatus.COPY, HoardFileStatus.MOVE, HoardFileStatus.AVAILABLE]
+STATUSES_DECLARED_TO_FETCH = [
+    HoardFileStatus.GET, HoardFileStatus.COPY, HoardFileStatus.MOVE, HoardFileStatus.AVAILABLE]
 
 
 class ContentPrefs:
@@ -201,21 +199,3 @@ class ContentPrefs:
         for b in self._backup_sets:
             yield from map(
                 lambda remote: remote.uuid, b.repos_to_backup_to(hoard_file, hoard_props, local_props.size, True))
-
-    @cached_property
-    def files_to_copy(self) -> Dict[str, List[str]]:
-        return _find_files_to_copy(self.hoard)
-
-
-def _find_files_to_copy(hoard: HoardContents) -> Dict[str, List[str]]:
-    fasthashes_to_copy = [
-        props.fasthash for filepath, props in hoard.fsobjects
-        if len(props.by_status(HoardFileStatus.COPY)) > 0]
-
-    files_to_copy: Dict[str, List[str]] = dict((h, []) for h in fasthashes_to_copy)
-    for filepath, props in hoard.fsobjects:
-        assert isinstance(props, HoardFileProps)
-        if props.fasthash in fasthashes_to_copy:
-            files_to_copy[props.fasthash].append(filepath.as_posix())
-
-    return files_to_copy
