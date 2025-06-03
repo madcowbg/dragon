@@ -14,6 +14,7 @@ class HoardFileStatus(enum.Enum):
     CLEANUP = "cleanup"
     COPY = "copy"  # fixme remove as copying is kinda the same as getting, and "move" should capture the real need
     MOVE = "move"
+    RESERVED = "reserved"
     UNKNOWN = "UNKNOWN"
 
 

@@ -505,7 +505,7 @@ class HoardCommandContents:
             all_stats = ["total", *(s for s in (
                 HoardFileStatus.AVAILABLE.value, HoardFileStatus.GET.value,
                 HoardFileStatus.COPY.value, HoardFileStatus.MOVE.value,
-                HoardFileStatus.CLEANUP.value) if s in available_states)]
+                HoardFileStatus.CLEANUP.value, HoardFileStatus.RESERVED.value) if s in available_states)]
             with StringIO() as out:
                 out.write(f"Root: {safe_hex(hoard.env.roots(False)['HOARD'].desired)}\n")
                 out.write(f"|{'Num Files':<20}|")

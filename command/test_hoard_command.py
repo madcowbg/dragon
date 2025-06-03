@@ -886,17 +886,17 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.status(hide_disk_sizes=True)
         self.assertEqual([
             'Root: 8da76083b9eab9f49945d8f2487df38ab909b7df',
-            '|Num Files           |             updated|total |availa|get   |copy  ' '|cleanu|',
-            '|repo-backup-name    |                 now|     6|     2|     4|     4|      ' '|',
-            '|repo-full-name      |                 now|     6|     4|     2|     2|      ' '|',
-            '|repo-incoming-name  |                 now|     4|      |      |      |     ' '4|',
-            '|repo-partial-name   |                 now|     2|     2|      |      |      ' '|',
+            '|Num Files           |             updated|total |availa|get   |copy  ' '|cleanu|reserv|',
+            '|repo-backup-name    |                 now|     6|     2|     4|     4|      ' '|      |',
+            '|repo-full-name      |                 now|     6|     4|     2|     2|      ' '|      |',
+            '|repo-incoming-name  |                 now|     4|      |      |      |     ' '4|     3|',
+            '|repo-partial-name   |                 now|     2|     2|      |      |      ' '|      |',
             '',
-            '|Size                |             updated|total |availa|get   |copy  ' '|cleanu|',
-            '|repo-backup-name    |                 now|    47|    16|    31|    31|      ' '|',
-            '|repo-full-name      |                 now|    47|    35|    12|    12|      ' '|',
-            '|repo-incoming-name  |                 now|    33|      |      |      |    ' '33|',
-            '|repo-partial-name   |                 now|    14|    14|      |      |      ' '|'],
+            '|Size                |             updated|total |availa|get   |copy  ' '|cleanu|reserv|',
+            '|repo-backup-name    |                 now|    47|    16|    31|    31|      ' '|      |',
+            '|repo-full-name      |                 now|    47|    35|    12|    12|      ' '|      |',
+            '|repo-incoming-name  |                 now|    33|      |      |      |    ' '33|    23|',
+            '|repo-partial-name   |                 now|    14|    14|      |      |      ' '|      |'],
             res.splitlines())
 
     async def test_sync_hoard_file_contents_all(self):
@@ -912,17 +912,17 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.status(hide_disk_sizes=True, hide_time=True)
         self.assertEqual([
             'Root: 8da76083b9eab9f49945d8f2487df38ab909b7df',
-            '|Num Files           |total |availa|get   |copy  |cleanu|',
-            '|repo-backup-name    |     6|     2|     4|     4|      |',
-            '|repo-full-name      |     6|     4|     2|     2|      |',
-            '|repo-incoming-name  |     4|      |      |      |     4|',
-            '|repo-partial-name   |     2|     2|      |      |      |',
+            '|Num Files           |total |availa|get   |copy  |cleanu|reserv|',
+            '|repo-backup-name    |     6|     2|     4|     4|      |      |',
+            '|repo-full-name      |     6|     4|     2|     2|      |      |',
+            '|repo-incoming-name  |     4|      |      |      |     4|     3|',
+            '|repo-partial-name   |     2|     2|      |      |      |      |',
             '',
-            '|Size                |total |availa|get   |copy  |cleanu|',
-            '|repo-backup-name    |    47|    16|    31|    31|      |',
-            '|repo-full-name      |    47|    35|    12|    12|      |',
-            '|repo-incoming-name  |    33|      |      |      |    33|',
-            '|repo-partial-name   |    14|    14|      |      |      |'],
+            '|Size                |total |availa|get   |copy  |cleanu|reserv|',
+            '|repo-backup-name    |    47|    16|    31|    31|      |      |',
+            '|repo-full-name      |    47|    35|    12|    12|      |      |',
+            '|repo-incoming-name  |    33|      |      |      |    33|    23|',
+            '|repo-partial-name   |    14|    14|      |      |      |      |'],
             res.splitlines())
 
         res = await hoard_cmd.files.push(all=True)

@@ -20,6 +20,9 @@ class HoardRemote:
         self.uuid = uuid
         self.doc = doc
 
+    def __str__(self):
+        return f"HoardRemote[{self.name}, uuid={self.uuid}]"
+
     @property
     def name(self):
         return self.doc["name"] if "name" in self.doc else "INVALID"

@@ -1,9 +1,11 @@
+import logging
 import sys
 from typing import Iterable, Tuple, List, Callable, Dict
 
 from command.fast_path import FastPosixPath
 from lmdb_storage.file_object import FileObject
-from lmdb_storage.tree_iteration import SkipFun, CANT_SKIP
+from lmdb_storage.roots import Root
+from lmdb_storage.tree_iteration import SkipFun, CANT_SKIP, ObjectIDs
 from lmdb_storage.tree_object import ObjectType, ObjectID, StoredObject, TreeObject, MaybeObjectID
 from lmdb_storage.tree_structure import Objects
 from util import format_size
@@ -37,6 +39,43 @@ def fast_dfs(
 
     for child_idx, (child_name, child_id) in enumerate(obj.children):
         yield from fast_dfs(objects, compressed_path + encode(child_idx), child_id)
+
+
+def fast_zip_left_dfs(
+        objects: Objects, compressed_path: bytearray, left_id: MaybeObjectID, right_id: MaybeObjectID,
+        drilldown_same: bool = True) -> Iterable[Tuple[bytearray, StoredObject | None, StoredObject | None, SkipFun]]:
+    if left_id is None and right_id is None:
+        return  # nothing more to yield
+
+    left_obj = objects[left_id] if left_id else None
+    right_obj = objects[right_id] if right_id else None
+
+    if left_id == right_id and not drilldown_same:  # we got same value for all
+        yield compressed_path, left_obj, right_obj, CANT_SKIP
+        return
+
+    if isinstance(left_obj, TreeObject):
+        # has tree
+        should_skip = False
+
+        def skip_children() -> None:
+            nonlocal should_skip
+            should_skip = True
+
+        yield compressed_path, left_obj, right_obj, skip_children
+
+        if should_skip:
+            return
+
+        for child_idx, (child_name, _) in enumerate(left_obj.children):
+            yield from fast_zip_left_dfs(
+                objects, compressed_path + encode(child_idx),
+                left_obj.get(child_name) if isinstance(left_obj, TreeObject) else None,
+                right_obj.get(child_name) if isinstance(right_obj, TreeObject) else None,
+                drilldown_same)
+    else:
+        # only one or more files
+        yield compressed_path, left_obj, right_obj, CANT_SKIP
 
 
 def decode_bytes_to_intpath(packed_lookup_data: bytes, idx: int) -> Tuple[int, List[int]]:
@@ -81,6 +120,9 @@ class LookupTable[LookupData]:
 
         self._decoded_lookup_data = dict()
         self._reader = reader
+
+    def __str__(self):
+        return f"LookupTable[{len(self)}, root_id={self.root_id.hex() if self.root_id else None}]"
 
     def __len__(self) -> int:
         return len(self._lookup_table)
@@ -141,4 +183,38 @@ def compute_lookup_table(objects: Objects, root_id: MaybeObjectID) -> bytearray:
 
     sys.stdout.write(
         f"decoded_files: {files}, {format_size(len(packed_lookup_data) // files) if files > 0 else 0} per file\n")
+    return packed_lookup_data
+
+
+def compute_difference_lookup_table(objects: Objects, existing_in: MaybeObjectID, missing_in: MaybeObjectID) -> bytearray:
+    """Computes what files need to be deleted."""
+    if existing_in is None:
+        return bytearray()
+
+    files = 0
+    packed_lookup_data = bytearray(existing_in)  # all files to be deleted are from the current tree
+    tmp_path: bytearray
+    for tmp_path, existing_in_obj, missing_in_obj, _ \
+            in fast_zip_left_dfs(objects, bytearray(), existing_in, missing_in, drilldown_same=False):
+        if existing_in_obj is None:
+            continue  # skip missing in current tree or not deleted from desired
+
+        if existing_in_obj == missing_in_obj:
+            continue
+
+        if missing_in_obj is not None:
+            logging.debug("Missing %s is actually just different", missing_in_obj)
+
+        if existing_in_obj.object_type == ObjectType.TREE:
+            continue  # skip trees
+
+        current_obj: FileObject
+
+        files += 1
+        assert len(existing_in_obj.id) == 20
+        packed_lookup_data += existing_in_obj.id + encode(len(tmp_path)) + tmp_path
+
+    sys.stdout.write(
+        f"diff tree - decoded_files: {files},"
+        f" {format_size(len(packed_lookup_data) // files) if files > 0 else 0} per file\n")
     return packed_lookup_data
