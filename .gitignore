@@ -5,3 +5,4 @@ dist/
 *.spec
 
 hoard_explorer.toml
+app-cache.lmdb*
