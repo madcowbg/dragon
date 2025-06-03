@@ -275,6 +275,10 @@ class MovesAndCopies:
     def get_existing_paths_in_uuid(self, in_uuid: str, desired_id: ObjectID) -> List[CompressedPath]:
         return self._lookup_current[in_uuid][desired_id]
 
+    def get_existing_paths_in_uuid_expanded(self, in_uuid: str, desired_id: ObjectID) -> Iterable[FastPosixPath]:
+        with self.parent.env.objects(write=False) as objects:
+            return list(self._lookup_current[in_uuid].get_paths(desired_id, objects.__getitem__))
+
     def get_remote_copies(self, skip_uuid: str, desired_id: ObjectID) -> Iterable[Tuple[str, List[CompressedPath]]]:
         for uuid in self._lookup_current.keys():
             if uuid == skip_uuid:
@@ -283,6 +287,17 @@ class MovesAndCopies:
             existing_paths = list(self._lookup_current[uuid][desired_id])
             if len(existing_paths) > 0:
                 yield uuid, existing_paths
+
+    def get_remote_copies_expanded(
+            self, skip_uuid: str, desired_id: ObjectID) -> Iterable[Tuple[str, List[FastPosixPath]]]:
+        with self.parent.env.objects(write=False) as objects:
+            for uuid in self._lookup_current.keys():
+                if uuid == skip_uuid:
+                    continue
+
+                existing_paths = list(self._lookup_current[uuid].get_paths(desired_id, objects.__getitem__))
+                if len(existing_paths) > 0:
+                    yield uuid, existing_paths
 
     def whereis_needed(self, current_id: ObjectID) -> Iterable[Tuple[str, List[CompressedPath]]]:
         for uuid, lookup_table in self._lookup_desired_but_not_current.items():

@@ -8,7 +8,7 @@ from lmdb_storage.tree_operations import remove_child
 from lmdb_storage.tree_structure import add_file_object
 
 
-def add_to_current_tree(hoard: HoardContents, repo_uuid: str, hoard_file: str, hoard_props: HoardFileProps):
+def add_to_current_tree_file_obj(hoard: HoardContents, repo_uuid: str, hoard_file: str, file_obj: FileObject):
     roots = hoard.env.roots(write=True)
     repo_root = roots[repo_uuid]
     repo_current_root_id = repo_root.current
@@ -16,12 +16,17 @@ def add_to_current_tree(hoard: HoardContents, repo_uuid: str, hoard_file: str, h
     with hoard.env.objects(write=True) as objects:
         new_repo_current_root_id = add_file_object(
             objects, repo_current_root_id, FastPosixPath(hoard_file)._rem,
-            FileObject.create(hoard_props.fasthash, hoard_props.size))
+            file_obj)
 
     if new_repo_current_root_id == repo_current_root_id:
         logging.error(f"Adding {hoard_file} did not create a new root?!")
 
     repo_root.current = new_repo_current_root_id
+
+
+def add_to_current_tree(hoard: HoardContents, repo_uuid: str, hoard_file: str, hoard_props: HoardFileProps):
+    add_to_current_tree_file_obj(
+        hoard, repo_uuid, hoard_file, FileObject.create(hoard_props.fasthash, hoard_props.size))
 
 
 # fixme merge with other add method

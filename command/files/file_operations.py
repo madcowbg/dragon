@@ -13,7 +13,7 @@ from command.content_prefs import ContentPrefs
 from command.fast_path import FastPosixPath
 from command.pathing import HoardPathing
 from command.pending_file_ops import HACK_create_from_hoard_props
-from command.tree_operations import add_to_current_tree, remove_from_current_tree
+from command.tree_operations import add_to_current_tree, remove_from_current_tree, add_to_current_tree_file_obj
 from config import HoardConfig, HoardPaths
 from contents.hoard import HoardContents, MovesAndCopies
 from contents.hoard_props import HoardFileProps, HoardFileStatus
@@ -110,8 +110,13 @@ async def _fetch_files_in_repo(
                     logging.error("error restoring file!")
                     return f"E {local_filepath}\n"
 
-        if False:
-            outputs = [await move_copy_or_get(hoard_path, hoard_props) for hoard_path, hoard_props in files_to_fetch]
+        if True:
+            outputs = [
+                await copy_or_get(
+                    hoard, pathing, moves_and_copies,
+                    pathing.in_hoard(FastPosixPath(hoard_path)),
+                    repo_uuid, HACK_create_from_hoard_props(hoard_props))
+                for hoard_path, hoard_props in files_to_fetch]
         else:
             copier = Copier()
             outputs = [await copier.copy_or_get_file(hoard_path, hoard_props) for hoard_path, hoard_props in
@@ -122,11 +127,40 @@ async def _fetch_files_in_repo(
                 out.write(line)
 
 
-async def move_copy_or_get(hoard_path: str, hoard_props: HoardFileProps) -> str | None:
-    if hoard_props.size > (5 * (1 << 30)):  # >5G
-        logging.warning(f"Copying large file {format_size(hoard_props.size)}: {hoard_path}")
+async def copy_or_get(
+        hoard: HoardContents, pathing: HoardPathing, moves_and_copies: MovesAndCopies,
+        hoard_path: HoardPathing.HoardPath, restore_to_uuid: str, file_obj: FileObject) -> str | None:
+    local_path_to_restore = hoard_path.at_local(restore_to_uuid).as_pure_path
+    fullpath_to_restore = hoard_path.at_local(restore_to_uuid).on_device_path()
 
-    raise NotImplementedError()
+    if file_obj.size > (5 * (1 << 30)):  # >5G
+        logging.warning(f"Copying large file {format_size(file_obj.size)}: {hoard_path}")
+
+    # first candidate is the current device - copy if we can
+    for expanded_path in moves_and_copies.get_existing_paths_in_uuid_expanded(restore_to_uuid, file_obj.file_id):
+        candidate_path_on_device = pathing.in_hoard(expanded_path).at_local(restore_to_uuid).on_device_path()
+        logging.debug(f"Preparing to copy local %s to %s...", expanded_path, candidate_path_on_device)
+
+        success, restored_file = await _restore_file(candidate_path_on_device, fullpath_to_restore, file_obj)
+        if success:
+            add_to_current_tree_file_obj(hoard, restore_to_uuid, hoard_path.as_pure_path.as_posix(), file_obj)
+            return f"+ {local_path_to_restore}\n"
+            # return f"LOCAL_COPY {hoard_path.as_pure_path}\n" fixme
+
+    remote_candidates: Dict[str, list[FastPosixPath]] = dict(moves_and_copies.get_remote_copies_expanded(
+        restore_to_uuid, file_obj.file_id))
+    for candidate_uuid in sorted(remote_candidates.keys(), key=sort_by_speed_then_latency(pathing._paths)):
+        for expanded_path in remote_candidates[candidate_uuid]:
+            candidate_path_on_device = pathing.in_hoard(expanded_path).at_local(candidate_uuid).on_device_path()
+            logging.debug(f"Preparing to copy remote %s to %s...", expanded_path, candidate_path_on_device)
+            success, restored_file = await _restore_file(candidate_path_on_device, fullpath_to_restore, file_obj)
+            if success:
+                add_to_current_tree_file_obj(hoard, restore_to_uuid, hoard_path.as_pure_path.as_posix(), file_obj)
+                return f"+ {local_path_to_restore}\n"
+                # return f"REMOTE_COPY {hoard_path.as_pure_path}\n" fixme
+
+    logging.error(f"Did not succeed restoring {hoard_path}!")
+    return f"E {local_path_to_restore}\n"
 
 
 async def _cleanup_files_in_repo(
@@ -200,7 +234,7 @@ async def DEPRECATED_restore_from_another_repo(
         (remote_uuid, hoard_file.at_local(remote_uuid).on_device_path()) for remote_uuid in candidate_repos))
 
     success, restored_path = await restore_file_from_candidates(
-        HACK_create_from_hoard_props(hoard_props), fullpath_to_restore, candidates_by_preference)
+        HACK_create_from_hoard_props(hoard_props), fullpath_to_restore, [v for _, v in candidates_by_preference])
     if not success:
         logging.error(f"Did not succeed restoring {hoard_file}!")
     return success, restored_path
@@ -216,8 +250,8 @@ def sort_by_speed_then_latency(paths: HoardPaths) -> Callable[[str], int]:
 
 async def restore_file_from_candidates(
         file_obj: FileObject,
-        fullpath_to_restore: FastPosixPath, candidates: Iterable[Tuple[str, FastPosixPath]]):
-    for remote_uuid, file_fullpath in candidates:
+        fullpath_to_restore: FastPosixPath, candidates: Iterable[FastPosixPath]):
+    for file_fullpath in candidates:
         success, restored_file = await _restore_file(file_fullpath, fullpath_to_restore, file_obj)
         if success:
             return True, restored_file
