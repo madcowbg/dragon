@@ -11,8 +11,9 @@ from command.files.file_operations import _fetch_files_in_repo, _cleanup_files_i
 
 from command.hoard import Hoard
 from command.pathing import HoardPathing
-from command.pending_file_ops import get_pending_operations, CopyFile, GetFile, CleanupFile, MoveFile
+from command.pending_file_ops import get_pending_operations, CopyFile, GetFile, CleanupFile, MoveFile, RetainFile
 from config import HoardConfig
+from contents.hoard import MovesAndCopies
 from contents.hoard_props import HoardFileStatus
 from resolve_uuid import resolve_remote_uuid
 
@@ -34,15 +35,17 @@ class HoardCommandFiles:
                     logging.info(f"Iterating over pending ops in {repo_uuid}")
                     out.write(f"{config.remotes[repo_uuid].name}:\n")
 
+                    moves_and_copies = MovesAndCopies(hoard)
                     repos_containing_what_this_one_needs: Dict[str, int] = dict()
-                    for op in get_pending_operations(hoard, repo_uuid):
-                        num_available = op.hoard_props.by_status(HoardFileStatus.AVAILABLE)
+                    for op in get_pending_operations(hoard, repo_uuid, moves_and_copies):
                         if isinstance(op, GetFile):
+                            num_available = op.hoard_props.by_status(HoardFileStatus.AVAILABLE)
                             out.write(f"TO_GET (from {len(num_available)}) {op.hoard_file.as_posix()}\n")
                             for repo in num_available:
                                 repos_containing_what_this_one_needs[repo] = \
                                     repos_containing_what_this_one_needs.get(repo, 0) + 1
                         elif isinstance(op, CopyFile):
+                            num_available = op.hoard_props.by_status(HoardFileStatus.AVAILABLE)
                             out.write(f"TO_COPY (from {len(num_available)}+?) {op.hoard_file.as_posix()}\n")
                             for repo in num_available:
                                 repos_containing_what_this_one_needs[repo] = \
@@ -50,7 +53,10 @@ class HoardCommandFiles:
                         elif isinstance(op, MoveFile):
                             out.write(f"TO_MOVE {op.hoard_file.as_posix()} from {op.old_hoard_file}\n")
                         elif isinstance(op, CleanupFile):
+                            num_available = op.hoard_props.by_status(HoardFileStatus.AVAILABLE)
                             out.write(f"TO_CLEANUP (is in {len(num_available)}) {op.hoard_file.as_posix()}\n")
+                        elif isinstance(op, RetainFile):
+                            out.write(f"TO_RETAIN (needed in {len(op.needed_locations)} [{', '.join(config.remotes[uuid].name for uuid in op.needed_locations)}]) {op.hoard_file.as_posix()}\n")
                         else:
                             raise ValueError(f"Unhandled op type: {type(op)}")
                     nc = sorted(map(
@@ -98,14 +104,15 @@ async def execute_files_push(config: HoardConfig, hoard: Hoard, repo_uuids: List
             await _fetch_files_in_repo(content_prefs, hoard_contents, repo_uuid, pathing, out, progress_bar)
 
         logging.info("Finding files that need copy - will not cleanup them!")
-        content_prefs = ContentPrefs(config, pathing, hoard_contents, hoard.available_remotes())
-        logging.info(f"Found {len(content_prefs.files_to_copy)} hashes to copy, won't cleanup them.")
+        content_prefs_after = ContentPrefs(config, pathing, hoard_contents, hoard.available_remotes()) # fixme remove
+        logging.info(f"Found {len(content_prefs_after.files_to_copy)} hashes to copy, won't cleanup them.")
+        moves_and_copies = MovesAndCopies(hoard_contents)
         logging.info("try cleaning unneeded files, per repo")
         for repo_uuid in repo_uuids:
             logging.info(f"cleaning repo {config.remotes[repo_uuid].name}")
             out.write(f"{config.remotes[repo_uuid].name}:\n")
 
-            await _cleanup_files_in_repo(content_prefs, hoard_contents, repo_uuid, pathing, out, progress_bar)
+            await _cleanup_files_in_repo(content_prefs_after, moves_and_copies, hoard_contents, repo_uuid, pathing, out, progress_bar)
 
         out.write(f"After:\n")
         dump_remotes(config, hoard_contents, out)

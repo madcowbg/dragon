@@ -272,7 +272,7 @@ class MovesAndCopies:
                     decode_bytes_to_intpath))
                 for remote in parent.hoard_config.remotes.all())
 
-    def get_moves(self, in_uuid: str, desired_id: ObjectID) -> List[CompressedPath]:
+    def get_existing_paths_in_uuid(self, in_uuid: str, desired_id: ObjectID) -> List[CompressedPath]:
         return self._lookup_current[in_uuid][desired_id]
 
     def get_remote_copies(self, skip_uuid: str, desired_id: ObjectID) -> Iterable[Tuple[str, List[CompressedPath]]]:
@@ -413,7 +413,7 @@ class ReadonlyHoardFSObjects:
                                 assert desired_obj.object_type == ObjectType.BLOB
                                 desired_obj: FileObject
 
-                                paths_to_move_inside_repo = moves_and_copies.get_moves(remote.uuid, desired_id)
+                                paths_to_move_inside_repo = moves_and_copies.get_existing_paths_in_uuid(remote.uuid, desired_id)
                                 if len(paths_to_move_inside_repo) > 0:
                                     # can be moved/copied in repo
                                     can_be_moved_cnt += 1

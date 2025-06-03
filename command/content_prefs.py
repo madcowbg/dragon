@@ -219,8 +219,6 @@ class ContentPrefs:
             logging.info(
                 f"file needs to be copied in {len(to_be_got)} places, "
                 f"has {len(is_available)} < {required_min_copies} - will retain here.")
-            names_to_get = list(sorted(self.config.remotes[uuid].name for uuid in to_be_got))
-            out.write(f"NEEDS_MORE_COPIES ({len(is_available)}) {names_to_get} {local_file_to_delete}\n")
             return False
 
         return True

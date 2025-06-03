@@ -14,9 +14,10 @@ from command.fast_path import FastPosixPath
 from command.pathing import HoardPathing
 from command.tree_operations import add_to_current_tree, remove_from_current_tree
 from config import HoardConfig, HoardPaths
-from contents.hoard import HoardContents
+from contents.hoard import HoardContents, MovesAndCopies
 from contents.hoard_props import HoardFileProps, HoardFileStatus
 from hashing import fast_hash_async
+from lmdb_storage.file_object import FileObject
 from util import to_mb, format_size
 
 
@@ -114,7 +115,8 @@ async def _fetch_files_in_repo(
 
 
 async def _cleanup_files_in_repo(
-        content_prefs: ContentPrefs, hoard: HoardContents, repo_uuid: str, pathing: HoardPathing,
+        content_prefs: ContentPrefs, moves_and_copies: MovesAndCopies, hoard: HoardContents, repo_uuid: str,
+        pathing: HoardPathing,
         out: StringIO, progress_bar):
     files_to_cleanup = sorted(hoard.fsobjects.to_cleanup(repo_uuid))
     with progress_bar(to_mb(sum(f[1].size for f in files_to_cleanup)), unit="MB", title="Cleaning files") as bar:
@@ -124,7 +126,22 @@ async def _cleanup_files_in_repo(
             assert hoard_props.get_status(repo_uuid) == HoardFileStatus.CLEANUP
 
             local_path = pathing.in_hoard(hoard_file).at_local(repo_uuid)
-            if content_prefs.can_cleanup(hoard_file, hoard_props, repo_uuid, out):
+
+            file_obj = FileObject.create(hoard_props.fasthash, hoard_props.size, None)
+
+            where_is_needed = dict(moves_and_copies.whereis_needed(file_obj.id))
+            logging.debug(f"Needed in {len(where_is_needed)} repos.")
+
+            where_is_needed_but_not_in_repo = dict(
+                (uuid, paths) for uuid, paths in where_is_needed.items()
+                if len(moves_and_copies.get_existing_paths_in_uuid(uuid, file_obj.id)) == 0)
+            logging.debug(f"Needed in {len(where_is_needed)} repos that would prevent this to be deleted.")
+
+            legacy_can_cleanup = content_prefs.can_cleanup(hoard_file, hoard_props, repo_uuid, out)
+
+            if len(where_is_needed_but_not_in_repo) == 0:
+                assert legacy_can_cleanup
+
                 logging.info("file doesn't need to be copied anymore, cleaning")
                 remove_from_current_tree(hoard, repo_uuid, hoard_file)
 
@@ -142,7 +159,18 @@ async def _cleanup_files_in_repo(
                 except PermissionError as e:
                     out.write(f"PermissionError {local_path.as_pure_path.as_posix()}\n")
                     logging.error(e)
+            else:
+                assert len(where_is_needed_but_not_in_repo) > 0
+                repo_names = list(
+                    hoard.hoard_config.remotes[uuid].name for uuid in where_is_needed_but_not_in_repo.keys())
+                out.write(
+                    f"NEEDS_MORE_COPIES ({len(where_is_needed_but_not_in_repo)}) {repo_names} {local_path.as_pure_path.as_posix()}\n")
 
+                if legacy_can_cleanup:
+                    logging.error(f"Change in behavior for {hoard_file}: now can't delete!!!")
+
+                logging.info(
+                    f"file {hoard_file} needs to be copied to {len(where_is_needed_but_not_in_repo)} repos, skipping")
             bar(to_mb(hoard_props.size))
 
 
