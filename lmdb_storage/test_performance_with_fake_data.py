@@ -19,8 +19,11 @@ vocabulary = [
     ''.join(random.choices(string.ascii_uppercase + string.digits, k=random.randint(5, 20)))
     for _ in range(100)]
 
+vocabulary_short = [
+    ''.join(random.choices(string.ascii_uppercase + string.digits, k=random.randint(2, 4)))
+    for _ in range(10)]
 
-def random_append(paths: List[List[str | None]]):
+def random_append(paths: List[List[str | None]], vocabulary=vocabulary, chance_pct=33):
     existing = set()
     for _ in range(25):
         cut_points = sorted(random.choices(range(len(paths)), k=random.randint(5, 20)))
@@ -30,7 +33,7 @@ def random_append(paths: List[List[str | None]]):
             while cut_point_idx < len(cut_points) and idx > cut_points[cut_point_idx]:
                 cut_point_idx += 1
 
-            if (len(paths[idx]) == 0 or paths[idx][-1] is not None) and random.randint(0, 3) > 0:
+            if (len(paths[idx]) == 0 or paths[idx][-1] is not None) and random.randint(0, 99) > chance_pct:
                 paths[idx].append(vocab_choice[cut_point_idx])
 
         for idx in range(len(paths)):
@@ -40,11 +43,11 @@ def random_append(paths: List[List[str | None]]):
                 paths[idx].append(None)
 
 
-def populate_index(seed_value, n_files) -> List[Tuple[str, str, int]]:
+def populate_index(seed_value, n_files, vocabulary=vocabulary, chance_pct=33) -> List[Tuple[str, str, int]]:
     random.seed(seed_value)
 
     paths = [[] for _ in range(n_files)]
-    random_append(paths)
+    random_append(paths, vocabulary, chance_pct)
 
     result = []
     for path in paths:
