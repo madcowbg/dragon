@@ -45,7 +45,6 @@ async def add_remotes(full_repo_cmd, hoard_cmd, partial_repo_cmds):
     full_repo_cmd.init()
     await full_repo_cmd.refresh()
     hoard_cmd.add_remote(remote_path=full_repo_cmd.repo.path, name="repo-full", mount_point="/")
-    await hoard_cmd.contents.pull(all=True)
 
 
 class TestBackupMaintenance(IsolatedAsyncioTestCase):
@@ -178,6 +177,8 @@ class TestBackupMaintenance(IsolatedAsyncioTestCase):
 
         await add_remotes(full_repo_cmd, hoard_cmd, partial_repo_cmds)
 
+        await hoard_cmd.contents.pull(all=True)
+
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True, show_empty=True)
         self.assertEqual((
             'Root: 3f807f22b0eabb5a44fca944acd489882afc09cb\n'
@@ -193,25 +194,48 @@ class TestBackupMaintenance(IsolatedAsyncioTestCase):
             '|work-repo-1         | 5.9KB| 5.9KB|      |      |\n'
             '|work-repo-2         | 6.6KB| 6.6KB|      |      |\n'), res)
 
+    async def test_create_backups_from_start(self):
+        partial_repo_cmds, full_repo_cmd, hoard_cmd = populate_random_data(self.tmpdir.name)
+
+        await add_remotes(full_repo_cmd, hoard_cmd, partial_repo_cmds)
+        backup_repo_cmds = await self.init_backup_repos(hoard_cmd)
+
+        await hoard_cmd.contents.pull(all=True)
+
+        res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True, show_empty=True)
+        self.assertEqual((
+            'Root: 3f807f22b0eabb5a44fca944acd489882afc09cb\n'
+            '|Num Files           |total |availa|get   |copy  |\n'
+            '|backup-repo-0       |     4|      |     4|     4|\n'
+            '|backup-repo-1       |     4|      |     4|     4|\n'
+            '|backup-repo-2       |     3|      |     3|     3|\n'
+            '|backup-repo-3       |     3|      |     3|     3|\n'
+            '|repo-full           |      |      |      |      |\n'
+            '|work-repo-0         |     5|     4|     1|     1|\n'
+            '|work-repo-1         |     4|     4|      |      |\n'
+            '|work-repo-2         |     5|     5|      |      |\n'
+            '\n'
+            '|Size                |total |availa|get   |copy  |\n'
+            '|backup-repo-0       | 5.5KB|      | 5.5KB| 5.5KB|\n'
+            '|backup-repo-1       | 4.7KB|      | 4.7KB| 4.7KB|\n'
+            '|backup-repo-2       | 5.1KB|      | 5.1KB| 5.1KB|\n'
+            '|backup-repo-3       | 3.5KB|      | 3.5KB| 3.5KB|\n'
+            '|repo-full           |      |      |      |      |\n'
+            '|work-repo-0         | 6.2KB| 4.3KB| 2.0KB| 2.0KB|\n'
+            '|work-repo-1         | 5.9KB| 5.9KB|      |      |\n'
+            '|work-repo-2         | 6.6KB| 6.6KB|      |      |\n'), res)
+
     async def test_assign_backups(self):
         partial_repo_cmds, full_repo_cmd, hoard_cmd = populate_random_data(self.tmpdir.name)
 
         await add_remotes(full_repo_cmd, hoard_cmd, partial_repo_cmds)
 
+        await hoard_cmd.contents.pull(all=True)
+
         backup_repo_cmds = await self.init_backup_repos(hoard_cmd)
         self.assertEqual([
             'backup-repo-0', 'backup-repo-1', 'backup-repo-2', 'backup-repo-3'], list(sorted(backup_repo_cmds.keys())))
 
-    async def init_backup_repos(self, hoard_cmd):
-        backup_repos_names = [f"backup-repo-{i}" for i in range(4)]
-        backup_repo_cmds = dict(
-            (backup_name, TotalCommand(path=Path(self.tmpdir.name).joinpath(backup_name).as_posix()).cave)
-            for backup_name in backup_repos_names)
-        for name, cmd in backup_repo_cmds.items():
-            Path(cmd.repo.path).mkdir(parents=True, exist_ok=True)
-            cmd.init()
-            await cmd.refresh()
-            hoard_cmd.add_remote(remote_path=cmd.repo.path, name=name, mount_point="/")
         res = await hoard_cmd.contents.pull(all=True)
         self.assertEqual((
             'Skipping update as work-repo-0.staging has not changed: 978c01\n'
@@ -235,6 +259,7 @@ class TestBackupMaintenance(IsolatedAsyncioTestCase):
             'After: Hoard [3f807f], repo [curr: a80f91, stg: a80f91, des: None]\n'
             "Sync'ed backup-repo-3 to hoard!\n"
             'DONE'), res)
+
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True, show_empty=True)
         self.assertEqual((
             'Root: 3f807f22b0eabb5a44fca944acd489882afc09cb\n'
@@ -257,6 +282,74 @@ class TestBackupMaintenance(IsolatedAsyncioTestCase):
             '|work-repo-0         | 6.2KB| 4.3KB| 2.0KB| 2.0KB|\n'
             '|work-repo-1         | 5.9KB| 5.9KB|      |      |\n'
             '|work-repo-2         | 6.6KB| 6.6KB|      |      |\n'), res)
+
+        res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True, show_empty=True)
+        self.assertEqual((
+            'Root: 3f807f22b0eabb5a44fca944acd489882afc09cb\n'
+            '|Num Files           |total |availa|get   |copy  |\n'
+            '|backup-repo-0       |      |      |      |      |\n'
+            '|backup-repo-1       |      |      |      |      |\n'
+            '|backup-repo-2       |      |      |      |      |\n'
+            '|backup-repo-3       |      |      |      |      |\n'
+            '|repo-full           |      |      |      |      |\n'
+            '|work-repo-0         |     5|     4|     1|     1|\n'
+            '|work-repo-1         |     4|     4|      |      |\n'
+            '|work-repo-2         |     5|     5|      |      |\n'
+            '\n'
+            '|Size                |total |availa|get   |copy  |\n'
+            '|backup-repo-0       |      |      |      |      |\n'
+            '|backup-repo-1       |      |      |      |      |\n'
+            '|backup-repo-2       |      |      |      |      |\n'
+            '|backup-repo-3       |      |      |      |      |\n'
+            '|repo-full           |      |      |      |      |\n'
+            '|work-repo-0         | 6.2KB| 4.3KB| 2.0KB| 2.0KB|\n'
+            '|work-repo-1         | 5.9KB| 5.9KB|      |      |\n'
+            '|work-repo-2         | 6.6KB| 6.6KB|      |      |\n'), res)
+
+        res = await hoard_cmd.backups.assign(available_only=False)
+        self.assertEqual((
+            'set: / with 4/4 media\n'
+            ' backup-repo-0 <- 4 files (5.1KB)\n'
+            ' backup-repo-1 <- 3 files (4.3KB)\n'
+            ' backup-repo-2 <- 3 files (3.5KB)\n'
+            ' backup-repo-3 <- 3 files (3.9KB)\n'
+            'DONE'), res)
+
+        res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True, show_empty=True)
+        self.assertEqual((
+            'Root: 3f807f22b0eabb5a44fca944acd489882afc09cb\n'
+            '|Num Files           |total |availa|get   |copy  |\n'
+            '|backup-repo-0       |     4|      |     4|     4|\n'
+            '|backup-repo-1       |     3|      |     3|     3|\n'
+            '|backup-repo-2       |     3|      |     3|     3|\n'
+            '|backup-repo-3       |     3|      |     3|     3|\n'
+            '|repo-full           |      |      |      |      |\n'
+            '|work-repo-0         |     5|     4|     1|     1|\n'
+            '|work-repo-1         |     4|     4|      |      |\n'
+            '|work-repo-2         |     5|     5|      |      |\n'
+            '\n'
+            '|Size                |total |availa|get   |copy  |\n'
+            '|backup-repo-0       | 5.1KB|      | 5.1KB| 5.1KB|\n'
+            '|backup-repo-1       | 4.3KB|      | 4.3KB| 4.3KB|\n'
+            '|backup-repo-2       | 3.5KB|      | 3.5KB| 3.5KB|\n'
+            '|backup-repo-3       | 3.9KB|      | 3.9KB| 3.9KB|\n'
+            '|repo-full           |      |      |      |      |\n'
+            '|work-repo-0         | 6.2KB| 4.3KB| 2.0KB| 2.0KB|\n'
+            '|work-repo-1         | 5.9KB| 5.9KB|      |      |\n'
+            '|work-repo-2         | 6.6KB| 6.6KB|      |      |\n'),
+            res)
+
+    async def init_backup_repos(self, hoard_cmd):
+        backup_repos_names = [f"backup-repo-{i}" for i in range(4)]
+        backup_repo_cmds = dict(
+            (backup_name, TotalCommand(path=Path(self.tmpdir.name).joinpath(backup_name).as_posix()).cave)
+            for backup_name in backup_repos_names)
+
+        for name, cmd in backup_repo_cmds.items():
+            Path(cmd.repo.path).mkdir(parents=True, exist_ok=True)
+            cmd.init()
+            await cmd.refresh()
+            hoard_cmd.add_remote(remote_path=cmd.repo.path, name=name, mount_point="/", type="backup")
 
         return backup_repo_cmds
 
