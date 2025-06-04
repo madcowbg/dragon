@@ -35,6 +35,7 @@ class DeferredItem:
 
 
 class HoardDeferredOperations:
+    """ Logic for executing deferred tree operations, which are most useful for files pushing."""
     _txn: Transaction | None
 
     def __init__(self, parent: HoardContents):
@@ -83,38 +84,72 @@ class HoardDeferredOperations:
         for uuid, items_for_uuid in group_to_dict(all_items, key=lambda item: item.uuid).items():
             for branch, deferred_items_for_uuid_and_branch in group_to_dict(
                     items_for_uuid, key=lambda item: item.branch).items():
-                item: DeferredItem
-                if branch == BRANCH_CURRENT:
-                    for item in deferred_items_for_uuid_and_branch:
-                        if item.op == DeferredOp.ADD:
-                            file_obj: StoredObject = read_stored_object(item.stored_obj_id, item.stored_obj_data)
-                            assert file_obj.object_type == ObjectType.BLOB
-                            file_obj: FileObject
-                            DEPRECATED_add_to_current_tree_file_obj(self._parent, item.uuid, item.hoard_file, file_obj)
-                        elif item.op == DeferredOp.DEL:
-                            file_obj: StoredObject = read_stored_object(item.stored_obj_id, item.stored_obj_data)
-                            assert file_obj.object_type == ObjectType.BLOB
-                            file_obj: FileObject
-                            DEPRECATED_remove_from_current_tree(self._parent, item.uuid, FastPosixPath(item.hoard_file))
-                        else:
-                            raise ValueError(f"Unknown op {item.op}")
-                elif branch == BRANCH_DESIRED:
-                    for item in deferred_items_for_uuid_and_branch:
-                        if item.op == DeferredOp.ADD:
-                            file_obj: StoredObject = read_stored_object(item.stored_obj_id, item.stored_obj_data)
-                            assert file_obj.object_type == ObjectType.BLOB
-                            file_obj: FileObject
-                            DEPRECATED_add_to_desired_tree(self._parent, item.uuid, item.hoard_file, file_obj)
-                        elif item.op == DeferredOp.DEL:
-                            file_obj: StoredObject = read_stored_object(item.stored_obj_id, item.stored_obj_data)
-                            assert file_obj.object_type == ObjectType.BLOB
-                            file_obj: FileObject
-                            DEPRECATED_remove_from_desired_tree(self._parent, item.uuid, FastPosixPath(item.hoard_file))
-                        else:
-                            raise ValueError(f"Unknown op {item.op}")
+                repo_root = self._parent.env.roots(write=False)[uuid]
+                # fixme implement via a single tree operation
 
-                else:
-                    raise ValueError(f"Unrecognized branch {branch}.")
+                with self._parent.env.objects(write=True) as objects:
+                    item: DeferredItem
+                    if branch == BRANCH_CURRENT:
+                        repo_root_id = repo_root.current
+                        new_repo_root_id = repo_root_id
+
+                        for item in deferred_items_for_uuid_and_branch:
+                            if item.op == DeferredOp.ADD:
+                                file_obj: StoredObject = read_stored_object(item.stored_obj_id, item.stored_obj_data)
+                                assert file_obj.object_type == ObjectType.BLOB
+                                file_obj: FileObject
+
+                                new_repo_root_id = add_file_object(
+                                    objects, new_repo_root_id, FastPosixPath(item.hoard_file)._rem,
+                                    file_obj)
+
+                            elif item.op == DeferredOp.DEL:
+                                file_obj: StoredObject = read_stored_object(item.stored_obj_id, item.stored_obj_data)
+                                assert file_obj.object_type == ObjectType.BLOB
+                                file_obj: FileObject
+
+                                new_repo_root_id = remove_child(
+                                    objects, FastPosixPath(item.hoard_file)._rem, new_repo_root_id)
+
+                            else:
+                                raise ValueError(f"Unknown op {item.op}")
+
+                    elif branch == BRANCH_DESIRED:
+                        repo_root_id = repo_root.desired
+                        new_repo_root_id = repo_root_id
+
+                        for item in deferred_items_for_uuid_and_branch:
+                            if item.op == DeferredOp.ADD:
+                                file_obj: StoredObject = read_stored_object(item.stored_obj_id, item.stored_obj_data)
+                                assert file_obj.object_type == ObjectType.BLOB
+                                file_obj: FileObject
+                                new_repo_root_id = add_file_object(
+                                    objects, new_repo_root_id, FastPosixPath(item.hoard_file)._rem,
+                                    FileObject.create(file_obj.fasthash, file_obj.size))
+
+                            elif item.op == DeferredOp.DEL:
+                                file_obj: StoredObject = read_stored_object(item.stored_obj_id, item.stored_obj_data)
+                                assert file_obj.object_type == ObjectType.BLOB
+                                file_obj: FileObject
+
+                                new_repo_root_id = remove_child(
+                                    objects, FastPosixPath(item.hoard_file)._rem, new_repo_root_id)
+
+                            else:
+                                raise ValueError(f"Unknown op {item.op}")
+                    else:
+                        raise ValueError(f"Unrecognized branch {branch}.")
+
+                if new_repo_root_id == repo_root_id:
+                    logging.error(f"Changing {item.hoard_file} did not create a new root?!")
+
+                repo_root = self._parent.env.roots(write=True)[uuid]
+                if branch == BRANCH_CURRENT:
+                    repo_root.current = new_repo_root_id
+
+                elif branch == BRANCH_DESIRED:
+                    repo_root.desired = new_repo_root_id
+
 
         logging.info(f"Cleaning deferred queue...")
         with self:
@@ -127,45 +162,10 @@ def add_to_current_tree_file_obj(
         deferred_ops.set_queue_item(repo_uuid, BRANCH_CURRENT, hoard_file, file_obj, DeferredOp.ADD)
 
 
-def DEPRECATED_add_to_current_tree_file_obj(
-        hoard: HoardContents, repo_uuid: str, hoard_file: str, file_obj: FileObject):
-    roots = hoard.env.roots(write=True)
-    repo_root = roots[repo_uuid]
-    repo_current_root_id = repo_root.current
-
-    with hoard.env.objects(write=True) as objects:
-        new_repo_current_root_id = add_file_object(
-            objects, repo_current_root_id, FastPosixPath(hoard_file)._rem,
-            file_obj)
-
-    if new_repo_current_root_id == repo_current_root_id:
-        logging.error(f"Adding {hoard_file} did not create a new root?!")
-
-    repo_root.current = new_repo_current_root_id
-
-
 def add_to_desired_tree(
         hoard: HoardContents, repo_uuid: str, hoard_file: str, file_obj: FileObject):
     with HoardDeferredOperations(hoard) as deferred_ops:
         deferred_ops.set_queue_item(repo_uuid, BRANCH_DESIRED, hoard_file, file_obj, DeferredOp.ADD)
-
-
-# fixme merge with other add method
-def DEPRECATED_add_to_desired_tree(
-        hoard: HoardContents, repo_uuid: str, hoard_file: str, file_obj: FileObject):
-    roots = hoard.env.roots(write=True)
-    repo_root = roots[repo_uuid]
-    repo_desired_root_id = repo_root.desired
-
-    with hoard.env.objects(write=True) as objects:
-        new_repo_desired_root_id = add_file_object(
-            objects, repo_desired_root_id, FastPosixPath(hoard_file)._rem,
-            FileObject.create(file_obj.fasthash, file_obj.size))
-
-    if new_repo_desired_root_id == repo_desired_root_id:
-        logging.error(f"Adding {hoard_file} to desired did not create a new root?!")
-
-    repo_root.desired = new_repo_desired_root_id
 
 
 def remove_from_current_tree(
@@ -174,36 +174,7 @@ def remove_from_current_tree(
         deferred_ops.set_queue_item(repo_uuid, BRANCH_CURRENT, hoard_file, file_obj, DeferredOp.DEL)
 
 
-def DEPRECATED_remove_from_current_tree(hoard: HoardContents, repo_uuid: str, hoard_file: FastPosixPath):
-    roots = hoard.env.roots(write=True)
-    repo_root = roots[repo_uuid]
-    repo_current_root_id = repo_root.current
-
-    with hoard.env.objects(write=True) as objects:
-        new_repo_current_root_id = remove_child(objects, FastPosixPath(hoard_file)._rem, repo_current_root_id)
-
-    if new_repo_current_root_id == repo_current_root_id:
-        logging.error(f"Removing {hoard_file} from current did not create a new root?!")
-
-    repo_root.current = new_repo_current_root_id
-
-
 def remove_from_desired_tree(
         hoard: HoardContents, repo_uuid: str, hoard_file: str, file_obj: FileObject):
     with HoardDeferredOperations(hoard) as deferred_ops:
         deferred_ops.set_queue_item(repo_uuid, BRANCH_DESIRED, hoard_file, file_obj, DeferredOp.DEL)
-
-
-# fixme merge with other remove method
-def DEPRECATED_remove_from_desired_tree(hoard: HoardContents, repo_uuid: str, hoard_file: FastPosixPath):
-    roots = hoard.env.roots(write=True)
-    repo_root = roots[repo_uuid]
-    repo_desired_root_id = repo_root.desired
-
-    with hoard.env.objects(write=True) as objects:
-        new_repo_desired_root_id = remove_child(objects, FastPosixPath(hoard_file)._rem, repo_desired_root_id)
-
-    if new_repo_desired_root_id == repo_desired_root_id:
-        logging.error(f"Removing {hoard_file} from desired did not create a new root?!")
-
-    repo_root.desired = new_repo_desired_root_id
