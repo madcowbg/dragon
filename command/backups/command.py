@@ -110,7 +110,6 @@ class HoardCommandBackups:
                             remove_from_desired_tree(
                                 hoard, repo.uuid, hoard_file.as_posix(), HACK_create_from_hoard_props(hoard_props))
 
-                            HoardDeferredOperations(hoard).apply_deferred_queue() # fixme issue caused by not updating sizes
 
                         for repo in repos_to_clean_from:
                             removed_cnt[repo] = removed_cnt.get(repo, 0) + 1
@@ -118,6 +117,9 @@ class HoardCommandBackups:
 
                     for repo, cnt in sorted(removed_cnt.items(), key=lambda rc: rc[0].name):
                         out.write(f" {repo.name} LOST {cnt} files ({format_size(removed_size[repo])})\n")
+
+                    logging.info("Running deferred operations...")
+                    HoardDeferredOperations(hoard).apply_deferred_queue()
 
                 out.write("DONE")
                 return out.getvalue()
@@ -158,9 +160,6 @@ class HoardCommandBackups:
                         logging.info(f"Backing up {hoard_file} to {[r.uuid for r in new_repos_to_backup_to]}")
                         for repo in new_repos_to_backup_to:
                             add_to_desired_tree(hoard, repo.uuid, hoard_file.simple, HACK_create_from_hoard_props(hoard_props))
-                            HoardDeferredOperations(
-                                hoard).apply_deferred_queue()  # fixme otherwise issue caused by not updating sizes
-
                             tree_ops += 1
                             if tree_ops % 5000 == 0:
                                 logging.warn(f"gc-ing at # of tree ops {tree_ops}. FIXME reimplement faster")
@@ -177,6 +176,9 @@ class HoardCommandBackups:
                                     f"Error: Backup {repo.name} free space is projected to become "
                                     f"{format_percent(projected)} < {format_percent(MIN_REPO_PERC_FREE)}%!\n)")
                                 return out.getvalue()
+
+                    logging.info("Running deferred operations...")
+                    HoardDeferredOperations(hoard).apply_deferred_queue()
 
                     for repo, cnt in sorted(added_cnt.items(), key=lambda rc: rc[0].name):
                         out.write(f" {repo.name} <- {cnt} files ({format_size(added_size[repo])})\n")

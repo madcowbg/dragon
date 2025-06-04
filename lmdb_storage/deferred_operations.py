@@ -3,6 +3,7 @@ import enum
 import logging
 from typing import Iterable, Dict
 
+from alive_progress import alive_it, alive_bar
 from lmdb import Transaction
 from msgspec import msgpack
 
@@ -87,124 +88,53 @@ class HoardDeferredOperations:
                     items_for_uuid, key=lambda item: item.branch).items():
                 repo_root = self._parent.env.roots(write=False)[uuid]
 
-                if len(deferred_items_for_uuid_and_branch) > 1:
+                if branch == BRANCH_CURRENT:
+                    repo_root_id = repo_root.current
+                    new_repo_root_id = repo_root_id
+                elif branch == BRANCH_DESIRED:
+                    repo_root_id = repo_root.desired
+                    new_repo_root_id = repo_root_id
+                else:
+                    raise ValueError(f"Unknown branch '{branch}'")
 
-                    if branch == BRANCH_CURRENT:
-                        repo_root_id = repo_root.current
-                        new_repo_root_id = repo_root_id
-                    elif branch == BRANCH_DESIRED:
-                        repo_root_id = repo_root.desired
-                        new_repo_root_id = repo_root_id
-                    else:
-                        raise ValueError(f"Unknown branch '{branch}'")
-
-                    with self._parent.env.objects(write=False) as objects:
-                        loaded_objs: Dict[str, FileObject] = {}
+                with self._parent.env.objects(write=False) as objects:
+                    loaded_objs: Dict[str, FileObject] = {}
+                    with alive_bar(title="Loading existing tree") as bar:
                         for path, obj_type, obj_id, obj, _ in dfs(objects, "", repo_root_id):
                             if obj_type == ObjectType.BLOB:
                                 obj: FileObject
                                 assert path not in loaded_objs
                                 loaded_objs[path] = obj
+                                bar()
 
-                    with self._parent.env.objects(write=True) as objects:  # fixme remove
-                        assert len(loaded_objs) == 0 or objects.mktree_from_tuples(
-                            sorted(loaded_objs.items())) == repo_root_id
+                for item in alive_it(deferred_items_for_uuid_and_branch, title="Making changes to tree"):
+                    file_obj: StoredObject = read_stored_object(item.stored_obj_id, item.stored_obj_data)
+                    assert file_obj.object_type == ObjectType.BLOB
+                    file_obj: FileObject
 
-                    for item in deferred_items_for_uuid_and_branch:
-                        file_obj: StoredObject = read_stored_object(item.stored_obj_id, item.stored_obj_data)
-                        assert file_obj.object_type == ObjectType.BLOB
-                        file_obj: FileObject
-
-                        if item.op == DeferredOp.ADD:
-                            loaded_objs[item.hoard_file] = file_obj
-                        elif item.op == DeferredOp.DEL:
-                            if item.hoard_file in loaded_objs:
-                                del loaded_objs[item.hoard_file]
-                            else:
-                                logging.info("Trying to delete non-existent file %s", item.hoard_file)
-
-                    with self._parent.env.objects(write=True) as objects:
-                        new_repo_root_id = objects.mktree_from_tuples(sorted(loaded_objs.items())) if len(
-                            loaded_objs) > 0 else None
-
-                    if new_repo_root_id == repo_root_id:
-                        logging.error(
-                            f"Changing {len(deferred_items_for_uuid_and_branch)} files did not create a new root?!")
-
-                    repo_root = self._parent.env.roots(write=True)[uuid]
-                    if branch == BRANCH_CURRENT:
-                        repo_root.current = new_repo_root_id
-
-                    else:
-                        assert branch == BRANCH_DESIRED
-                        repo_root.desired = new_repo_root_id
-                else:
-                    logging.error(f"Using slow path, as we are modifying {len(deferred_items_for_uuid_and_branch)} files. Remove case after fixing backup assignment.")
-                    # fixme implement via a single tree operation
-
-                    with self._parent.env.objects(write=True) as objects:
-                        item: DeferredItem
-                        if branch == BRANCH_CURRENT:
-                            repo_root_id = repo_root.current
-                            new_repo_root_id = repo_root_id
-
-                            for item in deferred_items_for_uuid_and_branch:
-                                if item.op == DeferredOp.ADD:
-                                    file_obj: StoredObject = read_stored_object(item.stored_obj_id, item.stored_obj_data)
-                                    assert file_obj.object_type == ObjectType.BLOB
-                                    file_obj: FileObject
-
-                                    new_repo_root_id = add_file_object(
-                                        objects, new_repo_root_id, FastPosixPath(item.hoard_file)._rem,
-                                        file_obj)
-
-                                elif item.op == DeferredOp.DEL:
-                                    file_obj: StoredObject = read_stored_object(item.stored_obj_id, item.stored_obj_data)
-                                    assert file_obj.object_type == ObjectType.BLOB
-                                    file_obj: FileObject
-
-                                    new_repo_root_id = remove_child(
-                                        objects, FastPosixPath(item.hoard_file)._rem, new_repo_root_id)
-
-                                else:
-                                    raise ValueError(f"Unknown op {item.op}")
-
-                        elif branch == BRANCH_DESIRED:
-                            repo_root_id = repo_root.desired
-                            new_repo_root_id = repo_root_id
-
-                            for item in deferred_items_for_uuid_and_branch:
-                                if item.op == DeferredOp.ADD:
-                                    file_obj: StoredObject = read_stored_object(item.stored_obj_id, item.stored_obj_data)
-                                    assert file_obj.object_type == ObjectType.BLOB
-                                    file_obj: FileObject
-                                    new_repo_root_id = add_file_object(
-                                        objects, new_repo_root_id, FastPosixPath(item.hoard_file)._rem,
-                                        FileObject.create(file_obj.fasthash, file_obj.size))
-
-                                elif item.op == DeferredOp.DEL:
-                                    file_obj: StoredObject = read_stored_object(item.stored_obj_id, item.stored_obj_data)
-                                    assert file_obj.object_type == ObjectType.BLOB
-                                    file_obj: FileObject
-
-                                    new_repo_root_id = remove_child(
-                                        objects, FastPosixPath(item.hoard_file)._rem, new_repo_root_id)
-
-                                else:
-                                    raise ValueError(f"Unknown op {item.op}")
+                    if item.op == DeferredOp.ADD:
+                        loaded_objs[item.hoard_file] = file_obj
+                    elif item.op == DeferredOp.DEL:
+                        if item.hoard_file in loaded_objs:
+                            del loaded_objs[item.hoard_file]
                         else:
-                            raise ValueError(f"Unrecognized branch {branch}.")
+                            logging.info("Trying to delete non-existent file %s", item.hoard_file)
 
-                    if new_repo_root_id == repo_root_id:
-                        logging.error(f"Changing {item.hoard_file} did not create a new root?!")
+                with self._parent.env.objects(write=True) as objects:
+                    new_repo_root_id = objects.mktree_from_tuples(sorted(loaded_objs.items()), alive_it=alive_it) if len(
+                        loaded_objs) > 0 else None
 
-                    repo_root = self._parent.env.roots(write=True)[uuid]
-                    if branch == BRANCH_CURRENT:
-                        repo_root.current = new_repo_root_id
+                if new_repo_root_id == repo_root_id:
+                    logging.error(
+                        f"Changing {len(deferred_items_for_uuid_and_branch)} files did not create a new root?!")
 
-                    elif branch == BRANCH_DESIRED:
-                        repo_root.desired = new_repo_root_id
+                repo_root = self._parent.env.roots(write=True)[uuid]
+                if branch == BRANCH_CURRENT:
+                    repo_root.current = new_repo_root_id
 
+                else:
+                    assert branch == BRANCH_DESIRED
+                    repo_root.desired = new_repo_root_id
 
         logging.info(f"Cleaning deferred queue...")
         with self:
