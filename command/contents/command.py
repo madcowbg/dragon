@@ -17,7 +17,7 @@ from command.pathing import HoardPathing
 from command.pending_file_ops import HACK_create_from_hoard_props
 from config import CaveType, HoardRemote, HoardConfig
 from contents.hoard import HoardContents, HoardFile, HoardDir
-from contents.hoard_props import HoardFileStatus, HoardFileProps
+from contents.hoard_props import HoardFileStatus, HoardFileProps, RESERVED, GET_BY_MOVE, GET_BY_COPY
 from contents.recursive_stats_calc import NodeID, NodeObj, CurrentAndDesiredReader
 from contents.repo import RepoContents
 from exceptions import MissingRepoContents, MissingRepo
@@ -39,7 +39,6 @@ def _file_stats(props: HoardFileProps) -> str:
     a = props.by_status(HoardFileStatus.AVAILABLE)
     g = props.by_status(HoardFileStatus.GET)
     c = props.by_status(HoardFileStatus.CLEANUP)
-    x = props.by_status(HoardFileStatus.COPY)
     res: List[str] = []
     if len(a) > 0:
         res.append(f'a:{len(a)}')
@@ -47,8 +46,6 @@ def _file_stats(props: HoardFileProps) -> str:
         res.append(f'g:{len(g)}')
     if len(c) > 0:
         res.append(f'c:{len(c)}')
-    if len(x) > 0:
-        res.append(f'x:{len(x)}')
     return " ".join(res)
 
 
@@ -505,8 +502,8 @@ class HoardCommandContents:
 
             all_stats = ["total", *(s for s in (
                 HoardFileStatus.AVAILABLE.value, HoardFileStatus.GET.value,
-                HoardFileStatus.COPY.value, HoardFileStatus.MOVE.value,
-                HoardFileStatus.CLEANUP.value, HoardFileStatus.RESERVED.value) if s in available_states)]
+                GET_BY_COPY, GET_BY_MOVE,
+                HoardFileStatus.CLEANUP.value, RESERVED) if s in available_states)]
             with StringIO() as out:
                 out.write(f"Root: {safe_hex(hoard.env.roots(False)['HOARD'].desired)}\n")
                 out.write(f"|{'Num Files':<20}|")

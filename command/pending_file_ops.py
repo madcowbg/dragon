@@ -52,14 +52,6 @@ def get_pending_operations(hoard: HoardContents, repo_uuid: str, moves_and_copie
         goal_status = hoard_props.get_status(repo_uuid)
         if goal_status == HoardFileStatus.GET:
             yield GetFile(hoard_file, hoard_props)
-        elif goal_status == HoardFileStatus.COPY:
-            raise NotImplementedError("Can't COPY")
-            yield CopyFile(hoard_file, hoard_props)
-        elif goal_status == HoardFileStatus.MOVE:
-            raise NotImplementedError("Can't MOVE")
-            move_file = hoard_props.get_move_file(repo_uuid)
-            move_file_props = hoard.fsobjects[FastPosixPath(move_file)]
-            yield MoveFile(hoard_file, hoard_props, move_file, move_file_props)
         elif goal_status == HoardFileStatus.CLEANUP:
             file_obj = HACK_create_from_hoard_props(hoard_props)
             moves_and_copies_loc = dict(moves_and_copies.whereis_needed(file_obj.file_id))

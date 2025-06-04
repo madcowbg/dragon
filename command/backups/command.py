@@ -56,12 +56,10 @@ class HoardCommandBackups:
 
                     available = sum(
                         1 for uuid in hoard_props.by_status(HoardFileStatus.AVAILABLE) if uuid in backup_media)
-                    get_or_copy = len(
-                        hoard_props.by_statuses(HoardFileStatus.GET, HoardFileStatus.COPY, HoardFileStatus.MOVE))
-                    move = len(hoard_props.by_status(HoardFileStatus.MOVE))
+                    get_or_copy = len(hoard_props.by_statuses(HoardFileStatus.GET))
                     cleanup = len(hoard_props.by_status(HoardFileStatus.CLEANUP))
 
-                    file_stats_copies[hoard_file] = (scheduled, available, get_or_copy, move, cleanup)
+                    file_stats_copies[hoard_file] = (scheduled, available, get_or_copy, 0, cleanup)  # fixme remove 0
 
                 def pivot_stat(stat_idx, fun: Callable[[str], int]) -> Dict[int, int]:
                     return dict(

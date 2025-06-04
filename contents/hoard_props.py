@@ -12,10 +12,11 @@ class HoardFileStatus(enum.Enum):
     AVAILABLE = "available"
     GET = "get"
     CLEANUP = "cleanup"
-    COPY = "copy"  # fixme remove as copying is kinda the same as getting, and "move" should capture the real need
-    MOVE = "move"
-    RESERVED = "reserved"
     UNKNOWN = "UNKNOWN"
+
+GET_BY_COPY = "copy"
+GET_BY_MOVE = "move"
+RESERVED = "reserved"
 
 
 def compute_status(

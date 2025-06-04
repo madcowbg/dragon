@@ -15,7 +15,7 @@ from command.fast_path import FastPosixPath
 from command.pathing import HoardPathing
 from config import HoardConfig
 from contents.hoard import HoardFile, HoardDir, HoardContents
-from contents.hoard_props import HoardFileProps, HoardFileStatus
+from contents.hoard_props import HoardFileProps, HoardFileStatus, GET_BY_COPY, RESERVED, GET_BY_MOVE
 from gui.confirm_action_screen import ConfirmActionScreen
 from util import format_size, group_to_dict, format_count
 
@@ -217,8 +217,8 @@ class NodeDescription(Widget):
             self.hoard_config, self.hoard_contents, False, statuses)
         all_stats = [
             "total",
-            HoardFileStatus.AVAILABLE.value, HoardFileStatus.GET.value, HoardFileStatus.COPY.value,
-            HoardFileStatus.MOVE.value, HoardFileStatus.CLEANUP.value]
+            HoardFileStatus.AVAILABLE.value, HoardFileStatus.GET.value, GET_BY_COPY,
+            GET_BY_MOVE, HoardFileStatus.CLEANUP.value, RESERVED]
         data_table = DataTable()
         yield data_table
         data_table.add_columns("name", *all_stats)
@@ -240,10 +240,6 @@ def file_status_order(status: HoardFileStatus):
         return 1
     elif status == HoardFileStatus.GET:
         return 2
-    elif status == HoardFileStatus.MOVE:
-        return 3
-    elif status == HoardFileStatus.COPY:
-        return 4
     elif status == HoardFileStatus.CLEANUP:
         return 10
     else:

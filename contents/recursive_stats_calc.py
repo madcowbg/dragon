@@ -296,8 +296,7 @@ class CompositeTreeReader[T](RecursiveReader[CompositeNodeID, HoardFilePresence 
 def calc_query_stats(props: HoardFilePresence) -> QueryStats:
     presence = props.presence
     is_deleted = len([uuid for uuid, status in presence.items() if status != HoardFileStatus.CLEANUP]) == 0
-    num_sources = len(
-        [uuid for uuid, status in presence.items() if status in (HoardFileStatus.AVAILABLE, HoardFileStatus.MOVE)])
+    num_sources = len([uuid for uuid, status in presence.items() if status == HoardFileStatus.AVAILABLE])
     used_size = props.file_obj.size
 
     return QueryStats(file=FileStats(is_deleted, num_sources, used_size))
@@ -334,7 +333,8 @@ class QueryStatsCalculator(RecursiveCalculator[CompositeNodeID, HoardFilePresenc
         return QueryStats(folder=FolderStats(0, 0, 0, 0))
 
     def __init__(self, contents: "HoardContent"):
-        super().__init__(calc_query_stats, CompositeTreeReader[HoardFilePresence | None](contents, read_hoard_file_presence))
+        super().__init__(calc_query_stats,
+                         CompositeTreeReader[HoardFilePresence | None](contents, read_hoard_file_presence))
 
     @cached_property
     def stat_cache_key(self) -> bytes:
@@ -452,7 +452,8 @@ class SizeCountPresenceStatsCalculator(RecursiveCalculator[CompositeNodeID, Hoar
         return SizeCountPresenceStats(0)
 
     def __init__(self, contents: "HoardContent"):
-        super().__init__(calc_size_count_stats, CompositeTreeReader[HoardFilePresence|None](contents, read_hoard_file_presence))
+        super().__init__(calc_size_count_stats,
+                         CompositeTreeReader[HoardFilePresence | None](contents, read_hoard_file_presence))
 
     @cached_property
     def stat_cache_key(self) -> bytes:

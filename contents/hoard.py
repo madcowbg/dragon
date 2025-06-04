@@ -12,7 +12,7 @@ from alive_progress import alive_bar
 
 from command.fast_path import FastPosixPath
 from config import HoardConfig
-from contents.hoard_props import HoardFileStatus, HoardFileProps
+from contents.hoard_props import HoardFileStatus, HoardFileProps, GET_BY_MOVE, GET_BY_COPY, RESERVED
 from contents.recursive_stats_calc import UsedSizeCalculator, NodeID, QueryStatsCalculator, composite_from_roots, \
     drilldown, FolderStats, SizeCountPresenceStatsCalculator, SizeCountPresenceStats, FileStats, QueryStats, UsedSize
 from contents.repo import RepoContentsConfig
@@ -177,9 +177,6 @@ def _filename(filepath: str) -> str:
     return name
 
 
-STATUSES_TO_FETCH = [HoardFileStatus.COPY, HoardFileStatus.GET, HoardFileStatus.MOVE]
-
-
 class HoardFilesIterator(TreeGenerator[BlobObject, Tuple[str, HoardFileProps]]):
     def __init__(self, objects: Objects, parent: "HoardContents"):
         self.parent = parent
@@ -331,7 +328,7 @@ class ReadonlyHoardFSObjects:
         yield from HoardFilesIterator.all(self.parent)
 
     def with_pending(self, repo_uuid: str) -> Iterable[Tuple[FastPosixPath, HoardFileProps]]:
-        pending_statuses = {HoardFileStatus.GET, HoardFileStatus.COPY, HoardFileStatus.MOVE, HoardFileStatus.CLEANUP}
+        pending_statuses = {HoardFileStatus.GET, HoardFileStatus.CLEANUP}
         for path, props in HoardFilesIterator.all(self.parent):
             if props.get_status(repo_uuid) in pending_statuses:
                 yield path, props
@@ -427,7 +424,8 @@ class ReadonlyHoardFSObjects:
                                 assert desired_obj.object_type == ObjectType.BLOB
                                 desired_obj: FileObject
 
-                                paths_to_move_inside_repo = moves_and_copies.get_existing_paths_in_uuid(remote.uuid, desired_id)
+                                paths_to_move_inside_repo = moves_and_copies.get_existing_paths_in_uuid(remote.uuid,
+                                                                                                        desired_id)
                                 if len(paths_to_move_inside_repo) > 0:
                                     # can be moved/copied in repo
                                     can_be_moved_cnt += 1
@@ -460,20 +458,18 @@ class ReadonlyHoardFSObjects:
                                     needed_to_get_cnt += 1
                                     needed_to_get_size += current_obj.size
 
-                    assert HoardFileStatus.MOVE.value not in stats[remote.uuid]
                     if can_be_moved_cnt > 0:
-                        stats[remote.uuid][HoardFileStatus.MOVE.value] = {
+                        stats[remote.uuid][GET_BY_MOVE] = {
                             "nfiles": can_be_moved_cnt,
                             "size": can_be_moved_size}
 
-                    assert HoardFileStatus.COPY.value not in stats[remote.uuid]
                     if can_be_copied_cnt > 0:
-                        stats[remote.uuid][HoardFileStatus.COPY.value] = {
+                        stats[remote.uuid][GET_BY_COPY] = {
                             "nfiles": can_be_copied_cnt,
                             "size": can_be_copied_size}
 
                     if needed_to_get_cnt > 0:
-                        stats[remote.uuid][HoardFileStatus.RESERVED.value] = {
+                        stats[remote.uuid][RESERVED] = {
                             "nfiles": needed_to_get_cnt,
                             "size": needed_to_get_size}
 
@@ -481,7 +477,7 @@ class ReadonlyHoardFSObjects:
 
     def to_fetch(self, repo_uuid: str) -> Generator[Tuple[str, HoardFileProps], None, None]:
         for path, props in HoardFilesIterator.all(self.parent):
-            if props.get_status(repo_uuid) in STATUSES_TO_FETCH:
+            if props.get_status(repo_uuid) == HoardFileStatus.GET:
                 yield path.as_posix(), props
 
     def to_cleanup(self, repo_uuid: str) -> Generator[Tuple[FastPosixPath, HoardFileProps], None, None]:
@@ -604,9 +600,6 @@ class Query:
         repo_root = self.parent.env.roots(write=False)[repo_uuid]
         repo_root_node: NodeID = NodeID(repo_root.desired, repo_root.current)
         return self._repo_stats_agg[repo_root_node].used_size
-
-
-STATUSES_THAT_USE_SIZE = [HoardFileStatus.AVAILABLE, HoardFileStatus.GET, HoardFileStatus.COPY, HoardFileStatus.CLEANUP]
 
 
 class HoardContents:

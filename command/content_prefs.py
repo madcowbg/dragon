@@ -100,7 +100,7 @@ class BackupSet:
             current_status = hoard_props.get_status(backup.uuid)
             if current_status == HoardFileStatus.CLEANUP:
                 return 0.0, backup.uuid
-            elif current_status == HoardFileStatus.GET or current_status == HoardFileStatus.COPY:
+            elif current_status == HoardFileStatus.GET:
                 return 1.0, backup.uuid
             elif current_status == HoardFileStatus.AVAILABLE:
                 return (
@@ -174,8 +174,7 @@ class BackupSet:
         return [BackupSet(mounted_at, s, pathing, hoard, available_remotes) for mounted_at, s in sets.items()]
 
 
-STATUSES_DECLARED_TO_FETCH = [
-    HoardFileStatus.GET, HoardFileStatus.COPY, HoardFileStatus.MOVE, HoardFileStatus.AVAILABLE]
+STATUSES_DECLARED_TO_FETCH = [HoardFileStatus.GET, HoardFileStatus.AVAILABLE]
 
 
 class ContentPrefs:
