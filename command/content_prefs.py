@@ -77,10 +77,8 @@ class Presence:
                     compute_path_lookup_table(objects, roots[remote.uuid].desired), decode_bytes_to_object_id))
                 for remote in self.hoard_contents.hoard_config.remotes.all())
 
-            self._hoard = dict(
-                (remote.uuid, LookupTable[ObjectID](
-                    compute_path_lookup_table(objects, roots["HOARD"].desired), decode_bytes_to_object_id))
-                for remote in self.hoard_contents.hoard_config.remotes.all())
+            self._hoard = LookupTable[ObjectID](
+                    compute_path_lookup_table(objects, roots["HOARD"].desired), decode_bytes_to_object_id)
 
     def in_current(self, hoard_file: FastPosixPath, file_obj: FileObject) -> Iterable[str]:
         assert isinstance(file_obj, FileObject)

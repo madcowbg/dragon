@@ -79,48 +79,51 @@ def reuse_already_existing_files(backup_set: BackupSet, hoard: HoardContents, ou
 
 
 def assign_non_assigned_files(
-        hoard: HoardContents, backup_set: BackupSet, available_only: bool, added_cnt, added_size, out: TextIO):
+        hoard: HoardContents, backup_set: BackupSet, available_only: bool, added_cnt, added_size, out: TextIO) -> bool:
     hoard_root = hoard.env.roots(write=False)["HOARD"]
-    with hoard.env.objects(write=False) as objects:
-        for path, object_type, obj_id, file_obj, _ in dfs(objects, "", hoard_root.desired):
-            if object_type == ObjectType.TREE:
-                continue
+    with alive_bar(title="Assigning non-assigned files") as bar:
+        with hoard.env.objects(write=False) as objects:
+            for path, object_type, obj_id, file_obj, _ in dfs(objects, "", hoard_root.desired):
+                bar()
 
-            if not path.startswith(backup_set.mounted_at.as_posix_folder()):
-                continue  # fixme this could be done faster if we don't iterate over all files
+                if object_type == ObjectType.TREE:
+                    continue
 
-            file_obj: FileObject
-            hoard_file = FastPosixPath(path)
+                if not path.startswith(backup_set.mounted_at.as_posix_folder()):
+                    continue  # fixme this could be done faster if we don't iterate over all files
 
-            assert hoard_file.is_relative_to(backup_set.mounted_at), \
-                f"{hoard_file} not rel to {backup_set.mounted_at}"
+                file_obj: FileObject
+                hoard_file = FastPosixPath(path)
 
-            new_repos_to_backup_to = backup_set.repos_to_backup_to(
-                hoard_file, file_obj, file_obj.size, available_only)
+                assert hoard_file.is_relative_to(backup_set.mounted_at), \
+                    f"{hoard_file} not rel to {backup_set.mounted_at}"
 
-            if len(new_repos_to_backup_to) == 0:
-                logging.info(f"No new backups for {hoard_file}.")
-                continue
+                new_repos_to_backup_to = backup_set.repos_to_backup_to(
+                    hoard_file, file_obj, file_obj.size, available_only)
 
-            logging.info(f"Backing up {hoard_file} to {[r.uuid for r in new_repos_to_backup_to]}")
-            for repo in new_repos_to_backup_to:
-                add_to_desired_tree(
-                    hoard, repo.uuid, hoard_file.simple, file_obj)
-                out.write(f"BACKUP [{repo.name}]{hoard_file.simple}\n")
+                if len(new_repos_to_backup_to) == 0:
+                    logging.info(f"No new backups for {hoard_file}.")
+                    continue
 
-            for repo in new_repos_to_backup_to:
-                added_cnt[repo] = added_cnt.get(repo, 0) + 1
-                added_size[repo] = added_size.get(repo, 0) + file_obj.size
+                logging.info(f"Backing up {hoard_file} to {[r.uuid for r in new_repos_to_backup_to]}")
+                for repo in new_repos_to_backup_to:
+                    add_to_desired_tree(
+                        hoard, repo.uuid, hoard_file.simple, file_obj)
+                    out.write(f"BACKUP [{repo.name}]{hoard_file.simple}\n")
 
-                projected = backup_set.backup_sizes.remaining_pct(repo)
-                if projected < MIN_REPO_PERC_FREE:
-                    # fixme this may be better handled in bulk...
-                    out.write(
-                        f"Error: Backup {repo.name} free space is projected to become "
-                        f"{format_percent(projected)} < {format_percent(MIN_REPO_PERC_FREE)}%!\n)")
-                    return
+                for repo in new_repos_to_backup_to:
+                    added_cnt[repo] = added_cnt.get(repo, 0) + 1
+                    added_size[repo] = added_size.get(repo, 0) + file_obj.size
 
+                    projected = backup_set.backup_sizes.remaining_pct(repo)
+                    if projected < MIN_REPO_PERC_FREE:
+                        # fixme this may be better handled in bulk...
+                        out.write(
+                            f"Error: Backup {repo.name} free space is projected to become "
+                            f"{format_percent(projected)} < {format_percent(MIN_REPO_PERC_FREE)}%!\n)")
+                        return False
     # out.write("SUCCESS!\n")  #fixme enable
+    return True
 
 
 class HoardCommandBackups:
@@ -236,8 +239,9 @@ class HoardCommandBackups:
                 added_cnt: Dict[HoardRemote, int] = dict()
                 added_size: Dict[HoardRemote, int] = dict()
 
+                presence = Presence(hoard)
                 for backup_set in BackupSet.all(
-                        config, pathing, hoard, self.hoard.available_remotes(), Presence(hoard)):
+                        config, pathing, hoard, self.hoard.available_remotes(), presence):
                     out.write(
                         f"set: {backup_set.mounted_at}"
                         f" with {len(backup_set.available_backups)}/{len(backup_set.backups)} media\n")
@@ -245,12 +249,15 @@ class HoardCommandBackups:
                     logging.info("Enabling files that are possibly the result of rename operations.")
                     reuse_already_existing_files(backup_set, hoard, out)
 
+                logging.info("Recomputing presence...")
+                presence = Presence(hoard)
+
                 for backup_set in BackupSet.all(
-                        config, pathing, hoard, self.hoard.available_remotes(), Presence(hoard)):
+                        config, pathing, hoard, self.hoard.available_remotes(), presence):
                     logging.info(
                         f"Considering backup set at {backup_set.mounted_at} with {len(backup_set.backups)} media")
 
-                    assign_non_assigned_files(hoard, backup_set, available_only, added_cnt, added_size, out)
+                    success = assign_non_assigned_files(hoard, backup_set, available_only, added_cnt, added_size, out)
 
                     logging.info("Running deferred operations...")
                     HoardDeferredOperations(hoard).apply_deferred_queue()
@@ -259,6 +266,9 @@ class HoardCommandBackups:
 
                     for repo, cnt in sorted(added_cnt.items(), key=lambda rc: rc[0].name):
                         out.write(f" {repo.name} <- {cnt} files ({format_size(added_size[repo])})\n")
+
+                    if not success:
+                        break
 
                 out.write("DONE")
                 return out.getvalue()
