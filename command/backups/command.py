@@ -79,7 +79,7 @@ def reuse_already_existing_files(backup_set: BackupSet, hoard: HoardContents, ou
 
 
 def assign_non_assigned_files(
-        hoard: HoardContents, backup_set: BackupSet, available_only: bool, added_cnt, added_size, out: TextIO) -> bool:
+        hoard: HoardContents, backup_set: BackupSet, available_only: bool, added_cnt, added_size, out: TextIO):
     hoard_root = hoard.env.roots(write=False)["HOARD"]
     with alive_bar(title="Assigning non-assigned files") as bar:
         with hoard.env.objects(write=False) as objects:
@@ -121,9 +121,8 @@ def assign_non_assigned_files(
                         out.write(
                             f"Error: Backup {repo.name} free space is projected to become "
                             f"{format_percent(projected)} < {format_percent(MIN_REPO_PERC_FREE)}%!\n)")
-                        return False
+                        return
     # out.write("SUCCESS!\n")  #fixme enable
-    return True
 
 
 class HoardCommandBackups:
@@ -257,7 +256,7 @@ class HoardCommandBackups:
                     logging.info(
                         f"Considering backup set at {backup_set.mounted_at} with {len(backup_set.backups)} media")
 
-                    success = assign_non_assigned_files(hoard, backup_set, available_only, added_cnt, added_size, out)
+                    assign_non_assigned_files(hoard, backup_set, available_only, added_cnt, added_size, out)
 
                     logging.info("Running deferred operations...")
                     HoardDeferredOperations(hoard).apply_deferred_queue()
@@ -266,9 +265,6 @@ class HoardCommandBackups:
 
                     for repo, cnt in sorted(added_cnt.items(), key=lambda rc: rc[0].name):
                         out.write(f" {repo.name} <- {cnt} files ({format_size(added_size[repo])})\n")
-
-                    if not success:
-                        break
 
                 out.write("DONE")
                 return out.getvalue()
@@ -285,10 +281,10 @@ class HoardCommandBackups:
 
             remotes_to_unassign = [self.hoard.config().remotes[repo_uuid].uuid]
         elif all:
-            assert all_unavailable == False
+            assert all_unavailable == False, "When --all is provided, cannot use provide --all-unavailable."
             remotes_to_unassign = [remote.uuid for remote in self.hoard.config().remotes.all()]
         else:
-            assert all_unavailable == True
+            assert all_unavailable == True, "Either provide a repo or use --all-unavailable or --all."
             available_remotes = self.hoard.available_remotes()
             remotes_to_unassign = [
                 remote.uuid for remote in self.hoard.config().remotes.all()

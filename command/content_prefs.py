@@ -206,9 +206,9 @@ class BackupSet:
             self.backup_sizes.reserve_size(remote, file_size)
             projected_free_space = self.backup_sizes.remaining_pct(remote)
             if projected_free_space < MIN_REPO_PERC_FREE:
-                logging.error(
+                logging.debug(
                     f"Free space on {remote.name} projected to become {format_percent(projected_free_space)}!")
-                logging.error(
+                logging.debug(
                     f"Not enough free space to reserve on {remote.name}, "
                     f"projected {format_percent(projected_free_space)}!")
                 self.backup_sizes.reserve_size(remote, -file_size)  # unreserve space ...
