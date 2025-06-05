@@ -107,7 +107,8 @@ class HoardCommandBackups:
                     file_sizes[hoard_file] = hoard_props.size
                     scheduled = 0
                     for backup_set in backup_sets:
-                        scheduled += len(backup_set.currently_scheduled_backups(hoard_file, hoard_props))
+                        scheduled += len(backup_set.currently_scheduled_backups(
+                            hoard_file, HACK_create_from_hoard_props(hoard_props)))
 
                     available = sum(
                         1 for uuid in hoard_props.by_status(HoardFileStatus.AVAILABLE) if uuid in backup_media)
@@ -155,7 +156,7 @@ class HoardCommandBackups:
                         assert hoard_file.is_relative_to(backup_set.mounted_at)
                         assert isinstance(hoard_props, HoardFileProps)
 
-                        repos_to_clean_from = backup_set.repos_to_clean(hoard_file, hoard_props, hoard_props.size)
+                        repos_to_clean_from = backup_set.repos_to_clean(hoard_file, HACK_create_from_hoard_props(hoard_props), hoard_props.size)
 
                         logging.info(f"Cleaning up {hoard_file} from {[r.uuid for r in repos_to_clean_from]}")
 
@@ -199,13 +200,15 @@ class HoardCommandBackups:
                     hoard_file: command.fast_path.FastPosixPath
                     for hoard_file, hoard_props in alive_it(
                             [s async for s in hoard.fsobjects.in_folder_non_deleted(backup_set.mounted_at)]):
+                        assert isinstance(hoard_props, HoardFileProps)
+
                         assert hoard_file.is_relative_to(backup_set.mounted_at), \
                             f"{hoard_file} not rel to {backup_set.mounted_at}"
 
-                        assert isinstance(hoard_props, HoardFileProps)
+                        file_obj = HACK_create_from_hoard_props(hoard_props)
 
                         new_repos_to_backup_to = backup_set.repos_to_backup_to(
-                            hoard_file, hoard_props, hoard_props.size, available_only)
+                            hoard_file, file_obj, file_obj.size, available_only)
 
                         if len(new_repos_to_backup_to) == 0:
                             logging.info(f"No new backups for {hoard_file}.")
@@ -214,12 +217,12 @@ class HoardCommandBackups:
                         logging.info(f"Backing up {hoard_file} to {[r.uuid for r in new_repos_to_backup_to]}")
                         for repo in new_repos_to_backup_to:
                             add_to_desired_tree(
-                                hoard, repo.uuid, hoard_file.simple, HACK_create_from_hoard_props(hoard_props))
+                                hoard, repo.uuid, hoard_file.simple, file_obj)
                             out.write(f"BACKUP [{repo.name}]{hoard_file.simple}\n")
 
                         for repo in new_repos_to_backup_to:
                             added_cnt[repo] = added_cnt.get(repo, 0) + 1
-                            added_size[repo] = added_size.get(repo, 0) + hoard_props.size
+                            added_size[repo] = added_size.get(repo, 0) + file_obj.size
 
                             projected = backup_set.backup_sizes.remaining_pct(repo)
                             if projected < MIN_REPO_PERC_FREE:

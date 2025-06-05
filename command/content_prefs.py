@@ -53,6 +53,14 @@ class BackupSizes:
         return self.sizes[remote.uuid].remaining_pct
 
 
+def _check_if_in(lookup_table: LookupTable[ObjectID], hoard_file: FastPosixPath, file_obj: FileObject) -> bool:
+    assert isinstance(file_obj, FileObject)
+    possible_obj_id = lookup_table[digest_path(hoard_file.as_posix())]
+    if len(possible_obj_id) == 0:
+        return False
+    return possible_obj_id[0] == file_obj.file_id
+
+
 class Presence:
     def __init__(self, hoard_contents: HoardContents):
         self.hoard_contents = hoard_contents
@@ -75,6 +83,7 @@ class Presence:
                 for remote in self.hoard_contents.hoard_config.remotes.all())
 
     def in_current(self, hoard_file: FastPosixPath, file_obj: FileObject) -> Iterable[str]:
+        assert isinstance(file_obj, FileObject)
         for uuid, path_lookup_table in self._current.items():
             possible_obj_id = path_lookup_table[digest_path(hoard_file.as_posix())]
             assert len(possible_obj_id) <= 1  # fixme store object id, not a list of object ids...
@@ -82,11 +91,18 @@ class Presence:
                 yield uuid
 
     def in_desired(self, hoard_file: FastPosixPath, file_obj: FileObject) -> Iterable[str]:
+        assert isinstance(file_obj, FileObject)
         for uuid, path_lookup_table in self._desired.items():
             possible_obj_id = path_lookup_table[digest_path(hoard_file.as_posix())]
             assert len(possible_obj_id) <= 1  # fixme store object id, not a list of object ids...
             if len(possible_obj_id) > 0 and possible_obj_id[0] == file_obj.file_id:
                 yield uuid
+
+    def is_desired(self, uuid: str, hoard_file: FastPosixPath, file_obj: FileObject) -> bool:
+        return _check_if_in(self._desired[uuid], hoard_file, file_obj)
+
+    def is_current(self, uuid: str, hoard_file: FastPosixPath, file_obj: FileObject):
+        return _check_if_in(self._current[uuid], hoard_file, file_obj)
 
 
 class BackupSet:
@@ -109,10 +125,10 @@ class BackupSet:
             logging.warning("No backups are defined.")
 
     def repos_to_backup_to(
-            self, hoard_file: FastPosixPath, hoard_props: Optional[HoardFileProps], file_size: int,
+            self, hoard_file: FastPosixPath, file_obj: Optional[FileObject], file_size: int,
             available_only: bool) -> List[HoardRemote]:
 
-        past_backups = self.currently_scheduled_backups(hoard_file, hoard_props) if hoard_props is not None else []
+        past_backups = self.currently_scheduled_backups(hoard_file, file_obj) if file_obj is not None else []
 
         logging.info(f"Got {len(past_backups)} currently requested backups for {hoard_file}.")
         if len(past_backups) >= self.num_backup_copies_desired:
@@ -122,11 +138,11 @@ class BackupSet:
 
         return self.reserve_new_backups(hoard_file, file_size, past_backups, available_only)
 
-    def repos_to_clean(self, hoard_file: FastPosixPath, hoard_props: Optional[HoardFileProps], file_size: int) -> List[
+    def repos_to_clean(self, hoard_file: FastPosixPath, file_obj: Optional[FileObject], file_size: int) -> List[
         HoardRemote]:
         assert hoard_file.is_absolute()
 
-        past_backups = self.currently_scheduled_backups(hoard_file, hoard_props) if hoard_props is not None else []
+        past_backups = self.currently_scheduled_backups(hoard_file, file_obj) if file_obj is not None else []
 
         logging.info(f"Got {len(past_backups)} currently requested backups for {hoard_file}.")
 
@@ -140,17 +156,14 @@ class BackupSet:
         assert num_backups_to_remove > 0
 
         def _available_are_largest(backup: HoardRemote) -> (float, str):
-            current_status = hoard_props.get_status(backup.uuid)
-            if current_status == HoardFileStatus.CLEANUP:
+            if not self.presence.is_desired(backup.uuid, hoard_file, file_obj):
                 return 0.0, backup.uuid
-            elif current_status == HoardFileStatus.GET:
+            elif not self.presence.is_current(backup.uuid, hoard_file, file_obj):
                 return 1.0, backup.uuid
-            elif current_status == HoardFileStatus.AVAILABLE:
+            else:  # is both current and desired
                 return (
                     10 - self.backup_sizes.remaining_pct(backup),  # 9 means empty remote, 10 means full
                     backup.uuid)
-            else:
-                raise ValueError(f"Unknown backup status {current_status} for backup UUID {backup.uuid}")
 
         sorted_to_remove = sorted(past_backups, key=_available_are_largest)
         logging.info(f"{hoard_file} has {len(sorted_to_remove)} backups to remove from.")
@@ -160,10 +173,10 @@ class BackupSet:
             self.backup_sizes.reserve_size(remote, -file_size)
         return remotes_to_remove
 
-    def currently_scheduled_backups(self, hoard_file: FastPosixPath, hoard_props: HoardFileProps) -> List[HoardRemote]:
+    def currently_scheduled_backups(self, hoard_file: FastPosixPath, file_obj: FileObject) -> List[HoardRemote]:
         return sorted([
             self.backups[uuid]
-            for uuid in self.presence.in_desired(hoard_file, HACK_create_from_hoard_props(hoard_props))
+            for uuid in self.presence.in_desired(hoard_file, file_obj)
             if uuid in self.backups and is_path_available(self.pathing, hoard_file, uuid)], key=lambda r: r.name)
 
     def reserve_new_backups(
@@ -243,4 +256,6 @@ class ContentPrefs:
 
         for b in self._backup_sets:
             yield from map(
-                lambda remote: remote.uuid, b.repos_to_backup_to(hoard_file, hoard_props, local_props.size, True))
+                lambda remote: remote.uuid, b.repos_to_backup_to(
+                    hoard_file, HACK_create_from_hoard_props(hoard_props) if hoard_props is not None else None,
+                    local_props.size, True))
