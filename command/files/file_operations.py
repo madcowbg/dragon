@@ -59,12 +59,28 @@ async def copy_or_get(
     if file_obj.size > (5 * (1 << 30)):  # >5G
         logging.warning(f"Copying large file {format_size(file_obj.size)}: {hoard_path}")
 
+    cleanup_local_paths = moves_and_copies.whereis_cleanup(restore_to_uuid, file_obj.file_id)
+    logging.debug(f"Found %s paths in %s that can be moved from", len(cleanup_local_paths), restore_to_uuid)
+
+    for move_path in cleanup_local_paths:
+        candidate_move_path_on_device = pathing.in_hoard(move_path).at_local(restore_to_uuid).on_device_path()
+
+        logging.debug(f"Trying copy from %s.", candidate_move_path_on_device)
+        success, restored_file = await _restore_file(
+            candidate_move_path_on_device, fullpath_to_restore, file_obj, move=True)
+        if success:
+            add_to_current_tree_file_obj(hoard, restore_to_uuid, hoard_path.as_pure_path.as_posix(), file_obj)
+            # should be safe to make it out of date until the deferred ops are cleared, as we check data when copying
+            remove_from_current_tree(hoard, restore_to_uuid, move_path.as_posix(), file_obj)
+            return f"LOCAL_MOVE {local_path_to_restore}\n"
+
     # first candidate is the current device - copy if we can
     for expanded_path in moves_and_copies.get_existing_paths_in_uuid_expanded(restore_to_uuid, file_obj.file_id):
-        candidate_path_on_device = pathing.in_hoard(expanded_path).at_local(restore_to_uuid).on_device_path()
-        logging.debug(f"Preparing to copy local %s to %s...", expanded_path, candidate_path_on_device)
+        candidate_copy_path_on_device = pathing.in_hoard(expanded_path).at_local(restore_to_uuid).on_device_path()
+        logging.debug(f"Preparing to copy local %s to %s...", expanded_path, candidate_copy_path_on_device)
 
-        success, restored_file = await _restore_file(candidate_path_on_device, fullpath_to_restore, file_obj)
+        success, restored_file = await _restore_file(
+            candidate_copy_path_on_device, fullpath_to_restore, file_obj, move=False)
         if success:
             add_to_current_tree_file_obj(hoard, restore_to_uuid, hoard_path.as_pure_path.as_posix(), file_obj)
             return f"LOCAL_COPY {local_path_to_restore}\n"
@@ -75,7 +91,8 @@ async def copy_or_get(
         for expanded_path in remote_candidates[candidate_uuid]:
             candidate_path_on_device = pathing.in_hoard(expanded_path).at_local(candidate_uuid).on_device_path()
             logging.debug(f"Preparing to copy remote %s to %s...", expanded_path, candidate_path_on_device)
-            success, restored_file = await _restore_file(candidate_path_on_device, fullpath_to_restore, file_obj)
+            success, restored_file = await _restore_file(candidate_path_on_device, fullpath_to_restore, file_obj,
+                                                         move=False)
             if success:
                 add_to_current_tree_file_obj(hoard, restore_to_uuid, hoard_path.as_pure_path.as_posix(), file_obj)
                 return f"REMOTE_COPY [{hoard.remote_name(candidate_uuid)}] {local_path_to_restore}\n"
@@ -108,7 +125,8 @@ def _cleanup_files_in_repo(
 
             if len(where_is_needed_but_not_in_repo) == 0:
                 logging.info("file doesn't need to be copied anymore, cleaning")
-                remove_from_current_tree(hoard, repo_uuid, hoard_file.as_posix(), HACK_create_from_hoard_props(hoard_props))
+                remove_from_current_tree(
+                    hoard, repo_uuid, hoard_file.as_posix(), HACK_create_from_hoard_props(hoard_props))
 
                 logging.info(f"deleting {local_path.on_device_path()}...")
 
@@ -144,7 +162,8 @@ def sort_by_speed_then_latency(paths: HoardPaths) -> Callable[[str], int]:
     return comparator
 
 
-async def _restore_file(fetch_fullpath: PathLike, to_fullpath: PathLike, file_obj: FileObject) -> (bool, str):
+async def _restore_file(
+        fetch_fullpath: PathLike, to_fullpath: PathLike, file_obj: FileObject, move: bool) -> (bool, str):
     if not os.path.isfile(fetch_fullpath):
         logging.error(f"File {fetch_fullpath} does not exist, but is needed for restore!")
         return False, None
@@ -159,12 +178,22 @@ async def _restore_file(fetch_fullpath: PathLike, to_fullpath: PathLike, file_ob
     logging.info(f"making necessary folders to restore: {dirpath}")
     os.makedirs(dirpath, exist_ok=True)
 
-    logging.info(f"Copying {fetch_fullpath} to {to_fullpath}")
-    try:
-        await aioshutil.copy2(fetch_fullpath, to_fullpath)
-        return True, to_fullpath
-    except aioshutil.SameFileError as e:
-        logging.error(f"Are same file: {e}")
-    except PermissionError as e:
-        logging.error(f"Permission error: {e}")
+    if move:
+        logging.info(f"Moving {fetch_fullpath} to {to_fullpath}")
+        try:
+            await aioshutil.move(fetch_fullpath, to_fullpath)
+            return True, to_fullpath
+        except aioshutil.SameFileError as e:
+            logging.error(f"Are same file: {e}")
+        except PermissionError as e:
+            logging.error(f"Permission error: {e}")
+    else:
+        logging.info(f"Copying {fetch_fullpath} to {to_fullpath}")
+        try:
+            await aioshutil.copy2(fetch_fullpath, to_fullpath)
+            return True, to_fullpath
+        except aioshutil.SameFileError as e:
+            logging.error(f"Are same file: {e}")
+        except PermissionError as e:
+            logging.error(f"Permission error: {e}")
     return False, None

@@ -269,6 +269,13 @@ class MovesAndCopies:
                     decode_bytes_to_intpath))
                 for remote in parent.hoard_config.remotes.all())
 
+            self._lookup_current_but_not_desired: Dict[str, LookupTable[CompressedPath]] = dict(
+                (remote.uuid, LookupTable[CompressedPath](
+                    compute_difference_lookup_table(
+                        objects, roots[remote.uuid].current, roots[remote.uuid].desired),
+                    decode_bytes_to_intpath))
+                for remote in parent.hoard_config.remotes.all())
+
             self._lookup_hoard_desired = LookupTable[CompressedPath](
                 compute_difference_lookup_table(
                     objects, roots["HOARD"].desired, roots["HOARD"].current),
@@ -310,6 +317,10 @@ class MovesAndCopies:
             paths_needing_to_get = list(lookup_table[current_id])
             if len(paths_needing_to_get) > 0:
                 yield uuid, paths_needing_to_get
+
+    def whereis_cleanup(self, uuid: str, current_id: ObjectID):
+        with self.parent.env.objects(write=False) as objects:
+            return list(self._lookup_current_but_not_desired[uuid].get_paths(current_id, objects.__getitem__))
 
 
 class ReadonlyHoardFSObjects:

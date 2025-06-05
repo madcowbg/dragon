@@ -1193,17 +1193,15 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'Remote repo-incoming-name current=None staging=None desired=None\n'
             'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=fc111c\n'
             'repo-copy-name:\n'
-            'LOCAL_COPY lets_get_it_started/test.me.2-butnew\n'
-            'LOCAL_COPY lets_get_it_started/test.me.2-butsecond\n'
-            'LOCAL_COPY lets_get_it_started/test.me.4-renamed\n'
+            'LOCAL_MOVE lets_get_it_started/test.me.2-butnew\n'
+            'REMOTE_COPY [repo-partial-name] lets_get_it_started/test.me.2-butsecond\n'  # not great but okay
+            'LOCAL_MOVE lets_get_it_started/test.me.4-renamed\n'
             'REMOTE_COPY [repo-full-name] test.me.1\n'
             'REMOTE_COPY [repo-full-name] test.me.added\n'
             'repo-copy-name:\n'
-            "NEEDS_MORE_COPIES (1) ['repo-backup-name'] test.me.4\n"
-            "NEEDS_MORE_COPIES (1) ['repo-backup-name'] wat/test.me.2\n"
             'After:\n'
             'Remote repo-backup-name current=None staging=None desired=01152a\n'
-            'Remote repo-copy-name current=3d68bd staging=None desired=01152a\n'
+            'Remote repo-copy-name current=01152a staging=None desired=01152a\n'
             'Remote repo-full-name current=01152a staging=01152a desired=01152a\n'
             'Remote repo-incoming-name current=None staging=None desired=None\n'
             'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=fc111c\n'
@@ -1214,13 +1212,13 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'Root: 01152ae75c4fbc81c40b8e9eba8ce23ab770630e\n'
             '|Num Files           |total |availa|get   |copy  |cleanu|reserv|\n'
             '|repo-backup-name    |     6|      |     6|     6|      |      |\n'
-            '|repo-copy-name      |     8|     6|      |      |     2|     2|\n'
+            '|repo-copy-name      |     6|     6|      |      |      |      |\n'
             '|repo-full-name      |     6|     6|      |      |      |      |\n'
             '|repo-partial-name   |     2|      |     1|     1|     1|     1|\n'
             '\n'
             '|Size                |total |availa|get   |copy  |cleanu|reserv|\n'
             '|repo-backup-name    |    47|      |    47|    47|      |      |\n'
-            '|repo-copy-name      |    66|    47|      |      |    19|    19|\n'
+            '|repo-copy-name      |    47|    47|      |      |      |      |\n'
             '|repo-full-name      |    47|    47|      |      |      |      |\n'
             '|repo-partial-name   |    13|      |     5|     5|     8|     8|\n'),
             res)
@@ -1271,17 +1269,15 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         self.assertEqual((
             'Before push:\n'
             'Remote repo-backup-name current=None staging=None desired=01152a\n'
-            'Remote repo-copy-name current=3d68bd staging=None desired=01152a\n'
+            'Remote repo-copy-name current=01152a staging=None desired=01152a\n'
             'Remote repo-full-name current=01152a staging=01152a desired=01152a\n'
             'Remote repo-incoming-name current=None staging=None desired=None\n'
             'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=fc111c\n'
             'repo-copy-name:\n'
             'repo-copy-name:\n'
-            "NEEDS_MORE_COPIES (1) ['repo-backup-name'] test.me.4\n"
-            "NEEDS_MORE_COPIES (1) ['repo-backup-name'] wat/test.me.2\n"
             'After:\n'
             'Remote repo-backup-name current=None staging=None desired=01152a\n'
-            'Remote repo-copy-name current=3d68bd staging=None desired=01152a\n'
+            'Remote repo-copy-name current=01152a staging=None desired=01152a\n'
             'Remote repo-full-name current=01152a staging=01152a desired=01152a\n'
             'Remote repo-incoming-name current=None staging=None desired=None\n'
             'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=fc111c\n'
@@ -1293,12 +1289,10 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'PRESENT_FILE lets_get_it_started/test.me.2-butsecond\n'
             'PRESENT_FILE lets_get_it_started/test.me.4-renamed\n'
             'PRESENT_FILE test.me.1\n'
-            'PRESENT_FILE test.me.4\n'
             'PRESENT_FILE test.me.added\n'
-            'PRESENT_FILE wat/test.me.2\n'
             'PRESENT_FILE wat/test.me.3\n'
             'old: a80f91bc48850a1fb3459bb76b9f6308d4d35710\n'
-            'current: 3d68bd261447d615b243bd897c2112f35b170aa9\n'
+            'current: 01152ae75c4fbc81c40b8e9eba8ce23ab770630e\n'
             'Refresh done!'), res)
 
         res = await full_cave_cmd.refresh()
@@ -1311,10 +1305,8 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.pull(copy_cave_cmd.current_uuid())
         self.assertEqual((
             'Pulling repo-copy-name...\n'
-            'Before: Hoard [01152a] <- repo [curr: 3d68bd, stg: 3d68bd, des: 01152a]\n'
-            'REPO_FILE_TO_DELETE /test.me.4\n'
-            'REPO_FILE_TO_DELETE /wat/test.me.2\n'
-            'After: Hoard [01152a], repo [curr: 3d68bd, stg: 3d68bd, des: 01152a]\n'
+            'Before: Hoard [01152a] <- repo [curr: 01152a, stg: 01152a, des: 01152a]\n'
+            'After: Hoard [01152a], repo [curr: 01152a, stg: 01152a, des: 01152a]\n'
             "Sync'ed repo-copy-name to hoard!\n"
             'DONE'), res)
 
@@ -1626,14 +1618,12 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'Remote repo-incoming-name current=None staging=None desired=None\n'
             'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=fc111c\n'
             'repo-copy-name:\n'
-            'LOCAL_COPY lets_get_it_started/test.me.2-butnew\n'
-            'LOCAL_COPY lets_get_it_started/test.me.2-butsecond\n'
-            'LOCAL_COPY lets_get_it_started/test.me.4-renamed\n'
+            'LOCAL_MOVE lets_get_it_started/test.me.2-butnew\n'
+            'REMOTE_COPY [repo-partial-name] lets_get_it_started/test.me.2-butsecond\n'  # not great but okay
+            'LOCAL_MOVE lets_get_it_started/test.me.4-renamed\n'
             'REMOTE_COPY [repo-full-name] test.me.1\n'
             'REMOTE_COPY [repo-full-name] test.me.added\n'
             'repo-copy-name:\n'
-            'd test.me.4\n'
-            'd wat/test.me.2\n'
             'After:\n'
             'Remote repo-backup-name current=1ad9e0 staging=3a0889 desired=01152a\n'
             'Remote repo-copy-name current=01152a staging=None desired=01152a\n'
@@ -1740,14 +1730,12 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'Remote repo-incoming-name current=None staging=None desired=None\n'
             'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=fc111c\n'
             'repo-backup-name:\n'
-            'LOCAL_COPY lets_get_it_started/test.me.2-butnew\n'
-            'LOCAL_COPY lets_get_it_started/test.me.2-butsecond\n'
-            'LOCAL_COPY lets_get_it_started/test.me.4-renamed\n'
+            'LOCAL_MOVE lets_get_it_started/test.me.2-butnew\n'
+            'REMOTE_COPY [repo-partial-name] lets_get_it_started/test.me.2-butsecond\n'  # not great but okay
+            'LOCAL_MOVE lets_get_it_started/test.me.4-renamed\n'
             'REMOTE_COPY [repo-full-name] test.me.1\n'
             'REMOTE_COPY [repo-full-name] test.me.added\n'
             'repo-backup-name:\n'
-            'd test.me.4\n'
-            'd wat/test.me.2\n'
             'After:\n'
             'Remote repo-backup-name current=01152a staging=3a0889 desired=01152a\n'
             'Remote repo-copy-name current=01152a staging=None desired=01152a\n'
@@ -2413,9 +2401,8 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'repo-full-name:',
             'REMOTE_COPY [repo-backup-name] test.me.4',
             'REMOTE_COPY [repo-partial-name] wat/test.me.2',
-            'LOCAL_COPY wat/test.me.6',
+            'LOCAL_MOVE wat/test.me.6',
             'repo-full-name:',
-            'd test.me.6-moved',
             'After:',
             'Remote repo-backup-name current=8da760 staging=3a0889 desired=8da760',
             'Remote repo-full-name current=8da760 staging=20b513 desired=8da760',
