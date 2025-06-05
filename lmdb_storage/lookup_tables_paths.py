@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import sys
 from typing import Iterable, Tuple, Callable
@@ -16,10 +17,10 @@ from varint import encode, decode_buffer
 def fast_compressed_path_dfs(
         objects: Objects, compressed_path: bytearray,
         obj_id: bytes) -> Iterable[Tuple[bytearray, ObjectType, ObjectID, StoredObject, SkipFun]]:
-    return fast_path(objects, compressed_path, obj_id, lambda p, i, s: p + encode(i))
+    return fast_path_dfs(objects, compressed_path, obj_id, lambda p, i, c: p + encode(i))
 
 
-def fast_path[P](
+def fast_path_dfs[P](
         objects: Objects, start_path: P, start_id: MaybeObjectID, state_extender: Callable[[P, int, str], P],
 ) -> Iterable[Tuple[P, ObjectType, ObjectID, StoredObject, SkipFun]]:
     if start_id is None:
@@ -143,7 +144,6 @@ def compute_obj_id_to_path_difference_lookup_table(
 
     files = 0
     packed_lookup_data = bytearray(existing_in)  # all files to be deleted are from the current tree
-    tmp_path: bytearray
     for tmp_path, existing_in_obj, missing_in_obj, _ \
             in fast_zip_left_dfs(objects, bytearray(), existing_in, missing_in, drilldown_same=False):
         if existing_in_obj is None:
@@ -178,3 +178,27 @@ def decode_bytes_to_intpath(packed_lookup_data: bytes, idx: int) -> Tuple[int, C
         path_part, idx = decode_buffer(packed_lookup_data, idx)
         path.append(path_part)
     return idx, path
+
+
+def decode_bytes_to_object_id(packed_lookup_data: bytes, idx: int) -> Tuple[int, bytes]:
+    cnt, idx = decode_buffer(packed_lookup_data, idx)
+    return idx + cnt, packed_lookup_data[idx:idx + cnt]
+
+
+def compute_path_lookup_table(objects: Objects, root_id: MaybeObjectID) -> bytearray:
+    if root_id is None:
+        return bytearray()
+
+    files = 0
+    packed_lookup_data = bytearray(root_id)
+    for tmp_path, obj_type, obj_id, stored_obj, _ in fast_path_dfs(objects, "", root_id, lambda p, i, c: p + c):
+        if obj_type == ObjectType.BLOB:
+            files += 1
+            digested_path = hashlib.sha1(tmp_path.encode()).digest()
+            assert len(digested_path) == 20
+
+            packed_lookup_data += digested_path + encode(len(obj_id)) + obj_id
+
+    sys.stdout.write(
+        f"decoded_paths: {files}, {format_size(len(packed_lookup_data) // files) if files > 0 else 0} per file\n")
+    return packed_lookup_data

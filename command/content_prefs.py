@@ -7,6 +7,9 @@ from config import HoardRemote, HoardConfig, CaveType
 from contents.hoard import HoardContents
 from contents.hoard_props import HoardFileStatus, HoardFileProps
 from contents.repo_props import FileDesc
+from lmdb_storage.lookup_tables import LookupTable
+from lmdb_storage.lookup_tables_paths import decode_bytes_to_object_id, compute_path_lookup_table
+from lmdb_storage.tree_object import ObjectID
 from util import format_percent, format_size
 
 MIN_REPO_PERC_FREE = 0.02
@@ -48,9 +51,26 @@ class BackupSizes:
         return self.sizes[remote.uuid].remaining_pct
 
 
+class Presence:
+    def __init__(self, hoard_contents: HoardContents):
+        self.hoard_contents = hoard_contents
+
+        roots = self.hoard_contents.env.roots(write=False)
+        with self.hoard_contents.env.objects(write=False) as objects:
+            self._current = dict(
+                (remote.uuid, LookupTable[ObjectID](
+                    compute_path_lookup_table(objects, roots[remote.uuid].current), decode_bytes_to_object_id))
+                for remote in self.hoard_contents.hoard_config.remotes.all())
+
+    def __getitem__(self, path: FastPosixPath):
+        raise NotImplementedError()
+
+
 class BackupSet:
     def __init__(self, mounted_at: FastPosixPath, backups: List[HoardRemote], pathing: HoardPathing,
                  hoard: HoardContents, available_remotes: List[str]):
+        # self.presence = Presence(hoard)
+
         self.backups = dict((backup.uuid, backup) for backup in backups)
         self.available_backups = set(backup.uuid for backup in backups if backup.uuid in available_remotes)
 
