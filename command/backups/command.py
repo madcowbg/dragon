@@ -30,6 +30,7 @@ def reuse_already_existing_files(backup_set: BackupSet, hoard: HoardContents, ou
     moves_and_copies = MovesAndCopies(hoard)
     for repo in backup_set.backups.values():
         repo_root = hoard.env.roots(write=False)[repo.uuid]
+        mounted_at_trailing_slash = repo.mounted_at.as_posix_folder()
 
         with hoard.env.objects(write=False) as objects:
             desired_tree_objs = mklist_from_tree(objects, repo_root.desired)
@@ -38,6 +39,10 @@ def reuse_already_existing_files(backup_set: BackupSet, hoard: HoardContents, ou
                 for hoard_path, diff_type, current_id, desired_id, _ in zip_dfs(
                         objects, '', repo_root.current, repo_root.desired, drilldown_same=False):
                     bar()
+                    if not hoard_path.startswith(mounted_at_trailing_slash):
+                        # fixme optimize this to simply not iterate
+                        continue
+
                     if diff_type == DiffType.RIGHT_MISSING:
                         current_obj = objects[current_id]
                         if current_obj.object_type == ObjectType.TREE:

@@ -46,6 +46,9 @@ class FastPosixPath(os.PathLike):
         else:
             return self._drive + "/" + "/".join(self._rem)
 
+    def as_posix_folder(self) -> str:
+        return self.as_posix() if self.as_posix()[-1] == "/" else self.as_posix() + "/"
+
     @property
     def simple(self) -> str:
         return ("/" if self.is_absolute() else "") + "/".join(self._rem)
