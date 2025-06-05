@@ -311,6 +311,19 @@ class TestBackupMaintenance(IsolatedAsyncioTestCase):
         res = await hoard_cmd.backups.assign(available_only=False)
         self.assertEqual((
             'set: / with 4/4 media\n'
+            'BACKUP [backup-repo-0]/FPWI/GYS.file\n'
+            'BACKUP [backup-repo-1]/FPWI/W6A.file\n'
+            'BACKUP [backup-repo-2]/FPWI/WU/QD6V.file\n'
+            'BACKUP [backup-repo-3]/FPWI.file\n'
+            'BACKUP [backup-repo-1]/GYS.file\n'
+            'BACKUP [backup-repo-2]/QD6V/WU/WU/BP.file\n'
+            'BACKUP [backup-repo-3]/QD6V.file\n'
+            'BACKUP [backup-repo-0]/W6A/QD6V/W6A/4T/FPWI.file\n'
+            'BACKUP [backup-repo-0]/W6A.file\n'
+            'BACKUP [backup-repo-1]/WU/BP.file\n'
+            'BACKUP [backup-repo-3]/WU/FPWI/FPWI/FPWI/W6A/QD6V.file\n'
+            'BACKUP [backup-repo-2]/WU.file\n'
+            'BACKUP [backup-repo-0]/ZEZ.file\n'
             ' backup-repo-0 <- 4 files (5.1KB)\n'
             ' backup-repo-1 <- 3 files (4.3KB)\n'
             ' backup-repo-2 <- 3 files (3.5KB)\n'
@@ -600,8 +613,6 @@ class TestBackupMaintenance(IsolatedAsyncioTestCase):
             '|work-repo-1         | 5.9KB| 5.9KB|      |      |      |      |      |\n'
             '|work-repo-2         | 6.2KB| 6.2KB|      |      |      |      |      |\n'), res)
 
-        # fixme implement operation where backup repos get assigned files that were meant to clean up
-
         res = await hoard_cmd.contents.ls()
         self.assertEqual((
             'Root: 8a4837fd80ab9a8991eaa3ec407b25c2e405c6c6\n'
@@ -645,13 +656,84 @@ class TestBackupMaintenance(IsolatedAsyncioTestCase):
             '/z/W6A-a copy.file = a:1 g:2\n'
             'DONE'), res)
 
+        res = await hoard_cmd.backups.unassign(all=True)
+        self.assertEqual((
+            'Unassigning from backup-repo-0 [e39dde]:\n'
+            'Desired root for backup-repo-0 is e39dde <- e39dde\n'
+            'Unassigning from backup-repo-1 [9b3019]:\n'
+            'WONT_GET /QD6V-new.file\n'
+            'Desired root for backup-repo-1 is 6ef094 <- 9b3019\n'
+            'Unassigning from backup-repo-2 [16d028]:\n'
+            'WONT_GET /b/W6A-another copy.file\n'
+            'Desired root for backup-repo-2 is 6a15b3 <- 16d028\n'
+            'Unassigning from backup-repo-3 [0b1f89]:\n'
+            'WONT_GET /QD6V/wololo/WU/BP.file\n'
+            'WONT_GET /z/W6A-a copy.file\n'
+            'Desired root for backup-repo-3 is 89a270 <- 0b1f89\n'), res)
+
+        res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True, show_empty=True)
+        self.assertEqual((
+            'Root: 8a4837fd80ab9a8991eaa3ec407b25c2e405c6c6\n'
+            '|Num Files           |total |availa|get   |copy  |move  |cleanu|reserv|\n'
+            '|backup-repo-0       |     4|     3|      |      |      |     1|     1|\n'
+            '|backup-repo-1       |     4|     3|      |      |      |     1|     1|\n'
+            '|backup-repo-2       |     3|     2|      |      |      |     1|     1|\n'
+            '|backup-repo-3       |     3|     2|      |      |      |     1|      |\n'
+            '|repo-full           |    17|     9|     4|     4|     4|     4|     3|\n'
+            '|work-repo-0         |     6|     5|      |      |      |     1|      |\n'
+            '|work-repo-1         |     4|     4|      |      |      |      |      |\n'
+            '|work-repo-2         |     5|     5|      |      |      |      |      |\n'
+            '\n'
+            '|Size                |total |availa|get   |copy  |move  |cleanu|reserv|\n'
+            '|backup-repo-0       | 5.5KB| 4.3KB|      |      |      | 1.2KB| 1.2KB|\n'
+            '|backup-repo-1       | 4.7KB| 3.1KB|      |      |      | 1.6KB| 1.6KB|\n'
+            '|backup-repo-2       | 5.1KB| 3.9KB|      |      |      | 1.2KB| 1.2KB|\n'
+            '|backup-repo-3       | 3.5KB| 2.0KB|      |      |      | 1.6KB|      |\n'
+            '|repo-full           |21.9KB|11.3KB| 5.1KB| 5.1KB| 5.1KB| 5.5KB| 3.9KB|\n'
+            '|work-repo-0         | 7.8KB| 6.2KB|      |      |      | 1.6KB|      |\n'
+            '|work-repo-1         | 5.9KB| 5.9KB|      |      |      |      |      |\n'
+            '|work-repo-2         | 6.2KB| 6.2KB|      |      |      |      |      |\n'), res)
+
+        res = await hoard_cmd.backups.assign(available_only=False)
+        self.assertEqual((
+            'set: / with 4/4 media\n'
+            'REASSIGN [backup-repo-0] /W6A.file to /b/W6A-another copy.file\n'
+            'REASSIGN [backup-repo-1] /QD6V/WU/WU/BP.file to /QD6V/wololo/WU/BP.file\n'
+            'REASSIGN [backup-repo-2] /QD6V.file to /QD6V-new.file\n'
+            'BACKUP [backup-repo-3]/z/W6A-a copy.file\n'
+            ' backup-repo-3 <- 1 files (1.2KB)\n'
+            'DONE'), res)
+
+        res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True, show_empty=True)
+        self.assertEqual((
+            'Root: 8a4837fd80ab9a8991eaa3ec407b25c2e405c6c6\n'
+            '|Num Files           |total |availa|get   |copy  |move  |cleanu|reserv|\n'
+            '|backup-repo-0       |     5|     3|     1|     1|     1|     1|     1|\n'  # a fixme bit too much for effective "move" ops
+            '|backup-repo-1       |     5|     3|     1|     1|     1|     1|     1|\n'
+            '|backup-repo-2       |     4|     2|     1|     1|     1|     1|     1|\n'
+            '|backup-repo-3       |     4|     2|     1|     1|      |     1|      |\n'
+            '|repo-full           |    17|     9|     4|     4|     4|     4|     3|\n'
+            '|work-repo-0         |     6|     5|      |      |      |     1|      |\n'
+            '|work-repo-1         |     4|     4|      |      |      |      |      |\n'
+            '|work-repo-2         |     5|     5|      |      |      |      |      |\n'
+            '\n'
+            '|Size                |total |availa|get   |copy  |move  |cleanu|reserv|\n'
+            '|backup-repo-0       | 6.6KB| 4.3KB| 1.2KB| 1.2KB| 1.2KB| 1.2KB| 1.2KB|\n'
+            '|backup-repo-1       | 6.2KB| 3.1KB| 1.6KB| 1.6KB| 1.6KB| 1.6KB| 1.6KB|\n'
+            '|backup-repo-2       | 6.2KB| 3.9KB| 1.2KB| 1.2KB| 1.2KB| 1.2KB| 1.2KB|\n'
+            '|backup-repo-3       | 4.7KB| 2.0KB| 1.2KB| 1.2KB|      | 1.6KB|      |\n'
+            '|repo-full           |21.9KB|11.3KB| 5.1KB| 5.1KB| 5.1KB| 5.5KB| 3.9KB|\n'
+            '|work-repo-0         | 7.8KB| 6.2KB|      |      |      | 1.6KB|      |\n'
+            '|work-repo-1         | 5.9KB| 5.9KB|      |      |      |      |      |\n'
+            '|work-repo-2         | 6.2KB| 6.2KB|      |      |      |      |      |\n'), res)
+
         res = await hoard_cmd.files.push(all=True)
         self.assertEqual((
             'Before push:\n'
-            'Remote backup-repo-0 current=ae5d47 staging=a80f91 desired=e39dde\n'
-            'Remote backup-repo-1 current=7a5957 staging=a80f91 desired=9b3019\n'
-            'Remote backup-repo-2 current=d870e1 staging=a80f91 desired=16d028\n'
-            'Remote backup-repo-3 current=40432b staging=a80f91 desired=0b1f89\n'
+            'Remote backup-repo-0 current=ae5d47 staging=a80f91 desired=27597a\n'
+            'Remote backup-repo-1 current=7a5957 staging=a80f91 desired=f3f7e5\n'
+            'Remote backup-repo-2 current=d870e1 staging=a80f91 desired=0fdb3f\n'
+            'Remote backup-repo-3 current=40432b staging=a80f91 desired=178937\n'
             'Remote repo-full current=3f807f staging=a80f91 desired=8a4837\n'
             'Remote work-repo-0 current=f1a4a0 staging=f1a4a0 desired=fd3ef9\n'
             'Remote work-repo-1 current=e550f6 staging=e550f6 desired=e550f6\n'
@@ -665,12 +747,12 @@ class TestBackupMaintenance(IsolatedAsyncioTestCase):
             'LOCAL_COPY b/W6A-another copy.file\n'
             'LOCAL_COPY z/W6A-a copy.file\n'
             'backup-repo-0:\n'
+            'LOCAL_COPY b/W6A-another copy.file\n'
             'backup-repo-1:\n'
-            'REMOTE_COPY [work-repo-1] QD6V-new.file\n'
+            'LOCAL_COPY QD6V/wololo/WU/BP.file\n'
             'backup-repo-2:\n'
-            'REMOTE_COPY [work-repo-2] b/W6A-another copy.file\n' # fixme this should be using a local copy maybe?
+            'LOCAL_COPY QD6V-new.file\n'
             'backup-repo-3:\n'
-            'REMOTE_COPY [work-repo-1] QD6V/wololo/WU/BP.file\n'  # fixme this should be using a local copy maybe?
             'REMOTE_COPY [work-repo-2] z/W6A-a copy.file\n'
             'work-repo-0:\n'
             'd FPWI/GYS.file\n'
@@ -690,10 +772,10 @@ class TestBackupMaintenance(IsolatedAsyncioTestCase):
             'backup-repo-3:\n'
             'd FPWI/GYS.file\n'
             'After:\n'
-            'Remote backup-repo-0 current=e39dde staging=a80f91 desired=e39dde\n'
-            'Remote backup-repo-1 current=9b3019 staging=a80f91 desired=9b3019\n'
-            'Remote backup-repo-2 current=16d028 staging=a80f91 desired=16d028\n'
-            'Remote backup-repo-3 current=0b1f89 staging=a80f91 desired=0b1f89\n'
+            'Remote backup-repo-0 current=27597a staging=a80f91 desired=27597a\n'
+            'Remote backup-repo-1 current=f3f7e5 staging=a80f91 desired=f3f7e5\n'
+            'Remote backup-repo-2 current=0fdb3f staging=a80f91 desired=0fdb3f\n'
+            'Remote backup-repo-3 current=178937 staging=a80f91 desired=178937\n'
             'Remote repo-full current=8a4837 staging=a80f91 desired=8a4837\n'
             'Remote work-repo-0 current=fd3ef9 staging=f1a4a0 desired=fd3ef9\n'
             'Remote work-repo-1 current=e550f6 staging=e550f6 desired=e550f6\n'

@@ -10,14 +10,15 @@ from command.hoard import Hoard
 from command.pathing import HoardPathing
 from command.pending_file_ops import HACK_create_from_hoard_props
 from config import HoardRemote
+from contents.hoard import MovesAndCopies
 from contents.hoard_props import HoardFileStatus, HoardFileProps
 from lmdb_storage.deferred_operations import remove_from_desired_tree, add_to_desired_tree, HoardDeferredOperations
 from lmdb_storage.file_object import BlobObject
 from lmdb_storage.object_serialization import construct_tree_object
 from lmdb_storage.operations.types import Transformation
 from lmdb_storage.operations.util import ByRoot
-from lmdb_storage.tree_iteration import zip_trees_dfs
-from lmdb_storage.tree_object import ObjectID, StoredObject, TreeObject, MaybeObjectID
+from lmdb_storage.tree_iteration import zip_trees_dfs, zip_dfs, DiffType
+from lmdb_storage.tree_object import ObjectID, StoredObject, TreeObject, MaybeObjectID, ObjectType
 from lmdb_storage.tree_structure import Objects
 from resolve_uuid import resolve_remote_uuid
 from util import format_size, format_percent, group_to_dict, safe_hex
@@ -108,7 +109,6 @@ class HoardCommandBackups:
                             remove_from_desired_tree(
                                 hoard, repo.uuid, hoard_file.as_posix(), HACK_create_from_hoard_props(hoard_props))
 
-
                         for repo in repos_to_clean_from:
                             removed_cnt[repo] = removed_cnt.get(repo, 0) + 1
                             removed_size[repo] = removed_size.get(repo, 0) + hoard_props.size
@@ -138,8 +138,46 @@ class HoardCommandBackups:
                     out.write(
                         f"set: {backup_set.mounted_at} with {len(backup_set.available_backups)}/{len(backup_set.backups)} media\n")
 
-                    tree_ops = 0
-                    print(f"Considering backup set at {backup_set.mounted_at} with {len(backup_set.backups)} media")
+                    logging.info("Enabling files that are possibly the result of rename operations.")
+                    moves_and_copies = MovesAndCopies(hoard)
+
+                    for repo in backup_set.backups.values():
+                        repo_root = hoard.env.roots(write=False)[repo.uuid]
+
+                        # Iterable[Tuple[str, DiffType, ObjectID | None, ObjectID | None, SkipFun]]
+                        with hoard.env.objects(write=False) as objects:
+                            for hoard_path, diff_type, current_id, desired_id, _ in zip_dfs(
+                                    objects, '', repo_root.current, repo_root.desired, drilldown_same=False):
+                                if diff_type == DiffType.RIGHT_MISSING:
+                                    current_obj = objects[current_id]
+                                    if current_obj.object_type == ObjectType.TREE:
+                                        continue
+
+                                    logging.debug(
+                                        "Reconsidering file %s scheduled for deletion in %s.", hoard_path, repo.uuid)
+
+                                    requested_paths_in_hoard = list(
+                                        moves_and_copies.get_existing_paths_in_hoard_expanded(current_id))
+
+                                    if len(requested_paths_in_hoard) == 0:
+                                        logging.debug("File not in hoard, skipping...")
+                                        continue
+
+                                    if len(requested_paths_in_hoard) > 1:
+                                        # todo maybe spread it around? hoard shouldn't contain many copies, but still
+                                        logging.info("File %s is %s>1 paths")
+
+                                    destination_path = requested_paths_in_hoard[0]
+                                    logging.debug("Assigning %s to %s", hoard_path, destination_path)
+
+                                    out.write(f"REASSIGN [{repo.name}] {hoard_path} to {destination_path}\n")
+                                    add_to_desired_tree(hoard, repo.uuid, destination_path.as_posix(), current_obj)
+
+                    logging.info("Running deferred operations after reassignment...")
+                    HoardDeferredOperations(hoard).apply_deferred_queue()
+
+                    logging.info(
+                        f"Considering backup set at {backup_set.mounted_at} with {len(backup_set.backups)} media")
                     hoard_file: command.fast_path.FastPosixPath
                     for hoard_file, hoard_props in alive_it(
                             [s async for s in hoard.fsobjects.in_folder_non_deleted(backup_set.mounted_at)]):
@@ -157,11 +195,9 @@ class HoardCommandBackups:
 
                         logging.info(f"Backing up {hoard_file} to {[r.uuid for r in new_repos_to_backup_to]}")
                         for repo in new_repos_to_backup_to:
-                            add_to_desired_tree(hoard, repo.uuid, hoard_file.simple, HACK_create_from_hoard_props(hoard_props))
-                            tree_ops += 1
-                            if tree_ops % 5000 == 0:
-                                logging.warn(f"gc-ing at # of tree ops {tree_ops}. FIXME reimplement faster")
-                                hoard.env.gc(silent=True)  # fixme reimplement logic with tree operation instead
+                            add_to_desired_tree(
+                                hoard, repo.uuid, hoard_file.simple, HACK_create_from_hoard_props(hoard_props))
+                            out.write(f"BACKUP [{repo.name}]{hoard_file.simple}\n")
 
                         for repo in new_repos_to_backup_to:
                             added_cnt[repo] = added_cnt.get(repo, 0) + 1
@@ -184,22 +220,28 @@ class HoardCommandBackups:
                 out.write("DONE")
                 return out.getvalue()
 
-    async def unassign(self, repo: str | None = None, all_unavailable: bool = False):
+    async def unassign(self, repo: str | None = None, all_unavailable: bool = False, all: bool = False):
         logging.info("Loading config")
         config = self.hoard.config()
 
         if repo is not None:
-            assert not all_unavailable, "Either provide a repo or use --all-unavailable."
+            assert not all_unavailable and not all, "Either provide a repo or use --all-unavailable or --all."
             repo_uuid = resolve_remote_uuid(self.hoard.config(), repo)
-            remote_to_unassign = self.hoard.config().remotes[repo_uuid]
-            if remote_to_unassign is None:
+            if repo_uuid not in self.hoard.config().remotes:
                 return f"Can't find repo {repo} with uuid {repo_uuid}!"
+
+            remotes_to_unassign = [self.hoard.config().remotes[repo_uuid].uuid]
+        elif all:
+            assert all_unavailable == False
+            remotes_to_unassign = [remote.uuid for remote in self.hoard.config().remotes.all()]
         else:
             assert all_unavailable == True
-            remote_to_unassign = None
+            available_remotes = self.hoard.available_remotes()
+            remotes_to_unassign = [
+                remote.uuid for remote in self.hoard.config().remotes.all()
+                if remote.uuid not in available_remotes]
 
-        assert (all_unavailable and remote_to_unassign is None) \
-               or (remote_to_unassign is not None and not all_unavailable)
+        assert len(remotes_to_unassign) >= 1
 
         pathing = HoardPathing(config, self.hoard.paths())
 
@@ -217,7 +259,7 @@ class HoardCommandBackups:
                             out.write(f"Remote {remote.name} is available, will not unassign\n")
                             continue
 
-                        if not all_unavailable and remote.uuid != remote_to_unassign.uuid:
+                        if remote.uuid not in remotes_to_unassign:
                             out.write(f"Skipping {remote.name}!")
                             continue
 
@@ -253,7 +295,7 @@ class SelectOnlyExisting(Transformation[None, MaybeObjectID]):
     def combine(self, state: None, merged: Dict[str, MaybeObjectID], original: ByRoot[StoredObject]) -> MaybeObjectID:
         merged = dict((c, v) for c, v in merged.items() if v is not None)
         if len(merged) == 0:
-            return None # skipping empty folders
+            return None  # skipping empty folders
 
         new_tree_node = construct_tree_object(merged)
 

@@ -261,6 +261,7 @@ class MovesAndCopies:
                 (remote.uuid, LookupTable[CompressedPath](
                     compute_lookup_table(objects, roots[remote.uuid].current), decode_bytes_to_intpath))
                 for remote in parent.hoard_config.remotes.all())
+
             self._lookup_desired_but_not_current: Dict[str, LookupTable[CompressedPath]] = dict(
                 (remote.uuid, LookupTable[CompressedPath](
                     compute_difference_lookup_table(
@@ -268,12 +269,21 @@ class MovesAndCopies:
                     decode_bytes_to_intpath))
                 for remote in parent.hoard_config.remotes.all())
 
+            self._lookup_hoard_desired = LookupTable[CompressedPath](
+                compute_difference_lookup_table(
+                    objects, roots["HOARD"].desired, roots["HOARD"].current),
+                decode_bytes_to_intpath)
+
     def get_existing_paths_in_uuid(self, in_uuid: str, desired_id: ObjectID) -> List[CompressedPath]:
         return self._lookup_current[in_uuid][desired_id]
 
     def get_existing_paths_in_uuid_expanded(self, in_uuid: str, desired_id: ObjectID) -> Iterable[FastPosixPath]:
         with self.parent.env.objects(write=False) as objects:
             return list(self._lookup_current[in_uuid].get_paths(desired_id, objects.__getitem__))
+
+    def get_existing_paths_in_hoard_expanded(self, desired_id: ObjectID) -> Iterable[FastPosixPath]:
+        with self.parent.env.objects(write=False) as objects:
+            return list(self._lookup_hoard_desired.get_paths(desired_id, objects.__getitem__))
 
     def get_remote_copies(self, skip_uuid: str, desired_id: ObjectID) -> Iterable[Tuple[str, List[CompressedPath]]]:
         for uuid in self._lookup_current.keys():

@@ -554,6 +554,10 @@ class TestBackups(IsolatedAsyncioTestCase):
         res = await hoard_cmd.backups.assign(available_only=False)
         self.assertEqual((
             'set: / with 4/4 media\n'
+            'BACKUP [backup-4]/test.me.4\n'
+            'BACKUP [backup-2]/test.me.5\n'
+            'BACKUP [backup-4]/wat/test.me.2\n'
+            'BACKUP [backup-4]/wat/test.me.6\n'
             ' backup-2 <- 1 files (60)\n'
             ' backup-4 <- 3 files (170)\n'
             'DONE'), res)
@@ -703,6 +707,10 @@ class TestBackups(IsolatedAsyncioTestCase):
         res = await hoard_cmd.backups.assign(available_only=False)
         self.assertEqual([
             'set: / with 2/2 media',
+            'BACKUP [backup-2]/test.me.4',
+            'BACKUP [backup-2]/test.me.5',
+            'BACKUP [backup-1]/wat/test.me.2',
+            'BACKUP [backup-1]/wat/test.me.6',
             ' backup-1 <- 2 files (93)',
             ' backup-2 <- 2 files (137)',
             'DONE'], res.splitlines())
@@ -742,6 +750,8 @@ class TestBackups(IsolatedAsyncioTestCase):
         res = await hoard_cmd.backups.assign(available_only=True)
         self.assertEqual([
             'set: / with 1/2 media',
+            'BACKUP [backup-1]/test.me.4',
+            'BACKUP [backup-1]/test.me.5',
             ' backup-1 <- 2 files (137)',
             'DONE'], res.splitlines())
 
@@ -764,6 +774,10 @@ class TestBackups(IsolatedAsyncioTestCase):
         res = await hoard_cmd.backups.assign(available_only=False)
         self.assertEqual([
             'set: / with 2/2 media',
+            'BACKUP [backup-2]/test.me.4',
+            'BACKUP [backup-2]/test.me.5',
+            'BACKUP [backup-1]/wat/test.me.2',
+            'BACKUP [backup-1]/wat/test.me.6',
             ' backup-1 <- 2 files (93)',
             ' backup-2 <- 2 files (137)',
             'DONE'], res.splitlines())
@@ -779,5 +793,7 @@ class TestBackups(IsolatedAsyncioTestCase):
         res = await hoard_cmd.backups.assign(available_only=False)
         self.assertEqual([
             'set: / with 2/2 media',
+            'BACKUP [backup-1]/wat/test.me.2',
+            'BACKUP [backup-1]/wat/test.me.6',
             ' backup-1 <- 2 files (93)',
             'DONE'], res.splitlines())

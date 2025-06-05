@@ -382,8 +382,8 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
             'Remote repo-incoming-name current=f0355b staging=3d1726 desired=None',
             'Remote repo-partial-name current=f9bfc2 staging=f9bfc2 desired=f9bfc2',
             'repo-full-name:',
- 'REMOTE_COPY [repo-backup-name] test.me.5',
- 'REMOTE_COPY [repo-backup-name] wat/test.me.6',
+            'REMOTE_COPY [repo-backup-name] test.me.5',
+            'REMOTE_COPY [repo-backup-name] wat/test.me.6',
             'repo-full-name:',
             'After:',
             'Remote repo-backup-name current=ea749c staging=3a0889 desired=ea749c',
@@ -435,6 +435,7 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
         res = await hoard_cmd.backups.assign(available_only=False)
         self.assertEqual([
             'set: / with 1/1 media',
+            'REASSIGN [repo-backup-name] /wat/test.me.3 to /wat2/test.me.3',
             'DONE'], res.splitlines())
 
     async def test_moving_files_twice_fallbacks_to_get(self):

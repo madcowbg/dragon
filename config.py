@@ -71,6 +71,7 @@ class HoardRemote:
     def __hash__(self):
         return hash(self.uuid)
 
+
 class HoardRemotes:
     def __init__(self, doc: Dict[str, Any]):
         self.doc = doc
@@ -84,6 +85,9 @@ class HoardRemotes:
 
     def names_map(self):
         return dict((props["name"], remote) for remote, props in self.doc.items() if "name" in props)
+
+    def __contains__(self, remote_uuid: str) -> bool:
+        return remote_uuid in self.doc
 
     def __getitem__(self, remote_uuid: str) -> Optional[HoardRemote]:
         return HoardRemote(remote_uuid, self.doc[remote_uuid]) if remote_uuid in self.doc else None
