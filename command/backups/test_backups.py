@@ -155,7 +155,7 @@ class TestBackups(IsolatedAsyncioTestCase):
             'repo-incoming-name:\n'
             'TO_CLEANUP (is in 1) /test.me.4\n'
             'TO_RETAIN (needed in 1 [repo-full-name]) /test.me.5\n'
-            'TO_CLEANUP (is in 1) /wat/test.me.3\n'
+            'TO_CLEANUP (is in 0) /wat/test.me.3\n'
             'TO_RETAIN (needed in 1 [repo-full-name]) /wat/test.me.6\n'
             'DONE'), res)
 

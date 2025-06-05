@@ -26,7 +26,7 @@ from command.fast_path import FastPosixPath
 from command.files.command import execute_files_push
 from command.hoard import Hoard
 from command.pathing import HoardPathing
-from command.pending_file_ops import FileOp, get_pending_operations, CleanupFile, GetFile, CopyFile, MoveFile
+from command.pending_file_ops import FileOp, DEPRECATED_get_pending_operations, CleanupFile, GetFile, CopyFile, MoveFile
 from config import HoardRemote, latency_order, ConnectionLatency, ConnectionSpeed, CaveType
 from contents.hoard import HoardContents, MovesAndCopies
 from contents.hoard_props import HoardFileProps
@@ -109,7 +109,7 @@ class HoardContentsPendingToSyncFile(Tree[FolderNode[FileOp]]):
         async with self.hoard.open_contents(create_missing=False) as hoard_contents:
             moves_and_copies = MovesAndCopies(hoard_contents)
             self.op_tree = FolderTree(
-                get_pending_operations(hoard_contents, self.remote.uuid, moves_and_copies),
+                DEPRECATED_get_pending_operations(hoard_contents, self.remote.uuid, moves_and_copies),
                 lambda op: op.hoard_file.as_posix())
 
         self.counts = await aggregate_counts(self.op_tree)
