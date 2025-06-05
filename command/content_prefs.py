@@ -1,6 +1,8 @@
 import logging
 from typing import List, Optional, Generator, Dict, Iterable
 
+from propcache import cached_property
+
 from command.fast_path import FastPosixPath
 from command.pathing import HoardPathing, is_path_available
 from command.pending_file_ops import HACK_create_from_hoard_props
@@ -65,20 +67,30 @@ class Presence:
     def __init__(self, hoard_contents: HoardContents):
         self.hoard_contents = hoard_contents
 
+    @cached_property
+    def _current(self):
         roots = self.hoard_contents.env.roots(write=False)
         with self.hoard_contents.env.objects(write=False) as objects:
-            self._current = dict(
+            return dict(
                 (remote.uuid, LookupTable[ObjectID](
                     compute_path_lookup_table(objects, roots[remote.uuid].current), decode_bytes_to_object_id))
                 for remote in self.hoard_contents.hoard_config.remotes.all())
 
-            self._desired = dict(
+    @cached_property
+    def _desired(self):
+        roots = self.hoard_contents.env.roots(write=False)
+        with self.hoard_contents.env.objects(write=False) as objects:
+            return dict(
                 (remote.uuid, LookupTable[ObjectID](
                     compute_path_lookup_table(objects, roots[remote.uuid].desired), decode_bytes_to_object_id))
                 for remote in self.hoard_contents.hoard_config.remotes.all())
 
-            self._hoard = LookupTable[ObjectID](
-                    compute_path_lookup_table(objects, roots["HOARD"].desired), decode_bytes_to_object_id)
+    @cached_property
+    def _hoard(self):
+        roots = self.hoard_contents.env.roots(write=False)
+        with self.hoard_contents.env.objects(write=False) as objects:
+            return LookupTable[ObjectID](
+                compute_path_lookup_table(objects, roots["HOARD"].desired), decode_bytes_to_object_id)
 
     def in_current(self, hoard_file: FastPosixPath, file_obj: FileObject) -> Iterable[str]:
         assert isinstance(file_obj, FileObject)
