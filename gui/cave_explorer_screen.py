@@ -156,11 +156,14 @@ class HoardContentsPendingToSyncFile(Tree[NodeID]):
                 event.node.add(folder_label.append(" ").append(cnts_label), data=child_id)
             else:  # is a file
                 child_pending_ops = self.pending_ops_calculator[child_id]
-                stat = (child_pending_ops.size if self.show_size else child_pending_ops.count)
-                op_type = \
-                    "GET" if stat.to_obtain > 0 else \
-                        "CLEANUP" if stat.to_delete else \
-                            "CHANGE" if stat.to_change else "UNKNOWN?!"
+                if child_pending_ops.count.to_obtain > 0:
+                    op_type = "GET"
+                elif child_pending_ops.count.to_delete > 0:
+                    op_type =  "CLEANUP"
+                elif child_pending_ops.count.to_change > 0:
+                    op_type = "CHANGE"
+                else:
+                    op_type = "UNKNOWN?!"
                 event.node.add_leaf(f"{op_type}: {child_name}", data=child_id)
 
 

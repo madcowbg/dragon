@@ -10,7 +10,7 @@ from command.fast_path import FastPosixPath
 from command.hoard import Hoard
 from command.pathing import HoardPathing
 from command.pending_file_ops import HACK_create_from_hoard_props
-from config import HoardRemote
+from config import HoardRemote, HoardConfig
 from contents.hoard import MovesAndCopies, HoardContents
 from contents.hoard_props import HoardFileStatus, HoardFileProps
 from lmdb_storage.deferred_operations import remove_from_desired_tree, add_to_desired_tree, HoardDeferredOperations, \
@@ -227,6 +227,28 @@ class HoardCommandBackups:
                 out.write("DONE")
                 return out.getvalue()
 
+    async def reuse(self):
+        logging.info("Loading config")
+        config = self.hoard.config()
+        pathing = HoardPathing(config, self.hoard.paths())
+
+        logging.info(f"Loading hoard...")
+        async with self.hoard.open_contents(create_missing=False).writeable() as hoard:
+            with StringIO() as out:
+                self._do_reuse(config, hoard, pathing, out)
+                return out.getvalue()
+
+    def _do_reuse(self, config: HoardConfig, hoard: HoardContents, pathing: HoardPathing, out: TextIO) -> None:
+        presence = Presence(hoard)
+        for backup_set in BackupSet.all(
+                config, pathing, hoard, self.hoard.available_remotes(), presence):
+            out.write(
+                f"set: {backup_set.mounted_at}"
+                f" with {len(backup_set.available_backups)}/{len(backup_set.backups)} media\n")
+
+            logging.info("Enabling files that are possibly the result of rename operations.")
+            reuse_already_existing_files(backup_set, hoard, out)
+
     async def assign(self, available_only: bool):
         logging.info("Loading config")
         config = self.hoard.config()
@@ -238,15 +260,7 @@ class HoardCommandBackups:
                 added_cnt: Dict[HoardRemote, int] = dict()
                 added_size: Dict[HoardRemote, int] = dict()
 
-                presence = Presence(hoard)
-                for backup_set in BackupSet.all(
-                        config, pathing, hoard, self.hoard.available_remotes(), presence):
-                    out.write(
-                        f"set: {backup_set.mounted_at}"
-                        f" with {len(backup_set.available_backups)}/{len(backup_set.backups)} media\n")
-
-                    logging.info("Enabling files that are possibly the result of rename operations.")
-                    reuse_already_existing_files(backup_set, hoard, out)
+                self._do_reuse(config, hoard, pathing, out)
 
                 logging.info("Recomputing presence...")
                 presence = Presence(hoard)
