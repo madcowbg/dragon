@@ -19,7 +19,7 @@ from contents.repo import RepoContentsConfig
 from lmdb_storage.cached_calcs import AppCachedCalculator
 from lmdb_storage.file_object import BlobObject, FileObject
 from lmdb_storage.lookup_tables import LookupTable, compute_lookup_table, decode_bytes_to_intpath, \
-    compute_difference_lookup_table, CompressedPath
+    compute_difference_lookup_table, CompressedPath, get_path_string
 from lmdb_storage.object_store import ObjectStorage
 from lmdb_storage.operations.fast_association import FastAssociation
 from lmdb_storage.operations.generator import TreeGenerator
@@ -304,6 +304,12 @@ class MovesAndCopies:
     def get_paths_in_hoard_expanded(self, desired_id: ObjectID) -> Iterable[FastPosixPath]:
         with self.parent.env.objects(write=False) as objects:
             return list(self._lookup_hoard_desired.get_paths(desired_id, objects.__getitem__))
+
+    def get_paths_in_hoard(self, desired_id: ObjectID) -> Iterable[CompressedPath]:
+        return list(self._lookup_hoard_desired[desired_id])
+
+    def resolve_on_hoard(self, compressed_path: CompressedPath, objects: Objects) -> FastPosixPath:
+        return get_path_string(self._lookup_hoard_desired.root_id, compressed_path, objects.__getitem__)
 
     def get_remote_copies(self, skip_uuid: str, desired_id: ObjectID) -> Iterable[Tuple[str, List[CompressedPath]]]:
         for uuid in self._lookup_current.keys():

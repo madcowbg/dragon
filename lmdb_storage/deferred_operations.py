@@ -12,9 +12,9 @@ from contents.hoard import HoardContents
 from lmdb_storage.file_object import FileObject
 from lmdb_storage.object_serialization import write_stored_object, read_stored_object
 from lmdb_storage.tree_iteration import dfs
-from lmdb_storage.tree_object import StoredObject, ObjectType
+from lmdb_storage.tree_object import StoredObject, ObjectType, ObjectID, MaybeObjectID
 from lmdb_storage.tree_operations import remove_child
-from lmdb_storage.tree_structure import add_file_object
+from lmdb_storage.tree_structure import add_file_object, Objects
 from util import group_to_dict
 
 BRANCH_CURRENT = "current"
@@ -98,14 +98,7 @@ class HoardDeferredOperations:
                     raise ValueError(f"Unknown branch '{branch}'")
 
                 with self._parent.env.objects(write=False) as objects:
-                    loaded_objs: Dict[str, FileObject] = {}
-                    with alive_bar(title="Loading existing tree") as bar:
-                        for path, obj_type, obj_id, obj, _ in dfs(objects, "", repo_root_id):
-                            if obj_type == ObjectType.BLOB:
-                                obj: FileObject
-                                assert path not in loaded_objs
-                                loaded_objs[path] = obj
-                                bar()
+                    loaded_objs = mklist_from_tree(objects, repo_root_id)
 
                 for item in alive_it(deferred_items_for_uuid_and_branch, title="Making changes to tree"):
                     file_obj: StoredObject = read_stored_object(item.stored_obj_id, item.stored_obj_data)
@@ -121,8 +114,8 @@ class HoardDeferredOperations:
                             logging.info("Trying to delete non-existent file %s", item.hoard_file)
 
                 with self._parent.env.objects(write=True) as objects:
-                    new_repo_root_id = objects.mktree_from_tuples(sorted(loaded_objs.items()), alive_it=alive_it) if len(
-                        loaded_objs) > 0 else None
+                    new_repo_root_id = objects.mktree_from_tuples(
+                        sorted(loaded_objs.items()), alive_it=alive_it) if len(loaded_objs) > 0 else None
 
                 if new_repo_root_id == repo_root_id:
                     logging.error(
@@ -139,6 +132,18 @@ class HoardDeferredOperations:
         logging.info(f"Cleaning deferred queue...")
         with self:
             self.clear_queue()  # we are in the same transaction
+
+
+def mklist_from_tree(objects: Objects, repo_root_id: MaybeObjectID) -> dict[str, FileObject]:
+    loaded_objs: Dict[str, FileObject] = {}
+    with alive_bar(title="Loading existing tree") as bar:
+        for path, obj_type, obj_id, obj, _ in dfs(objects, "", repo_root_id):
+            if obj_type == ObjectType.BLOB:
+                obj: FileObject
+                assert path not in loaded_objs
+                loaded_objs[path] = obj
+                bar()
+    return loaded_objs
 
 
 def add_to_current_tree_file_obj(

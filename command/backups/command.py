@@ -1,6 +1,6 @@
 import logging
 from io import StringIO
-from typing import Dict, Tuple, Callable
+from typing import Dict, Tuple, Callable, Any, TextIO
 
 from alive_progress import alive_it, alive_bar
 
@@ -10,10 +10,12 @@ from command.hoard import Hoard
 from command.pathing import HoardPathing
 from command.pending_file_ops import HACK_create_from_hoard_props
 from config import HoardRemote
-from contents.hoard import MovesAndCopies
+from contents.hoard import MovesAndCopies, HoardContents
 from contents.hoard_props import HoardFileStatus, HoardFileProps
-from lmdb_storage.deferred_operations import remove_from_desired_tree, add_to_desired_tree, HoardDeferredOperations
-from lmdb_storage.file_object import BlobObject
+from lmdb_storage.deferred_operations import remove_from_desired_tree, add_to_desired_tree, HoardDeferredOperations, \
+    mklist_from_tree
+from lmdb_storage.file_object import BlobObject, FileObject
+from lmdb_storage.lookup_tables import CompressedPath
 from lmdb_storage.object_serialization import construct_tree_object
 from lmdb_storage.operations.types import Transformation
 from lmdb_storage.operations.util import ByRoot
@@ -22,6 +24,52 @@ from lmdb_storage.tree_object import ObjectID, StoredObject, TreeObject, MaybeOb
 from lmdb_storage.tree_structure import Objects
 from resolve_uuid import resolve_remote_uuid
 from util import format_size, format_percent, group_to_dict, safe_hex
+
+
+def reuse_already_existing_files(backup_set: BackupSet, hoard: HoardContents, out: TextIO) -> None:
+    moves_and_copies = MovesAndCopies(hoard)
+    for repo in backup_set.backups.values():
+        repo_root = hoard.env.roots(write=False)[repo.uuid]
+
+        with hoard.env.objects(write=False) as objects:
+            desired_tree_objs = mklist_from_tree(objects, repo_root.desired)
+
+            with alive_bar(title="Computing reassignments") as bar:
+                for hoard_path, diff_type, current_id, desired_id, _ in zip_dfs(
+                        objects, '', repo_root.current, repo_root.desired, drilldown_same=False):
+                    bar()
+                    if diff_type == DiffType.RIGHT_MISSING:
+                        current_obj = objects[current_id]
+                        if current_obj.object_type == ObjectType.TREE:
+                            continue
+
+                        logging.debug(
+                            "Reconsidering file %s scheduled for deletion in %s.", hoard_path, repo.uuid)
+
+                        requested_paths_in_hoard: list[CompressedPath] = list(
+                            moves_and_copies.get_paths_in_hoard(current_id))
+
+                        if len(requested_paths_in_hoard) == 0:
+                            logging.debug("File not in hoard, skipping...")
+                            continue
+
+                        if len(requested_paths_in_hoard) > 1:
+                            # todo maybe spread it around? hoard shouldn't contain many copies, but still
+                            logging.info("File %s is %s>1 paths")
+
+                        destination_path = moves_and_copies.resolve_on_hoard(requested_paths_in_hoard[0], objects)
+                        logging.debug("Preparing to assign %s to %s", hoard_path, destination_path)
+
+                        out.write(f"REASSIGN [{repo.name}] {hoard_path} to {destination_path.as_posix()}\n")
+                        desired_tree_objs[destination_path.as_posix()] = current_obj
+
+        with hoard.env.objects(write=True) as objects:
+            new_desired_root = objects.mktree_from_tuples(
+                sorted(desired_tree_objs.items()), alive_it=alive_it) \
+                if len(desired_tree_objs) > 0 else None
+
+        hoard.env.roots(write=True)[repo.uuid].desired = new_desired_root
+    assert not HoardDeferredOperations(hoard).have_deferred_ops()
 
 
 class HoardCommandBackups:
@@ -139,42 +187,7 @@ class HoardCommandBackups:
                         f"set: {backup_set.mounted_at} with {len(backup_set.available_backups)}/{len(backup_set.backups)} media\n")
 
                     logging.info("Enabling files that are possibly the result of rename operations.")
-                    moves_and_copies = MovesAndCopies(hoard)
-
-                    for repo in backup_set.backups.values():
-                        repo_root = hoard.env.roots(write=False)[repo.uuid]
-
-                        # Iterable[Tuple[str, DiffType, ObjectID | None, ObjectID | None, SkipFun]]
-                        with hoard.env.objects(write=False) as objects:
-                            for hoard_path, diff_type, current_id, desired_id, _ in zip_dfs(
-                                    objects, '', repo_root.current, repo_root.desired, drilldown_same=False):
-                                if diff_type == DiffType.RIGHT_MISSING:
-                                    current_obj = objects[current_id]
-                                    if current_obj.object_type == ObjectType.TREE:
-                                        continue
-
-                                    logging.debug(
-                                        "Reconsidering file %s scheduled for deletion in %s.", hoard_path, repo.uuid)
-
-                                    requested_paths_in_hoard = list(
-                                        moves_and_copies.get_paths_in_hoard_expanded(current_id))
-
-                                    if len(requested_paths_in_hoard) == 0:
-                                        logging.debug("File not in hoard, skipping...")
-                                        continue
-
-                                    if len(requested_paths_in_hoard) > 1:
-                                        # todo maybe spread it around? hoard shouldn't contain many copies, but still
-                                        logging.info("File %s is %s>1 paths")
-
-                                    destination_path = requested_paths_in_hoard[0]
-                                    logging.debug("Assigning %s to %s", hoard_path, destination_path)
-
-                                    out.write(f"REASSIGN [{repo.name}] {hoard_path} to {destination_path}\n")
-                                    add_to_desired_tree(hoard, repo.uuid, destination_path.as_posix(), current_obj)
-
-                    logging.info("Running deferred operations after reassignment...")
-                    HoardDeferredOperations(hoard).apply_deferred_queue()
+                    reuse_already_existing_files(backup_set, hoard, out)
 
                     logging.info(
                         f"Considering backup set at {backup_set.mounted_at} with {len(backup_set.backups)} media")
