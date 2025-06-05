@@ -254,29 +254,42 @@ class MovesAndCopies:
     def __init__(self, parent: "HoardContents") -> None:
         self.parent = parent
 
+    @cached_property
+    def _lookup_current(self) -> Dict[str, LookupTable[CompressedPath]]:
         roots = self.parent.env.roots(write=False)
-
-        with parent.env.objects(write=False) as objects:
-            self._lookup_current: Dict[str, LookupTable[CompressedPath]] = dict(
+        with self.parent.env.objects(write=False) as objects:
+            return dict(
                 (remote.uuid, LookupTable[CompressedPath](
                     compute_lookup_table(objects, roots[remote.uuid].current), decode_bytes_to_intpath))
-                for remote in parent.hoard_config.remotes.all())
+                for remote in self.parent.hoard_config.remotes.all())
 
-            self._lookup_desired_but_not_current: Dict[str, LookupTable[CompressedPath]] = dict(
+    @cached_property
+    def _lookup_desired_but_not_current(self) -> Dict[str, LookupTable[CompressedPath]]:
+        roots = self.parent.env.roots(write=False)
+        with self.parent.env.objects(write=False) as objects:
+            return dict(
                 (remote.uuid, LookupTable[CompressedPath](
                     compute_difference_lookup_table(
                         objects, roots[remote.uuid].desired, roots[remote.uuid].current),
                     decode_bytes_to_intpath))
-                for remote in parent.hoard_config.remotes.all())
+                for remote in self.parent.hoard_config.remotes.all())
 
-            self._lookup_current_but_not_desired: Dict[str, LookupTable[CompressedPath]] = dict(
+    @cached_property
+    def _lookup_current_but_not_desired(self) -> Dict[str, LookupTable[CompressedPath]]:
+        roots = self.parent.env.roots(write=False)
+        with self.parent.env.objects(write=False) as objects:
+            return dict(
                 (remote.uuid, LookupTable[CompressedPath](
                     compute_difference_lookup_table(
                         objects, roots[remote.uuid].current, roots[remote.uuid].desired),
                     decode_bytes_to_intpath))
-                for remote in parent.hoard_config.remotes.all())
+                for remote in self.parent.hoard_config.remotes.all())
 
-            self._lookup_hoard_desired = LookupTable[CompressedPath](
+    @cached_property
+    def _lookup_hoard_desired(self) -> LookupTable[CompressedPath]:
+        roots = self.parent.env.roots(write=False)
+        with self.parent.env.objects(write=False) as objects:
+            return LookupTable[CompressedPath](
                 compute_difference_lookup_table(
                     objects, roots["HOARD"].desired, roots["HOARD"].current),
                 decode_bytes_to_intpath)
