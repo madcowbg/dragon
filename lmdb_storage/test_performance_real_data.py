@@ -6,16 +6,14 @@ from timeit import default_timer
 from typing import Tuple, Iterable, List, Callable
 from unittest.async_case import IsolatedAsyncioTestCase
 
-import varint
-
 from command.fast_path import FastPosixPath
 from command.hoard import Hoard
 from contents.hoard import HoardFilesIterator, HoardContents
 from dragon import TotalCommand
 from lmdb_storage.file_object import FileObject
 from lmdb_storage.lookup_tables import LookupTable
-from lmdb_storage.lookup_tables_paths import fast_dfs, lookup_paths, get_path_string, compute_obj_id_to_path_lookup_table, \
-    decode_bytes_to_intpath
+from lmdb_storage.lookup_tables_paths import fast_compressed_path_dfs, lookup_paths, get_path_string, \
+    compute_obj_id_to_path_lookup_table, decode_bytes_to_intpath
 from lmdb_storage.tree_object import ObjectType, ObjectID, StoredObject, TreeObject
 from util import format_size
 
@@ -138,7 +136,7 @@ class TestPerformance(IsolatedAsyncioTestCase):
                 start = default_timer()
                 files = 0
                 all_files = list()
-                for tmp_path, obj_type, obj_id, stored_obj, _ in fast_dfs(objects, bytearray(), root_id):
+                for tmp_path, obj_type, obj_id, stored_obj, _ in fast_compressed_path_dfs(objects, bytearray(), root_id):
                     if obj_type == ObjectType.BLOB:
                         all_files.append(obj_id)
                 #

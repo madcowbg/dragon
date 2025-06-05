@@ -13,33 +13,43 @@ from util import format_size
 from varint import encode, decode_buffer
 
 
-def fast_dfs(
+def fast_compressed_path_dfs(
         objects: Objects, compressed_path: bytearray,
         obj_id: bytes) -> Iterable[Tuple[bytearray, ObjectType, ObjectID, StoredObject, SkipFun]]:
-    if obj_id is None:
-        return
-    assert type(obj_id) is bytes
+    return fast_path(objects, compressed_path, obj_id, lambda p, i, s: p + encode(i))
 
-    obj = objects[obj_id]
-    if obj is None:
-        raise ValueError(f"{obj_id} is missing!")
 
-    if not isinstance(obj, TreeObject):
-        yield compressed_path, ObjectType.BLOB, obj_id, obj, CANT_SKIP
+def fast_path[P](
+        objects: Objects, start_path: P, start_id: MaybeObjectID, state_extender: Callable[[P, int, str], P],
+) -> Iterable[Tuple[P, ObjectType, ObjectID, StoredObject, SkipFun]]:
+    if start_id is None:
         return
 
-    should_skip = False
+    def _fast_path(path: P, obj_id: ObjectID) -> Iterable[Tuple[P, ObjectType, ObjectID, StoredObject, SkipFun]]:
+        assert type(obj_id) is bytes
 
-    def skip_children() -> None:
-        nonlocal should_skip
-        should_skip = True
+        obj = objects[obj_id]
+        if obj is None:
+            raise ValueError(f"{obj_id} is missing!")
 
-    yield compressed_path, ObjectType.TREE, obj_id, obj, skip_children
-    if should_skip:
-        return
+        if not isinstance(obj, TreeObject):
+            yield path, ObjectType.BLOB, obj_id, obj, CANT_SKIP
+            return
 
-    for child_idx, (child_name, child_id) in enumerate(obj.children):
-        yield from fast_dfs(objects, compressed_path + encode(child_idx), child_id)
+        should_skip = False
+
+        def skip_children() -> None:
+            nonlocal should_skip
+            should_skip = True
+
+        yield path, ObjectType.TREE, obj_id, obj, skip_children
+        if should_skip:
+            return
+
+        for child_idx, (child_name, child_id) in enumerate(obj.children):
+            yield from _fast_path(state_extender(path, child_idx, child_name), child_id)
+
+    yield from _fast_path(start_path, start_id)
 
 
 def fast_zip_left_dfs(
@@ -114,7 +124,7 @@ def compute_obj_id_to_path_lookup_table(objects: Objects, root_id: MaybeObjectID
     files = 0
     packed_lookup_data = bytearray(root_id)
     tmp_path: bytearray
-    for tmp_path, obj_type, obj_id, stored_obj, _ in fast_dfs(objects, bytearray(), root_id):
+    for tmp_path, obj_type, obj_id, stored_obj, _ in fast_compressed_path_dfs(objects, bytearray(), root_id):
         if obj_type == ObjectType.BLOB:
             files += 1
             assert len(obj_id) == 20
