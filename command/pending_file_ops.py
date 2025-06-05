@@ -18,6 +18,8 @@ class GetFile:  # fixme needs to know if we would fetch or update a current file
         self.hoard_file = hoard_file
         self.hoard_props = hoard_props
 
+        self.file_obj = HACK_create_from_hoard_props(hoard_props)
+
 
 class CopyFile:
     def __init__(self, hoard_file: FastPosixPath, hoard_props: HoardFileProps):
@@ -25,6 +27,7 @@ class CopyFile:
         self.hoard_file = hoard_file
         self.hoard_props = hoard_props
 
+        self.file_obj = HACK_create_from_hoard_props(hoard_props)
 
 class MoveFile:
     def __init__(
@@ -36,12 +39,16 @@ class MoveFile:
         self.old_hoard_file = old_hoard_file
         self.old_hoard_props = old_hoard_props
 
+        self.file_obj = HACK_create_from_hoard_props(hoard_props)
+
 
 class CleanupFile:
     def __init__(self, hoard_file: FastPosixPath, hoard_props: HoardFileProps):
         assert hoard_file.is_absolute()
         self.hoard_file = hoard_file
         self.hoard_props = hoard_props
+
+        self.file_obj = HACK_create_from_hoard_props(hoard_props)
 
 class RetainFile:
     def __init__(self, hoard_file: FastPosixPath, file_obj: FileObject, needed_locations: List[str]):

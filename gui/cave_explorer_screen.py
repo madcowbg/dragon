@@ -26,7 +26,8 @@ from command.fast_path import FastPosixPath
 from command.files.command import execute_files_push
 from command.hoard import Hoard
 from command.pathing import HoardPathing
-from command.pending_file_ops import FileOp, DEPRECATED_get_pending_operations, CleanupFile, GetFile, CopyFile, MoveFile
+from command.pending_file_ops import FileOp, DEPRECATED_get_pending_operations, CleanupFile, GetFile, CopyFile, \
+    MoveFile, RetainFile
 from config import HoardRemote, latency_order, ConnectionLatency, ConnectionSpeed, CaveType
 from contents.hoard import HoardContents, MovesAndCopies
 from contents.hoard_props import HoardFileProps
@@ -34,7 +35,7 @@ from contents.repo_props import FileDesc
 from exceptions import RepoOpeningFailed, WrongRepo, MissingRepoContents, MissingRepo
 from gui.app_config import config, _write_config
 from gui.confirm_action_screen import ConfirmActionScreen
-from gui.folder_tree import FolderNode, FolderTree, aggregate_on_nodes
+from gui.folder_tree import DEPRECATED_FolderNode, DEPRECATED_FolderTree, DEPRECATED_aggregate_on_nodes
 from gui.progress_reporting import StartProgressReporting, MarkProgressReporting, progress_reporting_it, \
     ProgressReporting, progress_reporting_bar
 from util import group_to_dict, format_count, format_size, snake_case
@@ -86,18 +87,20 @@ class Action(abc.ABC):
     def execute(self, local_uuid: str, content_prefs: ContentPrefs, hoard: HoardContents, out: StringIO) -> None: pass
 
 
-class HoardContentsPendingToSyncFile(Tree[FolderNode[FileOp]]):
+class HoardContentsPendingToSyncFile(Tree[DEPRECATED_FolderNode[FileOp]]):
     hoard: Hoard | None = reactive(None)
     remote: HoardRemote | None = reactive(None, recompose=True)
 
-    op_tree: FolderTree[FileOp] | None
+    DEPRECATED_op_tree: DEPRECATED_FolderTree[FileOp] | None
+
+
 
     def __init__(self, hoard: Hoard, remote: HoardRemote):
         super().__init__('Pending file sync ')
         self.hoard = hoard
         self.remote = remote
 
-        self.op_tree = None
+        self.DEPRECATED_op_tree = None
         self.counts = None
         self.ops_cnt = None
 
@@ -108,21 +111,21 @@ class HoardContentsPendingToSyncFile(Tree[FolderNode[FileOp]]):
     async def on_mount(self):
         async with self.hoard.open_contents(create_missing=False) as hoard_contents:
             moves_and_copies = MovesAndCopies(hoard_contents)
-            self.op_tree = FolderTree(
+            self.DEPRECATED_op_tree = DEPRECATED_FolderTree(
                 DEPRECATED_get_pending_operations(hoard_contents, self.remote.uuid, moves_and_copies),
                 lambda op: op.hoard_file.as_posix())
 
-        self.counts = await aggregate_counts(self.op_tree)
-        self.ops_cnt = aggregate_on_nodes(
-            self.op_tree,
-            lambda node: {op_to_str(node.data): node.data.hoard_props.size if self.show_size else 1},
+        self.counts = await aggregate_counts(self.DEPRECATED_op_tree)
+        self.ops_cnt = DEPRECATED_aggregate_on_nodes(
+            self.DEPRECATED_op_tree,
+            lambda node: {op_to_str(node.data): node.data.file_obj.size if self.show_size else 1},
             sum_dicts)
 
-        self.root.data = self.op_tree.root
-        self.root.label = self.root.label.append(self._pretty_folder_label_descriptor(self.op_tree.root))
+        self.root.data = self.DEPRECATED_op_tree.root
+        self.root.label = self.root.label.append(self._pretty_folder_label_descriptor(self.DEPRECATED_op_tree.root))
         self.root.expand()
 
-    def on_tree_node_expanded(self, event: Tree[FolderNode[FileOp]].NodeExpanded):
+    def on_tree_node_expanded(self, event: Tree[DEPRECATED_FolderNode[FileOp]].NodeExpanded):
         if event.node in self.expanded:
             return
 
@@ -136,7 +139,7 @@ class HoardContentsPendingToSyncFile(Tree[FolderNode[FileOp]]):
         for _, op in event.node.data.files.items():
             event.node.add_leaf(f"{type(op.data)}: {op.data.hoard_file}", data=op)
 
-    def _pretty_folder_label_descriptor(self, folder: FolderNode[FileOp]) -> Text:
+    def _pretty_folder_label_descriptor(self, folder: DEPRECATED_FolderNode[FileOp]) -> Text:
         cnts_label = Text().append("{")
         pending = self.ops_cnt[folder]
         if pending is not None:
@@ -149,7 +152,7 @@ class HoardContentsPendingToSyncFile(Tree[FolderNode[FileOp]]):
 
 
 async def aggregate_counts(op_tree):
-    return aggregate_on_nodes(
+    return DEPRECATED_aggregate_on_nodes(
         op_tree,
         lambda op: 1,
         lambda old, new: new if old is None else old + new)
@@ -164,6 +167,8 @@ def op_to_str(op: FileOp):
         return "move", 3
     elif isinstance(op, CleanupFile):
         return "cleanup", 4
+    elif isinstance(op, RetainFile):
+        return "retain", 5
     else:
         raise ValueError(f"Unsupported op: {op}")
 
@@ -253,16 +258,16 @@ class HoardContentsPendingToPull(Tree[Action]):
                     #     actions = list(calculate_actions(preferences, resolutions, pathing, hoard_config, other_out))
                     #     logging.debug(other_out.getvalue())
 
-            self.op_tree = FolderTree[Action](actions, lambda action: action.file_being_acted_on.as_posix())
+            self.DEPRECATED_op_tree = DEPRECATED_FolderTree[Action](actions, lambda action: action.file_being_acted_on.as_posix())
 
-            self.counts = await aggregate_counts(self.op_tree)
-            self.ops_cnt = aggregate_on_nodes(
-                self.op_tree,
-                lambda node: {pull_op_to_str(node.data): node.data.hoard_props.size if self.show_size else 1},
+            self.counts = await aggregate_counts(self.DEPRECATED_op_tree)
+            self.ops_cnt = DEPRECATED_aggregate_on_nodes(
+                self.DEPRECATED_op_tree,
+                lambda node: {pull_op_to_str(node.data): node.data.file_obj.size if self.show_size else 1},
                 sum_dicts)
 
             self.root.label = PENDING_TO_PULL + f" ({len(actions)})"
-            self.root.data = self.op_tree.root
+            self.root.data = self.DEPRECATED_op_tree.root
 
             self.post_message(Tree.NodeExpanded(self.root))
 
@@ -288,7 +293,7 @@ class HoardContentsPendingToPull(Tree[Action]):
             assert self.op_tree is not None
             self._expand_subtree(event.node)
 
-    def _expand_subtree(self, node: TreeNode[FolderNode[Action]]):
+    def _expand_subtree(self, node: TreeNode[DEPRECATED_FolderNode[Action]]):
         for _, folder in node.data.folders.items():
             folder_name = Text().append(folder.name).append(" ").append(f"({self.counts[folder]})", style="dim")
             cnts_label = self._pretty_folder_label_descriptor(folder)
@@ -297,7 +302,7 @@ class HoardContentsPendingToPull(Tree[Action]):
         for _, file in node.data.files.items():
             node.add_leaf(f"{type(file.data)}: {file.data.file_being_acted_on}", data=node.data)
 
-    def _pretty_folder_label_descriptor(self, folder: FolderNode[FileOp]) -> Text:
+    def _pretty_folder_label_descriptor(self, folder: DEPRECATED_FolderNode[FileOp]) -> Text:
         cnts_label = Text().append("{")
         pending = self.ops_cnt[folder]
         if pending is not None:
