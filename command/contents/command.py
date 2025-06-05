@@ -23,12 +23,13 @@ from contents.repo import RepoContents
 from exceptions import MissingRepoContents, MissingRepo
 from lmdb_storage.cached_calcs import CachedCalculator
 from lmdb_storage.deferred_operations import remove_from_desired_tree, HoardDeferredOperations
+from lmdb_storage.file_object import FileObject
 from lmdb_storage.operations.three_way_merge import TransformedRoots
 from lmdb_storage.pull_contents import merge_contents, commit_merged
 from lmdb_storage.roots import Root, Roots
 from lmdb_storage.tree_calculation import RecursiveCalculator, StatGetter
 from lmdb_storage.tree_iteration import zip_trees_dfs
-from lmdb_storage.tree_object import ObjectType, TreeObject, ObjectID, MaybeObjectID
+from lmdb_storage.tree_object import ObjectType, TreeObject, ObjectID, MaybeObjectID, StoredObject
 from lmdb_storage.tree_operations import get_child, graft_in_tree
 from lmdb_storage.tree_structure import Objects
 from resolve_uuid import resolve_remote_uuid
@@ -281,49 +282,52 @@ async def print_pending_pull(
         logging.debug(other_out.getvalue())
 
 
+@dataclasses.dataclass()
+class Difference:
+    to_obtain: int = 0
+    to_delete: int = 0
+    to_change: int = 0
+    children: List[Tuple[str, "Difference"]] | None = None
+
+type MaybeDifference = Difference | None
+
+def get_current_file_differences(show_size: bool) -> Callable[[tuple[FileObject | None, FileObject | None]], Difference | None]:
+    def fun(node_obj: NodeObj) -> MaybeDifference:
+
+        current, desired = node_obj
+        if current is None:
+            return Difference(to_obtain=desired.size if show_size else 1)
+        if desired is None:
+            return Difference(to_delete=current.size if show_size else 1)
+        if current != desired:
+            return Difference(to_change=desired.size if show_size else 1)
+        assert current == desired
+        return None
+    return fun
+
+class DifferencesCalculator(RecursiveCalculator[NodeID, NodeObj, MaybeDifference]):
+    def __init__(self, hoard_contents: HoardContents, value_getter: Callable[[NodeObj], Difference]):
+        super().__init__(value_getter, CurrentAndDesiredReader(hoard_contents))
+
+    def aggregate(self, items: Iterable[Tuple[str, MaybeDifference]]) -> MaybeDifference:
+        items = list(items)
+        result = Difference(
+            to_obtain=sum(i.to_obtain for _, i in items if i),
+            to_delete=sum(i.to_delete for _, i in items if i),
+            to_change=sum(i.to_change for _, i in items if i),
+            children=[(name, i) for name, i in items if i])
+        return result if result.to_change + result.to_delete + result.to_obtain > 0 else None
+
+    def for_none(self, calculator: StatGetter[NodeID, NodeObj]) -> MaybeDifference:
+        return None
+
 def print_differences_of_desired_vs_current(
         hoard_contents: HoardContents, uuid: str, max_depth: int, show_size: bool, out: TextIO):
     with StringIO() as other_out:
         roots = hoard_contents.env.roots(write=False)
         repo_root = roots[uuid]
 
-        @dataclasses.dataclass()
-        class Difference:
-            to_obtain: int = 0
-            to_delete: int = 0
-            to_change: int = 0
-            children: List[Tuple[str, "Difference"]] | None = None
-
-        type MaybeDifference = Difference | None
-
-        def get_current_file_differences(node_obj: NodeObj) -> MaybeDifference:
-            current, desired = node_obj
-            if current is None:
-                return Difference(to_obtain=desired.size if show_size else 1)
-            if desired is None:
-                return Difference(to_delete=current.size if show_size else 1)
-            if current != desired:
-                return Difference(to_change=desired.size if show_size else 1)
-            assert current == desired
-            return None
-
-        class DifferencesCalculator(RecursiveCalculator[NodeID, NodeObj, MaybeDifference]):
-            def __init__(self, value_getter: Callable[[NodeObj], Difference]):
-                super().__init__(value_getter, CurrentAndDesiredReader(hoard_contents))
-
-            def aggregate(self, items: Iterable[Tuple[str, MaybeDifference]]) -> MaybeDifference:
-                items = list(items)
-                result = Difference(
-                    to_obtain=sum(i.to_obtain for _, i in items if i),
-                    to_delete=sum(i.to_delete for _, i in items if i),
-                    to_change=sum(i.to_change for _, i in items if i),
-                    children=[(name, i) for name, i in items if i])
-                return result if result.to_change + result.to_delete + result.to_obtain > 0 else None
-
-            def for_none(self, calculator: StatGetter[NodeID, NodeObj]) -> MaybeDifference:
-                return None
-
-        agg = CachedCalculator(DifferencesCalculator(get_current_file_differences))
+        agg = CachedCalculator(DifferencesCalculator(hoard_contents, get_current_file_differences(show_size)))
         computed: Difference = agg[NodeID(repo_root.current, repo_root.desired)]
 
         def write_out(depth: int, current_name: str, current_diff: Difference) -> None:

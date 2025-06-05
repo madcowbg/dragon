@@ -19,7 +19,8 @@ from textual.widgets import Tree, Static, Header, Footer, Select, RichLog, Butto
 from textual.widgets._tree import TreeNode
 
 from command.content_prefs import ContentPrefs
-from command.contents.command import execute_pull, init_pull_preferences, pull_prefs_to_restore_from_hoard
+from command.contents.command import execute_pull, init_pull_preferences, pull_prefs_to_restore_from_hoard, \
+    MaybeDifference, DifferencesCalculator, get_current_file_differences
 from command.contents.comparisons import copy_local_staging_data_to_hoard, \
     commit_local_staging
 from command.fast_path import FastPosixPath
@@ -30,7 +31,9 @@ from command.pending_file_ops import FileOp, DEPRECATED_get_pending_operations, 
     MoveFile, RetainFile
 from config import HoardRemote, latency_order, ConnectionLatency, ConnectionSpeed, CaveType
 from contents.hoard import HoardContents, MovesAndCopies
+from contents.hoard_connection import ReadonlyHoardContentsConn
 from contents.hoard_props import HoardFileProps
+from contents.recursive_stats_calc import NodeID, CurrentAndDesiredReader, NodeObj
 from contents.repo_props import FileDesc
 from exceptions import RepoOpeningFailed, WrongRepo, MissingRepoContents, MissingRepo
 from gui.app_config import config, _write_config
@@ -38,6 +41,9 @@ from gui.confirm_action_screen import ConfirmActionScreen
 from gui.folder_tree import DEPRECATED_FolderNode, DEPRECATED_FolderTree, DEPRECATED_aggregate_on_nodes
 from gui.progress_reporting import StartProgressReporting, MarkProgressReporting, progress_reporting_it, \
     ProgressReporting, progress_reporting_bar
+from lmdb_storage.cached_calcs import CachedCalculator
+from lmdb_storage.tree_calculation import RecursiveSumCalculator
+from lmdb_storage.tree_object import TreeObject
 from util import group_to_dict, format_count, format_size, snake_case
 
 
@@ -87,66 +93,102 @@ class Action(abc.ABC):
     def execute(self, local_uuid: str, content_prefs: ContentPrefs, hoard: HoardContents, out: StringIO) -> None: pass
 
 
-class HoardContentsPendingToSyncFile(Tree[DEPRECATED_FolderNode[FileOp]]):
+def sum_ops(diffs: MaybeDifference) -> int:
+    return (diffs.to_change + diffs.to_obtain + diffs.to_delete) if diffs else 0
+
+
+class HoardContentsPendingToSyncFile(Tree[NodeID]):
     hoard: Hoard | None = reactive(None)
     remote: HoardRemote | None = reactive(None, recompose=True)
 
-    DEPRECATED_op_tree: DEPRECATED_FolderTree[FileOp] | None
+    files_diff_tree_root: NodeID | None
 
+    hoard_conn: ReadonlyHoardContentsConn | None
+    hoard_contents: HoardContents | None
+    current_and_desired_reader: CurrentAndDesiredReader | None
 
+    counts_calculator: CachedCalculator[NodeID, MaybeDifference] | None
+    pending_ops_calculator: CachedCalculator[NodeID, MaybeDifference] | None
 
     def __init__(self, hoard: Hoard, remote: HoardRemote):
         super().__init__('Pending file sync ')
         self.hoard = hoard
         self.remote = remote
 
-        self.DEPRECATED_op_tree = None
-        self.counts = None
-        self.ops_cnt = None
+        self.hoard_contents = None
+        self.current_and_desired_reader = None
+        self.counts_calculator = None
+        self.pending_ops_calculator = None
+
+        self.files_diff_tree_root = None
 
         self.show_size = True
 
         self.expanded = set()
 
     async def on_mount(self):
-        async with self.hoard.open_contents(create_missing=False) as hoard_contents:
-            moves_and_copies = MovesAndCopies(hoard_contents)
-            self.DEPRECATED_op_tree = DEPRECATED_FolderTree(
-                DEPRECATED_get_pending_operations(hoard_contents, self.remote.uuid, moves_and_copies),
-                lambda op: op.hoard_file.as_posix())
+        self.hoard_conn = self.hoard.open_contents(create_missing=False)
+        self.hoard_contents = await self.hoard_conn.__aenter__()
+        self.current_and_desired_reader = CurrentAndDesiredReader(self.hoard_contents)
 
-        self.counts = await aggregate_counts(self.DEPRECATED_op_tree)
-        self.ops_cnt = DEPRECATED_aggregate_on_nodes(
-            self.DEPRECATED_op_tree,
-            lambda node: {op_to_str(node.data): node.data.file_obj.size if self.show_size else 1},
-            sum_dicts)
+        repo_root = self.hoard_contents.env.roots(write=False)[self.remote.uuid]
+        self.files_diff_tree_root: NodeID = NodeID(repo_root.desired, repo_root.current)
+        self.pending_ops_calculator = CachedCalculator(
+            DifferencesCalculator(self.hoard_contents, get_current_file_differences(self.show_size)))
+        self.counts_calculator = CachedCalculator(
+            DifferencesCalculator(self.hoard_contents, get_current_file_differences(False)))  # fixme merge calcs
 
-        self.root.data = self.DEPRECATED_op_tree.root
-        self.root.label = self.root.label.append(self._pretty_folder_label_descriptor(self.DEPRECATED_op_tree.root))
+        self.root.data = self.files_diff_tree_root
+        self.root.label = (
+            self.root.label.append(f"({sum_ops(self.counts_calculator[self.files_diff_tree_root])})")
+            .append(self._pretty_folder_label_descriptor(self.files_diff_tree_root)))
         self.root.expand()
 
-    def on_tree_node_expanded(self, event: Tree[DEPRECATED_FolderNode[FileOp]].NodeExpanded):
+    def on_tree_node_expanded(self, event: Tree[NodeID].NodeExpanded):
         if event.node in self.expanded:
             return
 
         self.expanded.add(event.node)
 
-        for _, folder in event.node.data.folders.items():
-            folder_label = Text().append(folder.name).append(" ").append(f"({self.counts[folder]})", style="dim")
-            cnts_label = self._pretty_folder_label_descriptor(folder)
-            event.node.add(folder_label.append(" ").append(cnts_label), data=folder)
+        folder_node_id: NodeID = event.node.data
+        for child_name, child_id in self.current_and_desired_reader.children(folder_node_id):
+            child_obj = self.current_and_desired_reader.convert(child_id)
 
-        for _, op in event.node.data.files.items():
-            event.node.add_leaf(f"{type(op.data)}: {op.data.hoard_file}", data=op)
+            if isinstance(child_obj[0], TreeObject) or isinstance(child_obj[1], TreeObject):
+                # is a folder
+                folder_label = Text().append(child_name).append(" ") \
+                    .append(f"({sum_ops(self.counts_calculator[child_id])})", style="dim")
+                cnts_label = self._pretty_folder_label_descriptor(child_id)
+                event.node.add(folder_label.append(" ").append(cnts_label), data=child_id)
+            else:  # is a file
+                child_pending_ops = self.pending_ops_calculator[child_id]
+                op_type = \
+                    "GET" if child_pending_ops.to_obtain > 0 else \
+                        "CLEANUP" if child_pending_ops.to_delete else \
+                            "CHANGE" if child_pending_ops.to_change else "UNKNOWN?!"
+                event.node.add_leaf(f"{op_type}: {child_name}", data=child_id)
 
-    def _pretty_folder_label_descriptor(self, folder: DEPRECATED_FolderNode[FileOp]) -> Text:
+
+    def _pretty_folder_label_descriptor(self, folder: NodeID) -> Text:
+        folder_diffs = self.pending_ops_calculator[folder]
+
+        def format_num(it):
+            return format_size(it) if self.show_size else format_count(it)
+
         cnts_label = Text().append("{")
-        pending = self.ops_cnt[folder]
-        if pending is not None:
-            for (op_type, order), v in sorted(pending.items(), key=lambda x: x[0][1]):
-                cnts_label.append(
-                    op_type, style="green" if op_type == "get" else "strike dim" if op_type == "cleanup" else "none") \
-                    .append(" ").append(format_size(v) if self.show_size else format_count(v), style="dim").append(",")
+        if folder_diffs is not None:
+            if folder_diffs.to_obtain > 0:
+                cnts_label.append("get", style="green") \
+                    .append(" ").append(format_num(folder_diffs.to_obtain), style="dim").append(",")
+
+            if folder_diffs.to_delete > 0:
+                cnts_label.append("rm", style="strike dim") \
+                    .append(" ").append(format_num(folder_diffs.to_delete), style="dim").append(",")
+
+            if folder_diffs.to_change > 0:
+                cnts_label.append("modify", style="none") \
+                    .append(" ").append(format_num(folder_diffs.to_change), style="dim").append(",")
+
         cnts_label.append("}")
         return cnts_label
 
@@ -258,7 +300,8 @@ class HoardContentsPendingToPull(Tree[Action]):
                     #     actions = list(calculate_actions(preferences, resolutions, pathing, hoard_config, other_out))
                     #     logging.debug(other_out.getvalue())
 
-            self.DEPRECATED_op_tree = DEPRECATED_FolderTree[Action](actions, lambda action: action.file_being_acted_on.as_posix())
+            self.DEPRECATED_op_tree = DEPRECATED_FolderTree[Action](actions, lambda
+                action: action.file_being_acted_on.as_posix())
 
             self.counts = await aggregate_counts(self.DEPRECATED_op_tree)
             self.ops_cnt = DEPRECATED_aggregate_on_nodes(
