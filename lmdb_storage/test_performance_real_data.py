@@ -13,8 +13,9 @@ from command.hoard import Hoard
 from contents.hoard import HoardFilesIterator, HoardContents
 from dragon import TotalCommand
 from lmdb_storage.file_object import FileObject
-from lmdb_storage.lookup_tables import fast_dfs, decode_bytes_to_intpath, LookupTable, get_path_string, \
-    compute_lookup_table
+from lmdb_storage.lookup_tables import LookupTable
+from lmdb_storage.lookup_tables_paths import fast_dfs, lookup_paths, get_path_string, compute_obj_id_to_path_lookup_table, \
+    decode_bytes_to_intpath
 from lmdb_storage.tree_object import ObjectType, ObjectID, StoredObject, TreeObject
 from util import format_size
 
@@ -83,7 +84,7 @@ class TestPerformance(IsolatedAsyncioTestCase):
 
                 start = default_timer()
 
-                packed_lookup_data = compute_lookup_table(objects, root_id)
+                packed_lookup_data = compute_obj_id_to_path_lookup_table(objects, root_id)
 
                 sys.stdout.write(f"\ncreating packed data time: {default_timer() - start}s\n")
                 sys.stdout.write(f"packed_data: {format_size(len(packed_lookup_data))}\n")
@@ -168,7 +169,7 @@ class TestPerformance(IsolatedAsyncioTestCase):
                         paths_and_files = list(_resolve(lookup_table, k, read_with_cache))
                         paths_in_hoard += len(paths_and_files)
 
-                        paths_as_string = list(lookup_table.get_paths(k, read_with_cache))
+                        paths_as_string = list(lookup_paths(lookup_table, k, read_with_cache))
                         assert len(paths_as_string) == len(paths_and_files)
 
                         if len(paths_and_files) == 0:

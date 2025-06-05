@@ -18,8 +18,9 @@ from contents.recursive_stats_calc import UsedSizeCalculator, NodeID, QueryStats
 from contents.repo import RepoContentsConfig
 from lmdb_storage.cached_calcs import AppCachedCalculator
 from lmdb_storage.file_object import BlobObject, FileObject
-from lmdb_storage.lookup_tables import LookupTable, compute_lookup_table, decode_bytes_to_intpath, \
-    compute_difference_lookup_table, CompressedPath, get_path_string
+from lmdb_storage.lookup_tables import LookupTable, CompressedPath
+from lmdb_storage.lookup_tables_paths import lookup_paths, get_path_string, compute_obj_id_to_path_lookup_table, \
+    compute_obj_id_to_path_difference_lookup_table, decode_bytes_to_intpath
 from lmdb_storage.object_store import ObjectStorage
 from lmdb_storage.operations.fast_association import FastAssociation
 from lmdb_storage.operations.generator import TreeGenerator
@@ -260,7 +261,7 @@ class MovesAndCopies:
         with self.parent.env.objects(write=False) as objects:
             return dict(
                 (remote.uuid, LookupTable[CompressedPath](
-                    compute_lookup_table(objects, roots[remote.uuid].current), decode_bytes_to_intpath))
+                    compute_obj_id_to_path_lookup_table(objects, roots[remote.uuid].current), decode_bytes_to_intpath))
                 for remote in self.parent.hoard_config.remotes.all())
 
     @cached_property
@@ -269,7 +270,7 @@ class MovesAndCopies:
         with self.parent.env.objects(write=False) as objects:
             return dict(
                 (remote.uuid, LookupTable[CompressedPath](
-                    compute_difference_lookup_table(
+                    compute_obj_id_to_path_difference_lookup_table(
                         objects, roots[remote.uuid].desired, roots[remote.uuid].current),
                     decode_bytes_to_intpath))
                 for remote in self.parent.hoard_config.remotes.all())
@@ -280,7 +281,7 @@ class MovesAndCopies:
         with self.parent.env.objects(write=False) as objects:
             return dict(
                 (remote.uuid, LookupTable[CompressedPath](
-                    compute_difference_lookup_table(
+                    compute_obj_id_to_path_difference_lookup_table(
                         objects, roots[remote.uuid].current, roots[remote.uuid].desired),
                     decode_bytes_to_intpath))
                 for remote in self.parent.hoard_config.remotes.all())
@@ -290,7 +291,7 @@ class MovesAndCopies:
         roots = self.parent.env.roots(write=False)
         with self.parent.env.objects(write=False) as objects:
             return LookupTable[CompressedPath](
-                compute_difference_lookup_table(
+                compute_obj_id_to_path_difference_lookup_table(
                     objects, roots["HOARD"].desired, roots["HOARD"].current),
                 decode_bytes_to_intpath)
 
@@ -299,11 +300,11 @@ class MovesAndCopies:
 
     def get_existing_paths_in_uuid_expanded(self, in_uuid: str, desired_id: ObjectID) -> Iterable[FastPosixPath]:
         with self.parent.env.objects(write=False) as objects:
-            return list(self._lookup_current[in_uuid].get_paths(desired_id, objects.__getitem__))
+            return list(lookup_paths(self._lookup_current[in_uuid], desired_id, objects.__getitem__))
 
     def get_paths_in_hoard_expanded(self, desired_id: ObjectID) -> Iterable[FastPosixPath]:
         with self.parent.env.objects(write=False) as objects:
-            return list(self._lookup_hoard_desired.get_paths(desired_id, objects.__getitem__))
+            return list(lookup_paths(self._lookup_hoard_desired, desired_id, objects.__getitem__))
 
     def get_paths_in_hoard(self, desired_id: ObjectID) -> Iterable[CompressedPath]:
         return list(self._lookup_hoard_desired[desired_id])
@@ -327,7 +328,7 @@ class MovesAndCopies:
                 if uuid == skip_uuid:
                     continue
 
-                existing_paths = list(self._lookup_current[uuid].get_paths(desired_id, objects.__getitem__))
+                existing_paths = list(lookup_paths(self._lookup_current[uuid], desired_id, objects.__getitem__))
                 if len(existing_paths) > 0:
                     yield uuid, existing_paths
 
@@ -339,7 +340,7 @@ class MovesAndCopies:
 
     def whereis_cleanup(self, uuid: str, current_id: ObjectID):
         with self.parent.env.objects(write=False) as objects:
-            return list(self._lookup_current_but_not_desired[uuid].get_paths(current_id, objects.__getitem__))
+            return list(lookup_paths(self._lookup_current_but_not_desired[uuid], current_id, objects.__getitem__))
 
 
 class ReadonlyHoardFSObjects:
