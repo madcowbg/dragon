@@ -122,8 +122,5 @@ class HoardFileProps:
     def get_status(self, repo_uuid: str) -> HoardFileStatus:
         return self.presence.get(repo_uuid, HoardFileStatus.UNKNOWN)
 
-    def repos_having_status(self, *statuses: HoardFileStatus) -> List[str]:
-        return self.by_statuses(*statuses)
-
     def get_move_file(self, repo_uuid: str) -> str:
         raise NotImplementedError()

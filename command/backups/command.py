@@ -5,7 +5,7 @@ from typing import Dict, Tuple, Callable, Any, TextIO
 from alive_progress import alive_it, alive_bar
 
 import command.fast_path
-from command.content_prefs import BackupSet, MIN_REPO_PERC_FREE
+from command.content_prefs import BackupSet, MIN_REPO_PERC_FREE, Presence
 from command.hoard import Hoard
 from command.pathing import HoardPathing
 from command.pending_file_ops import HACK_create_from_hoard_props
@@ -89,7 +89,7 @@ class HoardCommandBackups:
         logging.info(f"Loading hoard...")
         async with self.hoard.open_contents(create_missing=False) as hoard:
 
-            backup_sets = BackupSet.all(config, pathing, hoard, self.hoard.available_remotes())
+            backup_sets = BackupSet.all(config, pathing, hoard, self.hoard.available_remotes(), Presence(hoard))
             backup_media = set(sum((list(b.backups.keys()) for b in backup_sets), []))
             count_backup_media = len(backup_media)
 
@@ -140,7 +140,7 @@ class HoardCommandBackups:
 
         logging.info(f"Loading hoard...")
         async with self.hoard.open_contents(create_missing=False).writeable() as hoard:
-            backup_sets = BackupSet.all(config, pathing, hoard, self.hoard.available_remotes())
+            backup_sets = BackupSet.all(config, pathing, hoard, self.hoard.available_remotes(), Presence(hoard))
 
             with StringIO() as out:
                 for backup_set in backup_sets:
@@ -183,10 +183,8 @@ class HoardCommandBackups:
 
         logging.info(f"Loading hoard...")
         async with self.hoard.open_contents(create_missing=False).writeable() as hoard:
-            backup_sets = BackupSet.all(config, pathing, hoard, self.hoard.available_remotes())
-
             with StringIO() as out:
-                for backup_set in backup_sets:
+                for backup_set in BackupSet.all(config, pathing, hoard, self.hoard.available_remotes(), Presence(hoard)):
                     added_cnt: Dict[HoardRemote, int] = dict()
                     added_size: Dict[HoardRemote, int] = dict()
                     out.write(
@@ -195,6 +193,7 @@ class HoardCommandBackups:
                     logging.info("Enabling files that are possibly the result of rename operations.")
                     reuse_already_existing_files(backup_set, hoard, out)
 
+                for backup_set in BackupSet.all(config, pathing, hoard, self.hoard.available_remotes(), Presence(hoard)):
                     logging.info(
                         f"Considering backup set at {backup_set.mounted_at} with {len(backup_set.backups)} media")
                     hoard_file: command.fast_path.FastPosixPath
@@ -267,7 +266,7 @@ class HoardCommandBackups:
         logging.info(f"Loading hoard...")
         async with self.hoard.open_contents(create_missing=False).writeable() as hoard:
             available_remotes = self.hoard.available_remotes()
-            backup_sets = BackupSet.all(config, pathing, hoard, available_remotes)
+            backup_sets = BackupSet.all(config, pathing, hoard, available_remotes, Presence(hoard))
 
             with StringIO() as out:
                 for backup_set in backup_sets:

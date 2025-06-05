@@ -8,7 +8,7 @@ from typing import List, Dict, Any, Optional, Callable, Awaitable, Tuple, TextIO
 import humanize
 from alive_progress import alive_it
 
-from command.content_prefs import ContentPrefs
+from command.content_prefs import ContentPrefs, Presence
 from command.contents.comparisons import copy_local_staging_data_to_hoard, \
     commit_local_staging
 from command.contents.pull_preferences import PullPreferences, PullIntention
@@ -107,7 +107,7 @@ async def execute_pull(
     config = hoard.config()
     uuid = preferences.local_uuid
     pathing = HoardPathing(config, hoard.paths())
-    content_prefs = ContentPrefs(config, pathing, hoard_contents, hoard.available_remotes())
+    content_prefs = ContentPrefs(config, pathing, hoard_contents, hoard.available_remotes(), Presence(hoard_contents))
 
     try:
         connected_repo = hoard.connect_to_repo(uuid, require_contents=True)
@@ -496,7 +496,8 @@ class HoardCommandContents:
                     out.write(f"Status of {remote_obj.name}:\n")
 
                     pathing = HoardPathing(config, self.hoard.paths())
-                    content_prefs = ContentPrefs(config, pathing, hoard_contents, self.hoard.available_remotes())
+                    content_prefs = ContentPrefs(
+                        config, pathing, hoard_contents, self.hoard.available_remotes(), Presence(hoard_contents))
 
                     abs_staging_root_id = copy_local_staging_data_to_hoard(
                         hoard_contents, current_contents, self.hoard.config())

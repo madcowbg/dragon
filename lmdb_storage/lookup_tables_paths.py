@@ -182,10 +182,10 @@ def decode_bytes_to_object_id(packed_lookup_data: bytes, idx: int) -> Tuple[int,
 def compute_path_lookup_table(objects: Objects, root_id: MaybeObjectID) -> bytearray:
     files = 0
     packed_lookup_data = bytearray()
-    for tmp_path, obj_type, obj_id, stored_obj, _ in fast_path_dfs(objects, "", root_id, lambda p, i, c: p + c):
+    for tmp_path, obj_type, obj_id, stored_obj, _ in fast_path_dfs(objects, "", root_id, lambda p, i, c: p + "/" + c):
         if obj_type == ObjectType.BLOB:
             files += 1
-            digested_path = hashlib.sha1(tmp_path.encode()).digest()
+            digested_path = digest_path(tmp_path)
             assert len(digested_path) == 20
 
             packed_lookup_data += digested_path + encode(len(obj_id)) + obj_id
@@ -193,3 +193,7 @@ def compute_path_lookup_table(objects: Objects, root_id: MaybeObjectID) -> bytea
     sys.stdout.write(
         f"decoded_paths: {files}, {format_size(len(packed_lookup_data) // files) if files > 0 else 0} per file\n")
     return packed_lookup_data
+
+
+def digest_path(tmp_path: str) -> bytes:
+    return hashlib.sha1(tmp_path.encode()).digest()

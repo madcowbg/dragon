@@ -1,14 +1,16 @@
 import logging
-from typing import List, Optional, Generator, Dict
+from typing import List, Optional, Generator, Dict, Iterable
 
 from command.fast_path import FastPosixPath
 from command.pathing import HoardPathing, is_path_available
+from command.pending_file_ops import HACK_create_from_hoard_props
 from config import HoardRemote, HoardConfig, CaveType
 from contents.hoard import HoardContents
 from contents.hoard_props import HoardFileStatus, HoardFileProps
 from contents.repo_props import FileDesc
+from lmdb_storage.file_object import FileObject
 from lmdb_storage.lookup_tables import LookupTable
-from lmdb_storage.lookup_tables_paths import decode_bytes_to_object_id, compute_path_lookup_table
+from lmdb_storage.lookup_tables_paths import decode_bytes_to_object_id, compute_path_lookup_table, digest_path
 from lmdb_storage.tree_object import ObjectID
 from util import format_percent, format_size
 
@@ -62,14 +64,35 @@ class Presence:
                     compute_path_lookup_table(objects, roots[remote.uuid].current), decode_bytes_to_object_id))
                 for remote in self.hoard_contents.hoard_config.remotes.all())
 
-    def __getitem__(self, path: FastPosixPath):
-        raise NotImplementedError()
+            self._desired = dict(
+                (remote.uuid, LookupTable[ObjectID](
+                    compute_path_lookup_table(objects, roots[remote.uuid].desired), decode_bytes_to_object_id))
+                for remote in self.hoard_contents.hoard_config.remotes.all())
+
+            self._hoard = dict(
+                (remote.uuid, LookupTable[ObjectID](
+                    compute_path_lookup_table(objects, roots["HOARD"].desired), decode_bytes_to_object_id))
+                for remote in self.hoard_contents.hoard_config.remotes.all())
+
+    def in_current(self, hoard_file: FastPosixPath, file_obj: FileObject) -> Iterable[str]:
+        for uuid, path_lookup_table in self._current.items():
+            possible_obj_id = path_lookup_table[digest_path(hoard_file.as_posix())]
+            assert len(possible_obj_id) <= 1  # fixme store object id, not a list of object ids...
+            if len(possible_obj_id) > 0 and possible_obj_id[0] == file_obj.file_id:
+                yield uuid
+
+    def in_desired(self, hoard_file: FastPosixPath, file_obj: FileObject) -> Iterable[str]:
+        for uuid, path_lookup_table in self._desired.items():
+            possible_obj_id = path_lookup_table[digest_path(hoard_file.as_posix())]
+            assert len(possible_obj_id) <= 1  # fixme store object id, not a list of object ids...
+            if len(possible_obj_id) > 0 and possible_obj_id[0] == file_obj.file_id:
+                yield uuid
 
 
 class BackupSet:
     def __init__(self, mounted_at: FastPosixPath, backups: List[HoardRemote], pathing: HoardPathing,
-                 hoard: HoardContents, available_remotes: List[str]):
-        # self.presence = Presence(hoard)
+                 hoard: HoardContents, available_remotes: List[str], presence: Presence):
+        self.presence = presence
 
         self.backups = dict((backup.uuid, backup) for backup in backups)
         self.available_backups = set(backup.uuid for backup in backups if backup.uuid in available_remotes)
@@ -138,9 +161,10 @@ class BackupSet:
         return remotes_to_remove
 
     def currently_scheduled_backups(self, hoard_file: FastPosixPath, hoard_props: HoardFileProps) -> List[HoardRemote]:
-        return [
-            self.backups[uuid] for uuid in hoard_props.repos_having_status(*STATUSES_DECLARED_TO_FETCH)
-            if uuid in self.backups and is_path_available(self.pathing, hoard_file, uuid)]
+        return sorted([
+            self.backups[uuid]
+            for uuid in self.presence.in_desired(hoard_file, HACK_create_from_hoard_props(hoard_props))
+            if uuid in self.backups and is_path_available(self.pathing, hoard_file, uuid)], key=lambda r: r.name)
 
     def reserve_new_backups(
             self, hoard_file: FastPosixPath, file_size: int, past_backups: List[HoardRemote],
@@ -183,28 +207,30 @@ class BackupSet:
         return good_remotes
 
     @staticmethod
-    def all(config: HoardConfig, pathing: HoardPathing, hoard: HoardContents, available_remotes: List[str]) -> List[
-        "BackupSet"]:
+    def all(config: HoardConfig, pathing: HoardPathing, hoard: HoardContents, available_remotes: List[str],
+            presence: Presence) -> List["BackupSet"]:
         sets: Dict[FastPosixPath, List[HoardRemote]] = dict()
         for remote in config.remotes.all():
             if remote.type == CaveType.BACKUP:
                 if remote.mounted_at not in sets:
                     sets[remote.mounted_at] = []
                 sets[remote.mounted_at].append(remote)
-        return [BackupSet(mounted_at, s, pathing, hoard, available_remotes) for mounted_at, s in sets.items()]
+        return [BackupSet(mounted_at, s, pathing, hoard, available_remotes, presence) for mounted_at, s in sets.items()]
 
 
 STATUSES_DECLARED_TO_FETCH = [HoardFileStatus.GET, HoardFileStatus.AVAILABLE]
 
 
 class ContentPrefs:
-    def __init__(self, config: HoardConfig, pathing: HoardPathing, hoard: HoardContents, available_remotes: List[str]):
+    def __init__(
+            self, config: HoardConfig, pathing: HoardPathing, hoard: HoardContents, available_remotes: List[str],
+            presence: Presence):
         self.config = config
         self._partials_with_fetch_new: List[HoardRemote] = [
             r for r in config.remotes.all() if
             r.type == CaveType.PARTIAL and r.fetch_new]
 
-        self._backup_sets = BackupSet.all(config, pathing, hoard, available_remotes)
+        self._backup_sets = BackupSet.all(config, pathing, hoard, available_remotes, presence)
         self.pathing = pathing
         self.hoard = hoard
 
