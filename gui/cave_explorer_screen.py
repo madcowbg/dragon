@@ -20,7 +20,7 @@ from textual.widgets._tree import TreeNode
 
 from command.content_prefs import ContentPrefs
 from command.contents.command import execute_pull, init_pull_preferences, pull_prefs_to_restore_from_hoard, \
-    MaybeDifference, DifferencesCalculator, get_current_file_differences
+    Difference, DifferencesCalculator, get_current_file_differences, Difference
 from command.contents.comparisons import copy_local_staging_data_to_hoard, \
     commit_local_staging
 from command.fast_path import FastPosixPath
@@ -41,7 +41,7 @@ from gui.confirm_action_screen import ConfirmActionScreen
 from gui.folder_tree import DEPRECATED_FolderNode, DEPRECATED_FolderTree, DEPRECATED_aggregate_on_nodes
 from gui.progress_reporting import StartProgressReporting, MarkProgressReporting, progress_reporting_it, \
     ProgressReporting, progress_reporting_bar
-from lmdb_storage.cached_calcs import CachedCalculator
+from lmdb_storage.cached_calcs import CachedCalculator, AppCachedCalculator
 from lmdb_storage.tree_calculation import RecursiveSumCalculator
 from lmdb_storage.tree_object import TreeObject
 from util import group_to_dict, format_count, format_size, snake_case
@@ -93,9 +93,6 @@ class Action(abc.ABC):
     def execute(self, local_uuid: str, content_prefs: ContentPrefs, hoard: HoardContents, out: StringIO) -> None: pass
 
 
-def sum_ops(diffs: MaybeDifference) -> int:
-    return (diffs.to_change + diffs.to_obtain + diffs.to_delete) if diffs else 0
-
 
 class HoardContentsPendingToSyncFile(Tree[NodeID]):
     hoard: Hoard | None = reactive(None)
@@ -107,8 +104,7 @@ class HoardContentsPendingToSyncFile(Tree[NodeID]):
     hoard_contents: HoardContents | None
     current_and_desired_reader: CurrentAndDesiredReader | None
 
-    counts_calculator: CachedCalculator[NodeID, MaybeDifference] | None
-    pending_ops_calculator: CachedCalculator[NodeID, MaybeDifference] | None
+    pending_ops_calculator: AppCachedCalculator[NodeID, Difference] | None
 
     def __init__(self, hoard: Hoard, remote: HoardRemote):
         super().__init__('Pending file sync ')
@@ -117,7 +113,6 @@ class HoardContentsPendingToSyncFile(Tree[NodeID]):
 
         self.hoard_contents = None
         self.current_and_desired_reader = None
-        self.counts_calculator = None
         self.pending_ops_calculator = None
 
         self.files_diff_tree_root = None
@@ -133,14 +128,13 @@ class HoardContentsPendingToSyncFile(Tree[NodeID]):
 
         repo_root = self.hoard_contents.env.roots(write=False)[self.remote.uuid]
         self.files_diff_tree_root: NodeID = NodeID(repo_root.desired, repo_root.current)
-        self.pending_ops_calculator = CachedCalculator(
-            DifferencesCalculator(self.hoard_contents, get_current_file_differences(self.show_size)))
-        self.counts_calculator = CachedCalculator(
-            DifferencesCalculator(self.hoard_contents, get_current_file_differences(False)))  # fixme merge calcs
+        self.pending_ops_calculator = AppCachedCalculator(
+            DifferencesCalculator(self.hoard_contents, get_current_file_differences),
+            Difference)
 
         self.root.data = self.files_diff_tree_root
         self.root.label = (
-            self.root.label.append(f"({sum_ops(self.counts_calculator[self.files_diff_tree_root])})")
+            self.root.label.append(f"({self.pending_ops_calculator[self.files_diff_tree_root].count.all})")
             .append(self._pretty_folder_label_descriptor(self.files_diff_tree_root)))
         self.root.expand()
 
@@ -157,15 +151,16 @@ class HoardContentsPendingToSyncFile(Tree[NodeID]):
             if isinstance(child_obj[0], TreeObject) or isinstance(child_obj[1], TreeObject):
                 # is a folder
                 folder_label = Text().append(child_name).append(" ") \
-                    .append(f"({sum_ops(self.counts_calculator[child_id])})", style="dim")
+                    .append(f"({self.pending_ops_calculator[child_id].count.all})", style="dim")
                 cnts_label = self._pretty_folder_label_descriptor(child_id)
                 event.node.add(folder_label.append(" ").append(cnts_label), data=child_id)
             else:  # is a file
                 child_pending_ops = self.pending_ops_calculator[child_id]
+                stat = (child_pending_ops.size if self.show_size else child_pending_ops.count)
                 op_type = \
-                    "GET" if child_pending_ops.to_obtain > 0 else \
-                        "CLEANUP" if child_pending_ops.to_delete else \
-                            "CHANGE" if child_pending_ops.to_change else "UNKNOWN?!"
+                    "GET" if stat.to_obtain > 0 else \
+                        "CLEANUP" if stat.to_delete else \
+                            "CHANGE" if stat.to_change else "UNKNOWN?!"
                 event.node.add_leaf(f"{op_type}: {child_name}", data=child_id)
 
 
@@ -177,17 +172,18 @@ class HoardContentsPendingToSyncFile(Tree[NodeID]):
 
         cnts_label = Text().append("{")
         if folder_diffs is not None:
-            if folder_diffs.to_obtain > 0:
+            stat = folder_diffs.size if self.show_size else folder_diffs.count
+            if folder_diffs.count.to_obtain > 0:
                 cnts_label.append("get", style="green") \
-                    .append(" ").append(format_num(folder_diffs.to_obtain), style="dim").append(",")
+                    .append(" ").append(format_num(stat.to_obtain), style="dim").append(",")
 
-            if folder_diffs.to_delete > 0:
+            if folder_diffs.count.to_delete > 0:
                 cnts_label.append("rm", style="strike dim") \
-                    .append(" ").append(format_num(folder_diffs.to_delete), style="dim").append(",")
+                    .append(" ").append(format_num(stat.to_delete), style="dim").append(",")
 
-            if folder_diffs.to_change > 0:
+            if folder_diffs.count.to_change > 0:
                 cnts_label.append("modify", style="none") \
-                    .append(" ").append(format_num(folder_diffs.to_change), style="dim").append(",")
+                    .append(" ").append(format_num(stat.to_change), style="dim").append(",")
 
         cnts_label.append("}")
         return cnts_label

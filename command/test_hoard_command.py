@@ -92,7 +92,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             'HOARD_FILE_ADDED /wat/test.me.twice'], res.splitlines())
 
         res = await hoard_cmd.contents.tree_differences("repo-in-local")
-        self.assertEqual(['Tree Differences up to level 3:', '/: GET: 1', 'DONE'], res.splitlines())
+        self.assertEqual(['Tree Differences up to level 3:', 'DONE'], res.splitlines())
 
         res = await hoard_cmd.contents.pull("repo-in-local")
         self.assertEqual((
@@ -1472,7 +1472,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         self.assertEqual(f"Added repo-full-name[{full_cave_cmd.current_uuid()}] at {join(tmpdir, 'repo-full')}!", res)
 
         res = await hoard_cmd.contents.tree_differences("repo-full-name")
-        self.assertEqual(['Tree Differences up to level 3:', '/: GET: 1', 'DONE'], res.splitlines())
+        self.assertEqual(['Tree Differences up to level 3:', 'DONE'], res.splitlines())
 
         res = await hoard_cmd.contents.pull(all=True)
         self.assertEqual((

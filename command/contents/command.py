@@ -1,6 +1,7 @@
 import dataclasses
 import logging
 import sys
+from functools import cached_property
 from io import StringIO
 from typing import List, Dict, Any, Optional, Callable, Awaitable, Tuple, TextIO, Iterable
 
@@ -283,43 +284,70 @@ async def print_pending_pull(
 
 
 @dataclasses.dataclass()
-class Difference:
+class DifferenceOfType:
     to_obtain: int = 0
     to_delete: int = 0
     to_change: int = 0
-    children: List[Tuple[str, "Difference"]] | None = None
 
-type MaybeDifference = Difference | None
+    @property
+    def all(self) -> int:
+        return self.to_obtain + self.to_delete + self.to_change
 
-def get_current_file_differences(show_size: bool) -> Callable[[tuple[FileObject | None, FileObject | None]], Difference | None]:
-    def fun(node_obj: NodeObj) -> MaybeDifference:
 
-        current, desired = node_obj
-        if current is None:
-            return Difference(to_obtain=desired.size if show_size else 1)
+@dataclasses.dataclass()
+class Difference:
+    considered: int
+
+    size: DifferenceOfType
+    count: DifferenceOfType
+
+    def should_store(self) -> bool:
+        return self.considered > 100
+
+
+def get_current_file_differences(node_obj: NodeObj) -> Difference:
+    current, desired = node_obj
+    if current is None:
         if desired is None:
-            return Difference(to_delete=current.size if show_size else 1)
-        if current != desired:
-            return Difference(to_change=desired.size if show_size else 1)
-        assert current == desired
-        return None
-    return fun
+            return Difference(considered=1, size=DifferenceOfType(), count=DifferenceOfType())
+        else:
+            return Difference(
+                considered=1, size=DifferenceOfType(to_obtain=desired.size), count=DifferenceOfType(to_obtain=1))
+    if desired is None:
+        return Difference(
+            considered=1, size=DifferenceOfType(to_delete=current.size), count=DifferenceOfType(to_delete=1))
+    if current != desired:
+        return Difference(
+            considered=1, size=DifferenceOfType(to_change=desired.size), count=DifferenceOfType(to_change=1))
+    assert current == desired
+    return Difference(considered=1, size=DifferenceOfType(), count=DifferenceOfType())
 
-class DifferencesCalculator(RecursiveCalculator[NodeID, NodeObj, MaybeDifference]):
+
+class DifferencesCalculator(RecursiveCalculator[NodeID, NodeObj, Difference]):
     def __init__(self, hoard_contents: HoardContents, value_getter: Callable[[NodeObj], Difference]):
         super().__init__(value_getter, CurrentAndDesiredReader(hoard_contents))
 
-    def aggregate(self, items: Iterable[Tuple[str, MaybeDifference]]) -> MaybeDifference:
+    def aggregate(self, items: Iterable[Tuple[str, Difference]]) -> Difference:
         items = list(items)
         result = Difference(
-            to_obtain=sum(i.to_obtain for _, i in items if i),
-            to_delete=sum(i.to_delete for _, i in items if i),
-            to_change=sum(i.to_change for _, i in items if i),
-            children=[(name, i) for name, i in items if i])
-        return result if result.to_change + result.to_delete + result.to_obtain > 0 else None
+            considered=sum(i.considered for _, i in items if i),
+            size=DifferenceOfType(
+                to_obtain=sum(i.size.to_obtain for _, i in items if i),
+                to_delete=sum(i.size.to_delete for _, i in items if i),
+                to_change=sum(i.size.to_change for _, i in items if i)),
+            count=DifferenceOfType(
+                to_obtain=sum(i.count.to_obtain for _, i in items if i),
+                to_delete=sum(i.count.to_delete for _, i in items if i),
+                to_change=sum(i.count.to_change for _, i in items if i)))
+        return result
 
-    def for_none(self, calculator: StatGetter[NodeID, NodeObj]) -> MaybeDifference:
-        return None
+    def for_none(self, calculator: StatGetter[NodeID, NodeObj]) -> Difference:
+        return Difference(considered=0, size=DifferenceOfType(), count=DifferenceOfType())
+
+    @cached_property
+    def stat_cache_key(self) -> bytes:
+        return "DifferencesCalculator-V06".encode()
+
 
 def print_differences_of_desired_vs_current(
         hoard_contents: HoardContents, uuid: str, max_depth: int, show_size: bool, out: TextIO):
@@ -327,32 +355,39 @@ def print_differences_of_desired_vs_current(
         roots = hoard_contents.env.roots(write=False)
         repo_root = roots[uuid]
 
-        agg = CachedCalculator(DifferencesCalculator(hoard_contents, get_current_file_differences(show_size)))
-        computed: Difference = agg[NodeID(repo_root.current, repo_root.desired)]
+        root_node_id = NodeID(repo_root.current, repo_root.desired)
 
-        def write_out(depth: int, current_name: str, current_diff: Difference) -> None:
-            if current_diff is None:
+        agg = CachedCalculator(DifferencesCalculator(hoard_contents, get_current_file_differences))
+        computed: Difference = agg[root_node_id]
+
+        reader: CurrentAndDesiredReader = agg.calculator.reader
+
+        def write_out(depth: int, current_name: str, current_id: NodeID, current_diff: Difference) -> None:
+            if current_diff.size.all == 0:
                 return
 
             as_str = []
-            if current_diff.to_obtain > 0:
-                as_str.append(f"GET: {format_count(current_diff.to_obtain)}")
-            if current_diff.to_delete > 0:
-                as_str.append(f"DELETE: {format_count(current_diff.to_delete)}")
-            if current_diff.to_change > 0:
-                as_str.append(f"CHANGE: {format_count(current_diff.to_change)}")
+            stat = current_diff.size if show_size else current_diff.count
+            if current_diff.count.to_obtain > 0:
+                as_str.append(f"GET: {format_count(stat.to_obtain)}")
+            if current_diff.count.to_delete > 0:
+                as_str.append(f"DELETE: {format_count(stat.to_delete)}")
+            if current_diff.count.to_change > 0:
+                as_str.append(f"CHANGE: {format_count(stat.to_change)}")
 
-            out.write(f'{" " * depth}{current_name}{"[D]" if current_diff.children else ""}: {", ".join(as_str)}\n')
+            out.write(
+                f'{" " * depth}{current_name}{"[D]" if reader.is_compound(current_id) else ""}: {", ".join(as_str)}\n')
 
             if depth >= max_depth:
                 return
 
-            if current_diff.children is not None:
-                for child_name, child_diff in current_diff.children:
-                    write_out(depth + 1, child_name, child_diff)
+            if reader.is_compound(current_id):
+                for child_name, child_id in reader.children(current_id):
+                    child_diff = agg[child_id]
+                    write_out(depth + 1, child_name, child_id, child_diff)
 
         out.write(f"Tree Differences up to level {max_depth}:\n")
-        write_out(0, "/", computed)
+        write_out(0, "/", root_node_id, computed)
 
         logging.debug(other_out.getvalue())
 
