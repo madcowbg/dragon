@@ -301,7 +301,7 @@ class MovesAndCopies:
         with self.parent.env.objects(write=False) as objects:
             return list(self._lookup_current[in_uuid].get_paths(desired_id, objects.__getitem__))
 
-    def get_existing_paths_in_hoard_expanded(self, desired_id: ObjectID) -> Iterable[FastPosixPath]:
+    def get_paths_in_hoard_expanded(self, desired_id: ObjectID) -> Iterable[FastPosixPath]:
         with self.parent.env.objects(write=False) as objects:
             return list(self._lookup_hoard_desired.get_paths(desired_id, objects.__getitem__))
 
@@ -351,12 +351,6 @@ class ReadonlyHoardFSObjects:
     def __getitem__(self, file_path: FastPosixPath) -> HoardFileProps:
         assert file_path.is_absolute()
         return hoard_file_props_from_tree(self.parent, file_path)
-
-    def by_fasthash(self, fasthash: str) -> Iterable[Tuple[FastPosixPath, HoardFileProps]]:
-        logging.error("Should not use this method, is too slow!")
-        for path, props in HoardFilesIterator.all(self.parent):
-            if props.fasthash == fasthash:
-                yield path, props
 
     def __iter__(self) -> Iterable[Tuple[FastPosixPath, HoardFileProps]]:
         yield from HoardFilesIterator.all(self.parent)

@@ -157,7 +157,7 @@ class HoardCommandBackups:
                                         "Reconsidering file %s scheduled for deletion in %s.", hoard_path, repo.uuid)
 
                                     requested_paths_in_hoard = list(
-                                        moves_and_copies.get_existing_paths_in_hoard_expanded(current_id))
+                                        moves_and_copies.get_paths_in_hoard_expanded(current_id))
 
                                     if len(requested_paths_in_hoard) == 0:
                                         logging.debug("File not in hoard, skipping...")

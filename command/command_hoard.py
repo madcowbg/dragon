@@ -16,7 +16,7 @@ from command.hoard import Hoard
 from command.pathing import HoardPathing
 from command.repo import ProspectiveRepo
 from config import HoardRemote, CavePath, CaveType, ConnectionSpeed, ConnectionLatency
-from contents.hoard import HoardContents
+from contents.hoard import HoardContents, MovesAndCopies
 from contents.hoard_props import HoardFileProps
 from contents.recursive_stats_calc import CachedReader, CompositeNodeID, NodeID, CompositeTreeReader, \
     composite_from_roots
@@ -387,6 +387,7 @@ class HoardCommand(object):
             if move:
                 junk_path.mkdir()
 
+            moves_and_copies = MovesAndCopies(hoard)
             copied, copied_dest, mismatched, errors, skipped = 0, 0, 0, 0, 0
             with StringIO() as out:
                 with alive_bar() as bar:
@@ -406,8 +407,10 @@ class HoardCommand(object):
                                 skipped += 1
                                 continue
 
-                            places: List[Tuple[FastPosixPath, HoardFileProps]] = list(
-                                hoard.fsobjects.by_fasthash(fasthash))
+                            file_obj = FileObject.create(fasthash=fasthash, size=size, md5=None)
+                            places: List[FastPosixPath] = list(
+                                moves_and_copies.get_paths_in_hoard_expanded(file_obj.file_id))
+
                             if len(places) == 0:
                                 mismatched += 1
 
@@ -429,7 +432,7 @@ class HoardCommand(object):
                             else:
                                 copied += 1
                                 while len(places) > 1:  # all but the last file...
-                                    hoard_filepath, hoard_props = places.pop()
+                                    hoard_filepath = places.pop()
 
                                     # use + because hoard paths are absolute!
                                     end_place = pathlib.Path(dest + hoard_filepath.as_posix())
@@ -448,7 +451,7 @@ class HoardCommand(object):
                                         out.write(f"E{end_place}\n")
 
                                 assert len(places) == 1
-                                hoard_filepath, hoard_props = places.pop()
+                                hoard_filepath = places.pop()
 
                                 # use + because hoard paths are absolute!
                                 end_place = pathlib.Path(dest + hoard_filepath.as_posix())
