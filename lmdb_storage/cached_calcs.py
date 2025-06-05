@@ -47,7 +47,7 @@ def app_stats_cache() -> StatsCache:
     return APP_STATS_CACHE
 
 
-APP_CACHE_LOG_RATIO = 1000
+APP_CACHE_LOG_RATIO = 10000
 
 
 class AppCachedCalculator[T, R](StatGetter[T, R]):
