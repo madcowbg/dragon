@@ -372,11 +372,6 @@ class ReadonlyHoardFSObjects:
             if props.get_status(repo_uuid) == HoardFileStatus.AVAILABLE:
                 yield path, props
 
-    def to_get_in_repo(self, repo_uuid: str) -> Iterable[Tuple[FastPosixPath, HoardFileProps]]:
-        for path, props in HoardFilesIterator.all(self.parent):
-            if props.get_status(repo_uuid) == HoardFileStatus.GET:
-                yield path, props
-
     async def in_folder(self, folder: FastPosixPath) -> AsyncGenerator[
         Tuple[FastPosixPath, HoardFileProps]]:
         assert custom_isabs(folder.as_posix())  # from 3.13 behavior change...
@@ -458,8 +453,8 @@ class ReadonlyHoardFSObjects:
                                 assert desired_obj.object_type == ObjectType.BLOB
                                 desired_obj: FileObject
 
-                                paths_to_move_inside_repo = moves_and_copies.get_existing_paths_in_uuid(remote.uuid,
-                                                                                                        desired_id)
+                                paths_to_move_inside_repo = moves_and_copies.get_existing_paths_in_uuid(
+                                    remote.uuid, desired_id)
                                 if len(paths_to_move_inside_repo) > 0:
                                     # can be moved/copied in repo
                                     can_be_moved_cnt += 1
@@ -559,16 +554,8 @@ class ReadonlyHoardFSObjects:
                     fullpath + "/" + child_name for child_name, child_obj in children
                     if child_obj.object_type == ObjectType.BLOB]
 
-    def current_at_repo(self, uuid: str) -> Iterable[Tuple[FastPosixPath, FileObject]]:
-        current_root_id = self.parent.env.roots(write=False)[uuid].current
-
-        yield from self._yield_all_files_in_tree(current_root_id)
-
     def desired_hoard(self) -> Iterable[Tuple[FastPosixPath, FileObject]]:
-        hoard_desired_id = self.parent.env.roots(write=False)["HOARD"].desired
-        yield from self._yield_all_files_in_tree(hoard_desired_id)
-
-    def _yield_all_files_in_tree(self, current_root_id: MaybeObjectID) -> Iterable[Tuple[FastPosixPath, FileObject]]:
+        current_root_id = self.parent.env.roots(write=False)["HOARD"].desired
         with self.parent.env.objects(write=False) as objects:
             for path, object_type, obj_id, obj, _ in dfs(objects, "", current_root_id):
                 if object_type == ObjectType.BLOB:
