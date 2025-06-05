@@ -18,7 +18,7 @@ from contents.recursive_stats_calc import UsedSizeCalculator, NodeID, QueryStats
 from contents.repo import RepoContentsConfig
 from lmdb_storage.cached_calcs import AppCachedCalculator
 from lmdb_storage.file_object import BlobObject, FileObject
-from lmdb_storage.lookup_tables import LookupTable, CompressedPath
+from lmdb_storage.lookup_tables import LookupTableObjToPaths, CompressedPath
 from lmdb_storage.lookup_tables_paths import lookup_paths, get_path_string, compute_obj_id_to_path_lookup_table, \
     compute_obj_id_to_path_difference_lookup_table, decode_bytes_to_intpath
 from lmdb_storage.object_store import ObjectStorage
@@ -256,44 +256,45 @@ class MovesAndCopies:
         self.parent = parent
 
     @cached_property
-    def _lookup_current(self) -> Dict[str, LookupTable[CompressedPath]]:
+    def _lookup_current(self) -> Dict[str, LookupTableObjToPaths[CompressedPath]]:
         roots = self.parent.env.roots(write=False)
         with self.parent.env.objects(write=False) as objects:
             return dict(
-                (remote.uuid, LookupTable[CompressedPath](
-                    compute_obj_id_to_path_lookup_table(objects, roots[remote.uuid].current), decode_bytes_to_intpath))
+                (remote.uuid, LookupTableObjToPaths[CompressedPath](
+                    compute_obj_id_to_path_lookup_table(objects, roots[remote.uuid].current),
+                    decode_bytes_to_intpath, roots[remote.uuid].current))
                 for remote in self.parent.hoard_config.remotes.all())
 
     @cached_property
-    def _lookup_desired_but_not_current(self) -> Dict[str, LookupTable[CompressedPath]]:
+    def _lookup_desired_but_not_current(self) -> Dict[str, LookupTableObjToPaths[CompressedPath]]:
         roots = self.parent.env.roots(write=False)
         with self.parent.env.objects(write=False) as objects:
             return dict(
-                (remote.uuid, LookupTable[CompressedPath](
+                (remote.uuid, LookupTableObjToPaths[CompressedPath](
                     compute_obj_id_to_path_difference_lookup_table(
                         objects, roots[remote.uuid].desired, roots[remote.uuid].current),
-                    decode_bytes_to_intpath))
+                    decode_bytes_to_intpath, roots[remote.uuid].desired))
                 for remote in self.parent.hoard_config.remotes.all())
 
     @cached_property
-    def _lookup_current_but_not_desired(self) -> Dict[str, LookupTable[CompressedPath]]:
+    def _lookup_current_but_not_desired(self) -> Dict[str, LookupTableObjToPaths[CompressedPath]]:
         roots = self.parent.env.roots(write=False)
         with self.parent.env.objects(write=False) as objects:
             return dict(
-                (remote.uuid, LookupTable[CompressedPath](
+                (remote.uuid, LookupTableObjToPaths[CompressedPath](
                     compute_obj_id_to_path_difference_lookup_table(
                         objects, roots[remote.uuid].current, roots[remote.uuid].desired),
-                    decode_bytes_to_intpath))
+                    decode_bytes_to_intpath, roots[remote.uuid].current))
                 for remote in self.parent.hoard_config.remotes.all())
 
     @cached_property
-    def _lookup_hoard_desired(self) -> LookupTable[CompressedPath]:
+    def _lookup_hoard_desired(self) -> LookupTableObjToPaths[CompressedPath]:
         roots = self.parent.env.roots(write=False)
         with self.parent.env.objects(write=False) as objects:
-            return LookupTable[CompressedPath](
+            return LookupTableObjToPaths[CompressedPath](
                 compute_obj_id_to_path_difference_lookup_table(
                     objects, roots["HOARD"].desired, roots["HOARD"].current),
-                decode_bytes_to_intpath)
+                decode_bytes_to_intpath, roots["HOARD"].desired)
 
     def get_existing_paths_in_uuid(self, in_uuid: str, desired_id: ObjectID) -> List[CompressedPath]:
         return self._lookup_current[in_uuid][desired_id]

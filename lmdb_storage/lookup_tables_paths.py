@@ -5,7 +5,7 @@ from typing import Iterable, Tuple, Callable
 
 from command.fast_path import FastPosixPath
 from lmdb_storage.file_object import FileObject
-from lmdb_storage.lookup_tables import LookupTable, CompressedPath
+from lmdb_storage.lookup_tables import LookupTableObjToPaths, CompressedPath
 
 from lmdb_storage.tree_iteration import SkipFun, CANT_SKIP
 from lmdb_storage.tree_object import ObjectType, ObjectID, StoredObject, TreeObject, MaybeObjectID
@@ -91,7 +91,7 @@ def fast_zip_left_dfs(
 
 
 def lookup_paths(
-        self: LookupTable[CompressedPath], obj_id: ObjectID,
+        self: LookupTableObjToPaths[CompressedPath], obj_id: ObjectID,
         objects: Callable[[ObjectID], StoredObject]) -> Iterable[FastPosixPath]:
     if obj_id not in self:
         return
@@ -119,11 +119,8 @@ def get_path_string(
 
 
 def compute_obj_id_to_path_lookup_table(objects: Objects, root_id: MaybeObjectID) -> bytearray:
-    if root_id is None:
-        return bytearray()
-
     files = 0
-    packed_lookup_data = bytearray(root_id)
+    packed_lookup_data = bytearray()
     tmp_path: bytearray
     for tmp_path, obj_type, obj_id, stored_obj, _ in fast_compressed_path_dfs(objects, bytearray(), root_id):
         if obj_type == ObjectType.BLOB:
@@ -139,11 +136,8 @@ def compute_obj_id_to_path_lookup_table(objects: Objects, root_id: MaybeObjectID
 def compute_obj_id_to_path_difference_lookup_table(
         objects: Objects, existing_in: MaybeObjectID, missing_in: MaybeObjectID) -> bytearray:
     """Computes what files need to be deleted."""
-    if existing_in is None:
-        return bytearray()
-
     files = 0
-    packed_lookup_data = bytearray(existing_in)  # all files to be deleted are from the current tree
+    packed_lookup_data = bytearray()
     for tmp_path, existing_in_obj, missing_in_obj, _ \
             in fast_zip_left_dfs(objects, bytearray(), existing_in, missing_in, drilldown_same=False):
         if existing_in_obj is None:
@@ -186,11 +180,8 @@ def decode_bytes_to_object_id(packed_lookup_data: bytes, idx: int) -> Tuple[int,
 
 
 def compute_path_lookup_table(objects: Objects, root_id: MaybeObjectID) -> bytearray:
-    if root_id is None:
-        return bytearray()
-
     files = 0
-    packed_lookup_data = bytearray(root_id)
+    packed_lookup_data = bytearray()
     for tmp_path, obj_type, obj_id, stored_obj, _ in fast_path_dfs(objects, "", root_id, lambda p, i, c: p + c):
         if obj_type == ObjectType.BLOB:
             files += 1

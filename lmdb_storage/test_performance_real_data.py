@@ -11,7 +11,7 @@ from command.hoard import Hoard
 from contents.hoard import HoardFilesIterator, HoardContents
 from dragon import TotalCommand
 from lmdb_storage.file_object import FileObject
-from lmdb_storage.lookup_tables import LookupTable
+from lmdb_storage.lookup_tables import LookupTableObjToPaths
 from lmdb_storage.lookup_tables_paths import fast_compressed_path_dfs, lookup_paths, get_path_string, \
     compute_obj_id_to_path_lookup_table, decode_bytes_to_intpath
 from lmdb_storage.tree_object import ObjectType, ObjectID, StoredObject, TreeObject
@@ -30,7 +30,7 @@ def force_iterating_over(hoard_contents: HoardContents) -> Tuple[int, int]:
     return decoded_file, decoded_folder
 
 
-def _resolve(self: LookupTable[List[int]], obj_id: ObjectID, objects: Callable[[ObjectID], StoredObject]) -> Iterable[
+def _resolve(self: LookupTableObjToPaths[List[int]], obj_id: ObjectID, objects: Callable[[ObjectID], StoredObject]) -> Iterable[
     Tuple[List[int], FileObject]]:
     if obj_id not in self:
         return
@@ -41,7 +41,7 @@ def _resolve(self: LookupTable[List[int]], obj_id: ObjectID, objects: Callable[[
         yield path, _follow_path(self, path, objects)
 
 
-def _follow_path(self: LookupTable[List[int]], path: List[int],
+def _follow_path(self: LookupTableObjToPaths[List[int]], path: List[int],
                  objects: Callable[[ObjectID], StoredObject]) -> FileObject:
     current_id = self.root_id
     for pi in path:
@@ -88,7 +88,7 @@ class TestPerformance(IsolatedAsyncioTestCase):
                 sys.stdout.write(f"packed_data: {format_size(len(packed_lookup_data))}\n")
 
                 start = default_timer()
-                lookup_table = LookupTable[List[int]](packed_lookup_data, decode_bytes_to_intpath)
+                lookup_table = LookupTableObjToPaths[List[int]](packed_lookup_data, decode_bytes_to_intpath)
 
                 sys.stdout.write(f"\nread lookup table time: {default_timer() - start}s\n")
                 sys.stdout.write(
