@@ -790,6 +790,167 @@ class TestBackupMaintenance(IsolatedAsyncioTestCase):
 
         return backup_repo_cmds
 
+    async def test_fake_backup_files_should_be_deletable(self):
+        partial_repo_cmds, full_repo_cmd, hoard_cmd = populate_random_data(self.tmpdir.name)
+
+        await add_remotes(full_repo_cmd, hoard_cmd, partial_repo_cmds)
+        backup_repo_cmds = await self.init_backup_repos(hoard_cmd)
+
+        await hoard_cmd.contents.pull(all=True)
+
+        await hoard_cmd.files.push(all=True)
+
+        res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True, show_empty=True)
+        self.assertEqual((
+            'Root: 3f807f22b0eabb5a44fca944acd489882afc09cb\n'
+            '|Num Files           |total |availa|\n'
+            '|backup-repo-0       |     4|     4|\n'
+            '|backup-repo-1       |     4|     4|\n'
+            '|backup-repo-2       |     3|     3|\n'
+            '|backup-repo-3       |     3|     3|\n'
+            '|repo-full           |    13|    13|\n'
+            '|work-repo-0         |     5|     5|\n'
+            '|work-repo-1         |     4|     4|\n'
+            '|work-repo-2         |     5|     5|\n'
+            '\n'
+            '|Size                |total |availa|\n'
+            '|backup-repo-0       | 5.5KB| 5.5KB|\n'
+            '|backup-repo-1       | 4.7KB| 4.7KB|\n'
+            '|backup-repo-2       | 5.1KB| 5.1KB|\n'
+            '|backup-repo-3       | 3.5KB| 3.5KB|\n'
+            '|repo-full           |16.8KB|16.8KB|\n'
+            '|work-repo-0         | 6.2KB| 6.2KB|\n'
+            '|work-repo-1         | 5.9KB| 5.9KB|\n'
+            '|work-repo-2         | 6.6KB| 6.6KB|\n'), res)
+
+        backup_fake_repo_path = Path(self.tmpdir.name).joinpath("backup-fake")
+        backup_fake_repo_path.mkdir(parents=True, exist_ok=False)
+
+        for fpath, rnddata, size in populate_index(100 + 99, 7, vocabulary=vocabulary_short, chance_pct=85):
+            file_path = backup_fake_repo_path.joinpath(fpath)
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+
+            file_path.with_suffix(".file").write_text(rnddata * size)
+
+        backup_fake_cmd = TotalCommand(path=backup_fake_repo_path.as_posix()).cave
+        backup_fake_cmd.init()
+        res = await backup_fake_cmd.refresh()
+        self.assertEqual((
+            'PRESENT_FILE 4T/BP.file\n'
+            'PRESENT_FILE CSS/VP1I/W6A/4T.file\n'
+            'PRESENT_FILE GYS/GYS/CSS.file\n'
+            'PRESENT_FILE GYS/W6A.file\n'
+            'PRESENT_FILE GYS.file\n'
+            'PRESENT_FILE WU/VP1I.file\n'
+            'PRESENT_FILE ZEZ.file\n'
+            'old: None\n'
+            'current: eefc5e7315a4b7c8c7bb1025fd7d13beefda7a0b\n'
+            'Refresh done!'), res)
+
+        hoard_cmd.add_remote(remote_path=backup_fake_cmd.repo.path, name="backup-fake", mount_point="/", type="backup")
+
+        res = await hoard_cmd.contents.pull(all=True)
+        self.assertEqual((
+            'Skipping update as work-repo-0.staging has not changed: 978c01\n'
+            'Skipping update as work-repo-1.staging has not changed: e37b4c\n'
+            'Skipping update as work-repo-2.staging has not changed: 191bd3\n'
+            'Skipping update as repo-full.staging has not changed: a80f91\n'
+            'Skipping update as backup-repo-0.staging has not changed: a80f91\n'
+            'Skipping update as backup-repo-1.staging has not changed: a80f91\n'
+            'Skipping update as backup-repo-2.staging has not changed: a80f91\n'
+            'Skipping update as backup-repo-3.staging has not changed: a80f91\n'
+            'Pulling backup-fake...\n'
+            'Before: Hoard [3f807f] <- repo [curr: None, stg: eefc5e, des: None]\n'
+            'REPO_DESIRED_FILE_TO_GET /GYS.file\n'
+            'REPO_DESIRED_FILE_TO_GET /ZEZ.file\n'
+            'updated backup-fake from None to c23b03\n'
+            'After: Hoard [3f807f], repo [curr: eefc5e, stg: eefc5e, des: c23b03]\n'
+            "Sync'ed backup-fake to hoard!\n"
+            'DONE'), res)
+
+        res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True, show_empty=True)
+        self.assertEqual((
+            'Root: 3f807f22b0eabb5a44fca944acd489882afc09cb\n'
+            '|Num Files           |total |availa|get   |copy  |cleanu|\n'
+            '|backup-fake         |     7|      |     2|     2|     5|\n'
+            '|backup-repo-0       |     4|     4|      |      |      |\n'
+            '|backup-repo-1       |     4|     4|      |      |      |\n'
+            '|backup-repo-2       |     3|     3|      |      |      |\n'
+            '|backup-repo-3       |     3|     3|      |      |      |\n'
+            '|repo-full           |    13|    13|      |      |      |\n'
+            '|work-repo-0         |     5|     5|      |      |      |\n'
+            '|work-repo-1         |     4|     4|      |      |      |\n'
+            '|work-repo-2         |     5|     5|      |      |      |\n'
+            '\n'
+            '|Size                |total |availa|get   |copy  |cleanu|\n'
+            '|backup-fake         | 9.0KB|      | 3.9KB| 3.9KB| 5.1KB|\n'
+            '|backup-repo-0       | 5.5KB| 5.5KB|      |      |      |\n'
+            '|backup-repo-1       | 4.7KB| 4.7KB|      |      |      |\n'
+            '|backup-repo-2       | 5.1KB| 5.1KB|      |      |      |\n'
+            '|backup-repo-3       | 3.5KB| 3.5KB|      |      |      |\n'
+            '|repo-full           |16.8KB|16.8KB|      |      |      |\n'
+            '|work-repo-0         | 6.2KB| 6.2KB|      |      |      |\n'
+            '|work-repo-1         | 5.9KB| 5.9KB|      |      |      |\n'
+            '|work-repo-2         | 6.6KB| 6.6KB|      |      |      |\n'), res)
+
+        res = await hoard_cmd.files.push("backup-fake")
+        self.assertEqual((
+            'Before push:\n'
+            'Remote backup-fake current=eefc5e staging=eefc5e desired=c23b03\n'
+            'Remote backup-repo-0 current=ae5d47 staging=a80f91 desired=ae5d47\n'
+            'Remote backup-repo-1 current=7a5957 staging=a80f91 desired=7a5957\n'
+            'Remote backup-repo-2 current=d870e1 staging=a80f91 desired=d870e1\n'
+            'Remote backup-repo-3 current=40432b staging=a80f91 desired=40432b\n'
+            'Remote repo-full current=3f807f staging=a80f91 desired=3f807f\n'
+            'Remote work-repo-0 current=fd3ef9 staging=978c01 desired=fd3ef9\n'
+            'Remote work-repo-1 current=e37b4c staging=e37b4c desired=e37b4c\n'
+            'Remote work-repo-2 current=191bd3 staging=191bd3 desired=191bd3\n'
+            'backup-fake:\n'
+            'REMOTE_COPY [work-repo-0] GYS.file\n'
+            'REMOTE_COPY [work-repo-0] ZEZ.file\n'
+            'backup-fake:\n'
+            'd 4T/BP.file\n'
+            'd CSS/VP1I/W6A/4T.file\n'
+            'd GYS/GYS/CSS.file\n'
+            'd GYS/W6A.file\n'
+            'd WU/VP1I.file\n'
+            'After:\n'
+            'Remote backup-fake current=c23b03 staging=eefc5e desired=c23b03\n'
+            'Remote backup-repo-0 current=ae5d47 staging=a80f91 desired=ae5d47\n'
+            'Remote backup-repo-1 current=7a5957 staging=a80f91 desired=7a5957\n'
+            'Remote backup-repo-2 current=d870e1 staging=a80f91 desired=d870e1\n'
+            'Remote backup-repo-3 current=40432b staging=a80f91 desired=40432b\n'
+            'Remote repo-full current=3f807f staging=a80f91 desired=3f807f\n'
+            'Remote work-repo-0 current=fd3ef9 staging=978c01 desired=fd3ef9\n'
+            'Remote work-repo-1 current=e37b4c staging=e37b4c desired=e37b4c\n'
+            'Remote work-repo-2 current=191bd3 staging=191bd3 desired=191bd3\n'
+            'DONE'), res)
+
+        res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True, show_empty=True)
+        self.assertEqual((
+            'Root: 3f807f22b0eabb5a44fca944acd489882afc09cb\n'
+            '|Num Files           |total |availa|\n'
+            '|backup-fake         |     2|     2|\n'
+            '|backup-repo-0       |     4|     4|\n'
+            '|backup-repo-1       |     4|     4|\n'
+            '|backup-repo-2       |     3|     3|\n'
+            '|backup-repo-3       |     3|     3|\n'
+            '|repo-full           |    13|    13|\n'
+            '|work-repo-0         |     5|     5|\n'
+            '|work-repo-1         |     4|     4|\n'
+            '|work-repo-2         |     5|     5|\n'
+            '\n'
+            '|Size                |total |availa|\n'
+            '|backup-fake         | 3.9KB| 3.9KB|\n'
+            '|backup-repo-0       | 5.5KB| 5.5KB|\n'
+            '|backup-repo-1       | 4.7KB| 4.7KB|\n'
+            '|backup-repo-2       | 5.1KB| 5.1KB|\n'
+            '|backup-repo-3       | 3.5KB| 3.5KB|\n'
+            '|repo-full           |16.8KB|16.8KB|\n'
+            '|work-repo-0         | 6.2KB| 6.2KB|\n'
+            '|work-repo-1         | 5.9KB| 5.9KB|\n'
+            '|work-repo-2         | 6.6KB| 6.6KB|\n'), res)
+
 
 if __name__ == '__main__':
     unittest.main()

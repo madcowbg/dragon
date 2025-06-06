@@ -91,8 +91,8 @@ async def copy_or_get(
         for expanded_path in remote_candidates[candidate_uuid]:
             candidate_path_on_device = pathing.in_hoard(expanded_path).at_local(candidate_uuid).on_device_path()
             logging.debug(f"Preparing to copy remote %s to %s...", expanded_path, candidate_path_on_device)
-            success, restored_file = await _restore_file(candidate_path_on_device, fullpath_to_restore, file_obj,
-                                                         move=False)
+            success, restored_file = await _restore_file(
+                candidate_path_on_device, fullpath_to_restore, file_obj, move=False)
             if success:
                 add_to_current_tree_file_obj(hoard, restore_to_uuid, hoard_path.as_pure_path.as_posix(), file_obj)
                 return f"REMOTE_COPY [{hoard.remote_name(candidate_uuid)}] {local_path_to_restore}\n"
