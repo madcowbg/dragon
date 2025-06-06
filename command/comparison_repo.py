@@ -325,7 +325,7 @@ class FilesystemIndex:
     def items(self) -> Iterable[Tuple[str, BlobObject]]:
         for file_path, file_data in self.current_index_doc.get("file_entries", {}).items():
             if "fasthash" not in file_data:
-                yield "/" + file_path, FileObject.create(None, -1)
+                logging.error("Skipping %s because fasthash is missing", file_path)
                 continue
 
             fasthash = file_data["fasthash"]
