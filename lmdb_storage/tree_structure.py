@@ -4,7 +4,7 @@ from typing import Iterable, Tuple, List, Callable, Union
 from lmdb import Transaction
 
 from lmdb_storage.object_serialization import construct_tree_object
-from lmdb_storage.tree_object import StoredObject, TreeObject, ObjectType, TreeObjectBuilder, ObjectID
+from lmdb_storage.tree_object import StoredObject, TreeObject, ObjectType, TreeObjectBuilder, ObjectID, MaybeObjectID
 
 
 def do_nothing[T](x: T, *, title) -> T: return x
@@ -163,7 +163,7 @@ def add_file_object[O](objects: Objects, tree_id: ObjectID | None, filepath: Obj
     return add_object(objects, tree_id, filepath, file.file_id)
 
 
-def add_object(objects: Objects, tree_id: ObjectID | None, path: ObjPath, obj_id: ObjectID) -> ObjectID | None:
+def add_object(objects: Objects, tree_id: ObjectID | None, path: ObjPath, obj_id: MaybeObjectID) -> MaybeObjectID:
     if len(path) == 0:  # is here
         return obj_id
 

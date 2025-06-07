@@ -138,7 +138,7 @@ class DirAvailabilityDataTable(DataTable):
 
             self.notify(f"Dropping all in {self.hoard_dir.fullname} from {repo_uuid}.")
             with StringIO() as out:
-                await execute_drop(self.hoard_contents, self.hoard_pathing, repo_uuid, hoard_precise_path, out)
+                await execute_drop(self.hoard_contents, repo_uuid, hoard_precise_path, out)
                 logging.warn(out.getvalue())  # fixme use log widget
                 self.notify("Result: " + out.getvalue()[-20:])
 

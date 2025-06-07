@@ -32,7 +32,7 @@ from lmdb_storage.tree_calculation import RecursiveCalculator, StatGetter
 from lmdb_storage.tree_iteration import zip_trees_dfs
 from lmdb_storage.tree_object import ObjectType, TreeObject, ObjectID, MaybeObjectID, StoredObject
 from lmdb_storage.tree_operations import get_child, graft_in_tree
-from lmdb_storage.tree_structure import Objects
+from lmdb_storage.tree_structure import Objects, add_object
 from resolve_uuid import resolve_remote_uuid
 from util import format_size, custom_isabs, safe_hex, format_count
 
@@ -818,31 +818,31 @@ async def _execute_drop(
     mounted_at: FastPosixPath = pathing.mounted_at(repo_uuid)
     path_in_hoard = mounted_at.joinpath(path_in_local)
     with StringIO() as out:
-        await execute_drop(hoard, pathing, repo_uuid, path_in_hoard, out)
+        await execute_drop(hoard, repo_uuid, path_in_hoard, out)
         return out.getvalue()
 
 
 async def execute_drop(
-        hoard: HoardContents, pathing: HoardPathing, repo_uuid: str, path_in_hoard: FastPosixPath,
-        out: TextIO) -> Tuple[int, int, int]:
+        hoard: HoardContents, repo_uuid: str, path_in_hoard: FastPosixPath, out: TextIO) -> Tuple[int, int, int]:
     assert path_in_hoard.is_absolute()
+
+    logging.info(f"Dropping {path_in_hoard} from {repo_uuid}...")
 
     old_desired_id = hoard.env.roots(write=False)[repo_uuid].desired
 
-    considered = 0
-    cleaned_up, wont_get, skipped = 0, 0, 0
+    with hoard.env.objects(write=True) as objects:
+        new_desired_id = add_object(objects, old_desired_id, path_in_hoard._rem, None)
 
-    print(f"Iterating files and folders to see what to drop...")
-    hoard_file: FastPosixPath
-    for hoard_file, hoard_props in alive_it([s async for s in hoard.fsobjects.in_folder(path_in_hoard)]):
-        assert isinstance(hoard_props, HoardFileProps)
+    if new_desired_id == old_desired_id:
+        logging.warning(f"Dropping {path_in_hoard} did not change the root.")
 
-        remove_from_desired_tree(hoard, repo_uuid, hoard_file.as_posix(), HACK_create_from_hoard_props(hoard_props))
+    hoard.env.roots(write=True)[repo_uuid].desired = new_desired_id
 
-    HoardDeferredOperations(hoard).apply_deferred_queue()
+    assert not HoardDeferredOperations(hoard).have_deferred_ops()
 
     new_desired_id = hoard.env.roots(write=False)[repo_uuid].desired
 
+    cleaned_up, wont_get, skipped = 0, 0, 0
     with hoard.env.objects(write=False) as objects:
         cleaned_up = dump_dropped_files_info(
             objects, path_in_hoard._rem, old_desired_id, new_desired_id, out)
