@@ -58,22 +58,6 @@ class RetainFile:
         self.needed_locations = needed_locations
 
 
-def DEPRECATED_get_pending_operations(hoard: HoardContents, repo_uuid: str, moves_and_copies: MovesAndCopies) -> Iterable[FileOp]:
-    for hoard_file, hoard_props in hoard.fsobjects.with_pending(repo_uuid):
-        goal_status = hoard_props.get_status(repo_uuid)
-        if goal_status == HoardFileStatus.GET:
-            yield GetFile(hoard_file, hoard_props)
-        elif goal_status == HoardFileStatus.CLEANUP:
-            file_obj = HACK_create_from_hoard_props(hoard_props)
-            moves_and_copies_loc = dict(moves_and_copies.whereis_needed(file_obj.file_id))
-            if len(moves_and_copies_loc) > 0:
-                yield RetainFile(hoard_file, file_obj, list(moves_and_copies_loc.keys()))
-            else:
-                yield CleanupFile(hoard_file, hoard_props)
-        else:
-            raise ValueError(f"File {hoard_file} has no pending ops, yet was selected as one that has.")
-
-
 class FileOpType(enum.Enum):
     FETCH = 1
 

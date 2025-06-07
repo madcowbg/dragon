@@ -363,12 +363,6 @@ class ReadonlyHoardFSObjects:
     def __iter__(self) -> Iterable[Tuple[FastPosixPath, HoardFileProps]]:
         yield from HoardFilesIterator.all(self.parent)
 
-    def with_pending(self, repo_uuid: str) -> Iterable[Tuple[FastPosixPath, HoardFileProps]]:
-        pending_statuses = {HoardFileStatus.GET, HoardFileStatus.CLEANUP}
-        for path, props in HoardFilesIterator.all(self.parent):
-            if props.get_status(repo_uuid) in pending_statuses:
-                yield path, props
-
     def available_in_repo(self, repo_uuid: str) -> Iterable[Tuple[FastPosixPath, HoardFileProps]]:
         for path, props in HoardFilesIterator.all(self.parent):
             if props.get_status(repo_uuid) == HoardFileStatus.AVAILABLE:
@@ -385,20 +379,6 @@ class ReadonlyHoardFSObjects:
         for path, props in HoardFilesIterator.all(self.parent):
             if path.simple.startswith(folder_with_trailing):
                 yield path, props
-
-    async def in_folder_non_deleted(self, folder: FastPosixPath) -> AsyncGenerator[
-        Tuple[FastPosixPath, HoardFileProps]]:
-        assert custom_isabs(folder.as_posix())  # from 3.13 behavior change...
-
-        folder = folder.as_posix()
-        folder_with_trailing = folder if folder.endswith("/") else folder + "/"
-        assert folder_with_trailing.endswith('/')
-
-        # fixme this could be done faster by directly drilling down to the folder
-        for path, props in HoardFilesIterator.all(self.parent):
-            if path.simple.startswith(folder_with_trailing):
-                if any(status != HoardFileStatus.CLEANUP for uuid, status in props.presence.items()):
-                    yield path, props
 
     def status_by_uuid(
             self, folder_path: FastPosixPath | None, extended: bool = False) -> Dict[str, Dict[str, Dict[str, Any]]]:

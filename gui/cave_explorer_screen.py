@@ -20,20 +20,19 @@ from textual.widgets._tree import TreeNode
 
 from command.content_prefs import ContentPrefs
 from command.contents.command import execute_pull, init_pull_preferences, pull_prefs_to_restore_from_hoard, \
-    Difference, DifferencesCalculator, get_current_file_differences, Difference
+    DifferencesCalculator, get_current_file_differences, Difference
 from command.contents.comparisons import copy_local_staging_data_to_hoard, \
     commit_local_staging
 from command.fast_path import FastPosixPath
 from command.files.command import execute_files_push
 from command.hoard import Hoard
 from command.pathing import HoardPathing
-from command.pending_file_ops import FileOp, DEPRECATED_get_pending_operations, CleanupFile, GetFile, CopyFile, \
-    MoveFile, RetainFile
+from command.pending_file_ops import FileOp, CleanupFile, GetFile, CopyFile, MoveFile, RetainFile
 from config import HoardRemote, latency_order, ConnectionLatency, ConnectionSpeed, CaveType
-from contents.hoard import HoardContents, MovesAndCopies
+from contents.hoard import HoardContents
 from contents.hoard_connection import ReadonlyHoardContentsConn
 from contents.hoard_props import HoardFileProps
-from contents.recursive_stats_calc import NodeID, CurrentAndDesiredReader, NodeObj
+from contents.recursive_stats_calc import NodeID, CurrentAndDesiredReader
 from contents.repo_props import FileDesc
 from exceptions import RepoOpeningFailed, WrongRepo, MissingRepoContents, MissingRepo
 from gui.app_config import config, _write_config
@@ -41,8 +40,7 @@ from gui.confirm_action_screen import ConfirmActionScreen
 from gui.folder_tree import DEPRECATED_FolderNode, DEPRECATED_FolderTree, DEPRECATED_aggregate_on_nodes
 from gui.progress_reporting import StartProgressReporting, MarkProgressReporting, progress_reporting_it, \
     ProgressReporting, progress_reporting_bar
-from lmdb_storage.cached_calcs import CachedCalculator, AppCachedCalculator
-from lmdb_storage.tree_calculation import RecursiveSumCalculator
+from lmdb_storage.cached_calcs import AppCachedCalculator
 from lmdb_storage.tree_object import TreeObject
 from util import group_to_dict, format_count, format_size, snake_case
 
