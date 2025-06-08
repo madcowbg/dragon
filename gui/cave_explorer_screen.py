@@ -125,7 +125,7 @@ class HoardContentsPendingToSyncFile(Tree[NodeID]):
         self.current_and_desired_reader = CurrentAndDesiredReader(self.hoard_contents)
 
         repo_root = self.hoard_contents.env.roots(write=False)[self.remote.uuid]
-        self.files_diff_tree_root: NodeID = NodeID(repo_root.desired, repo_root.current)
+        self.files_diff_tree_root: NodeID = NodeID(repo_root.current, repo_root.desired)
         self.pending_ops_calculator = AppCachedCalculator(
             DifferencesCalculator(self.hoard_contents, get_current_file_differences),
             Difference)
