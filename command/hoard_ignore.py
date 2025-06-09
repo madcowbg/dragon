@@ -12,6 +12,7 @@ DEFAULT_IGNORE_GLOBS = [
     r"**/thumbs.db",
     r"System Volume Information",
     r"$Recycle.Bin",
+    # r"$RECYCLE.BIN"
     r"RECYCLE?",
     r"#recycle"
 ]

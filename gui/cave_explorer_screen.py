@@ -545,7 +545,7 @@ class CaveExplorerScreen(Screen):
 
     def on_mount(self):
         if self.hoard is not None:
-            selected_remote = config.get("cave_exporer_selected_repo", None)
+            selected_remote = config().get("cave_exporer_selected_repo", None)
             if selected_remote is not None:
                 self.remote = self.hoard.config().remotes[selected_remote]
 
@@ -557,7 +557,7 @@ class CaveExplorerScreen(Screen):
 
     def watch_remote(self, new_remote: HoardRemote, old_remote: HoardRemote):
         if self.remote is not None:
-            config["cave_exporer_selected_repo"] = self.remote.uuid
+            config()["cave_exporer_selected_repo"] = self.remote.uuid
             _write_config()
             self.query_one(CaveInfoWidget).remote = self.remote
             self.query_one(f"#uuid-{self.remote.uuid}", RadioButton).toggle()

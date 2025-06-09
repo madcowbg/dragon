@@ -97,7 +97,7 @@ class HoardExplorerSettings(Widget):
             super().__init__()
             self.value = value
 
-    hoard_path: pathlib.Path = reactive(lambda: pathlib.Path(config.get("hoard_path", ".")))
+    hoard_path: pathlib.Path = reactive(lambda: pathlib.Path(config().get("hoard_path", ".")))
     can_modify: bool = reactive(default=False)
 
     def __init__(self, *children: Widget):
@@ -125,10 +125,10 @@ class HoardExplorerSettings(Widget):
 
     def on_input_submitted(self, event: Input.Submitted):
         if event.input == self.query_one("#hoard_path_input", Input):
-            config["hoard_path"] = event.value
+            config()["hoard_path"] = event.value
             _write_config()
 
-            self.hoard_path = pathlib.Path(config["hoard_path"])
+            self.hoard_path = pathlib.Path(config()["hoard_path"])
             if self.hoard_path.is_dir():
                 self.notify(f"New hoard path: {self.hoard_path}")
             else:
