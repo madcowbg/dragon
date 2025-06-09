@@ -306,20 +306,19 @@ class Difference:
 
 
 def get_current_file_differences(node_obj: NodeObj) -> Difference:
-    current, desired = node_obj
-    if current is None:
-        if desired is None:
+    if node_obj.current is None:
+        if node_obj.desired is None:
             return Difference(considered=1, size=DifferenceOfType(), count=DifferenceOfType())
         else:
             return Difference(
-                considered=1, size=DifferenceOfType(to_obtain=desired.size), count=DifferenceOfType(to_obtain=1))
-    if desired is None:
+                considered=1, size=DifferenceOfType(to_obtain=node_obj.desired.size), count=DifferenceOfType(to_obtain=1))
+    if node_obj.desired is None:
         return Difference(
-            considered=1, size=DifferenceOfType(to_delete=current.size), count=DifferenceOfType(to_delete=1))
-    if current != desired:
+            considered=1, size=DifferenceOfType(to_delete=node_obj.current.size), count=DifferenceOfType(to_delete=1))
+    if node_obj.current != node_obj.desired:
         return Difference(
-            considered=1, size=DifferenceOfType(to_change=desired.size), count=DifferenceOfType(to_change=1))
-    assert current == desired
+            considered=1, size=DifferenceOfType(to_change=node_obj.desired.size), count=DifferenceOfType(to_change=1))
+    assert node_obj.current == node_obj.desired
     return Difference(considered=1, size=DifferenceOfType(), count=DifferenceOfType())
 
 

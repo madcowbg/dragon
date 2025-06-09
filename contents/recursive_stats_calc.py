@@ -34,8 +34,68 @@ class NodeID(HashableKey):
     def hashed(self) -> bytes:
         return msgpack.encode((self.current, self.desired))
 
+    @property
+    def children(self) -> Iterable[Tuple[str, "NodeID"]]:
+        pass
 
-type NodeObj = Tuple[StoredObject | None, StoredObject | None]
+
+class RecursiveObject[RID]:
+    @property
+    @abstractmethod
+    def has_children(self) -> bool: pass
+
+    @property
+    @abstractmethod
+    def children(self) -> Iterable[Tuple[str, RID]]: pass
+
+
+@dataclasses.dataclass(frozen=True)
+class NodeObj(RecursiveObject[NodeID]):
+    current: StoredObject | None
+    desired: StoredObject | None
+
+    @property
+    def children(self) -> Iterable[Tuple[str, NodeID]]:
+        if self.current is None and self.desired is None:
+            return
+
+        if self.current is None:
+            assert isinstance(self.desired, TreeObject)
+            yield from [(child_name, NodeID(None, right_child)) for child_name, right_child in self.desired.children]
+            return
+
+        if self.current.object_type == ObjectType.BLOB:
+            yield "$LEFT$", NodeID(self.current.id, None)  # returns self.current blob
+
+            assert isinstance(self.desired, TreeObject)
+            yield from [(child_name, NodeID(None, right_child)) for child_name, right_child in self.desired.children]
+            return
+
+        assert self.current.object_type == ObjectType.TREE
+
+        if self.desired is None:
+            assert isinstance(self.current, TreeObject)
+            yield from [(child_name, NodeID(left_child, None)) for child_name, left_child in self.current.children]
+            return
+
+        if self.desired.object_type == ObjectType.BLOB:
+            yield "$RIGHT", NodeID(None, self.desired.id)  # returns right blob
+
+            assert isinstance(self.current, TreeObject)
+            yield from [(child_name, NodeID(left_child, None)) for child_name, left_child in self.current.children]
+            return
+
+        assert self.desired.object_type == ObjectType.TREE
+        left_map = dict(self.current.children)
+        right_map = dict(self.desired.children)
+        all_children = sorted(set(list(left_map.keys()) + list(right_map.keys())))
+        for child_name in all_children:
+            yield child_name, NodeID(left_map.get(child_name), right_map.get(child_name))
+
+    @property
+    def has_children(self) -> bool:
+        return (self.current and self.current.object_type == ObjectType.TREE) \
+            or (self.desired and self.desired.object_type == ObjectType.TREE)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -49,9 +109,9 @@ class UsedSize(Storeable):
 
 def get_used_size(obj: NodeObj) -> UsedSize:
     """ Returns the larger of the desired or the current size for that object. Assumes they are blobs"""
-    assert not obj[0] or obj[0].object_type == ObjectType.BLOB
-    assert not obj[1] or obj[1].object_type == ObjectType.BLOB
-    return UsedSize(max(obj[0].size if obj[0] else 0, obj[1].size if obj[1] else 0), 1)
+    assert not obj.current or obj.current.object_type == ObjectType.BLOB
+    assert not obj.desired or obj.desired.object_type == ObjectType.BLOB
+    return UsedSize(max(obj.current.size if obj.current else 0, obj.desired.size if obj.desired else 0), 1)
 
 
 class CurrentAndDesiredReader(RecursiveReader[NodeID, NodeObj]):
@@ -60,49 +120,13 @@ class CurrentAndDesiredReader(RecursiveReader[NodeID, NodeObj]):
 
     def convert(self, obj: NodeID) -> NodeObj:
         with self.contents.env.objects(write=False) as objects:
-            return objects[obj.current] if obj.current else None, objects[obj.desired] if obj.desired else None
+            return NodeObj(objects[obj.current] if obj.current else None, objects[obj.desired] if obj.desired else None)
 
-    def children(self, obj: NodeID) -> Iterable[Tuple[str, NodeID]]:
-        left, right = self.convert(obj)
+    def children(self, obj_id: NodeID) -> Iterable[Tuple[str, NodeID]]:
+        return self.convert(obj_id).children
 
-        if left is None:
-            assert isinstance(right, TreeObject)
-            yield from [(child_name, NodeID(None, right_child)) for child_name, right_child in right.children]
-            return
-
-        if left.object_type == ObjectType.BLOB:
-            yield "$LEFT$", NodeID(obj.current, None)  # returns left blob
-
-            assert isinstance(right, TreeObject)
-            yield from [(child_name, NodeID(None, right_child)) for child_name, right_child in right.children]
-            return
-
-        assert left.object_type == ObjectType.TREE
-
-        if right is None:
-            assert isinstance(left, TreeObject)
-            yield from [(child_name, NodeID(left_child, None)) for child_name, left_child in left.children]
-            return
-
-        if right.object_type == ObjectType.BLOB:
-            yield "$RIGHT", NodeID(None, obj.desired)  # returns right blob
-
-            assert isinstance(left, TreeObject)
-            yield from [(child_name, NodeID(left_child, None)) for child_name, left_child in left.children]
-            return
-
-        assert right.object_type == ObjectType.TREE
-        left_map = dict(left.children)
-        right_map = dict(right.children)
-        all_children = sorted(set(list(left_map.keys()) + list(right_map.keys())))
-        for child_name in all_children:
-            yield child_name, NodeID(left_map.get(child_name), right_map.get(child_name))
-
-    def is_compound(self, obj: NodeID) -> bool:
-        left, right = self.convert(obj)
-
-        return (left and left.object_type == ObjectType.TREE) \
-            or (right and right.object_type == ObjectType.TREE)
+    def is_compound(self, obj_id: NodeID) -> bool:
+        return self.convert(obj_id).has_children
 
     def is_atom(self, obj: NodeID) -> bool:
         return not self.is_compound(obj)
