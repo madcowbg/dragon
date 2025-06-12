@@ -1,7 +1,8 @@
 import logging
 import random
-from typing import Dict, Any, Callable
+from typing import Dict, Any, Callable, Tuple
 
+from lmdb import Transaction
 from msgspec import msgpack
 
 from contents.recursive_stats_calc import HashableKey
@@ -38,13 +39,17 @@ class CachedCalculator[T, R](StatGetter[T, R]):
 
 
 APP_STATS_CACHE: StatsCache | None = None
+APP_STATS_CACHE_READER: Transaction | None = None
 
 
-def app_stats_cache() -> StatsCache:
+def app_stats_cache() -> Tuple[StatsCache, Transaction]:
     global APP_STATS_CACHE
+    global APP_STATS_CACHE_READER
     if APP_STATS_CACHE is None:
         APP_STATS_CACHE = StatsCache("./app-cache.lmdb")
-    return APP_STATS_CACHE
+        APP_STATS_CACHE_READER = APP_STATS_CACHE.begin(write=False)
+        APP_STATS_CACHE_READER.__enter__()
+    return APP_STATS_CACHE, APP_STATS_CACHE_READER
 
 
 APP_CACHE_LOG_RATIO = 10000
@@ -58,10 +63,7 @@ class AppCachedCalculator[T, R](StatGetter[T, R]):
         self._cache: Dict[Any, R] = dict()
         self._result_type = result_type
 
-        self._stats_cache: StatsCache = app_stats_cache()
-
-        self._cache_reader = self._stats_cache.begin(write=False)
-        self._cache_reader.__enter__()
+        self._stats_cache, self._cache_reader = app_stats_cache()
 
     def __getitem__(self, item: T) -> R:
         if item not in self._cache:

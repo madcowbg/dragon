@@ -32,7 +32,7 @@ class HoardTreeWidget(Tree):
         self.run_worker(self._expand_root())
 
     async def _expand_root(self):
-        hoard_tree = await self.contents.fsobjects.tree
+        hoard_tree = self.contents.tree
         hoard_root = self.root.add(
             self._create_pretty_folder_label("/", FastPosixPath("/"), 45), data=hoard_tree.root, expand=True)
 
@@ -42,8 +42,8 @@ class HoardTreeWidget(Tree):
     def _expand_hoard_dir(self, widget_node: TreeNode[TreeData], hoard_dir: HoardDir, parent_offset: int):
         label_max_width = 45 - parent_offset * widget_node.tree.guide_depth
         for folder in hoard_dir.dirs.values():
-            folder_label = self._create_pretty_folder_label(folder.name, FastPosixPath(folder.fullname),
-                                                            label_max_width)
+            folder_label = self._create_pretty_folder_label(
+                folder.name, FastPosixPath(folder.fullname), label_max_width)
             widget_node.add(folder_label, allow_expand=True, data=folder)
 
         for file in hoard_dir.files.values():

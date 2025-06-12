@@ -15,7 +15,6 @@ from command.contents.pull_preferences import PullPreferences, PullIntention
 from command.fast_path import FastPosixPath
 from command.hoard import Hoard
 from command.pathing import HoardPathing
-from command.pending_file_ops import HACK_create_from_hoard_props
 from config import CaveType, HoardRemote, HoardConfig
 from contents.hoard import HoardContents, HoardFile, HoardDir
 from contents.hoard_props import HoardFileStatus, HoardFileProps, RESERVED, GET_BY_MOVE, GET_BY_COPY
@@ -23,14 +22,13 @@ from contents.recursive_stats_calc import NodeID, NodeObj, CurrentAndDesiredRead
 from contents.repo import RepoContents
 from exceptions import MissingRepoContents, MissingRepo
 from lmdb_storage.cached_calcs import CachedCalculator
-from lmdb_storage.deferred_operations import remove_from_desired_tree, HoardDeferredOperations
-from lmdb_storage.file_object import FileObject
+from lmdb_storage.deferred_operations import HoardDeferredOperations
 from lmdb_storage.operations.three_way_merge import TransformedRoots
 from lmdb_storage.pull_contents import merge_contents, commit_merged
 from lmdb_storage.roots import Root, Roots
 from lmdb_storage.tree_calculation import RecursiveCalculator, StatGetter
 from lmdb_storage.tree_iteration import zip_trees_dfs
-from lmdb_storage.tree_object import ObjectType, TreeObject, ObjectID, MaybeObjectID, StoredObject
+from lmdb_storage.tree_object import ObjectType, TreeObject, ObjectID, MaybeObjectID
 from lmdb_storage.tree_operations import get_child, graft_in_tree
 from lmdb_storage.tree_structure import Objects, add_object
 from resolve_uuid import resolve_remote_uuid
@@ -615,7 +613,7 @@ class HoardCommandContents:
 
                 file: Optional[HoardFile]
                 folder: Optional[HoardDir]
-                for folder, file in (await hoard.fsobjects.tree).walk(selected_path, depth=depth):
+                for folder, file in hoard.tree.walk(selected_path, depth=depth):
                     if file is not None:
                         stats = _file_stats(file.props)
                         out.write(f"{file.fullname} = {stats}\n")

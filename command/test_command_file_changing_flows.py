@@ -643,6 +643,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             '/test.me.1 = a:3\n'
             '/test.me.4 = a:2\n'
             '/wat\n'
+            '/wat/test.me.2 = c:2\n'
             '/wat/test.me.3 = a:2\n'
             'DONE'), res)
 
