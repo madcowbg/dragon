@@ -9,9 +9,8 @@ import aioshutil
 
 from command.fast_path import FastPosixPath
 from command.pathing import HoardPathing
-from command.pending_file_ops import HACK_create_from_hoard_props
 from config import HoardPaths
-from contents.hoard import HoardContents, MovesAndCopies
+from contents.hoard import HoardContents, MovesAndCopies, HACK_create_from_hoard_props
 from contents.hoard_props import HoardFileProps, HoardFileStatus
 from hashing import fast_hash_async
 from lmdb_storage.deferred_operations import add_to_current_tree_file_obj, remove_from_current_tree
@@ -31,19 +30,19 @@ async def _fetch_files_in_repo(
                 self.current_size = 0
                 self.current_size_mb = 0
 
-            async def copy_or_get_file(self, hoard_file: str, hoard_props: HoardFileProps) -> Optional[str]:
+            async def copy_or_get_file(self, hoard_file: str, file_obj: FileObject) -> Optional[str]:
                 try:
                     return await copy_or_get(
                         hoard, pathing, moves_and_copies,
                         pathing.in_hoard(FastPosixPath(hoard_file)),
-                        repo_uuid, HACK_create_from_hoard_props(hoard_props))
+                        repo_uuid, file_obj)
                 finally:
-                    self.current_size += hoard_props.size
+                    self.current_size += file_obj.size
                     bar(to_mb(self.current_size) - self.current_size_mb)
                     self.current_size_mb = to_mb(self.current_size)
 
         copier = Copier()
-        outputs = [await copier.copy_or_get_file(hoard_path, hoard_props) for hoard_path, hoard_props in files_to_fetch]
+        outputs = [await copier.copy_or_get_file(hoard_path, file_obj) for hoard_path, file_obj in files_to_fetch]
 
         for line in outputs:
             if line is not None:
@@ -106,14 +105,10 @@ def _cleanup_files_in_repo(
         out: StringIO, progress_bar):
     files_to_cleanup = sorted(hoard.fsobjects.to_cleanup(repo_uuid))
     with progress_bar(to_mb(sum(f[1].size for f in files_to_cleanup)), unit="MB", title="Cleaning files") as bar:
-        for hoard_file, hoard_props in files_to_cleanup:
-            assert isinstance(hoard_props, HoardFileProps)
-
-            assert hoard_props.get_status(repo_uuid) == HoardFileStatus.CLEANUP
+        for hoard_file, file_obj in files_to_cleanup:
+            assert isinstance(file_obj, FileObject)
 
             local_path = pathing.in_hoard(hoard_file).at_local(repo_uuid)
-
-            file_obj = FileObject.create(hoard_props.fasthash, hoard_props.size, None)
 
             where_is_needed = dict(moves_and_copies.whereis_needed(file_obj.id))
             logging.debug(f"Needed in {len(where_is_needed)} repos.")
@@ -125,8 +120,7 @@ def _cleanup_files_in_repo(
 
             if len(where_is_needed_but_not_in_repo) == 0:
                 logging.info("file doesn't need to be copied anymore, cleaning")
-                remove_from_current_tree(
-                    hoard, repo_uuid, hoard_file.as_posix(), HACK_create_from_hoard_props(hoard_props))
+                remove_from_current_tree(hoard, repo_uuid, hoard_file.as_posix(), file_obj)
 
                 logging.info(f"deleting {local_path.on_device_path()}...")
 
@@ -151,7 +145,7 @@ def _cleanup_files_in_repo(
 
                 logging.info(
                     f"file {hoard_file} needs to be copied to {len(where_is_needed_but_not_in_repo)} repos, skipping")
-            bar(to_mb(hoard_props.size))
+            bar(to_mb(file_obj.size))
 
 
 def sort_by_speed_then_latency(paths: HoardPaths) -> Callable[[str], int]:

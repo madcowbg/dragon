@@ -9,10 +9,8 @@ from command.content_prefs import BackupSet, MIN_REPO_PERC_FREE, Presence
 from command.fast_path import FastPosixPath
 from command.hoard import Hoard
 from command.pathing import HoardPathing
-from command.pending_file_ops import HACK_create_from_hoard_props
 from config import HoardRemote, HoardConfig
 from contents.hoard import MovesAndCopies, HoardContents
-from contents.hoard_props import HoardFileProps
 from lmdb_storage.deferred_operations import remove_from_desired_tree, add_to_desired_tree, HoardDeferredOperations, \
     mklist_from_tree
 from lmdb_storage.file_object import BlobObject, FileObject
@@ -205,24 +203,20 @@ class HoardCommandBackups:
 
                     print(f"Considering backup set at {backup_set.mounted_at} with {len(backup_set.backups)} media")
                     hoard_file: command.fast_path.FastPosixPath
-                    for hoard_file, hoard_props in alive_it(
-                            [s async for s in hoard.fsobjects.in_folder(backup_set.mounted_at)]):
+                    for hoard_file, file_obj in alive_it(hoard.fsobjects.in_folder(backup_set.mounted_at)):
                         assert hoard_file.is_relative_to(backup_set.mounted_at)
-                        assert isinstance(hoard_props, HoardFileProps)
+                        assert isinstance(file_obj, FileObject)
 
-                        repos_to_clean_from = backup_set.repos_to_clean(
-                            hoard_file, HACK_create_from_hoard_props(hoard_props),
-                            hoard_props.size)
+                        repos_to_clean_from = backup_set.repos_to_clean(hoard_file, file_obj, file_obj.size)
 
                         logging.info(f"Cleaning up {hoard_file} from {[r.uuid for r in repos_to_clean_from]}")
 
                         for repo in repos_to_clean_from:
-                            remove_from_desired_tree(
-                                hoard, repo.uuid, hoard_file.as_posix(), HACK_create_from_hoard_props(hoard_props))
+                            remove_from_desired_tree(hoard, repo.uuid, hoard_file.as_posix(), file_obj)
 
                         for repo in repos_to_clean_from:
                             removed_cnt[repo] = removed_cnt.get(repo, 0) + 1
-                            removed_size[repo] = removed_size.get(repo, 0) + hoard_props.size
+                            removed_size[repo] = removed_size.get(repo, 0) + file_obj.size
 
                     for repo, cnt in sorted(removed_cnt.items(), key=lambda rc: rc[0].name):
                         out.write(f" {repo.name} LOST {cnt} files ({format_size(removed_size[repo])})\n")

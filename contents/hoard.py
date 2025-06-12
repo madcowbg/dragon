@@ -5,7 +5,7 @@ import sys
 from datetime import datetime
 from functools import cached_property
 from types import NoneType
-from typing import Dict, Any, Optional, Tuple, Generator, Iterable, List, AsyncGenerator
+from typing import Dict, Any, Optional, Tuple, Generator, Iterable, List
 
 import rtoml
 from alive_progress import alive_bar
@@ -15,7 +15,7 @@ from config import HoardConfig
 from contents.hoard_props import HoardFileStatus, HoardFileProps, GET_BY_MOVE, GET_BY_COPY, RESERVED
 from contents.recursive_stats_calc import UsedSizeCalculator, NodeID, QueryStatsCalculator, composite_from_roots, \
     drilldown, FolderStats, SizeCountPresenceStatsCalculator, SizeCountPresenceStats, FileStats, QueryStats, UsedSize, \
-    CompositeNodeID, CompositeObject, CachedReader, read_hoard_file_presence
+    CompositeObject, CachedReader, read_hoard_file_presence, CurrentAndDesiredReader
 from contents.repo import RepoContentsConfig
 from lmdb_storage.cached_calcs import AppCachedCalculator
 from lmdb_storage.file_object import BlobObject, FileObject
@@ -370,17 +370,15 @@ class ReadonlyHoardFSObjects:
                 obj: FileObject
                 yield FastPosixPath(path), obj
 
-    async def in_folder(self, folder: FastPosixPath) -> AsyncGenerator[
-        Tuple[FastPosixPath, HoardFileProps]]:
+    def in_folder(self, folder: FastPosixPath) -> Iterable[Tuple[FastPosixPath, FileObject]]:
         assert custom_isabs(folder.as_posix())  # from 3.13 behavior change...
         folder = folder.as_posix()
         folder_with_trailing = folder if folder.endswith("/") else folder + "/"
         assert folder_with_trailing.endswith('/')
 
-        # fixme this could be done faster by directly drilling down to the folder
-        for path, props in HoardFilesIterator.DEPRECATED_all(self.parent):
-            if path.simple.startswith(folder_with_trailing):
-                yield path, props
+        for folder, file in self.parent.tree.walk(folder):
+            if file is not None:
+                yield FastPosixPath(file.fullname), file.file_obj
 
     def status_by_uuid(
             self, folder_path: FastPosixPath | None, extended: bool = False) -> Dict[str, Dict[str, Dict[str, Any]]]:
@@ -488,15 +486,15 @@ class ReadonlyHoardFSObjects:
 
         return stats
 
-    def to_fetch(self, repo_uuid: str) -> Generator[Tuple[str, HoardFileProps], None, None]:
+    def to_fetch(self, repo_uuid: str) -> Generator[Tuple[str, FileObject], None, None]:
         for path, props in HoardFilesIterator.DEPRECATED_all(self.parent):
             if props.get_status(repo_uuid) == HoardFileStatus.GET:
-                yield path.as_posix(), props
+                yield path.as_posix(), HACK_create_from_hoard_props(props)
 
-    def to_cleanup(self, repo_uuid: str) -> Generator[Tuple[FastPosixPath, HoardFileProps], None, None]:
+    def to_cleanup(self, repo_uuid: str) -> Generator[Tuple[FastPosixPath, FileObject], None, None]:
         for path, props in HoardFilesIterator.DEPRECATED_all(self.parent):
             if props.get_status(repo_uuid) == HoardFileStatus.CLEANUP:
-                yield path, props
+                yield path, HACK_create_from_hoard_props(props)
 
     def __contains__(self, file_path: FastPosixPath) -> bool:
         assert file_path.is_absolute()
@@ -649,3 +647,7 @@ class HoardContents:
 
     def remote_name(self, candidate_uuid) -> str:
         return self.hoard_config.remotes[candidate_uuid].name
+
+
+def HACK_create_from_hoard_props(hoard_props: HoardFileProps) -> FileObject:
+    return FileObject.create(hoard_props.fasthash, hoard_props.size, None)

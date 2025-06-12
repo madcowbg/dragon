@@ -5,9 +5,8 @@ from propcache import cached_property
 
 from command.fast_path import FastPosixPath
 from command.pathing import HoardPathing, is_path_available
-from command.pending_file_ops import HACK_create_from_hoard_props
 from config import HoardRemote, HoardConfig, CaveType
-from contents.hoard import HoardContents
+from contents.hoard import HoardContents, HACK_create_from_hoard_props
 from contents.hoard_props import HoardFileStatus, HoardFileProps
 from contents.repo_props import FileDesc
 from lmdb_storage.file_object import FileObject

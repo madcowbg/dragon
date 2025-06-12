@@ -15,10 +15,9 @@ from command.contents.pull_preferences import PullPreferences, PullIntention
 from command.fast_path import FastPosixPath
 from command.hoard import Hoard
 from command.pathing import HoardPathing
-from command.pending_file_ops import HACK_create_from_hoard_props
 from config import CaveType, HoardRemote, HoardConfig
 from contents.hoard import HoardContents, HoardFile, HoardDir
-from contents.hoard_props import HoardFileStatus, HoardFileProps, RESERVED, GET_BY_MOVE, GET_BY_COPY
+from contents.hoard_props import HoardFileStatus, RESERVED, GET_BY_MOVE, GET_BY_COPY
 from contents.recursive_stats_calc import NodeID, NodeObj, CurrentAndDesiredReader
 from contents.repo import RepoContents
 from exceptions import MissingRepoContents, MissingRepo

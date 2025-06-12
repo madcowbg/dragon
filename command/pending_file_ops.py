@@ -3,8 +3,8 @@ import enum
 from command.fast_path import FastPosixPath
 from typing import Iterable, List, Tuple
 
-from contents.hoard import HoardContents, MovesAndCopies
-from contents.hoard_props import HoardFileStatus, HoardFileProps
+from contents.hoard import HoardContents, MovesAndCopies, HACK_create_from_hoard_props
+from contents.hoard_props import HoardFileProps
 from lmdb_storage.file_object import FileObject
 from lmdb_storage.tree_iteration import zip_dfs, DiffType
 from lmdb_storage.tree_object import ObjectType, StoredObject
@@ -29,6 +29,7 @@ class CopyFile:
 
         self.file_obj = HACK_create_from_hoard_props(hoard_props)
 
+
 class MoveFile:
     def __init__(
             self, hoard_file: FastPosixPath, hoard_props: HoardFileProps, old_hoard_file: str,
@@ -49,6 +50,7 @@ class CleanupFile:
         self.hoard_props = hoard_props
 
         self.file_obj = HACK_create_from_hoard_props(hoard_props)
+
 
 class RetainFile:
     def __init__(self, hoard_file: FastPosixPath, file_obj: FileObject, needed_locations: List[str]):
@@ -74,7 +76,6 @@ def get_pending_operations(
         for hoard_path, diff_type, current_obj_id, desired_obj_id, _ in zip_dfs(
                 objects, '', repo_root.current, repo_root.desired, drilldown_same=False):
 
-
             if diff_type == DiffType.LEFT_MISSING or diff_type == DiffType.DIFFERENT:
                 desired_obj: StoredObject = objects[desired_obj_id]
                 if desired_obj.object_type == ObjectType.TREE:
@@ -95,7 +96,3 @@ def get_pending_operations(
                     yield FileOpType.CLEANUP, FastPosixPath(hoard_path), current_obj
             elif diff_type != DiffType.SAME:
                 raise ValueError(f"File {hoard_path} has unrecognized diff type {diff_type}")
-
-
-def HACK_create_from_hoard_props(hoard_props: HoardFileProps) -> FileObject:
-    return FileObject.create(hoard_props.fasthash, hoard_props.size, None)
