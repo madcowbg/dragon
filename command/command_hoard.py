@@ -21,6 +21,7 @@ from contents.hoard import HoardContents, MovesAndCopies
 from contents.hoard_props import HoardFileProps
 from contents.recursive_stats_calc import CachedReader, CompositeNodeID, NodeID, CompositeTreeReader, \
     composite_from_roots
+from contents.repo import RepoContents
 from exceptions import MissingRepo
 from gui.hoard_explorer import start_hoard_explorer_gui
 from hashing import fast_hash
@@ -349,25 +350,34 @@ class HoardCommand(object):
                 hoard.config.restore_remote_config(current_contents.config)
 
                 with StringIO() as out:
-                    logging.info(f"Iterating over files marked available in {remote}...")
-                    hoard_file: FastPosixPath
-                    for hoard_file, hoard_props in alive_it(
-                            hoard.fsobjects.available_in_repo(remote_uuid), title="Recreating index"):
-                        local_path_obj = pathing.in_hoard(hoard_file).at_local(remote_uuid)
-                        assert local_path_obj is not None, \
-                            f"Path {hoard_file} needs to be available in local, but isn't???"
-                        assert isinstance(hoard_props, HoardFileProps)
-
-                        logging.info(
-                            f"Restoring description of file {hoard_file} to {local_path_obj}...")
-                        current_contents.fsobjects.add_file(
-                            local_path_obj.as_pure_path,
-                            FileObject.create(size=hoard_props.size, fasthash=hoard_props.fasthash))
-                        out.write(f"PRESENT {local_path_obj}\n")
+                    self._export_contents_to_cave(hoard, current_contents, pathing, remote_uuid, out)
 
                     current_contents.config.end_updating()
                     out.write("DONE")
                     return out.getvalue()
+
+    def _export_contents_to_cave(
+            self, hoard: HoardContents, current_contents: RepoContents, pathing:HoardPathing, remote_uuid: str,
+            out: TextIO) -> None:
+        logging.info(f"Iterating over files marked available in {remote_uuid}...")
+        hoard_file: FastPosixPath
+        presence = Presence(hoard)
+        for hoard_file, file_obj in alive_it(
+                hoard.fsobjects.desired_in_repo(remote_uuid), title="Recreating index"):
+            if not presence.is_current(remote_uuid, hoard_file, file_obj):
+                continue
+
+            local_path_obj = pathing.in_hoard(hoard_file).at_local(remote_uuid)
+            assert local_path_obj is not None, \
+                f"Path {hoard_file} needs to be available in local, but isn't???"
+            assert isinstance(file_obj, FileObject)
+
+            logging.info(
+                f"Restoring description of file {hoard_file} to {local_path_obj}...")
+            current_contents.fsobjects.add_file(
+                local_path_obj.as_pure_path,
+                FileObject.create(size=file_obj.size, fasthash=file_obj.fasthash))
+            out.write(f"PRESENT {local_path_obj}\n")
 
     async def meld(
             self, source: str, dest: str, move: bool = False, junk_folder: str = "_JUNK_",

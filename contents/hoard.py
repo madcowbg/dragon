@@ -206,7 +206,7 @@ class HoardFilesIterator(TreeGenerator[BlobObject, Tuple[str, HoardFileProps]]):
         return True
 
     @staticmethod
-    def all(parent: "HoardContents") -> Iterable[Tuple[FastPosixPath, HoardFileProps]]:
+    def DEPRECATED_all(parent: "HoardContents") -> Iterable[Tuple[FastPosixPath, HoardFileProps]]:
         hoard_root, root_ids = find_roots(parent)
 
         obj_ids = ByRoot(
@@ -361,7 +361,7 @@ class ReadonlyHoardFSObjects:
         return hoard_file_props_from_tree(self.parent, file_path)
 
     def DEPRECATED_iter(self) -> Iterable[Tuple[FastPosixPath, HoardFileProps]]:
-        yield from HoardFilesIterator.all(self.parent)
+        yield from HoardFilesIterator.DEPRECATED_all(self.parent)
 
     def hoard_files(self) -> Iterable[Tuple[FastPosixPath, FileObject]]:
         hoard_root_id = self.parent.env.roots(write=False)["HOARD"].desired
@@ -372,11 +372,6 @@ class ReadonlyHoardFSObjects:
                 obj: FileObject
                 yield FastPosixPath(path), obj
 
-    def available_in_repo(self, repo_uuid: str) -> Iterable[Tuple[FastPosixPath, HoardFileProps]]:
-        for path, props in HoardFilesIterator.all(self.parent):
-            if props.get_status(repo_uuid) == HoardFileStatus.AVAILABLE:
-                yield path, props
-
     async def in_folder(self, folder: FastPosixPath) -> AsyncGenerator[
         Tuple[FastPosixPath, HoardFileProps]]:
         assert custom_isabs(folder.as_posix())  # from 3.13 behavior change...
@@ -385,7 +380,7 @@ class ReadonlyHoardFSObjects:
         assert folder_with_trailing.endswith('/')
 
         # fixme this could be done faster by directly drilling down to the folder
-        for path, props in HoardFilesIterator.all(self.parent):
+        for path, props in HoardFilesIterator.DEPRECATED_all(self.parent):
             if path.simple.startswith(folder_with_trailing):
                 yield path, props
 
@@ -496,12 +491,12 @@ class ReadonlyHoardFSObjects:
         return stats
 
     def to_fetch(self, repo_uuid: str) -> Generator[Tuple[str, HoardFileProps], None, None]:
-        for path, props in HoardFilesIterator.all(self.parent):
+        for path, props in HoardFilesIterator.DEPRECATED_all(self.parent):
             if props.get_status(repo_uuid) == HoardFileStatus.GET:
                 yield path.as_posix(), props
 
     def to_cleanup(self, repo_uuid: str) -> Generator[Tuple[FastPosixPath, HoardFileProps], None, None]:
-        for path, props in HoardFilesIterator.all(self.parent):
+        for path, props in HoardFilesIterator.DEPRECATED_all(self.parent):
             if props.get_status(repo_uuid) == HoardFileStatus.CLEANUP:
                 yield path, props
 
@@ -547,11 +542,18 @@ class ReadonlyHoardFSObjects:
 
     def desired_hoard(self) -> Iterable[Tuple[FastPosixPath, FileObject]]:
         current_root_id = self.parent.env.roots(write=False)["HOARD"].desired
+        return self._iterate_all_files(current_root_id)
+
+    def _iterate_all_files(self, current_root_id):
         with self.parent.env.objects(write=False) as objects:
             for path, object_type, obj_id, obj, _ in dfs(objects, "", current_root_id):
                 if object_type == ObjectType.BLOB:
                     assert isinstance(obj, FileObject)
                     yield FastPosixPath(path), obj
+
+    def desired_in_repo(self, remote_uuid: str):
+        current_repo_id = self.parent.env.roots(write=False)[remote_uuid].desired
+        return self._iterate_all_files(current_repo_id)
 
 
 class Query:

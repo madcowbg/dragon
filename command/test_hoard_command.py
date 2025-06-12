@@ -138,7 +138,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             self, hoard_contents: HoardContents, files_exp: List[Tuple[str, int, int, str]]):
         files = sorted(
             (f.as_posix(), prop.size, len(prop.available_at), prop.fasthash)
-            for f, prop in HoardFilesIterator.all(hoard_contents) if isinstance(prop, HoardFileProps))
+            for f, prop in HoardFilesIterator.DEPRECATED_all(hoard_contents) if isinstance(prop, HoardFileProps))
         self.assertEqual(sorted(files_exp), sorted(files))
 
     async def test_sync_two_repos(self):

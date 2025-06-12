@@ -191,7 +191,7 @@ class TestPerformance(IsolatedAsyncioTestCase):
         sys.stdout.write(f"\nto open: {datetime.now()}\n")
         async with hoard.open_contents(create_missing=False) as hoard_contents:
             sys.stdout.write(f"\nstart: {datetime.now()}\n")
-            for file, prop in HoardFilesIterator.all(hoard_contents):
+            for file, prop in HoardFilesIterator.DEPRECATED_all(hoard_contents):
                 decoded_file += 1
                 repo_files += len(prop.presence.items())
 

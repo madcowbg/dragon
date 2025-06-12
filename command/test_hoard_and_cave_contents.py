@@ -63,7 +63,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
         async with Hoard(join(self.tmpdir.name, "hoard")).open_contents(False) as hoard_contents:
             all_fsobjects = [
                 (file_or_dir.as_posix(), str([f"{repo}: {status.value}" for repo, status in props.presence.items()]))
-                for file_or_dir, props in HoardFilesIterator.all(hoard_contents)]
+                for file_or_dir, props in HoardFilesIterator.DEPRECATED_all(hoard_contents)]
             self.assertEqual([
                 ('/wat/test.me.different', f"['{repo_uuid}: available']"),
                 ('/wat/test.me.once', f"['{repo_uuid}: available']"),
