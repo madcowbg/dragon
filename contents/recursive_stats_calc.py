@@ -12,6 +12,7 @@ from lmdb_storage.file_object import BlobObject, FileObject
 from lmdb_storage.operations.util import remap
 from lmdb_storage.tree_calculation import RecursiveReader, RecursiveCalculator, StatGetter
 from lmdb_storage.tree_object import TreeObject, ObjectType, MaybeObjectID, StoredObject, ObjectID
+from lmdb_storage.tree_structure import Objects
 
 
 class HashableKey:
@@ -198,42 +199,48 @@ class CompositeNodeID(HashableKey):
             desired_id = self._desired_roots.get(uuid, None)
             yield uuid, (current_id, desired_id)
 
-    def children(self, objects: ObjectReader) -> Iterable[Tuple[str, "CompositeNodeID"]]:
-        hoard_obj = objects.maybe_read(self._hoard_obj_id)
-        current_roots = remap(self._current_roots, objects.read)
-        desired_roots = remap(self._desired_roots, objects.read)
-        children_names = set(
-            child_names(hoard_obj)
-            + sum((child_names(obj) for obj in current_roots.values()), [])
-            + sum((child_names(obj) for obj in desired_roots.values()), []))
-
-        for child_name in children_names:
-            child_node = self.get_child(objects, child_name)
-            if child_node is not None:
-                yield child_name, child_node
-
-    def get_child(self, objects: ObjectReader, child_name: str) -> "CompositeNodeID":
-        assert isinstance(objects, ObjectReader)
-        hoard_obj = objects.maybe_read(self._hoard_obj_id)
-        child_node = CompositeNodeID(get_child_if_exists(child_name, hoard_obj))
-
-        for uuid, child_current_id in self._current_roots.items():
-            current_child = get_child_if_exists(child_name, objects.read(child_current_id))
-            if current_child is not None:
-                child_node.set_root_current(uuid, current_child)
-
-        for uuid, child_desired_id in self._desired_roots.items():
-            desired_child = get_child_if_exists(child_name, objects.read(child_desired_id))
-            if desired_child is not None:
-                child_node.set_root_desired(uuid, desired_child)
-
-        return child_node
+    def as_object(self, objects: ObjectReader) -> "CompositeObject":
+        return CompositeObject(self, objects)
 
     def __hash__(self) -> int:
         return hash(self.hashed)
 
     def __eq__(self, other) -> bool:
         return isinstance(other, CompositeNodeID) and self.hashed == other.hashed
+
+
+class CompositeObject:
+    def __init__(self, node_id: CompositeNodeID, objects: ObjectReader):
+        self.node_id = node_id
+        self._hoard_obj = objects.maybe_read(node_id._hoard_obj_id)
+        self._current_roots = remap(node_id._current_roots, objects.read)
+        self._desired_roots = remap(node_id._desired_roots, objects.read)
+
+    def children(self) -> Iterable[Tuple[str, "CompositeNodeID"]]:
+        children_names = set(
+            child_names(self._hoard_obj)
+            + sum((child_names(obj) for obj in self._current_roots.values()), [])
+            + sum((child_names(obj) for obj in self._desired_roots.values()), []))
+
+        for child_name in children_names:
+            child_node = self.get_child(child_name)
+            if child_node is not None:
+                yield child_name, child_node
+
+    def get_child(self, child_name: str) -> "CompositeNodeID":
+        child_node = CompositeNodeID(get_child_if_exists(child_name, self._hoard_obj))
+
+        for uuid, child_current in self._current_roots.items():
+            current_child = get_child_if_exists(child_name, child_current)
+            if current_child is not None:
+                child_node.set_root_current(uuid, current_child)
+
+        for uuid, child_desired in self._desired_roots.items():
+            desired_child = get_child_if_exists(child_name, child_desired)
+            if desired_child is not None:
+                child_node.set_root_desired(uuid, desired_child)
+
+        return child_node
 
 
 @dataclasses.dataclass
@@ -314,7 +321,7 @@ class CompositeTreeReader[T](RecursiveReader[CompositeNodeID, HoardFilePresence 
     def children(self, obj: CompositeNodeID) -> Iterable[Tuple[str, CompositeNodeID]]:
         return [
             (child_name, child_obj)
-            for child_name, child_obj in obj.children(self._reader)]
+            for child_name, child_obj in obj.as_object(self._reader).children()]
 
     def is_compound(self, obj: CompositeNodeID) -> bool:
         return self.convert(obj) is None  # len(list(self.children(obj))) == 0
@@ -405,7 +412,7 @@ def drilldown(contents: "HoardContents", node_at_path: CompositeNodeID, path: Li
             return None
 
         for child in path:
-            current_node_id = current_node_id.get_child(reader, child)
+            current_node_id = current_node_id.as_object(reader).get_child(child)
             if current_node_id is None:
                 return None
 
