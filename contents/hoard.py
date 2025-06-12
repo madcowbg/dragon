@@ -24,8 +24,7 @@ from lmdb_storage.lookup_tables_paths import lookup_paths, get_path_string, comp
     compute_obj_id_to_path_difference_lookup_table, decode_bytes_to_intpath
 from lmdb_storage.object_store import ObjectStorage
 from lmdb_storage.tree_iteration import zip_trees_dfs, dfs, DiffType, zip_dfs
-from lmdb_storage.tree_object import ObjectType, StoredObject, TreeObject, MaybeObjectID, ObjectID
-from lmdb_storage.tree_operations import get_child
+from lmdb_storage.tree_object import ObjectType, StoredObject, TreeObject, ObjectID
 from lmdb_storage.tree_structure import Objects
 from util import custom_isabs
 
@@ -178,45 +177,6 @@ class HoardDir:
             yield None, hoard_file
         for hoard_dir in self.dirs.values():
             yield from hoard_dir.walk(depth - 1)
-
-
-def _filename(filepath: str) -> str:
-    _, name = os.path.split(filepath)
-    return name
-
-
-def find_roots(parent: "HoardContents") -> (MaybeObjectID, List[Tuple[str, MaybeObjectID]]):
-    roots = parent.env.roots(write=False)
-    hoard_root = roots["HOARD"].desired
-    all_roots = roots.all_roots
-    with roots:
-        root_data = [(r.name, r.load_from_storage) for r in all_roots]
-    root_ids = sum(
-        [[("current@" + name, data.current), ("desired@" + name, data.desired)] for name, data in root_data],
-        # fixme should only iterate over desired files
-        [])
-    return hoard_root, root_ids
-
-
-def hoard_file_props_from_tree(parent, file_path: FastPosixPath) -> HoardFileProps:
-    hoard_root, root_ids = find_roots(parent)
-    with parent.env.objects(write=False) as objects:
-        hoard_child_id = get_child(objects, file_path._rem, hoard_root)
-        file_obj: StoredObject | None = objects[hoard_child_id] if hoard_child_id is not None else None
-        if file_obj is not None:
-            assert isinstance(file_obj, FileObject)
-            file_obj: FileObject
-            return HoardFileProps(parent, file_path, file_obj.size, file_obj.fasthash)
-
-        # fixme this is the legacy case where we iterate over current but not desired files. remove!
-        for _, root_id in root_ids:
-            root_child_id = get_child(objects, file_path._rem, root_id)
-            file_obj = objects[root_child_id] if root_child_id is not None else None
-            if file_obj and file_obj.object_type == ObjectType.BLOB:
-                assert isinstance(file_obj, FileObject)
-                return HoardFileProps(parent, file_path, file_obj.size, file_obj.fasthash)
-
-        raise ValueError("Should not have tried getting a nonexistent file!")
 
 
 class MovesAndCopies:
@@ -449,7 +409,7 @@ class ReadonlyHoardFSObjects:
         remote_root = self.parent.env.roots(write=False)[repo_uuid]
         with self.parent.env.objects(write=False) as objects:
             for path, diff_type, current_id, desired_id, _ in zip_dfs(
-                objects, '', remote_root.current, remote_root.desired):
+                    objects, '', remote_root.current, remote_root.desired):
                 if diff_type == DiffType.LEFT_MISSING or diff_type == DiffType.DIFFERENT:
                     assert desired_id is not None
                     desired_obj: StoredObject = objects[desired_id]

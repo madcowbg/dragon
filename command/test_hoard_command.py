@@ -11,14 +11,14 @@ from command.command_repo import RepoCommand
 from command.fast_path import FastPosixPath
 from command.test_repo_command import populate, write_contents, pretty_file_writer
 from config import CaveType
-from contents.hoard import HoardContents, find_roots
+from contents.hoard import HoardContents
 from contents.hoard_props import HoardFileProps
 from dragon import TotalCommand
 from lmdb_storage.file_object import BlobObject, FileObject
 from lmdb_storage.operations.fast_association import FastAssociation
 from lmdb_storage.operations.generator import TreeGenerator
 from lmdb_storage.operations.util import ByRoot
-from lmdb_storage.tree_object import StoredObject, ObjectType, TreeObject
+from lmdb_storage.tree_object import StoredObject, ObjectType, TreeObject, MaybeObjectID
 from lmdb_storage.tree_structure import Objects
 from resolve_uuid import resolve_remote_uuid
 
@@ -1628,3 +1628,16 @@ class HoardFilesIterator(TreeGenerator[BlobObject, Tuple[str, HoardFileProps]]):
 
         with parent.env.objects(write=False) as objects:
             yield from HoardFilesIterator(objects, parent).execute(obj_ids=obj_ids)
+
+
+def find_roots(parent: "HoardContents") -> (MaybeObjectID, List[Tuple[str, MaybeObjectID]]):
+    roots = parent.env.roots(write=False)
+    hoard_root = roots["HOARD"].desired
+    all_roots = roots.all_roots
+    with roots:
+        root_data = [(r.name, r.load_from_storage) for r in all_roots]
+    root_ids = sum(
+        [[("current@" + name, data.current), ("desired@" + name, data.desired)] for name, data in root_data],
+        # fixme should only iterate over desired files
+        [])
+    return hoard_root, root_ids

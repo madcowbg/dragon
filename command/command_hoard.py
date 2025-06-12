@@ -351,7 +351,7 @@ class HoardCommand(object):
                     return out.getvalue()
 
     def _export_contents_to_cave(
-            self, hoard: HoardContents, current_contents: RepoContents, pathing:HoardPathing, remote_uuid: str,
+            self, hoard: HoardContents, current_contents: RepoContents, pathing: HoardPathing, remote_uuid: str,
             out: TextIO) -> None:
         logging.info(f"Iterating over files marked available in {remote_uuid}...")
         hoard_file: FastPosixPath
