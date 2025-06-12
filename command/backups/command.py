@@ -140,6 +140,7 @@ class HoardCommandBackups:
             backup_sets = BackupSet.all(config, pathing, hoard, self.hoard.available_remotes(), Presence(hoard))
             backup_media = set(sum((list(b.backups.keys()) for b in backup_sets), []))
             count_backup_media = len(backup_media)
+            # presence = Presence(hoard)
 
             with StringIO() as out:
                 out.write(f"# backup sets: {len(backup_sets)}\n")
@@ -149,7 +150,7 @@ class HoardCommandBackups:
 
                 file_sizes: Dict[str, int] = dict()
                 file_stats_copies: Dict[str, Tuple[int, int, int, int, int]] = dict()
-                for hoard_file, hoard_props in alive_it(hoard.fsobjects):
+                for hoard_file, hoard_props in alive_it(hoard.fsobjects.DEPRECATED_iter()):
                     assert isinstance(hoard_props, HoardFileProps)
 
                     file_sizes[hoard_file] = hoard_props.size

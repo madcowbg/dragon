@@ -360,8 +360,17 @@ class ReadonlyHoardFSObjects:
         assert file_path.is_absolute()
         return hoard_file_props_from_tree(self.parent, file_path)
 
-    def __iter__(self) -> Iterable[Tuple[FastPosixPath, HoardFileProps]]:
+    def DEPRECATED_iter(self) -> Iterable[Tuple[FastPosixPath, HoardFileProps]]:
         yield from HoardFilesIterator.all(self.parent)
+
+    def hoard_files(self) -> Iterable[Tuple[FastPosixPath, FileObject]]:
+        hoard_root_id = self.parent.env.roots(write=False)["HOARD"].desired
+        with self.parent.env.objects(write=False) as objects:
+            for path, obj_type, obj_id, obj, _ in dfs(objects, "", hoard_root_id):
+                if obj_type == ObjectType.TREE:
+                    continue
+                obj: FileObject
+                yield FastPosixPath(path), obj
 
     def available_in_repo(self, repo_uuid: str) -> Iterable[Tuple[FastPosixPath, HoardFileProps]]:
         for path, props in HoardFilesIterator.all(self.parent):

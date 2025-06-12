@@ -10,7 +10,7 @@ from unittest import IsolatedAsyncioTestCase
 from command.command_repo import RepoCommand
 from command.test_repo_command import populate, write_contents, pretty_file_writer
 from config import CaveType
-from contents.hoard import HoardContents
+from contents.hoard import HoardContents, HoardFilesIterator
 from contents.hoard_props import HoardFileProps
 from dragon import TotalCommand
 from resolve_uuid import resolve_remote_uuid
@@ -138,7 +138,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             self, hoard_contents: HoardContents, files_exp: List[Tuple[str, int, int, str]]):
         files = sorted(
             (f.as_posix(), prop.size, len(prop.available_at), prop.fasthash)
-            for f, prop in hoard_contents.fsobjects if isinstance(prop, HoardFileProps))
+            for f, prop in HoardFilesIterator.all(hoard_contents) if isinstance(prop, HoardFileProps))
         self.assertEqual(sorted(files_exp), sorted(files))
 
     async def test_sync_two_repos(self):

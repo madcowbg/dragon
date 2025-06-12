@@ -9,6 +9,7 @@ from alive_progress import alive_bar, alive_it
 
 from command.backups.command import HoardCommandBackups
 from command.command_repo import RepoCommand
+from command.content_prefs import Presence
 from command.contents.command import HoardCommandContents
 from command.fast_path import FastPosixPath
 from command.files.command import HoardCommandFiles
@@ -165,17 +166,20 @@ class HoardCommand(object):
 
             repo_health: Dict[str, Dict[int, int]] = dict()
             health_files: Dict[int, List[FastPosixPath]] = dict()
+            presence = Presence(hoard)
             with alive_bar(title="Iterating hoard...") as bar:
-                for file, props in hoard.fsobjects:
-                    assert isinstance(props, HoardFileProps)
+                for hoard_file, file_obj in hoard.fsobjects.hoard_files():
+                    assert isinstance(file_obj, FileObject)
 
-                    num_copies = len(props.available_at)
+                    uuid_current = list(presence.in_current(hoard_file, file_obj))
+
+                    num_copies = len(uuid_current)
                     if num_copies not in health_files:
                         health_files[num_copies] = []
-                    health_files[num_copies].append(file)
+                    health_files[num_copies].append(hoard_file)
 
                     # count how many files are uniquely stored here
-                    for repo in props.available_at:
+                    for repo in uuid_current:
                         if repo not in repo_health:
                             repo_health[repo] = dict()
                         if num_copies not in repo_health[repo]:

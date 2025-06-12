@@ -26,7 +26,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
 
         async with hoard_cmd.hoard.open_contents(create_missing=False) as hoard_contents:
             query = hoard_contents.fsobjects.query
-            file_paths = [path.as_posix() for path, _ in hoard_contents.fsobjects]
+            file_paths = [path.as_posix() for path, _ in hoard_contents.fsobjects.hoard_files()]
             folder_paths = ["/", "/wat"]
             paths = folder_paths + [ "/wat/nonexistent.file", '/wat/test.me.6']
 
