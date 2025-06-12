@@ -37,9 +37,10 @@ class FileAvailabilityPerRepoDataTable(DataTable):
         self.can_modify = can_modify
 
     def on_mount(self):
-        hoard_props = self.hoard_contents.fsobjects[FastPosixPath(self.hoard_file.fullname)]
-
-        presence = hoard_props.presence
+        presence = HoardFileProps(  # fixme should probably use presence object instead
+            self.hoard_contents,
+            FastPosixPath(self.hoard_file.fullname),
+            self.hoard_file.file_obj.size, self.hoard_file.file_obj.fasthash).presence
         by_presence = group_to_dict(presence.keys(), key=lambda uuid: presence[uuid])
 
         self.add_columns("repo", "status", "actions", "path")
@@ -194,14 +195,13 @@ class NodeDescription(Widget):
         yield Label(f"File name: {hoard_file.name}")
         yield Label(f"Hoard path: {hoard_file.fullname}")
 
-        hoard_props = self.hoard_contents.fsobjects[FastPosixPath(hoard_file.fullname)]
-        assert isinstance(hoard_props, HoardFileProps)
-        yield Label(f"size = {format_size(hoard_props.size)}", classes="desc_line")
-        yield Label(f"fasthash = {hoard_props.fasthash}", classes="desc_line")
+        assert isinstance(hoard_file, HoardFile)
+        yield Label(f"size = {format_size(hoard_file.file_obj.size)}", classes="desc_line")
+        yield Label(f"fasthash = {hoard_file.file_obj.fasthash}", classes="desc_line")
 
         yield Label("Statuses per repo", classes="desc_section")
-        yield FileAvailabilityPerRepoDataTable(self.hoard_config, self.hoard_pathing, self.hoard_contents, hoard_file,
-                                               self.can_modify)
+        yield FileAvailabilityPerRepoDataTable(
+            self.hoard_config, self.hoard_pathing, self.hoard_contents, hoard_file, self.can_modify)
 
     def _compose_dir(self, hoard_dir: HoardDir):
         yield Label(f"Folder name: {hoard_dir.name}")
