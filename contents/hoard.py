@@ -361,9 +361,6 @@ class ReadonlyHoardFSObjects:
             SizeCountPresenceStatsCalculator(self.parent),
             SizeCountPresenceStats)
 
-    def DEPRECATED_iter(self) -> Iterable[Tuple[FastPosixPath, HoardFileProps]]:
-        yield from HoardFilesIterator.DEPRECATED_all(self.parent)
-
     def hoard_files(self) -> Iterable[Tuple[FastPosixPath, FileObject]]:
         hoard_root_id = self.parent.env.roots(write=False)["HOARD"].desired
         with self.parent.env.objects(write=False) as objects:

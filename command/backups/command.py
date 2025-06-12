@@ -12,7 +12,7 @@ from command.pathing import HoardPathing
 from command.pending_file_ops import HACK_create_from_hoard_props
 from config import HoardRemote, HoardConfig
 from contents.hoard import MovesAndCopies, HoardContents
-from contents.hoard_props import HoardFileStatus, HoardFileProps
+from contents.hoard_props import HoardFileProps
 from lmdb_storage.deferred_operations import remove_from_desired_tree, add_to_desired_tree, HoardDeferredOperations, \
     mklist_from_tree
 from lmdb_storage.file_object import BlobObject, FileObject
@@ -140,31 +140,36 @@ class HoardCommandBackups:
             backup_sets = BackupSet.all(config, pathing, hoard, self.hoard.available_remotes(), Presence(hoard))
             backup_media = set(sum((list(b.backups.keys()) for b in backup_sets), []))
             count_backup_media = len(backup_media)
-            # presence = Presence(hoard)
 
             with StringIO() as out:
                 out.write(f"# backup sets: {len(backup_sets)}\n")
                 out.write(f"# backups: {count_backup_media}\n")
 
-                print("Iterating over hoard files")
-
+                presence = Presence(hoard)
                 file_sizes: Dict[str, int] = dict()
                 file_stats_copies: Dict[str, Tuple[int, int, int, int, int]] = dict()
-                for hoard_file, hoard_props in alive_it(hoard.fsobjects.DEPRECATED_iter()):
-                    assert isinstance(hoard_props, HoardFileProps)
+                with alive_bar(title="Iterating over hoard files") as bar:
+                    for folder, file in hoard.tree.walk():
+                        if file is not None:
+                            bar()
 
-                    file_sizes[hoard_file] = hoard_props.size
-                    scheduled = 0
-                    for backup_set in backup_sets:
-                        scheduled += len(backup_set.currently_scheduled_backups(
-                            hoard_file, HACK_create_from_hoard_props(hoard_props)))
+                            fullpath = FastPosixPath(file.fullname)
+                            in_current = set(presence.in_current(fullpath, file.file_obj))
+                            exists_in_current = set(presence.exists_on_current_path(fullpath))
+                            in_desired = set(presence.in_desired(fullpath, file.file_obj))
 
-                    available = sum(
-                        1 for uuid in hoard_props.by_status(HoardFileStatus.AVAILABLE) if uuid in backup_media)
-                    get_or_copy = len(hoard_props.by_statuses(HoardFileStatus.GET))
-                    cleanup = len(hoard_props.by_status(HoardFileStatus.CLEANUP))
+                            available = len(in_current.intersection(in_desired).intersection(backup_media))
+                            get_or_copy = len(in_desired - in_current)
+                            # all files, even those that are not the same as the desired ones
+                            cleanup = len(exists_in_current - in_desired)
 
-                    file_stats_copies[hoard_file] = (scheduled, available, get_or_copy, 0, cleanup)  # fixme remove 0
+                            file_sizes[fullpath.as_posix()] = file.file_obj.size
+                            scheduled = 0
+                            for backup_set in backup_sets:
+                                scheduled += len(backup_set.currently_scheduled_backups(fullpath, file.file_obj))
+
+                            # fixme remove 0
+                            file_stats_copies[fullpath.as_posix()] = (scheduled, available, get_or_copy, 0, cleanup)
 
                 def pivot_stat(stat_idx, fun: Callable[[str], int]) -> Dict[int, int]:
                     return dict(
