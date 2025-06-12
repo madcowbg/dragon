@@ -300,41 +300,21 @@ class CachedReader(ObjectReader):
         return self._cache[object_id]
 
 
-def read_hoard_file_presence(reader: CachedReader, node_id: CompositeNodeID) -> HoardFilePresence | None:
-    file_obj: BlobObject | None = reader.maybe_read(node_id._hoard_obj_id)
+def read_hoard_file_presence(node: CompositeObject) -> HoardFilePresence | None:
+    file_obj: BlobObject | None = node._hoard_obj
 
     if file_obj is None:
         # fixme this is the legacy case where we iterate over current but not desired files, required by hoard file props. remove!
-        existing_current = (reader.maybe_read(root_id) for root_id in node_id._current_roots.values())
+        existing_current = (root_obj for root_obj in node._current_roots.values())
 
         file_obj: BlobObject | None = next((obj for obj in existing_current if obj is not None), None)
 
     if not file_obj or file_obj.object_type != ObjectType.BLOB:
-        logging.debug("Error - path %s as it is not a BlobObject", node_id)
+        logging.debug("Error - path %s as it is not a BlobObject", node.node_id)
         return None  # assert False, f"Error - path {path} as it is not a BlobObject"
 
     assert isinstance(file_obj, FileObject)
-    return HoardFilePresence(file_obj, node_id)
-
-
-class CompositeTreeReader[T](RecursiveReader[CompositeNodeID, HoardFilePresence | None]):
-    def __init__(self, parent: "HoardContents", converter: Callable[[CachedReader, CompositeNodeID], T]):
-        self._reader = CachedReader(parent)
-        self._converter = converter
-
-    def convert(self, node: CompositeNodeID) -> HoardFilePresence | None:
-        return self._converter(self._reader, node)
-
-    def children(self, obj: CompositeNodeID) -> Iterable[Tuple[str, CompositeNodeID]]:
-        return [
-            (child_name, child_obj)
-            for child_name, child_obj in CompositeObject.expand(obj, self._reader).children()]
-
-    def is_compound(self, obj: CompositeNodeID) -> bool:
-        return self.convert(obj) is None  # len(list(self.children(obj))) == 0
-
-    def is_atom(self, obj: CompositeNodeID) -> bool:
-        return not self.is_compound(obj)
+    return HoardFilePresence(file_obj, node.node_id)
 
 
 class CompositeNodeCalculator[R](ValueCalculator[CompositeObject, R]):
@@ -371,10 +351,10 @@ class CompositeNodeCalculator[R](ValueCalculator[CompositeObject, R]):
 class QueryStatsCalculator(CompositeNodeCalculator[QueryStats]):
     def treat_as_composite(self, obj: CompositeObject) -> bool:
         # fixme weird (checking if we found a file), but what if names collide?
-        return read_hoard_file_presence(self.object_reader, obj.node_id) is None
+        return read_hoard_file_presence(obj) is None
 
     def calculate_for_atom(self, obj: CompositeObject) -> QueryStats:
-        hfp = read_hoard_file_presence(self.object_reader, obj.node_id)
+        hfp = read_hoard_file_presence(obj)
 
         assert isinstance(hfp, HoardFilePresence)
         is_deleted = len([uuid for uuid, status in hfp.presence.items() if status != HoardFileStatus.CLEANUP]) == 0
@@ -414,7 +394,7 @@ class QueryStatsCalculator(CompositeNodeCalculator[QueryStats]):
 
     @cached_property
     def stat_cache_key(self) -> bytes:
-        return "QueryStatsCalculator-V01".encode()
+        return "QueryStatsCalculator-V02".encode()
 
 
 def get_child_if_exists(child_name: str, hoard_obj: StoredObject | None) -> MaybeObjectID:
@@ -508,18 +488,24 @@ class SizeCountPresenceStats(Struct, Storeable):
         return self
 
 
-def calc_size_count_stats(props: HoardFilePresence) -> SizeCountPresenceStats:
-    result = SizeCountPresenceStats(1)
-    presence = props.presence
-    for uuid, status in presence.items():
-        single_file_stat = SizeCount(1, props.file_obj.size)
-        result.for_remote(uuid).total = single_file_stat
-        result.for_remote(uuid).presence = {status: single_file_stat}
-
-    return result
+class SizeCountPresenceStatsCalculator(CompositeNodeCalculator[SizeCountPresenceStats]):
+    def treat_as_composite(self, obj: CompositeObject) -> bool:
+        # fixme weird (checking if we found a file), but what if names collide?
+        return read_hoard_file_presence(obj) is None
 
 
-class SizeCountPresenceStatsCalculator(RecursiveCalculator[CompositeNodeID, HoardFilePresence, SizeCountPresenceStats]):
+    def calculate_for_atom(self, obj: CompositeObject) -> SizeCountPresenceStats:
+        props = read_hoard_file_presence(obj)
+
+        result = SizeCountPresenceStats(1)
+        presence = props.presence
+        for uuid, status in presence.items():
+            single_file_stat = SizeCount(1, props.file_obj.size)
+            result.for_remote(uuid).total = single_file_stat
+            result.for_remote(uuid).presence = {status: single_file_stat}
+
+        return result
+
     def aggregate(self, items: Iterable[Tuple[str, SizeCountPresenceStats]]) -> SizeCountPresenceStats:
         result = SizeCountPresenceStats(0)
 
@@ -530,10 +516,6 @@ class SizeCountPresenceStatsCalculator(RecursiveCalculator[CompositeNodeID, Hoar
     def for_none(self, calculator: "StatGetter[HoardFilePresence, SizeCountPresenceStats]") -> SizeCountPresenceStats:
         return SizeCountPresenceStats(0)
 
-    def __init__(self, contents: "HoardContent"):
-        super().__init__(calc_size_count_stats,
-                         CompositeTreeReader[HoardFilePresence | None](contents, read_hoard_file_presence))
-
     @cached_property
     def stat_cache_key(self) -> bytes:
-        return "SizeCountPresenceStats-V01".encode("UTF-8")
+        return "SizeCountPresenceStats-V02".encode("UTF-8")
