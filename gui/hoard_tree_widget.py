@@ -8,6 +8,7 @@ from textual.widgets._tree import TreeNode
 
 from config import HoardConfig, HoardRemote
 from contents.hoard import HoardContents, HoardDir, HoardFile
+from contents.recursive_stats_calc import CachedReader
 from util import group_to_dict, format_size, format_count
 
 TreeData = HoardDir | HoardFile
@@ -41,12 +42,12 @@ class HoardTreeWidget(Tree):
 
     def _expand_hoard_dir(self, widget_node: TreeNode[TreeData], hoard_dir: HoardDir, parent_offset: int):
         label_max_width = 45 - parent_offset * widget_node.tree.guide_depth
-        for folder in hoard_dir.dirs.values():
+        for folder in hoard_dir.dirs(CachedReader(self.contents)).values():
             folder_label = self._create_pretty_folder_label(
                 folder.name, FastPosixPath(folder.fullname), label_max_width)
             widget_node.add(folder_label, allow_expand=True, data=folder)
 
-        for file in hoard_dir.files.values():
+        for file in hoard_dir.files(CachedReader(self.contents)).values():
             size = file.file_obj.size
             file_label = self._pretty_file_label(file, label_max_width, size)
             file_node = widget_node.add_leaf(file_label, data=file)

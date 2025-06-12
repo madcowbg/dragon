@@ -16,9 +16,9 @@ from command.fast_path import FastPosixPath
 from command.hoard import Hoard
 from command.pathing import HoardPathing
 from config import CaveType, HoardRemote, HoardConfig
-from contents.hoard import HoardContents, HoardFile, HoardDir
+from contents.hoard import HoardContents, HoardFile, HoardDir, walk
 from contents.hoard_props import HoardFileStatus, RESERVED, GET_BY_MOVE, GET_BY_COPY
-from contents.recursive_stats_calc import NodeID, NodeObj, CurrentAndDesiredReader
+from contents.recursive_stats_calc import NodeID, NodeObj, CurrentAndDesiredReader, CachedReader
 from contents.repo import RepoContents
 from exceptions import MissingRepoContents, MissingRepo
 from lmdb_storage.cached_calcs import CachedCalculator
@@ -619,7 +619,7 @@ class HoardCommandContents:
 
                 file: Optional[HoardFile]
                 folder: Optional[HoardDir]
-                for folder, file in hoard.tree.walk(selected_path, depth=depth):
+                for folder, file in walk(hoard.tree_root, CachedReader(hoard), selected_path, depth):
                     if file is not None:
                         stats = _file_stats(file.file_obj, FastPosixPath(file.fullname), presence)
                         out.write(f"{file.fullname} = {stats}\n")

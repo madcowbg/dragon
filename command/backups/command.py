@@ -1,4 +1,5 @@
 import logging
+import sys
 from io import StringIO
 from typing import Dict, Tuple, Callable, TextIO
 
@@ -10,7 +11,8 @@ from command.fast_path import FastPosixPath
 from command.hoard import Hoard
 from command.pathing import HoardPathing
 from config import HoardRemote, HoardConfig
-from contents.hoard import MovesAndCopies, HoardContents
+from contents.hoard import MovesAndCopies, HoardContents, walk
+from contents.recursive_stats_calc import CachedReader
 from lmdb_storage.deferred_operations import remove_from_desired_tree, add_to_desired_tree, HoardDeferredOperations, \
     mklist_from_tree
 from lmdb_storage.file_object import BlobObject, FileObject
@@ -147,7 +149,7 @@ class HoardCommandBackups:
                 file_sizes: Dict[str, int] = dict()
                 file_stats_copies: Dict[str, Tuple[int, int, int, int, int]] = dict()
                 with alive_bar(title="Iterating over hoard files") as bar:
-                    for folder, file in hoard.tree.walk():
+                    for folder, file in walk(hoard.tree_root, CachedReader(hoard), "/", sys.maxsize):
                         if file is not None:
                             bar()
 

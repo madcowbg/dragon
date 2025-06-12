@@ -93,23 +93,15 @@ class HoardContentsConfig:
             self.write()
 
 
-class HoardTree:
-    def __init__(self, hoard_contents: "HoardContents"):
-        self.objects_reader = CachedReader(hoard_contents)
-        root_obj = CompositeObject(composite_from_roots(hoard_contents), self.objects_reader)
-        self.root = HoardDir(None, "", self, root_obj)
-        self.objects = hoard_contents.fsobjects
+def walk(current: "HoardDir", objects_reader: CachedReader, from_path: str = "/", depth: int = sys.maxsize) -> \
+        Generator[Tuple[Optional["HoardDir"], Optional["HoardFile"]], None, None]:
+    assert custom_isabs(from_path)
+    for folder in pathlib.Path(from_path).parts[1:]:
+        current = current.get_dir(objects_reader, folder)
+        if current is None:
+            return
 
-    def walk(self, from_path: str = "/", depth: int = sys.maxsize) -> \
-            Generator[Tuple[Optional["HoardDir"], Optional["HoardFile"]], None, None]:
-        assert custom_isabs(from_path)
-        current = self.root
-        for folder in pathlib.Path(from_path).parts[1:]:
-            current = current.get_dir(folder)
-            if current is None:
-                return
-
-        yield from current.walk(depth)
+    yield from current.walk(objects_reader, depth)
 
 
 class HoardFile:
@@ -130,53 +122,51 @@ class HoardDir:
         parent_path = pathlib.Path(self.parent.fullname) if self.parent is not None else pathlib.Path("/")
         return parent_path.joinpath(self.name).as_posix()
 
-    def __init__(self, parent: Optional["HoardDir"], name: str, tree: HoardTree, node: CompositeObject):
-        self.tree = tree
+    def __init__(self, parent: Optional["HoardDir"], name: str, node: CompositeObject):
         self.name = name
         self.parent = parent
         assert isinstance(node, CompositeObject)
         self.node = node
 
-    @property
-    def dirs(self) -> Dict[str, "HoardDir"]:
+    def dirs(self, objects_reader: CachedReader) -> Dict[str, "HoardDir"]:
         result = dict()
         for child_name, child_node_id in self.node.children():
-            child_node = CompositeObject(child_node_id, self.tree.objects_reader)
+            child_node = CompositeObject(child_node_id, objects_reader)
             if read_hoard_file_presence(child_node) is None:  # fixme weird way to check if a dir
-                result[child_name] = HoardDir(self, child_name, self.tree, child_node)
+                result[child_name] = HoardDir(self, child_name, child_node)
         return dict(sorted(result.items(), key=lambda kv: kv[0]))
 
     @property
     def _as_parent(self):
         return self.fullname if self.fullname != "/" else ""
 
-    @property
-    def files(self) -> Dict[str, HoardFile]:
+    def files(self, objects_reader: CachedReader) -> Dict[str, HoardFile]:
         result = dict()
         for child_name, child_node_id in self.node.children():
-            child_node = CompositeObject(child_node_id, self.tree.objects_reader)
+            child_node = CompositeObject(child_node_id, objects_reader)
             presence = read_hoard_file_presence(child_node)
             if presence is not None:  # fixme weird way to check if a file
                 fullpath = FastPosixPath(self.fullname).joinpath(child_name).as_posix()
                 result[child_name] = HoardFile(self, child_name, fullpath, presence.file_obj)
         return dict(sorted(result.items(), key=lambda kv: kv[0]))
 
-    def get_dir(self, subname: str) -> Optional["HoardDir"]:
+    def get_dir(self, objects_reader: CachedReader, subname: str) -> Optional["HoardDir"]:
         child_node_id = self.node.get_child(subname)
-        child_node = CompositeObject(child_node_id, self.tree.objects_reader)
+        child_node = CompositeObject(child_node_id, objects_reader)
         if read_hoard_file_presence(child_node) is not None:  # fixme weird way to check if a file
             return None
 
-        return HoardDir(self, subname, self.tree, child_node)
+        return HoardDir(self, subname, child_node)
 
-    def walk(self, depth: int) -> Generator[Tuple[Optional["HoardDir"], Optional["HoardFile"]], None, None]:
+    def walk(self, objects_reader: CachedReader, depth: int) -> Generator[
+        Tuple[Optional["HoardDir"], Optional["HoardFile"]], None, None]:
         yield self, None
         if depth <= 0:
             return
-        for hoard_file in self.files.values():
+        for hoard_file in self.files(objects_reader).values():
             yield None, hoard_file
-        for hoard_dir in self.dirs.values():
-            yield from hoard_dir.walk(depth - 1)
+        for hoard_dir in self.dirs(objects_reader).values():
+            yield from hoard_dir.walk(objects_reader, depth - 1)
 
 
 class MovesAndCopies:
@@ -295,7 +285,7 @@ class ReadonlyHoardFSObjects:
         folder_with_trailing = folder if folder.endswith("/") else folder + "/"
         assert folder_with_trailing.endswith('/')
 
-        for folder, file in self.parent.tree.walk(folder):
+        for folder, file in walk(self.parent.tree_root, CachedReader(self.parent), folder, sys.maxsize):
             if file is not None:
                 yield FastPosixPath(file.fullname), file.file_obj
 
@@ -535,7 +525,8 @@ class HoardContents:
         self.env = ObjectStorage(os.path.join(folder, HOARD_CONTENTS_LMDB_DIR), map_size=1 << 30)  # 1GB
         self.env.__enter__()
 
-        self.tree = HoardTree(self)
+        root_obj = CompositeObject(composite_from_roots(self), CachedReader(self))
+        self.tree_root = HoardDir(None, "", root_obj)
 
     def close(self, writeable: bool):
         self.env.gc()
