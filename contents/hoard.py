@@ -361,10 +361,6 @@ class ReadonlyHoardFSObjects:
             SizeCountPresenceStatsCalculator(self.parent),
             SizeCountPresenceStats)
 
-    def __getitem__(self, file_path: FastPosixPath) -> HoardFileProps:
-        assert file_path.is_absolute()
-        return hoard_file_props_from_tree(self.parent, file_path)
-
     def DEPRECATED_iter(self) -> Iterable[Tuple[FastPosixPath, HoardFileProps]]:
         yield from HoardFilesIterator.DEPRECATED_all(self.parent)
 
