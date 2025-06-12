@@ -163,37 +163,45 @@ class ObjectReader:
 class CompositeNodeID(HashableKey):
     def __init__(self, hoard_obj_id: MaybeObjectID) -> None:
         self._hoard_obj_id = hoard_obj_id
-        self._roots: Dict[str, List[MaybeObjectID]] = {}
+        self._current_roots: Dict[str, ObjectID] = {}
+        self._desired_roots: Dict[str, ObjectID] = {}
         self._hashed: bytes | None = None
 
     def set_root_current(self, uuid: str, node_id: MaybeObjectID) -> None:
         self._hashed = None
-        if uuid not in self._roots:
-            self._roots[uuid] = [node_id, None]
-        else:
-            self._roots[uuid][0] = node_id
+        if node_id is not None:
+            self._current_roots[uuid] = node_id
+        elif uuid in self._current_roots:
+            del self._current_roots[uuid]
 
     def set_root_desired(self, uuid: str, node_id: MaybeObjectID) -> None:
         self._hashed = None
-        if uuid not in self._roots:
-            self._roots[uuid] = [None, node_id]
-        else:
-            self._roots[uuid][1] = node_id
+        if node_id is not None:
+            self._desired_roots[uuid] = node_id
+        elif uuid in self._desired_roots:
+            del self._desired_roots[uuid]
 
     @property
     def hashed(self) -> bytes:
         if self._hashed is None:
             packed = msgpack.encode((
                 self._hoard_obj_id,
-                sorted((name, oids) for name, oids in self._roots.items()
-                       if oids[0] is not None or oids[1] is not None)))
+                sorted(self._current_roots.items()),
+                sorted(self._desired_roots.items())))
             self._hashed = hashlib.md5(packed).digest()
         return self._hashed
 
+    @property
+    def roots(self) -> Iterable[Tuple[str, Tuple[MaybeObjectID, MaybeObjectID]]]:
+        for uuid in set(list(self._current_roots.keys()) + list(self._desired_roots.keys())):
+            current_id = self._current_roots.get(uuid, None)
+            desired_id = self._desired_roots.get(uuid, None)
+            yield uuid, (current_id, desired_id)
+
     def children(self, objects: ObjectReader) -> Iterable[Tuple[str, "CompositeNodeID"]]:
         hoard_obj = objects.maybe_read(self._hoard_obj_id)
-        current_roots = remap(self._roots, lambda oids: objects.read(oids[0]) if oids[0] is not None else None)
-        desired_roots = remap(self._roots, lambda oids: objects.read(oids[1]) if oids[1] is not None else None)
+        current_roots = remap(self._current_roots, objects.read)
+        desired_roots = remap(self._desired_roots, objects.read)
         children_names = set(
             child_names(hoard_obj)
             + sum((child_names(obj) for obj in current_roots.values()), [])
@@ -204,17 +212,18 @@ class CompositeNodeID(HashableKey):
             if child_node is not None:
                 yield child_name, child_node
 
-    def get_child(self, objects: ObjectReader, child_name) -> "CompositeNodeID":
+    def get_child(self, objects: ObjectReader, child_name: str) -> "CompositeNodeID":
         assert isinstance(objects, ObjectReader)
         hoard_obj = objects.maybe_read(self._hoard_obj_id)
         child_node = CompositeNodeID(get_child_if_exists(child_name, hoard_obj))
 
-        for uuid, roots_ids in self._roots.items():
-            current_child = get_child_if_exists(child_name, objects.maybe_read(roots_ids[0]))
+        for uuid, child_current_id in self._current_roots.items():
+            current_child = get_child_if_exists(child_name, objects.read(child_current_id))
             if current_child is not None:
                 child_node.set_root_current(uuid, current_child)
 
-            desired_child = get_child_if_exists(child_name, objects.maybe_read(roots_ids[1]))
+        for uuid, child_desired_id in self._desired_roots.items():
+            desired_child = get_child_if_exists(child_name, objects.read(child_desired_id))
             if desired_child is not None:
                 child_node.set_root_desired(uuid, desired_child)
 
@@ -259,7 +268,7 @@ class HoardFilePresence:
 
         hoard_id = node_id._hoard_obj_id
         self.presence = dict()
-        for uuid, (current_id, desired_id) in node_id._roots.items():
+        for uuid, (current_id, desired_id) in node_id.roots:
             status = compute_status(hoard_id, current_id, desired_id)
             if status is not None:
                 self.presence[uuid] = status
@@ -282,7 +291,7 @@ def read_hoard_file_presence(reader: CachedReader, node_id: CompositeNodeID) -> 
 
     if file_obj is None:
         # fixme this is the legacy case where we iterate over current but not desired files, required by hoard file props. remove!
-        existing_current = (reader.maybe_read(root_ids[0]) for root_ids in node_id._roots.values())
+        existing_current = (reader.maybe_read(root_id) for root_id in node_id._current_roots.values())
 
         file_obj: BlobObject | None = next((obj for obj in existing_current if obj is not None), None)
 
@@ -362,8 +371,11 @@ class QueryStatsCalculator(RecursiveCalculator[CompositeNodeID, HoardFilePresenc
         return "QueryStatsCalculator-V01".encode()
 
 
-def get_child_if_exists(child_name: str, hoard_obj: StoredObject | None):
-    return hoard_obj.get(child_name) if hoard_obj and hoard_obj.object_type == ObjectType.TREE else None
+def get_child_if_exists(child_name: str, hoard_obj: StoredObject | None) -> MaybeObjectID:
+    if hoard_obj and hoard_obj.object_type == ObjectType.TREE:
+        hoard_obj: TreeObject
+        return hoard_obj.get(child_name)
+    return None
 
 
 def child_names(obj: StoredObject) -> List[str]:
