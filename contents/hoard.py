@@ -12,20 +12,17 @@ from alive_progress import alive_bar
 
 from command.fast_path import FastPosixPath
 from config import HoardConfig
-from contents.hoard_props import HoardFileStatus, HoardFileProps, GET_BY_MOVE, GET_BY_COPY, RESERVED
+from contents.hoard_props import HoardFileProps, GET_BY_MOVE, GET_BY_COPY, RESERVED
 from contents.recursive_stats_calc import UsedSizeCalculator, NodeID, QueryStatsCalculator, composite_from_roots, \
     drilldown, FolderStats, SizeCountPresenceStatsCalculator, SizeCountPresenceStats, FileStats, QueryStats, UsedSize, \
-    CompositeObject, CachedReader, read_hoard_file_presence, CurrentAndDesiredReader
+    CompositeObject, CachedReader, read_hoard_file_presence
 from contents.repo import RepoContentsConfig
 from lmdb_storage.cached_calcs import AppCachedCalculator
-from lmdb_storage.file_object import BlobObject, FileObject
+from lmdb_storage.file_object import FileObject
 from lmdb_storage.lookup_tables import LookupTableObjToPaths, CompressedPath
 from lmdb_storage.lookup_tables_paths import lookup_paths, get_path_string, compute_obj_id_to_path_lookup_table, \
     compute_obj_id_to_path_difference_lookup_table, decode_bytes_to_intpath
 from lmdb_storage.object_store import ObjectStorage
-from lmdb_storage.operations.fast_association import FastAssociation
-from lmdb_storage.operations.generator import TreeGenerator
-from lmdb_storage.operations.util import ByRoot
 from lmdb_storage.tree_iteration import zip_trees_dfs, dfs, DiffType, zip_dfs
 from lmdb_storage.tree_object import ObjectType, StoredObject, TreeObject, MaybeObjectID, ObjectID
 from lmdb_storage.tree_operations import get_child
@@ -186,44 +183,6 @@ class HoardDir:
 def _filename(filepath: str) -> str:
     _, name = os.path.split(filepath)
     return name
-
-
-class HoardFilesIterator(TreeGenerator[BlobObject, Tuple[str, HoardFileProps]]):
-    def __init__(self, objects: Objects, parent: "HoardContents"):
-        self.parent = parent
-        self.objects = objects
-
-    def compute_on_level(
-            self, path: List[str], original: FastAssociation[StoredObject]
-    ) -> Iterable[Tuple[FastPosixPath, HoardFileProps]]:
-        path = FastPosixPath("/" + "/".join(path))
-        file_obj: BlobObject | None = original.get_if_present("HOARD")
-
-        if file_obj is None:
-            # fixme this is the legacy case where we iterate over current but not desired files. remove!
-            file_obj: BlobObject | None = next(
-                (f for root_name, f in original.available_items() if f.object_type == ObjectType.BLOB), None)
-
-        if not file_obj or file_obj.object_type != ObjectType.BLOB:
-            logging.debug("Skipping path %s as it is not a BlobObject", path)
-            return
-
-        assert isinstance(file_obj, FileObject)
-        yield path, HoardFileProps(self.parent, path, file_obj.size, file_obj.fasthash, by_root=original)
-
-    def should_drill_down(self, path: List[str], trees: ByRoot[TreeObject], files: ByRoot[BlobObject]) -> bool:
-        return True
-
-    @staticmethod
-    def DEPRECATED_all(parent: "HoardContents") -> Iterable[Tuple[FastPosixPath, HoardFileProps]]:
-        hoard_root, root_ids = find_roots(parent)
-
-        obj_ids = ByRoot(
-            [name for name, _ in root_ids] + ["HOARD"],
-            root_ids + [("HOARD", hoard_root)])
-
-        with parent.env.objects(write=False) as objects:
-            yield from HoardFilesIterator(objects, parent).execute(obj_ids=obj_ids)
 
 
 def find_roots(parent: "HoardContents") -> (MaybeObjectID, List[Tuple[str, MaybeObjectID]]):
@@ -487,14 +446,30 @@ class ReadonlyHoardFSObjects:
         return stats
 
     def to_fetch(self, repo_uuid: str) -> Generator[Tuple[str, FileObject], None, None]:
-        for path, props in HoardFilesIterator.DEPRECATED_all(self.parent):
-            if props.get_status(repo_uuid) == HoardFileStatus.GET:
-                yield path.as_posix(), HACK_create_from_hoard_props(props)
+        remote_root = self.parent.env.roots(write=False)[repo_uuid]
+        with self.parent.env.objects(write=False) as objects:
+            for path, diff_type, current_id, desired_id, _ in zip_dfs(
+                objects, '', remote_root.current, remote_root.desired):
+                if diff_type == DiffType.LEFT_MISSING or diff_type == DiffType.DIFFERENT:
+                    assert desired_id is not None
+                    desired_obj: StoredObject = objects[desired_id]
+                    if desired_obj.object_type == ObjectType.TREE:
+                        continue
+                    desired_obj: FileObject
+                    yield path, desired_obj
 
     def to_cleanup(self, repo_uuid: str) -> Generator[Tuple[FastPosixPath, FileObject], None, None]:
-        for path, props in HoardFilesIterator.DEPRECATED_all(self.parent):
-            if props.get_status(repo_uuid) == HoardFileStatus.CLEANUP:
-                yield path, HACK_create_from_hoard_props(props)
+        remote_root = self.parent.env.roots(write=False)[repo_uuid]
+        with self.parent.env.objects(write=False) as objects:
+            for path, diff_type, current_id, desired_id, _ in zip_dfs(
+                    objects, '', remote_root.current, remote_root.desired):
+                if diff_type == DiffType.RIGHT_MISSING:
+                    assert current_id is not None
+                    current_obj: StoredObject = objects[current_id]
+                    if current_obj.object_type == ObjectType.TREE:
+                        continue
+                    current_obj: FileObject
+                    yield FastPosixPath(path), current_obj
 
     def __contains__(self, file_path: FastPosixPath) -> bool:
         assert file_path.is_absolute()

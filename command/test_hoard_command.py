@@ -4,15 +4,22 @@ import pathlib
 import sys
 import tempfile
 from os.path import join
-from typing import Tuple, List, Dict
+from typing import Tuple, List, Dict, Iterable
 from unittest import IsolatedAsyncioTestCase
 
 from command.command_repo import RepoCommand
+from command.fast_path import FastPosixPath
 from command.test_repo_command import populate, write_contents, pretty_file_writer
 from config import CaveType
-from contents.hoard import HoardContents, HoardFilesIterator
+from contents.hoard import HoardContents, find_roots
 from contents.hoard_props import HoardFileProps
 from dragon import TotalCommand
+from lmdb_storage.file_object import BlobObject, FileObject
+from lmdb_storage.operations.fast_association import FastAssociation
+from lmdb_storage.operations.generator import TreeGenerator
+from lmdb_storage.operations.util import ByRoot
+from lmdb_storage.tree_object import StoredObject, ObjectType, TreeObject
+from lmdb_storage.tree_structure import Objects
 from resolve_uuid import resolve_remote_uuid
 
 
@@ -1583,3 +1590,41 @@ async def init_complex_hoard(tmpdir: str):
     assert partial_cave_cmd.repo.path == tmp_command.repo.path
 
     return hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd
+
+
+class HoardFilesIterator(TreeGenerator[BlobObject, Tuple[str, HoardFileProps]]):
+    def __init__(self, objects: Objects, parent: "HoardContents"):
+        self.parent = parent
+        self.objects = objects
+
+    def compute_on_level(
+            self, path: List[str], original: FastAssociation[StoredObject]
+    ) -> Iterable[Tuple[FastPosixPath, HoardFileProps]]:
+        path = FastPosixPath("/" + "/".join(path))
+        file_obj: BlobObject | None = original.get_if_present("HOARD")
+
+        if file_obj is None:
+            # fixme this is the legacy case where we iterate over current but not desired files. remove!
+            file_obj: BlobObject | None = next(
+                (f for root_name, f in original.available_items() if f.object_type == ObjectType.BLOB), None)
+
+        if not file_obj or file_obj.object_type != ObjectType.BLOB:
+            logging.debug("Skipping path %s as it is not a BlobObject", path)
+            return
+
+        assert isinstance(file_obj, FileObject)
+        yield path, HoardFileProps(self.parent, path, file_obj.size, file_obj.fasthash, by_root=original)
+
+    def should_drill_down(self, path: List[str], trees: ByRoot[TreeObject], files: ByRoot[BlobObject]) -> bool:
+        return True
+
+    @staticmethod
+    def DEPRECATED_all(parent: "HoardContents") -> Iterable[Tuple[FastPosixPath, HoardFileProps]]:
+        hoard_root, root_ids = find_roots(parent)
+
+        obj_ids = ByRoot(
+            [name for name, _ in root_ids] + ["HOARD"],
+            root_ids + [("HOARD", hoard_root)])
+
+        with parent.env.objects(write=False) as objects:
+            yield from HoardFilesIterator(objects, parent).execute(obj_ids=obj_ids)

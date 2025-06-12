@@ -8,7 +8,8 @@ from unittest.async_case import IsolatedAsyncioTestCase
 
 from command.fast_path import FastPosixPath
 from command.hoard import Hoard
-from contents.hoard import HoardFilesIterator, HoardContents
+from contents.hoard import HoardContents
+from command.test_hoard_command import HoardFilesIterator
 from dragon import TotalCommand
 from lmdb_storage.file_object import FileObject
 from lmdb_storage.lookup_tables import LookupTableObjToPaths
