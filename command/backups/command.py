@@ -149,7 +149,7 @@ class HoardCommandBackups:
                 file_sizes: Dict[str, int] = dict()
                 file_stats_copies: Dict[str, Tuple[int, int, int, int, int]] = dict()
                 with alive_bar(title="Iterating over hoard files") as bar:
-                    for folder, file in walk(hoard.tree_root, CachedReader(hoard), "/", sys.maxsize):
+                    for folder, file in hoard.tree_root.walk(CachedReader(hoard), sys.maxsize):
                         if file is not None:
                             bar()
 

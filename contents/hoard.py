@@ -105,11 +105,15 @@ def walk(current: "HoardDir", objects_reader: CachedReader, from_path: str = "/"
 
 
 class HoardFile:
-    def __init__(self, parent: "HoardDir", name: str, fullname: str, file_obj: FileObject):
+    @cached_property
+    def fullname(self) -> str:  # fixme replace with FullPosixPath
+        parent_path = pathlib.Path(self.parent.fullname) if self.parent is not None else pathlib.Path("/")
+        return parent_path.joinpath(self.name).as_posix()
+
+    def __init__(self, parent: "HoardDir", name: str, file_obj: FileObject):
         self.parent = parent
         self.name = name
 
-        self.fullname = fullname
         self.file_obj = file_obj
 
     def reload_props(self):
@@ -136,18 +140,13 @@ class HoardDir:
                 result[child_name] = HoardDir(self, child_name, child_node)
         return dict(sorted(result.items(), key=lambda kv: kv[0]))
 
-    @property
-    def _as_parent(self):
-        return self.fullname if self.fullname != "/" else ""
-
     def files(self, objects_reader: CachedReader) -> Dict[str, HoardFile]:
         result = dict()
         for child_name, child_node_id in self.node.children():
             child_node = CompositeObject(child_node_id, objects_reader)
             presence = read_hoard_file_presence(child_node)
             if presence is not None:  # fixme weird way to check if a file
-                fullpath = FastPosixPath(self.fullname).joinpath(child_name).as_posix()
-                result[child_name] = HoardFile(self, child_name, fullpath, presence.file_obj)
+                result[child_name] = HoardFile(self, child_name, presence.file_obj)
         return dict(sorted(result.items(), key=lambda kv: kv[0]))
 
     def get_dir(self, objects_reader: CachedReader, subname: str) -> Optional["HoardDir"]:

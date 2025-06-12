@@ -33,9 +33,9 @@ class HoardTreeWidget(Tree):
         self.run_worker(self._expand_root())
 
     async def _expand_root(self):
-        hoard_tree = self.contents.tree
+        hoard_tree_root = self.contents.tree_root
         hoard_root = self.root.add(
-            self._create_pretty_folder_label("/", FastPosixPath("/"), 45), data=hoard_tree.root, expand=True)
+            self._create_pretty_folder_label("/", FastPosixPath("/"), 45), data=hoard_tree_root, expand=True)
 
         hoard_root.expand()
         self.root.set_label("Hoard")
