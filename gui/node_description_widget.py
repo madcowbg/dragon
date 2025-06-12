@@ -14,7 +14,8 @@ from command.contents.command import augment_statuses, execute_get, execute_drop
 from command.fast_path import FastPosixPath
 from command.pathing import HoardPathing
 from config import HoardConfig
-from contents.hoard import HoardFile, HoardDir, HoardContents
+from contents.hoard import HoardContents
+from contents.hoard_tree_walking import HoardFile, HoardDir
 from contents.hoard_props import HoardFileProps, HoardFileStatus, GET_BY_COPY, RESERVED, GET_BY_MOVE
 from gui.confirm_action_screen import ConfirmActionScreen
 from util import format_size, group_to_dict, format_count

@@ -5,7 +5,7 @@ from typing import Dict, Any, Callable, Tuple
 from lmdb import Transaction
 from msgspec import msgpack
 
-from contents.recursive_stats_calc import HashableKey
+from contents.hashable_key import HashableKey
 from lmdb_storage.object_store import used_ratio
 from lmdb_storage.stats_cache import StatsCache
 from lmdb_storage.tree_calculation import StatGetter, ValueCalculator
