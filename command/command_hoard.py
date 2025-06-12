@@ -3,7 +3,7 @@ import os
 import pathlib
 import shutil
 from io import StringIO
-from typing import Dict, List, Tuple, TextIO, Any, Iterable
+from typing import Dict, List, Tuple, TextIO, Any
 
 from alive_progress import alive_bar, alive_it
 
@@ -18,20 +18,14 @@ from command.pathing import HoardPathing
 from command.repo import ProspectiveRepo
 from config import HoardRemote, CavePath, CaveType, ConnectionSpeed, ConnectionLatency
 from contents.hoard import HoardContents, MovesAndCopies
-from contents.hoard_props import HoardFileProps
-from contents.recursive_stats_calc import CachedReader, CompositeNodeID, NodeID, CompositeTreeReader, \
-    composite_from_roots
 from contents.repo import RepoContents
 from exceptions import MissingRepo
 from gui.hoard_explorer import start_hoard_explorer_gui
 from hashing import fast_hash
-from lmdb_storage.cached_calcs import Calculator
 from lmdb_storage.file_object import FileObject
-from lmdb_storage.lookup_tables import CompressedPath
 from lmdb_storage.lookup_tables_paths import fast_compressed_path_dfs
-from lmdb_storage.tree_calculation import RecursiveCalculator, StatGetter
 from lmdb_storage.tree_iteration import dfs
-from lmdb_storage.tree_object import ObjectType, TreeObject, MaybeObjectID
+from lmdb_storage.tree_object import ObjectType, MaybeObjectID
 from lmdb_storage.tree_operations import get_child, remove_child
 from lmdb_storage.tree_structure import ObjectID, add_object, Objects
 from resolve_uuid import resolve_remote_uuid

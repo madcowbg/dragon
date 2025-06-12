@@ -199,9 +199,6 @@ class CompositeNodeID(HashableKey):
             desired_id = self._desired_roots.get(uuid, None)
             yield uuid, (current_id, desired_id)
 
-    def as_object(self, objects: ObjectReader) -> "CompositeObject":
-        return CompositeObject(self, objects)
-
     def __hash__(self) -> int:
         return hash(self.hashed)
 
@@ -210,6 +207,10 @@ class CompositeNodeID(HashableKey):
 
 
 class CompositeObject:
+    @staticmethod
+    def expand(node_id: CompositeNodeID, objects: ObjectReader) -> "CompositeObject":
+        return CompositeObject(node_id, objects)
+
     def __init__(self, node_id: CompositeNodeID, objects: ObjectReader):
         self.node_id = node_id
         self._hoard_obj = objects.maybe_read(node_id._hoard_obj_id)
@@ -241,6 +242,12 @@ class CompositeObject:
                 child_node.set_root_desired(uuid, desired_child)
 
         return child_node
+
+    def __hash__(self) -> int:
+        return hash(self.node_id.hashed)
+
+    def __eq__(self, other) -> bool:
+        return isinstance(other, CompositeObject) and self.node_id == other.node_id
 
 
 @dataclasses.dataclass
@@ -321,7 +328,7 @@ class CompositeTreeReader[T](RecursiveReader[CompositeNodeID, HoardFilePresence 
     def children(self, obj: CompositeNodeID) -> Iterable[Tuple[str, CompositeNodeID]]:
         return [
             (child_name, child_obj)
-            for child_name, child_obj in obj.as_object(self._reader).children()]
+            for child_name, child_obj in CompositeObject.expand(obj, self._reader).children()]
 
     def is_compound(self, obj: CompositeNodeID) -> bool:
         return self.convert(obj) is None  # len(list(self.children(obj))) == 0
@@ -412,7 +419,7 @@ def drilldown(contents: "HoardContents", node_at_path: CompositeNodeID, path: Li
             return None
 
         for child in path:
-            current_node_id = current_node_id.as_object(reader).get_child(child)
+            current_node_id = CompositeObject.expand(current_node_id, reader).get_child(child)
             if current_node_id is None:
                 return None
 
