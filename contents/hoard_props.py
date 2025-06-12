@@ -44,11 +44,10 @@ def compute_status(
 
 
 class HoardFileProps:
-    def __init__(self, parent: "HoardContents", path: FastPosixPath, size: int, fasthash: str, *, by_root: FastAssociation[StoredObject] | None=None, file_id: MaybeObjectID = None):
+    def __init__(self, parent: "HoardContents", path: FastPosixPath, size: int, fasthash: str, *, by_root: FastAssociation[StoredObject] | None=None):
         self.parent = parent
         self._path = path
         self._maybe_by_root = by_root
-        self._maybe_file_id = file_id
 
         self.size = size
         self.fasthash = fasthash

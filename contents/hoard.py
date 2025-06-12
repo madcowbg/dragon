@@ -199,8 +199,7 @@ class HoardFilesIterator(TreeGenerator[BlobObject, Tuple[str, HoardFileProps]]):
             return
 
         assert isinstance(file_obj, FileObject)
-        yield path, HoardFileProps(
-            self.parent, path, file_obj.size, file_obj.fasthash, by_root=original, file_id=file_obj.id)
+        yield path, HoardFileProps(self.parent, path, file_obj.size, file_obj.fasthash, by_root=original)
 
     def should_drill_down(self, path: List[str], trees: ByRoot[TreeObject], files: ByRoot[BlobObject]) -> bool:
         return True
