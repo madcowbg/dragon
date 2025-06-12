@@ -15,6 +15,7 @@ from command.contents.pull_preferences import PullPreferences, PullIntention
 from command.fast_path import FastPosixPath
 from command.hoard import Hoard
 from command.pathing import HoardPathing
+from command.pending_file_ops import HACK_create_from_hoard_props
 from config import CaveType, HoardRemote, HoardConfig
 from contents.hoard import HoardContents, HoardFile, HoardDir
 from contents.hoard_props import HoardFileStatus, HoardFileProps, RESERVED, GET_BY_MOVE, GET_BY_COPY
@@ -23,6 +24,7 @@ from contents.repo import RepoContents
 from exceptions import MissingRepoContents, MissingRepo
 from lmdb_storage.cached_calcs import CachedCalculator
 from lmdb_storage.deferred_operations import HoardDeferredOperations
+from lmdb_storage.file_object import FileObject
 from lmdb_storage.operations.three_way_merge import TransformedRoots
 from lmdb_storage.pull_contents import merge_contents, commit_merged
 from lmdb_storage.roots import Root, Roots
@@ -35,10 +37,14 @@ from resolve_uuid import resolve_remote_uuid
 from util import format_size, custom_isabs, safe_hex, format_count
 
 
-def _file_stats(props: HoardFileProps) -> str:
-    a = props.by_status(HoardFileStatus.AVAILABLE)
-    g = props.by_status(HoardFileStatus.GET)
-    c = props.by_status(HoardFileStatus.CLEANUP)
+def _file_stats(file_obj: FileObject, fullpath: FastPosixPath, presence: Presence) -> str:
+    in_current = set(presence.in_current(fullpath, file_obj))
+    exists_in_current = set(presence.exists_on_current_path(fullpath))
+    in_desired = set(presence.in_desired(fullpath, file_obj))
+
+    a = (in_current.intersection(in_desired))
+    g = (in_desired - in_current)
+    c = (exists_in_current - in_desired) # all files, even those that are not the same as the desired ones
     res: List[str] = []
     if len(a) > 0:
         res.append(f'a:{len(a)}')
@@ -605,6 +611,7 @@ class HoardCommandContents:
                 return f"Use absolute paths, {selected_path} is relative."
 
             pathing = HoardPathing(self.hoard.config(), self.hoard.paths())
+            presence = Presence(hoard)
 
             logging.info(f"Listing files...")
             with StringIO() as out:
@@ -615,7 +622,7 @@ class HoardCommandContents:
                 folder: Optional[HoardDir]
                 for folder, file in hoard.tree.walk(selected_path, depth=depth):
                     if file is not None:
-                        stats = _file_stats(file.props)
+                        stats = _file_stats(file.file_obj, FastPosixPath(file.fullname), presence)
                         out.write(f"{file.fullname} = {stats}\n")
 
                     if not skip_folders and folder is not None:

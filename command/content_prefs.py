@@ -100,12 +100,26 @@ class Presence:
             if len(possible_obj_id) > 0 and possible_obj_id[0] == file_obj.file_id:
                 yield uuid
 
+    def exists_on_current_path(self, hoard_file: FastPosixPath) -> Iterable[str]:
+        for uuid, path_lookup_table in self._current.items():
+            possible_obj_id = path_lookup_table[digest_path(hoard_file.as_posix())]
+            assert len(possible_obj_id) <= 1  # fixme store object id, not a list of object ids...
+            if len(possible_obj_id) > 0:
+                yield uuid
+
     def in_desired(self, hoard_file: FastPosixPath, file_obj: FileObject) -> Iterable[str]:
         assert isinstance(file_obj, FileObject)
         for uuid, path_lookup_table in self._desired.items():
             possible_obj_id = path_lookup_table[digest_path(hoard_file.as_posix())]
             assert len(possible_obj_id) <= 1  # fixme store object id, not a list of object ids...
             if len(possible_obj_id) > 0 and possible_obj_id[0] == file_obj.file_id:
+                yield uuid
+
+    def exists_on_desired_path(self, hoard_file: FastPosixPath) -> Iterable[str]:
+        for uuid, path_lookup_table in self._desired.items():
+            possible_obj_id = path_lookup_table[digest_path(hoard_file.as_posix())]
+            assert len(possible_obj_id) <= 1  # fixme store object id, not a list of object ids...
+            if len(possible_obj_id) > 0:
                 yield uuid
 
     def is_desired(self, uuid: str, hoard_file: FastPosixPath, file_obj: FileObject) -> bool:

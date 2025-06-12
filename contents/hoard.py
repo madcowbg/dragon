@@ -117,23 +117,15 @@ class HoardTree:
 
 
 class HoardFile:
-    def __init__(self, parent: "HoardDir", name: str, fullname: str, fsobjects: "ReadonlyHoardFSObjects"):
+    def __init__(self, parent: "HoardDir", name: str, fullname: str, file_obj: FileObject):
         self.parent = parent
         self.name = name
 
         self.fullname = fullname
-        self.fsobjects = fsobjects
-
-        self._props = None
-
-    @property
-    def props(self) -> HoardFileProps:
-        if self._props is None:
-            self._props = self.fsobjects[FastPosixPath(self.fullname)]
-        return self._props
+        self.file_obj = file_obj
 
     def reload_props(self):
-        self._props = self.fsobjects[FastPosixPath(self.fullname)]
+        logging.error("Useless operation!")
 
 
 class HoardDir:
@@ -167,15 +159,16 @@ class HoardDir:
         result = dict()
         for child_name, child_node_id in self.node.children():
             child_node = CompositeObject(child_node_id, self.tree.objects_reader)
-            if read_hoard_file_presence(child_node) is not None:  # fixme weird way to check if a file
-                result[child_name] = HoardFile(
-                    self, child_name, FastPosixPath(self.fullname).joinpath(child_name).as_posix(), self.tree.objects)
+            presence = read_hoard_file_presence(child_node)
+            if presence is not None:  # fixme weird way to check if a file
+                fullpath = FastPosixPath(self.fullname).joinpath(child_name).as_posix()
+                result[child_name] = HoardFile(self, child_name, fullpath, presence.file_obj)
         return dict(sorted(result.items(), key=lambda kv: kv[0]))
 
     def get_dir(self, subname: str) -> Optional["HoardDir"]:
         child_node_id = self.node.get_child(subname)
         child_node = CompositeObject(child_node_id, self.tree.objects_reader)
-        if read_hoard_file_presence(child_node) is not None: # fixme weird way to check if a file
+        if read_hoard_file_presence(child_node) is not None:  # fixme weird way to check if a file
             return None
 
         return HoardDir(self, subname, self.tree, child_node)

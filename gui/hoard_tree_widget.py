@@ -47,7 +47,7 @@ class HoardTreeWidget(Tree):
             widget_node.add(folder_label, allow_expand=True, data=folder)
 
         for file in hoard_dir.files.values():
-            size = file.props.size
+            size = file.file_obj.size
             file_label = self._pretty_file_label(file, label_max_width, size)
             file_node = widget_node.add_leaf(file_label, data=file)
             self.file_nodes[file.fullname] = file_node, label_max_width
@@ -93,6 +93,6 @@ class HoardTreeWidget(Tree):
 
     def refresh_file_label(self, hoard_file: HoardFile):
         file_node, label_max_width = self.file_nodes[hoard_file.fullname]
-        file_node.set_label(self._pretty_file_label(hoard_file, label_max_width, hoard_file.props.size))
+        file_node.set_label(self._pretty_file_label(hoard_file, label_max_width, hoard_file.file_obj.size))
 
         # TODO also update the file's parents

@@ -146,7 +146,7 @@ class HoardContentsPendingToSyncFile(Tree[NodeID]):
         for child_name, child_id in self.current_and_desired_reader.children(folder_node_id):
             child_obj = self.current_and_desired_reader.convert(child_id)
 
-            if isinstance(child_obj[0], TreeObject) or isinstance(child_obj[1], TreeObject):
+            if isinstance(child_obj.current, TreeObject) or isinstance(child_obj.desired, TreeObject):
                 # is a folder
                 folder_label = Text().append(child_name).append(" ") \
                     .append(f"({self.pending_ops_calculator[child_id].count.all})", style="dim")
