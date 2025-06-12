@@ -25,11 +25,13 @@ from gui.hoard_explorer import start_hoard_explorer_gui
 from hashing import fast_hash
 from lmdb_storage.cached_calcs import Calculator
 from lmdb_storage.file_object import FileObject
+from lmdb_storage.lookup_tables import CompressedPath
+from lmdb_storage.lookup_tables_paths import fast_compressed_path_dfs
 from lmdb_storage.tree_calculation import RecursiveCalculator, StatGetter
 from lmdb_storage.tree_iteration import dfs
-from lmdb_storage.tree_object import ObjectType, TreeObject
+from lmdb_storage.tree_object import ObjectType, TreeObject, MaybeObjectID
 from lmdb_storage.tree_operations import get_child, remove_child
-from lmdb_storage.tree_structure import ObjectID, add_object
+from lmdb_storage.tree_structure import ObjectID, add_object, Objects
 from resolve_uuid import resolve_remote_uuid
 from util import group_to_dict, run_in_separate_loop, safe_hex, format_size
 
@@ -181,9 +183,7 @@ class HoardCommand(object):
                         repo_health[repo][num_copies] += 1
                     bar()
 
-            with alive_bar(title="Reading all hashes") as bar:
-                existing_hashes_calc = Calculator(HashesCalculator(hoard), bar)
-                existing_fast_hashes = existing_hashes_calc[composite_from_roots(hoard)]
+            existing_fast_hashes = read_all_current_hashes(hoard)
 
             hoard_fasthashes: Dict[str, List[Tuple[FastPosixPath, FileObject]]] = dict()
             for path, file in hoard.fsobjects.desired_hoard():
@@ -224,9 +224,9 @@ class HoardCommand(object):
                     (fasthash, len(existing_fast_hashes[fasthash])) for fasthash in hoard_fasthashes)
                 count_to_lfc = group_to_dict(num_copies_of_hoard_filehashes.items(), lambda fc: fc[1])
                 for count, lfc in sorted(count_to_lfc.items()):
-                    existing_sizes = [existing_fast_hashes[fasthash][0][2].size for fasthash, _ in lfc]
+                    existing_sizes = [existing_fast_hashes[fasthash][0][1].size for fasthash, _ in lfc]
                     total_sizes = [
-                        sum(file_copy[2].size for file_copy in existing_fast_hashes[fasthash]) for fasthash, _ in lfc]
+                        sum(file_copy[1].size for file_copy in existing_fast_hashes[fasthash]) for fasthash, _ in lfc]
 
                     set_sizes = set(existing_sizes)
                     assert len(set_sizes) > 0
@@ -502,42 +502,38 @@ def move_paths(
     return new_root_id
 
 
-type ReversedPath = List[str]
-type Hashes = Dict[str, List[Tuple[str, ReversedPath, FileObject]]] | None
+type Hashes = Dict[str, List[Tuple[str, FileObject, bytearray, MaybeObjectID]]] | None
 
 
-def read_hashes_for_node(reader: CachedReader, node_id: CompositeNodeID) -> Hashes | None:
-    result: Hashes = dict()
-    for uuid, file_id in node_id.current_trees():
-        file_obj = reader.read(file_id)
-        if file_obj.object_type != ObjectType.BLOB:
-            assert isinstance(file_obj, TreeObject)
-            continue
+class CachedObjectReader:
+    def __init__(self, objects: Objects):
+        self.objects = objects
+        self.cache = dict()
+        assert self.objects.txn is not None, "Use with an opened transaction only."
 
-        assert isinstance(file_obj, FileObject)
-
-        if file_obj.fasthash not in result:
-            result[file_obj.fasthash] = [(uuid, [], file_obj)]
-        else:
-            result[file_obj.fasthash].append((uuid, [], file_obj))
-
-    return result if len(result) > 0 else None
+    def __getitem__(self, obj_id):
+        if obj_id not in self.cache:
+            self.cache[obj_id] = self.objects[obj_id]
+        return self.cache[obj_id]
 
 
-class HashesCalculator(RecursiveCalculator[NodeID, Hashes, Hashes]):
-    def __init__(self, hoard_contents: HoardContents):
-        super().__init__(lambda h: h, CompositeTreeReader(hoard_contents, read_hashes_for_node))
+def read_all_current_hashes(hoard: HoardContents) -> Hashes:
+    roots = hoard.env.roots(write=False)
 
-    def aggregate(self, items: Iterable[Tuple[str, Hashes]]) -> Hashes:
-        result: Hashes = dict()
-        for child_name, hashes_in_child in items:
-            for fasthash, upfs in hashes_in_child.items():
-                for uuid, path, file_id in upfs:
-                    if fasthash not in result:
-                        result[fasthash] = []
-                    path.append(child_name)  # fixme convert to linked list, as this mutates intermediate results
-                    result[fasthash].append((uuid, path, file_id))
-        return result
+    hashes: Hashes = dict()
+    roots_per_uuid = dict((remote.uuid, roots[remote.uuid].current) for remote in hoard.hoard_config.remotes.all())
 
-    def for_none(self, calculator: StatGetter[NodeID, Hashes]) -> Hashes:
-        return dict()
+    with alive_bar(title="Reading all hashes") as bar:
+        with hoard.env.objects(write=False) as objects:
+            for uuid, root_id in roots_per_uuid.items():
+                for path, obj_type, obj_id, obj, _ in fast_compressed_path_dfs(
+                        CachedObjectReader(objects), bytearray(), root_id):
+                    bar()
+                    if obj_type == ObjectType.TREE:
+                        continue
+                    obj: FileObject
+                    if obj.fasthash not in hashes:
+                        hashes[obj.fasthash] = [(uuid, obj, path.copy(), root_id)]
+                    else:
+                        hashes[obj.fasthash].append((uuid, obj, path.copy(), root_id))
+    return hashes
