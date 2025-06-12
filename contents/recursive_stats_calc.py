@@ -1,3 +1,4 @@
+import abc
 import dataclasses
 import hashlib
 import logging
@@ -10,9 +11,8 @@ from msgspec import msgpack, Struct
 from contents.hoard_props import HoardFileStatus, compute_status
 from lmdb_storage.file_object import BlobObject, FileObject
 from lmdb_storage.operations.util import remap
-from lmdb_storage.tree_calculation import RecursiveReader, RecursiveCalculator, StatGetter
+from lmdb_storage.tree_calculation import RecursiveReader, RecursiveCalculator, StatGetter, ValueCalculator
 from lmdb_storage.tree_object import TreeObject, ObjectType, MaybeObjectID, StoredObject, ObjectID
-from lmdb_storage.tree_structure import Objects
 
 
 class HashableKey:
@@ -337,16 +337,52 @@ class CompositeTreeReader[T](RecursiveReader[CompositeNodeID, HoardFilePresence 
         return not self.is_compound(obj)
 
 
-def calc_query_stats(props: HoardFilePresence) -> QueryStats:
-    presence = props.presence
-    is_deleted = len([uuid for uuid, status in presence.items() if status != HoardFileStatus.CLEANUP]) == 0
-    num_sources = len([uuid for uuid, status in presence.items() if status == HoardFileStatus.AVAILABLE])
-    used_size = props.file_obj.size
+class CompositeNodeCalculator[R](ValueCalculator[CompositeObject, R]):
+    def __init__(self, hoard_contents: "HoardContents"):
+        self.object_reader = CachedReader(hoard_contents)
 
-    return QueryStats(file=FileStats(is_deleted, num_sources, used_size))
+    def calculate(self, calculator: "StatGetter[CompositeNodeID, R]", item: CompositeNodeID) -> R:
+        item_object = CompositeObject.expand(item, self.object_reader)
+        if self.treat_as_composite(item_object):
+            return self.aggregate(
+                (child_name, calculator[child_node_at_path]) for child_name, child_node_at_path in
+                item_object.children())
+        else:
+            return self.calculate_for_atom(item_object)
+
+    @abc.abstractmethod
+    def treat_as_composite(self, obj: CompositeObject) -> bool:
+        pass
+
+    @abc.abstractmethod
+    def calculate_for_atom(self, obj: CompositeObject) -> R:
+        pass
+
+    @abc.abstractmethod
+    def aggregate(self, items: Iterable[Tuple[str, R]]) -> R:
+        pass
+
+    @property
+    @abc.abstractmethod
+    def stat_cache_key(self) -> bytes:
+        pass
 
 
-class QueryStatsCalculator(RecursiveCalculator[CompositeNodeID, HoardFilePresence, QueryStats]):
+class QueryStatsCalculator(CompositeNodeCalculator[QueryStats]):
+    def treat_as_composite(self, obj: CompositeObject) -> bool:
+        # fixme weird (checking if we found a file), but what if names collide?
+        return read_hoard_file_presence(self.object_reader, obj.node_id) is None
+
+    def calculate_for_atom(self, obj: CompositeObject) -> QueryStats:
+        hfp = read_hoard_file_presence(self.object_reader, obj.node_id)
+
+        assert isinstance(hfp, HoardFilePresence)
+        is_deleted = len([uuid for uuid, status in hfp.presence.items() if status != HoardFileStatus.CLEANUP]) == 0
+        num_sources = len([uuid for uuid, status in hfp.presence.items() if status == HoardFileStatus.AVAILABLE])
+        used_size = hfp.file_obj.size
+
+        return QueryStats(file=FileStats(is_deleted, num_sources, used_size))
+
     def aggregate(self, items: Iterable[Tuple[str, QueryStats]]) -> QueryStats:
         count = 0
         used_size = 0
@@ -375,10 +411,6 @@ class QueryStatsCalculator(RecursiveCalculator[CompositeNodeID, HoardFilePresenc
 
     def for_none(self, calculator: "StatGetter[HoardFilePresence, QueryStats]") -> QueryStats:
         return QueryStats(folder=FolderStats(0, 0, 0, 0))
-
-    def __init__(self, contents: "HoardContent"):
-        super().__init__(calc_query_stats,
-                         CompositeTreeReader[HoardFilePresence | None](contents, read_hoard_file_presence))
 
     @cached_property
     def stat_cache_key(self) -> bytes:
