@@ -502,7 +502,6 @@ class CaveInfoWidget(Widget):
         logging.info(res)
         logging.info(f"Refreshing {self.remote.name}({self.remote.uuid}) completed.")
 
-
     @on(Button.Pressed, "#reset_pending_file_ops")
     @work
     async def reset_pending_file_ops(self):
@@ -627,7 +626,7 @@ class CaveExplorerScreen(Screen):
     async def cave_settings_changed(self):
         await self.recompose()
 
-    async def on_radio_set_changed(self, event: RadioSet.Changed):
+    def on_radio_set_changed(self, event: RadioSet.Changed):
         if self.hoard is None:
             return
 
@@ -636,6 +635,9 @@ class CaveExplorerScreen(Screen):
             self.notify(f"Invalid repo selected - {event.pressed.name} with uuid {uuid}!", severity="error")
             return
 
+        self.switch_remote(uuid)
+
+    def switch_remote(self, uuid: str):
         self.remote = self.hoard.config().remotes[uuid]
 
     async def on_start_progress_reporting(self, event: StartProgressReporting):

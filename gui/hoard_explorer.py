@@ -3,7 +3,7 @@ import os
 import pathlib
 import subprocess
 
-from textual import on
+from textual import on, work
 from textual.app import App, ComposeResult
 from textual.screen import Screen
 from textual.widgets import Header, Footer, Label
@@ -45,6 +45,12 @@ class HoardExplorerApp(App):
         _write_config()
 
         super().push_screen(screen)
+
+    @work
+    async def action_cave_operations_navigate(self, repo_uuid: str, obj_path: str):
+        self.notify(f"Trying to navigate to repo {repo_uuid} at {obj_path}.")
+        await self.push_screen("cave_explorer")
+        self.get_screen("cave_explorer", CaveExplorerScreen).switch_remote(repo_uuid)
 
     def action_toggle_dark(self) -> None:
         """An action to toggle dark mode."""

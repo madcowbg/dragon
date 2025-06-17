@@ -55,7 +55,9 @@ class FileAvailabilityPerRepoDataTable(DataTable):
                 actions_links = self._generate_action_links(repo_uuid, status)
 
                 self.add_row(
-                    Text().append(hoard_remote.name, "green" if is_file_present else "dim strike"),
+                    Text.from_markup(
+                        f"[@click=app.cave_operations_navigate('{hoard_remote.uuid}','{self.hoard_file.fullname}')]{hoard_remote.name}[/]",
+                        style="green" if is_file_present else "dim strike"),
                     Text().append(status.value),
                     actions_links,
                     Text(
@@ -118,8 +120,8 @@ class DirAvailabilityDataTable(DataTable):
                 actions_links = Text().append(get_link).append(" ", style="none").append(drop_link)
 
                 self.add_row(
-                    Text(
-                        hoard_remote.name,
+                    Text.from_markup(
+                        f"[@click=app.cave_operations_navigate('{hoard_remote.uuid}','{self.hoard_dir.fullname}')]{hoard_remote.name}[/]",
                         style="green" if is_dir_present else "strike"),
                     actions_links,
                     Text(
@@ -225,13 +227,13 @@ class NodeDescription(Widget):
         data_table.add_columns("name", *all_stats)
         for name, uuid, updated_maybe, uuid_stats in statuses_sorted:
             data_table.add_row(
-                name,
+                Text.from_markup(f"[@click=app.cave_operations_navigate('{uuid}','{hoard_dir.fullname}')]{name}[/]"),
                 *(Text(format_count(uuid_stats[stat]["nfiles"]), justify="right") if stat in uuid_stats else "" for stat
                   in all_stats))
         data_table.add_row()
         for name, uuid, updated_maybe, uuid_stats in statuses_sorted:
             data_table.add_row(
-                name,
+                Text.from_markup(f"[@click=app.cave_operations_navigate('{uuid}','{hoard_dir.fullname}')]{name}[/]"),
                 *(Text(format_size(uuid_stats[stat]["size"]), justify="right") if stat in uuid_stats else "" for stat in
                   all_stats))
 
