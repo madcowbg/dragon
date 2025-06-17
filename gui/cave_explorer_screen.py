@@ -18,6 +18,7 @@ from textual.widget import Widget
 from textual.widgets import Tree, Static, Header, Footer, Select, RichLog, Button, RadioSet, RadioButton, Input
 from textual.widgets._tree import TreeNode
 
+from command.command_repo import RepoCommand
 from command.content_prefs import ContentPrefs
 from command.contents.command import execute_pull, init_pull_preferences, pull_prefs_to_restore_from_hoard, \
     DifferencesCalculator, get_current_file_differences, Difference
@@ -377,6 +378,8 @@ class CaveInfoWidget(Widget):
                 yield Static("desired: " + safe_hex(repo_root.desired), classes="repo-setting-group")
                 yield Static("staging: " + safe_hex(repo_root.staging), classes="repo-setting-group")
 
+            yield Button("`cave refresh`", variant="primary", id="refresh_cave_contents")
+
             with Grid(classes="repo-setting-grid"):
                 yield Static("Name", classes="repo-setting-label")
                 yield Input(value=self.remote.name, placeholder="Remote Name", id="repo-name", restrict="..+")
@@ -481,6 +484,24 @@ class CaveInfoWidget(Widget):
                 logging.info(out.getvalue())
 
             await self.recompose()
+
+    @on(Button.Pressed, "#refresh_cave_contents")
+    @work
+    async def refresh_cave_contents(self):
+        if await self.app.push_screen_wait(
+                ConfirmActionScreen(f"Are you sure you want to REFRESH repo {self.remote.name} ({self.remote.uuid}?")):
+            self.run_refresh()
+
+            await self.recompose()
+
+    @work(thread=True)
+    async def run_refresh(self):
+        repo_cmd = RepoCommand(path=self.hoard.hoardpath, name=self.remote.uuid)
+        res = await repo_cmd.refresh(show_details=False)
+
+        logging.info(res)
+        logging.info(f"Refreshing {self.remote.name}({self.remote.uuid}) completed.")
+
 
     @on(Button.Pressed, "#reset_pending_file_ops")
     @work
