@@ -29,7 +29,7 @@ def _has_uuid_filename(path: str) -> bool:
 class ProspectiveRepo:
     def __init__(self, path: str):
         self.path = path
-        logging.info("Opening prospective repo at path: %s", self.path)
+        logging.debug("Opening prospective repo at path: %s", self.path)
 
     def _init_uuid(self):
         with open(os.path.join(self.config_folder, CURRENT_UUID_FILENAME), "w") as f:
@@ -50,7 +50,7 @@ class ProspectiveRepo:
             self._init_uuid()
 
     def _validate_repo(self):
-        logging.info(f"Validating {self.path}")
+        logging.debug(f"Validating {self.path}")
         if not os.path.isdir(self.path):
             raise MissingRepo(f"folder {self.path} does not exist")
         if not os.path.isdir(self.config_folder):

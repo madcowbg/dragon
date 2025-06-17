@@ -1,5 +1,8 @@
 
-
+#logging-widget {
+    height: 10;
+    dock: bottom;
+}
 
 .horizontal_config_line Label, .horizontal_config_line Static {
     padding: 1;
@@ -7,6 +10,10 @@
 
 Static {
     width: auto;
+}
+
+#settings-bar {
+    dock: top;
 }
 
 HoardTreeWidget {
@@ -24,7 +31,7 @@ HoardTreeWidget {
 }
 
 HoardExplorerSettings {
-    height: auto
+    height: auto;
 }
 
 #hoard-explorer-settings-grid {

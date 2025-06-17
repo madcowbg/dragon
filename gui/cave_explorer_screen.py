@@ -38,6 +38,7 @@ from exceptions import RepoOpeningFailed, WrongRepo, MissingRepoContents, Missin
 from gui.app_config import config, _write_config
 from gui.confirm_action_screen import ConfirmActionScreen
 from gui.folder_tree import DEPRECATED_FolderNode, DEPRECATED_FolderTree, DEPRECATED_aggregate_on_nodes
+from gui.logging import PythonLoggingWidget
 from gui.progress_reporting import StartProgressReporting, MarkProgressReporting, progress_reporting_it, \
     ProgressReporting, progress_reporting_bar
 from lmdb_storage.cached_calcs import AppCachedCalculator
@@ -566,39 +567,40 @@ class CaveExplorerScreen(Screen):
         yield Header()
         yield Footer()
 
-        with Horizontal(id="selection-pane"):
-            with RadioSet(id="choose_remote"):
-                if self.hoard is not None:
-                    config = self.hoard.config()
+        with Vertical():
+            with Horizontal(id="selection-pane"):
+                with RadioSet(id="choose_remote"):
+                    if self.hoard is not None:
+                        config = self.hoard.config()
 
-                    latency_to_repos = group_to_dict(
-                        config.remotes.all(),
-                        key=lambda r: self.hoard.paths()[r.uuid].latency)
-                    for latency, repos in sorted(latency_to_repos.items(), key=lambda lr: latency_order(lr[0])):
-                        yield Static(f"Latency: {latency.value}", classes="repo-group")
-                        for remote in sorted(repos, key=lambda r: r.name):
-                            try:
-                                self.hoard.connect_to_repo(remote.uuid, require_contents=True)
-                                style = "green"
-                            except MissingRepo as mr:
-                                style = "dim"
-                            except MissingRepoContents as mrc:
-                                style = "dim red"
-                            except WrongRepo as wr:
-                                style = "dim strike"
-                            except Exception as e:
-                                traceback.print_exception(e)
-                                logging.error(e)
-                                style = "red strike"
+                        latency_to_repos = group_to_dict(
+                            config.remotes.all(),
+                            key=lambda r: self.hoard.paths()[r.uuid].latency)
+                        for latency, repos in sorted(latency_to_repos.items(), key=lambda lr: latency_order(lr[0])):
+                            yield Static(f"Latency: {latency.value}", classes="repo-group")
+                            for remote in sorted(repos, key=lambda r: r.name):
+                                try:
+                                    self.hoard.connect_to_repo(remote.uuid, require_contents=True)
+                                    style = "green"
+                                except MissingRepo as mr:
+                                    style = "dim"
+                                except MissingRepoContents as mrc:
+                                    style = "dim red"
+                                except WrongRepo as wr:
+                                    style = "dim strike"
+                                except Exception as e:
+                                    traceback.print_exception(e)
+                                    logging.error(e)
+                                    style = "red strike"
 
-                            yield RadioButton(
-                                Text().append(remote.name, style),
-                                name=remote.uuid, id=f"uuid-{remote.uuid}", value=remote == self.remote)
+                                yield RadioButton(
+                                    Text().append(remote.name, style),
+                                    name=remote.uuid, id=f"uuid-{remote.uuid}", value=remote == self.remote)
 
-            yield CaveInfoWidget(self.hoard, self.remote)
+                yield CaveInfoWidget(self.hoard, self.remote)
 
-        yield ProgressReporting()
-        yield RichLog(id="cave_explorer_log")
+            yield ProgressReporting()
+            yield PythonLoggingWidget()
 
     @on(CaveInfoWidget.RemoteSettingChanged)
     async def cave_settings_changed(self):

@@ -51,12 +51,12 @@ class ObjectEnvironmentCache:
         self._cache: Dict[str, Tuple[EnvParams, Environment, Dict[str, _Database], int]] = dict()
 
     def obtain(self, path: str, map_size: int | None, max_dbs: int) -> Tuple[Environment, Dict[str, _Database]]:
-        logging.info(f"### LMDB OBTAIN {path}\n")
+        logging.debug(f"### LMDB OBTAIN {path}")
 
         env_params = EnvParams(path, max_dbs=max_dbs, map_size=map_size)
 
         if path not in self._cache:
-            logging.info(f"### LMDB OPENING {path}\n")
+            logging.info(f"### LMDB OPENING {path}")
             if not os.path.isfile(path):
                 maybe_migrate_storage(path)
 
@@ -94,10 +94,10 @@ class ObjectEnvironmentCache:
         if usage == 0:
             raise ValueError("Cannot release an unused object!")
 
-        logging.info(f"### LMDB RELEASE {path}\n")
+        logging.debug(f"### LMDB RELEASE {path}")
         usage -= 1
         if usage == 0:
-            logging.info(f"### LMDB CLOSING CONNECTION {path}\n")
+            logging.info(f"### LMDB CLOSING CONNECTION {path}")
             env.close()
             self._cache.pop(path)
         else:
@@ -178,7 +178,7 @@ class ObjectStorage(TransactionCreator):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        logging.info(f"### LMDB CLOSE {self._env_params.path} {self._env.info()}\n")
+        logging.info(f"### LMDB CLOSE {self._env_params.path} {self._env.info()}")
         OBJECT_ENVIRONMENT_CACHE.release(self._env_params.path)
         self._env = None
         self._dbs = None
@@ -200,8 +200,8 @@ class ObjectStorage(TransactionCreator):
                 logging.error("Even after GC usage is more than 40%. Can fill up.")
 
     def gc(self, silent: bool = False):
-        sys.stdout.write(f"Used space = {format_size(self.used_size)}\n")
-        sys.stdout.write(f"Used pct = {100 * self.used_ratio}\n")
+        logging.warn(f"Used space = {format_size(self.used_size)}")
+        logging.warn(f"Used pct = {100 * self.used_ratio}")
 
         root_ids = self.roots(write=False).all_live
         logging.info(f"found {len(root_ids)} live top-level refs.")

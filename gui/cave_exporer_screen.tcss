@@ -64,8 +64,13 @@ Bar > .bar--complete {
 }
 
 ProgressReporting {
-    min-height: 10%;
+    min-height: 3;
     max-height: 15%;
+}
+
+#logging-widget {
+    height: 10;
+    dock: bottom;
 }
 
 PercentageStatus {

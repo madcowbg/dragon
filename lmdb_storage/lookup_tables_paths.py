@@ -128,7 +128,7 @@ def compute_obj_id_to_path_lookup_table(objects: Objects, root_id: MaybeObjectID
             assert len(obj_id) == 20
             packed_lookup_data += obj_id + encode(len(tmp_path)) + tmp_path
 
-    sys.stdout.write(
+    logging.info(
         f"decoded_files: {files}, {format_size(len(packed_lookup_data) // files) if files > 0 else 0} per file\n")
     return packed_lookup_data
 
@@ -158,9 +158,9 @@ def compute_obj_id_to_path_difference_lookup_table(
         assert len(existing_in_obj.id) == 20
         packed_lookup_data += existing_in_obj.id + encode(len(tmp_path)) + tmp_path
 
-    sys.stdout.write(
+    logging.info(
         f"diff tree - decoded_files: {files},"
-        f" {format_size(len(packed_lookup_data) // files) if files > 0 else 0} per file\n")
+        f" {format_size(len(packed_lookup_data) // files) if files > 0 else 0} per file")
     return packed_lookup_data
 
 
@@ -190,7 +190,7 @@ def compute_path_lookup_table(objects: Objects, root_id: MaybeObjectID) -> bytea
 
             packed_lookup_data += digested_path + encode(len(obj_id)) + obj_id
 
-    sys.stdout.write(
+    logging.info(
         f"decoded_paths: {files}, {format_size(len(packed_lookup_data) // files) if files > 0 else 0} per file\n")
     return packed_lookup_data
 

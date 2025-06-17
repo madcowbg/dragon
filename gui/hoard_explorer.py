@@ -12,6 +12,7 @@ from command.hoard import Hoard
 from gui.app_config import config, _write_config
 from gui.cave_explorer_screen import CaveExplorerScreen
 from gui.hoard_explorer_screen import HoardExplorerScreen, HoardExplorerSettings
+from gui.logging import PRINT_HANDLER
 
 
 class HoardStateScreen(Screen):
@@ -21,6 +22,7 @@ class HoardStateScreen(Screen):
         yield Footer()
 
         yield Label("Hoard state")
+
 
 class HoardExplorerApp(App):
     BINDINGS = [
@@ -76,6 +78,11 @@ class HoardExplorerApp(App):
 def start_hoard_explorer_gui(path: str | None = None):
     if path is not None:
         os.chdir(path)
+
+    logger = logging.getLogger()
+    logger.handlers.clear()
+    logger.addHandler(PRINT_HANDLER)
+    logger.setLevel(logging.INFO)
 
     app = HoardExplorerApp()
     app.run()

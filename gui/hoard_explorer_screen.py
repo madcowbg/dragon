@@ -18,6 +18,7 @@ from command.pathing import HoardPathing
 from contents.hoard import HoardContents
 from gui.app_config import config, _write_config
 from gui.hoard_tree_widget import HoardTreeWidget
+from gui.logging import PythonLoggingWidget
 from gui.node_description_widget import NodeDescription, FileAvailabilityPerRepoDataTable
 
 
@@ -41,6 +42,8 @@ class HoardExplorerWidget(Widget):
                 NodeDescription(self.hoard_contents, config, pathing, self.can_modify))
         else:
             yield Label("Please select a valid hoard!")
+
+        yield PythonLoggingWidget()
 
     async def watch_can_modify(self, new_value: bool, old_value: bool):
         if old_value != new_value:
@@ -143,7 +146,7 @@ class HoardExplorerScreen(Screen):
         yield Header()
         yield Footer()
 
-        with Collapsible(title="Hoard Settings"):
+        with Collapsible(title="Hoard Settings", id="settings-bar"):
             yield HoardExplorerSettings()
         yield HoardExplorerWidget()
 
