@@ -207,7 +207,7 @@ def read_hoard_file_presence(node: CompositeObject) -> HoardFilePresence | None:
 
     if not file_obj or file_obj.object_type != ObjectType.BLOB:
         # fixme remove this case, it triggers for all folders now
-        logging.debug("Error - path %s as it is not a BlobObject", node.node_id)
+        logging.error("Error - path %s as it is not a BlobObject", node.node_id)
         return None  # assert False, f"Error - path {path} as it is not a BlobObject"
 
     assert isinstance(file_obj, FileObject)
@@ -247,8 +247,7 @@ class CompositeNodeCalculator[R](ValueCalculator[CompositeObject, R]):
 
 class QueryStatsCalculator(CompositeNodeCalculator[QueryStats]):
     def treat_as_composite(self, obj: CompositeObject) -> bool:
-        # fixme weird (checking if we found a file), but what if names collide?
-        return read_hoard_file_presence(obj) is None
+        return obj.is_any_tree()
 
     def calculate_for_atom(self, obj: CompositeObject) -> QueryStats:
         hfp = read_hoard_file_presence(obj)
@@ -366,12 +365,12 @@ class SizeCountPresenceStats(Struct, Storeable):
 
 class SizeCountPresenceStatsCalculator(CompositeNodeCalculator[SizeCountPresenceStats]):
     def treat_as_composite(self, obj: CompositeObject) -> bool:
-        # fixme weird (checking if we found a file), but what if names collide?
-        return read_hoard_file_presence(obj) is None
-
+        return obj.is_any_tree()
 
     def calculate_for_atom(self, obj: CompositeObject) -> SizeCountPresenceStats:
         props = read_hoard_file_presence(obj)
+        if props is None:
+            return SizeCountPresenceStats(0)
 
         result = SizeCountPresenceStats(1)
         presence = props.presence

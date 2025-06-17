@@ -53,7 +53,7 @@ class HoardDir:
         result = dict()
         for child_name, child_node_id in self.node.children():
             child_node = CompositeObject(child_node_id, objects_reader)
-            if read_hoard_file_presence(child_node) is None:  # fixme weird way to check if a dir
+            if child_node.is_any_tree():
                 result[child_name] = HoardDir(self, child_name, child_node)
         return dict(sorted(result.items(), key=lambda kv: kv[0]))
 
@@ -61,15 +61,15 @@ class HoardDir:
         result = dict()
         for child_name, child_node_id in self.node.children():
             child_node = CompositeObject(child_node_id, objects_reader)
-            presence = read_hoard_file_presence(child_node)
-            if presence is not None:  # fixme weird way to check if a file
+            if not child_node.is_any_tree():
+                presence = read_hoard_file_presence(child_node)
                 result[child_name] = HoardFile(self, child_name, presence.file_obj)
         return dict(sorted(result.items(), key=lambda kv: kv[0]))
 
     def get_dir(self, objects_reader: CachedReader, subname: str) -> Optional["HoardDir"]:
         child_node_id = self.node.get_child(subname)
         child_node = CompositeObject(child_node_id, objects_reader)
-        if read_hoard_file_presence(child_node) is not None:  # fixme weird way to check if a file
+        if not child_node.is_any_tree():
             return None
 
         return HoardDir(self, subname, child_node)

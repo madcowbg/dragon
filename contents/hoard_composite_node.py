@@ -5,6 +5,7 @@ from typing import Dict, Iterable, Tuple, List
 from msgspec import msgpack
 
 from contents.hashable_key import HashableKey
+from lmdb_storage.file_object import FileObject
 from lmdb_storage.operations.util import remap
 from lmdb_storage.tree_object import ObjectID, StoredObject, MaybeObjectID, ObjectType, TreeObject
 
@@ -105,6 +106,19 @@ class CompositeObject:
 
     def __eq__(self, other) -> bool:
         return isinstance(other, CompositeObject) and self.node_id == other.node_id
+
+    def is_any_tree(self):
+        if self._hoard_obj is not None:
+            return isinstance(self._hoard_obj, TreeObject)
+
+        for obj in self._current_roots.values():
+            if isinstance(obj, TreeObject):
+                return True
+
+        for obj in self._desired_roots.values():
+            if isinstance(obj, TreeObject):
+                return True
+        return False
 
 
 def get_child_if_exists(child_name: str, hoard_obj: StoredObject | None) -> MaybeObjectID:
