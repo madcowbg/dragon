@@ -61,7 +61,7 @@ class TestPerformance(IsolatedAsyncioTestCase):
     async def test_load_all_and_decode(self):
         path = r"C:\Users\Bono\hoard"
         hoard = Hoard(path)
-        async with hoard.open_contents(create_missing=False) as hoard_contents:
+        with hoard.open_contents(create_missing=False) as hoard_contents:
             decoded_file, decoded_folder = force_iterating_over(hoard_contents)  # just force loading
 
             start = default_timer()
@@ -74,7 +74,7 @@ class TestPerformance(IsolatedAsyncioTestCase):
     async def test_fast_approximate_mapping(self):
         path = r"C:\Users\Bono\hoard"
         hoard = Hoard(path)
-        async with hoard.open_contents(create_missing=False) as hoard_contents:
+        with hoard.open_contents(create_missing=False) as hoard_contents:
             decoded_file, decoded_folder = force_iterating_over(hoard_contents)  # just force loading
 
             root_id = hoard_contents.env.roots(write=False)["HOARD"].desired
@@ -190,7 +190,7 @@ class TestPerformance(IsolatedAsyncioTestCase):
 
         decoded_file, decoded_folder, repo_files = 0, 0, 0
         sys.stdout.write(f"\nto open: {datetime.now()}\n")
-        async with hoard.open_contents(create_missing=False) as hoard_contents:
+        with hoard.open_contents(create_missing=False) as hoard_contents:
             sys.stdout.write(f"\nstart: {datetime.now()}\n")
             for file, prop in HoardFilesIterator.DEPRECATED_all(hoard_contents):
                 decoded_file += 1
@@ -206,7 +206,7 @@ class TestPerformance(IsolatedAsyncioTestCase):
         hoard = Hoard(path)
 
         sys.stdout.write(f"\nto open: {datetime.now()}\n")
-        async with hoard.open_contents(create_missing=False) as hoard_contents:
+        with hoard.open_contents(create_missing=False) as hoard_contents:
             sys.stdout.write(f"\nstart: {datetime.now()}\n")
             query = hoard_contents.fsobjects.query
             # query.is_deleted(FastPosixPath("."))

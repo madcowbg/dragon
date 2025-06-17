@@ -14,7 +14,8 @@ from command.fast_path import FastPosixPath
 from config import HoardConfig
 from contents.hoard_props import HoardFileProps, GET_BY_MOVE, GET_BY_COPY, RESERVED
 from contents.hoard_tree_walking import walk, composite_from_roots, hoard_tree_root
-from contents.recursive_stats_calc import UsedSizeCalculator, NodeID, QueryStatsCalculator, drilldown, FolderStats, SizeCountPresenceStatsCalculator, SizeCountPresenceStats, FileStats, QueryStats, UsedSize, \
+from contents.recursive_stats_calc import UsedSizeCalculator, NodeID, QueryStatsCalculator, drilldown, FolderStats, \
+    SizeCountPresenceStatsCalculator, SizeCountPresenceStats, FileStats, QueryStats, UsedSize, \
     CachedReader
 from contents.repo import RepoContentsConfig
 from lmdb_storage.cached_calcs import AppCachedCalculator
@@ -450,8 +451,8 @@ class HoardContents:
         self.env.__enter__()
 
     def close(self, writeable: bool):
-        self.env.gc()
         if writeable:
+            self.env.gc()
             self.validate_desired()
 
         self.env.__exit__(None, None, None)

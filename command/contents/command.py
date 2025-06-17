@@ -473,7 +473,7 @@ class HoardCommandContents:
         remote_uuid = resolve_remote_uuid(config, remote)
 
         logging.info(f"Loading hoard TOML...")
-        async with self.hoard.open_contents(create_missing=False) as hoard_contents:
+        with self.hoard.open_contents(create_missing=False) as hoard_contents:
             with StringIO() as out:
                 print_differences_of_desired_vs_current(hoard_contents, remote_uuid, max_depth, show_size, out)
 
@@ -491,7 +491,7 @@ class HoardCommandContents:
         connected_repo = self.hoard.connect_to_repo(remote_uuid, require_contents=True)
         with connected_repo.open_contents(is_readonly=True) as current_contents:
             logging.info(f"Loading hoard TOML...")
-            async with self.hoard.open_contents(create_missing=False) as hoard_contents:
+            with self.hoard.open_contents(create_missing=False) as hoard_contents:
                 logging.info(f"Loaded hoard TOML!")
                 logging.info(f"Computing status ...")
 
@@ -517,7 +517,7 @@ class HoardCommandContents:
         connected_repo = self.hoard.connect_to_repo(remote_uuid, require_contents=True)
         with connected_repo.open_contents(is_readonly=True) as current_contents:
             logging.info(f"Loading hoard TOML...")
-            async with self.hoard.open_contents(create_missing=False) as hoard:
+            with self.hoard.open_contents(create_missing=False) as hoard:
                 logging.info(f"Loaded hoard TOML!")
                 logging.info(f"Computing status ...")
 
@@ -538,7 +538,7 @@ class HoardCommandContents:
             self, path: str | None = None, hide_time: bool = False, hide_disk_sizes: bool = False,
             show_empty: bool = False):
         config = self.hoard.config()
-        async with self.hoard.open_contents(create_missing=False) as hoard:
+        with self.hoard.open_contents(create_missing=False) as hoard:
             statuses: Dict[str, Dict[str, Dict[str, Any]]] = hoard.fsobjects.status_by_uuid(
                 FastPosixPath(path) if path else None, extended=True)
             available_states, statuses_sorted = augment_statuses(config, hoard, show_empty, statuses)
@@ -601,7 +601,7 @@ class HoardCommandContents:
             self, selected_path: Optional[str] = None, depth: int = None,
             skip_folders: bool = False, show_remotes: int = False):
         logging.info(f"Loading hoard TOML...")
-        async with self.hoard.open_contents(create_missing=False) as hoard:
+        with self.hoard.open_contents(create_missing=False) as hoard:
             if depth is None:
                 depth = sys.maxsize if selected_path is None else 1
 
@@ -659,7 +659,7 @@ class HoardCommandContents:
         conn = self.hoard.open_contents(create_missing=False)
         if not is_readonly:
             conn = conn.writeable()
-        async with conn as hoard:
+        with conn as hoard:
             repo_uuid = resolve_remote_uuid(self.hoard.config(), repo)
             repo_mounted_at = config.remotes[repo_uuid].mounted_at
             logging.info(f"repo {repo} mounted at {repo_mounted_at}")
@@ -690,7 +690,7 @@ class HoardCommandContents:
 
         with StringIO() as out:
             logging.info(f"Loading hoard contents TOML...")
-            async with self.hoard.open_contents(create_missing=False).writeable() as hoard_contents:
+            with self.hoard.open_contents(create_missing=False).writeable() as hoard_contents:
                 logging.info(f"Loaded hoard contents TOML!")
 
                 for remote_uuid in remote_uuids:
@@ -721,7 +721,7 @@ class HoardCommandContents:
                 out.write(f"Remote {remote_uuid} is not mounted!\n")
                 return
 
-            async with self.hoard.open_contents(create_missing=False).writeable() as hoard_contents:
+            with self.hoard.open_contents(create_missing=False).writeable() as hoard_contents:
                 roots = hoard_contents.env.roots(True)
 
                 dump_before_op(roots, remote_uuid, out)

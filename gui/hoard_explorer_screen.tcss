@@ -1,6 +1,6 @@
 
 #logging-widget {
-    height: 10;
+    height: 7;
     dock: bottom;
 }
 

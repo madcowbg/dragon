@@ -136,7 +136,7 @@ class HoardCommandBackups:
         pathing = HoardPathing(config, self.hoard.paths())
 
         logging.info(f"Loading hoard...")
-        async with self.hoard.open_contents(create_missing=False) as hoard:
+        with self.hoard.open_contents(create_missing=False) as hoard:
 
             backup_sets = BackupSet.all(config, pathing, hoard, self.hoard.available_remotes(), Presence(hoard))
             backup_media = set(sum((list(b.backups.keys()) for b in backup_sets), []))
@@ -195,7 +195,7 @@ class HoardCommandBackups:
         pathing = HoardPathing(config, self.hoard.paths())
 
         logging.info(f"Loading hoard...")
-        async with self.hoard.open_contents(create_missing=False).writeable() as hoard:
+        with self.hoard.open_contents(create_missing=False).writeable() as hoard:
             backup_sets = BackupSet.all(config, pathing, hoard, self.hoard.available_remotes(), Presence(hoard))
 
             with StringIO() as out:
@@ -236,7 +236,7 @@ class HoardCommandBackups:
         pathing = HoardPathing(config, self.hoard.paths())
 
         logging.info(f"Loading hoard...")
-        async with self.hoard.open_contents(create_missing=False).writeable() as hoard:
+        with self.hoard.open_contents(create_missing=False).writeable() as hoard:
             with StringIO() as out:
                 self._do_reuse(config, hoard, pathing, out)
                 return out.getvalue()
@@ -258,7 +258,7 @@ class HoardCommandBackups:
         pathing = HoardPathing(config, self.hoard.paths())
 
         logging.info(f"Loading hoard...")
-        async with self.hoard.open_contents(create_missing=False).writeable() as hoard:
+        with self.hoard.open_contents(create_missing=False).writeable() as hoard:
             with StringIO() as out:
                 added_cnt: Dict[HoardRemote, int] = dict()
                 added_size: Dict[HoardRemote, int] = dict()
@@ -312,7 +312,7 @@ class HoardCommandBackups:
         pathing = HoardPathing(config, self.hoard.paths())
 
         logging.info(f"Loading hoard...")
-        async with self.hoard.open_contents(create_missing=False).writeable() as hoard:
+        with self.hoard.open_contents(create_missing=False).writeable() as hoard:
             available_remotes = self.hoard.available_remotes()
             backup_sets = BackupSet.all(config, pathing, hoard, available_remotes, Presence(hoard))
 

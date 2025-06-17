@@ -15,7 +15,7 @@ class ReadonlyHoardContentsConn:
         self.folder = folder
         self.config = config
 
-    async def __aenter__(self) -> "HoardContents":
+    def __enter__(self) -> "HoardContents":
         self.contents = HoardContents(self.folder, True, self.config)
         deferred_ops = HoardDeferredOperations(self.contents)
         if deferred_ops.have_deferred_ops():
@@ -23,7 +23,7 @@ class ReadonlyHoardContentsConn:
             deferred_ops.apply_deferred_queue()
         return self.contents
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type, exc_val, exc_tb):
         if HoardDeferredOperations(self.contents).have_deferred_ops():
             raise ValueError("Have deferred operations that cannot even be applied!!!")
 
@@ -47,7 +47,7 @@ class HoardContentsConn:
 
         self.folder = folder
 
-    async def __aenter__(self) -> "HoardContents":
+    def __enter__(self) -> "HoardContents":
         self.contents = HoardContents(self.folder, False, self.config)
         deferred_ops = HoardDeferredOperations(self.contents)
         if deferred_ops.have_deferred_ops():
@@ -55,7 +55,7 @@ class HoardContentsConn:
             deferred_ops.apply_deferred_queue()
         return self.contents
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type, exc_val, exc_tb):
         if HoardDeferredOperations(self.contents).have_deferred_ops():
             raise ValueError("Have deferred operations that were not applied!!!")
 

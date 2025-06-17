@@ -12,9 +12,6 @@
     padding-top: 1;
 }
 
-.repo-setting-group {
-    height: 3;
-}
 .repo-setting-group Static {
     width: 12;
 }
@@ -69,7 +66,7 @@ ProgressReporting {
 }
 
 #logging-widget {
-    height: 10;
+    height: 7;
     dock: bottom;
 }
 

@@ -56,7 +56,7 @@ class HoardExplorerWidget(Widget):
     @work(exclusive=True)
     async def close_and_reopen(self):
         if self.hoard_contents is not None:
-            await self.conn.__aexit__(None, None, None)
+            await self.conn.__exit__(None, None, None)
 
         self._hoard = Hoard(self.hoard_path.as_posix())
         try:
@@ -65,7 +65,7 @@ class HoardExplorerWidget(Widget):
             if self.can_modify:
                 self.conn = self.conn.writeable()
 
-            self.hoard_contents = await self.conn.__aenter__()
+            self.hoard_contents = self.conn.__enter__()
 
             await self.recompose()
         except Exception as e:
@@ -73,9 +73,9 @@ class HoardExplorerWidget(Widget):
             logging.error(e)
             self.hoard_contents = None
 
-    async def on_unmount(self):
+    def on_unmount(self):
         if self.hoard_contents is not None:
-            await self.conn.__aexit__(None, None, None)
+            self.conn.__exit__(None, None, None)
 
     def on_tree_node_selected(self, event: Tree.NodeSelected):
         self.query_one(NodeDescription).hoard_item = event.node.data

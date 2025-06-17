@@ -178,7 +178,7 @@ class ObjectStorage(TransactionCreator):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        logging.info(f"### LMDB CLOSE {self._env_params.path} {self._env.info()}")
+        logging.debug(f"### LMDB CLOSE {self._env_params.path} {self._env.info()}")
         OBJECT_ENVIRONMENT_CACHE.release(self._env_params.path)
         self._env = None
         self._dbs = None

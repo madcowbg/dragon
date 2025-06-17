@@ -26,7 +26,7 @@ class HoardCommandFiles:
             if repo is not None else [r.uuid for r in config.remotes.all()]
 
         logging.info(f"Loading hoard contents...")
-        async with self.hoard.open_contents(create_missing=False) as hoard:
+        with self.hoard.open_contents(create_missing=False) as hoard:
             with StringIO() as out:
                 for repo_uuid in repo_uuids:
                     logging.info(f"Iterating over pending ops in {repo_uuid}")
@@ -86,7 +86,7 @@ class HoardCommandFiles:
 
 async def execute_files_push(config: HoardConfig, hoard: Hoard, repo_uuids: List[str], out: StringIO, progress_bar):
     pathing = HoardPathing(config, hoard.paths())
-    async with hoard.open_contents(False).writeable() as hoard_contents:
+    with hoard.open_contents(False).writeable() as hoard_contents:
         out.write(f"Before push:\n")
         dump_remotes(config, hoard_contents, out)
 

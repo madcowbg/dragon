@@ -116,7 +116,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             "Sync'ed repo-in-local to hoard!\n"
             'DONE'), res.strip())
 
-        async with hoard_cmd.hoard.open_contents(False) as hoard_contents:
+        with hoard_cmd.hoard.open_contents(False) as hoard_contents:
             self._assert_hoard_contents(
                 hoard_contents,
                 files_exp=[
@@ -169,7 +169,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
 
         await hoard_cmd.contents.pull("repo-in-local")
 
-        async with hoard_cmd.hoard.open_contents(False) as hc:
+        with hoard_cmd.hoard.open_contents(False) as hc:
             self._assert_hoard_contents(
                 hc,
                 files_exp=[
@@ -192,7 +192,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             'DONE'),
             res.strip())
 
-        async with hoard_cmd.hoard.open_contents(False) as hc:
+        with hoard_cmd.hoard.open_contents(False) as hc:
             self._assert_hoard_contents(
                 hc,
                 files_exp=[
@@ -208,7 +208,7 @@ class TestHoardCommand(IsolatedAsyncioTestCase):
             "Sync'ed repo-in-local to hoard!\n"
             'DONE'), res)
 
-        async with hoard_cmd.hoard.open_contents(False) as hc:
+        with hoard_cmd.hoard.open_contents(False) as hc:
             self._assert_hoard_contents(
                 hc,
                 files_exp=[

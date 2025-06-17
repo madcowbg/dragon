@@ -43,7 +43,7 @@ from gui.progress_reporting import StartProgressReporting, MarkProgressReporting
     ProgressReporting, progress_reporting_bar
 from lmdb_storage.cached_calcs import AppCachedCalculator
 from lmdb_storage.tree_object import TreeObject
-from util import group_to_dict, format_count, format_size, snake_case
+from util import group_to_dict, format_count, format_size, snake_case, safe_hex
 
 
 # fixme reimplement with trees
@@ -92,7 +92,6 @@ class Action(abc.ABC):
     def execute(self, local_uuid: str, content_prefs: ContentPrefs, hoard: HoardContents, out: StringIO) -> None: pass
 
 
-
 class HoardContentsPendingToSyncFile(Tree[NodeID]):
     hoard: Hoard | None = reactive(None)
     remote: HoardRemote | None = reactive(None, recompose=True)
@@ -122,7 +121,7 @@ class HoardContentsPendingToSyncFile(Tree[NodeID]):
 
     async def on_mount(self):
         self.hoard_conn = self.hoard.open_contents(create_missing=False)
-        self.hoard_contents = await self.hoard_conn.__aenter__()
+        self.hoard_contents = self.hoard_conn.__enter__()
         self.current_and_desired_reader = CurrentAndDesiredReader(self.hoard_contents)
 
         repo_root = self.hoard_contents.env.roots(write=False)[self.remote.uuid]
@@ -158,13 +157,12 @@ class HoardContentsPendingToSyncFile(Tree[NodeID]):
                 if child_pending_ops.count.to_obtain > 0:
                     op_type = "GET"
                 elif child_pending_ops.count.to_delete > 0:
-                    op_type =  "CLEANUP"
+                    op_type = "CLEANUP"
                 elif child_pending_ops.count.to_change > 0:
                     op_type = "CHANGE"
                 else:
                     op_type = "UNKNOWN?!"
                 event.node.add_leaf(f"{op_type}: {child_name}", data=child_id)
-
 
     def _pretty_folder_label_descriptor(self, folder: NodeID) -> Text:
         folder_diffs = self.pending_ops_calculator[folder]
@@ -372,6 +370,12 @@ class CaveInfoWidget(Widget):
             yield Static("Please choose a cave.")
         else:
             yield Static("UUID: " + self.remote.uuid, classes="repo-setting-group")
+            with self.hoard.open_contents(create_missing=False) as hoard_contents:
+                repo_root = hoard_contents.env.roots(write=False)[self.remote.uuid]
+
+                yield Static("current: " + safe_hex(repo_root.current), classes="repo-setting-group")
+                yield Static("desired: " + safe_hex(repo_root.desired), classes="repo-setting-group")
+                yield Static("staging: " + safe_hex(repo_root.staging), classes="repo-setting-group")
 
             with Grid(classes="repo-setting-grid"):
                 yield Static("Name", classes="repo-setting-label")
@@ -421,8 +425,6 @@ class CaveInfoWidget(Widget):
 
             self.remote = hoard_config.remotes[self.remote.uuid]
 
-            self.run_worker(self.recompose())
-
     @on(Input.Submitted, "#repo-min-copies-before-cleanup")
     def repo_min_copies_before_cleanup_changed(self, event: Input.Changed):
         assert event.input.id == "repo-min-copies-before-cleanup"
@@ -433,8 +435,6 @@ class CaveInfoWidget(Widget):
             hoard_config.write()
 
             self.remote = hoard_config.remotes[self.remote.uuid]
-
-            self.run_worker(self.recompose())
 
     @on(Input.Submitted, "#repo-name")
     def repo_name_changed(self, event: Input.Changed):
@@ -509,7 +509,7 @@ class CaveInfoWidget(Widget):
             with StringIO() as out:
                 preferences = init_pull_preferences(self.remote, assume_current=False, force_fetch_local_missing=False)
                 logging.info(f"Loading hoard contents TOML...")
-                async with self.hoard.open_contents(create_missing=False).writeable() as hoard_contents:
+                with self.hoard.open_contents(create_missing=False).writeable() as hoard_contents:
                     await execute_pull(
                         self.hoard, hoard_contents, preferences, ignore_epoch=False, out=out,
                         progress_bar=progress_reporting_it(self, "pull-to-hoard-operation", 10))
@@ -529,7 +529,7 @@ class CaveInfoWidget(Widget):
                 preferences = pull_prefs_to_restore_from_hoard(self.remote.uuid, self.remote.type)
 
                 logging.info(f"Loading hoard contents TOML...")
-                async with self.hoard.open_contents(create_missing=False).writeable() as hoard_contents:
+                with self.hoard.open_contents(create_missing=False).writeable() as hoard_contents:
                     await execute_pull(
                         self.hoard, hoard_contents, preferences, ignore_epoch=False, out=out,
                         progress_bar=progress_reporting_it(self, "restore-from-hoard-operation", 10))
@@ -606,7 +606,7 @@ class CaveExplorerScreen(Screen):
     async def cave_settings_changed(self):
         await self.recompose()
 
-    def on_radio_set_changed(self, event: RadioSet.Changed):
+    async def on_radio_set_changed(self, event: RadioSet.Changed):
         if self.hoard is None:
             return
 
