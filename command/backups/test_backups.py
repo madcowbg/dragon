@@ -310,42 +310,42 @@ class TestBackups(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual([
             'Root: c8405b542a1e9b691f8e2be70d1bd387e54d530d',
-            '|Num Files           |total |availa|get   |copy  |cleanu|reserv|',
-            '|backup-1            |     3|     2|     1|     1|      |      |',
-            '|backup-2            |     3|     1|     2|     2|      |      |',
-            '|backup-3            |     2|      |     1|     1|     1|      |',
-            '|backup-4            |     1|      |     1|     1|      |      |',
-            '|repo-full-name      |     6|     4|     2|     2|      |      |',
-            '|repo-incoming-name  |     4|      |      |      |     4|     3|',
-            '|repo-partial-name   |     2|     2|      |      |      |      |',
+            '|Num Files           |total  |availab|get    |copy   |cleanup|reserve|',
+            '|backup-1            |      3|      2|      1|      1|       |       |',
+            '|backup-2            |      3|      1|      2|      2|       |       |',
+            '|backup-3            |      2|       |      1|      1|      1|       |',
+            '|backup-4            |      1|       |      1|      1|       |       |',
+            '|repo-full-name      |      6|      4|      2|      2|       |       |',
+            '|repo-incoming-name  |      4|       |       |       |      4|      3|',
+            '|repo-partial-name   |      2|      2|       |       |       |       |',
             '',
-            '|Size                |total |availa|get   |copy  |cleanu|reserv|',
-            '|backup-1            |   227|   150|    77|    77|      |      |',
-            '|backup-2            |   136|    60|    76|    76|      |      |',
-            '|backup-3            |   194|      |    77|    77|   117|      |',
-            '|backup-4            |    90|      |    90|    90|      |      |',
-            '|repo-full-name      |   380|   243|   137|   137|      |      |',
-            '|repo-incoming-name  |   304|      |      |      |   304|   214|',
-            '|repo-partial-name   |    76|    76|      |      |      |      |'], res.splitlines())
+            '|Size                |total  |availab|get    |copy   |cleanup|reserve|',
+            '|backup-1            |    227|    150|     77|     77|       |       |',
+            '|backup-2            |    136|     60|     76|     76|       |       |',
+            '|backup-3            |    194|       |     77|     77|    117|       |',
+            '|backup-4            |     90|       |     90|     90|       |       |',
+            '|repo-full-name      |    380|    243|    137|    137|       |       |',
+            '|repo-incoming-name  |    304|       |       |       |    304|    214|',
+            '|repo-partial-name   |     76|     76|       |       |       |       |'], res.splitlines())
 
         res = await hoard_cmd.contents.status(path="/wat", hide_time=True, hide_disk_sizes=True)
         self.assertEqual([
             'Root: c8405b542a1e9b691f8e2be70d1bd387e54d530d',
-            '|Num Files           |total |availa|get   |copy  |cleanu|reserv|',
-            '|backup-1            |     2|     1|     1|     1|      |      |',
-            '|backup-2            |     1|      |     1|     2|      |      |',
-            '|backup-4            |     1|      |     1|     1|      |      |',
-            '|repo-full-name      |     3|     2|     1|     2|      |      |',
-            '|repo-incoming-name  |     2|      |      |      |     2|     3|',
-            '|repo-partial-name   |     1|     1|      |      |      |      |',
+            '|Num Files           |total  |availab|get    |copy   |cleanup|reserve|',
+            '|backup-1            |      2|      1|      1|      1|       |       |',
+            '|backup-2            |      1|       |      1|      2|       |       |',
+            '|backup-4            |      1|       |      1|      1|       |       |',
+            '|repo-full-name      |      3|      2|      1|      2|       |       |',
+            '|repo-incoming-name  |      2|       |       |       |      2|      3|',
+            '|repo-partial-name   |      1|      1|       |       |       |       |',
             '',
-            '|Size                |total |availa|get   |copy  |cleanu|reserv|',
-            '|backup-1            |   167|    90|    77|    77|      |      |',
-            '|backup-2            |    16|      |    16|    76|      |      |',
-            '|backup-4            |    90|      |    90|    90|      |      |',
-            '|repo-full-name      |   183|   106|    77|   137|      |      |',
-            '|repo-incoming-name  |   167|      |      |      |   167|   214|',
-            '|repo-partial-name   |    16|    16|      |      |      |      |'], res.splitlines())
+            '|Size                |total  |availab|get    |copy   |cleanup|reserve|',
+            '|backup-1            |    167|     90|     77|     77|       |       |',
+            '|backup-2            |     16|       |     16|     76|       |       |',
+            '|backup-4            |     90|       |     90|     90|       |       |',
+            '|repo-full-name      |    183|    106|     77|    137|       |       |',
+            '|repo-incoming-name  |    167|       |       |       |    167|    214|',
+            '|repo-partial-name   |     16|     16|       |       |       |       |'], res.splitlines())
 
         res = await hoard_cmd.backups.health()
         self.assertEqual([
@@ -443,21 +443,21 @@ class TestBackups(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual([
             'Root: c8405b542a1e9b691f8e2be70d1bd387e54d530d',
-            '|Num Files           |total |availa|cleanu|',
-            '|backup-1            |     3|     3|      |',
-            '|backup-2            |     3|     2|     1|',
-            '|backup-3            |     1|     1|      |',
-            '|backup-4            |     1|     1|      |',
-            '|repo-full-name      |     6|     6|      |',
-            '|repo-partial-name   |     2|     2|      |',
-            '',
-            '|Size                |total |availa|cleanu|',
-            '|backup-1            |   227|   227|      |',
-            '|backup-2            |   136|   120|    16|',
-            '|backup-3            |    77|    77|      |',
-            '|backup-4            |    90|    90|      |',
-            '|repo-full-name      |   380|   380|      |',
-            '|repo-partial-name   |    76|    76|      |'], res.splitlines())
+ '|Num Files           |total  |availab|cleanup|',
+ '|backup-1            |      3|      3|       |',
+ '|backup-2            |      3|      2|      1|',
+ '|backup-3            |      1|      1|       |',
+ '|backup-4            |      1|      1|       |',
+ '|repo-full-name      |      6|      6|       |',
+ '|repo-partial-name   |      2|      2|       |',
+ '',
+ '|Size                |total  |availab|cleanup|',
+ '|backup-1            |    227|    227|       |',
+ '|backup-2            |    136|    120|     16|',
+ '|backup-3            |     77|     77|       |',
+ '|backup-4            |     90|     90|       |',
+ '|repo-full-name      |    380|    380|       |',
+ '|repo-partial-name   |     76|     76|       |'], res.splitlines())
 
     async def test_add_backup_repos_over_time(self):
         hoard_cmd, partial_cave_cmd, full_cave_cmd, incoming_cave_cmd = await init_complex_hoard(self.tmpdir.name)
@@ -513,21 +513,21 @@ class TestBackups(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual([
             'Root: c8405b542a1e9b691f8e2be70d1bd387e54d530d',
-            '|Num Files           |total |availa|get   |copy  |cleanu|reserv|',
-            '|backup-1            |     2|     2|      |      |      |      |',
-            '|backup-2            |     1|     1|      |      |      |      |',
-            '|backup-3            |     1|      |      |      |     1|      |',
-            '|repo-full-name      |     6|     4|     2|     2|      |      |',
-            '|repo-incoming-name  |     4|      |      |      |     4|     2|',
-            '|repo-partial-name   |     2|     2|      |      |      |      |',
+            '|Num Files           |total  |availab|get    |copy   |cleanup|reserve|',
+            '|backup-1            |      2|      2|       |       |       |       |',
+            '|backup-2            |      1|      1|       |       |       |       |',
+            '|backup-3            |      1|       |       |       |      1|       |',
+            '|repo-full-name      |      6|      4|      2|      2|       |       |',
+            '|repo-incoming-name  |      4|       |       |       |      4|      2|',
+            '|repo-partial-name   |      2|      2|       |       |       |       |',
             '',
-            '|Size                |total |availa|get   |copy  |cleanu|reserv|',
-            '|backup-1            |   150|   150|      |      |      |      |',
-            '|backup-2            |    60|    60|      |      |      |      |',
-            '|backup-3            |   117|      |      |      |   117|      |',
-            '|repo-full-name      |   380|   243|   137|   137|      |      |',
-            '|repo-incoming-name  |   304|      |      |      |   304|   137|',
-            '|repo-partial-name   |    76|    76|      |      |      |      |'], res.splitlines())
+            '|Size                |total  |availab|get    |copy   |cleanup|reserve|',
+            '|backup-1            |    150|    150|       |       |       |       |',
+            '|backup-2            |     60|     60|       |       |       |       |',
+            '|backup-3            |    117|       |       |       |    117|       |',
+            '|repo-full-name      |    380|    243|    137|    137|       |       |',
+            '|repo-incoming-name  |    304|       |       |       |    304|    137|',
+            '|repo-partial-name   |     76|     76|       |       |       |       |'], res.splitlines())
 
         res = await hoard_cmd.backups.health()
         self.assertEqual([
@@ -565,23 +565,23 @@ class TestBackups(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual([
             'Root: c8405b542a1e9b691f8e2be70d1bd387e54d530d',
-            '|Num Files           |total |availa|get   |copy  |cleanu|reserv|',
-            '|backup-1            |     2|     2|      |      |      |      |',
-            '|backup-2            |     2|     1|     1|     1|      |      |',
-            '|backup-3            |     1|      |      |      |     1|      |',
-            '|backup-4            |     3|      |     3|     3|      |      |',
-            '|repo-full-name      |     6|     4|     2|     2|      |      |',
-            '|repo-incoming-name  |     4|      |      |      |     4|     3|',
-            '|repo-partial-name   |     2|     2|      |      |      |      |',
+            '|Num Files           |total  |availab|get    |copy   |cleanup|reserve|',
+            '|backup-1            |      2|      2|       |       |       |       |',
+            '|backup-2            |      2|      1|      1|      1|       |       |',
+            '|backup-3            |      1|       |       |       |      1|       |',
+            '|backup-4            |      3|       |      3|      3|       |       |',
+            '|repo-full-name      |      6|      4|      2|      2|       |       |',
+            '|repo-incoming-name  |      4|       |       |       |      4|      3|',
+            '|repo-partial-name   |      2|      2|       |       |       |       |',
             '',
-            '|Size                |total |availa|get   |copy  |cleanu|reserv|',
-            '|backup-1            |   150|   150|      |      |      |      |',
-            '|backup-2            |   120|    60|    60|    60|      |      |',
-            '|backup-3            |   117|      |      |      |   117|      |',
-            '|backup-4            |   170|      |   170|   170|      |      |',
-            '|repo-full-name      |   380|   243|   137|   137|      |      |',
-            '|repo-incoming-name  |   304|      |      |      |   304|   214|',
-            '|repo-partial-name   |    76|    76|      |      |      |      |'], res.splitlines())
+            '|Size                |total  |availab|get    |copy   |cleanup|reserve|',
+            '|backup-1            |    150|    150|       |       |       |       |',
+            '|backup-2            |    120|     60|     60|     60|       |       |',
+            '|backup-3            |    117|       |       |       |    117|       |',
+            '|backup-4            |    170|       |    170|    170|       |       |',
+            '|repo-full-name      |    380|    243|    137|    137|       |       |',
+            '|repo-incoming-name  |    304|       |       |       |    304|    214|',
+            '|repo-partial-name   |     76|     76|       |       |       |       |'], res.splitlines())
 
         res = await hoard_cmd.contents.drop(repo="backup-1", path="wat")
         self.assertEqual(
@@ -592,23 +592,23 @@ class TestBackups(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual([
             'Root: c8405b542a1e9b691f8e2be70d1bd387e54d530d',
-            '|Num Files           |total |availa|get   |copy  |cleanu|reserv|',
-            '|backup-1            |     2|     1|      |      |     1|      |',
-            '|backup-2            |     2|     1|     1|     1|      |      |',
-            '|backup-3            |     1|      |      |      |     1|      |',
-            '|backup-4            |     3|      |     3|     3|      |      |',
-            '|repo-full-name      |     6|     4|     2|     2|      |      |',
-            '|repo-incoming-name  |     4|      |      |      |     4|     3|',
-            '|repo-partial-name   |     2|     2|      |      |      |      |',
-            '',
-            '|Size                |total |availa|get   |copy  |cleanu|reserv|',
-            '|backup-1            |   150|    60|      |      |    90|      |',
-            '|backup-2            |   120|    60|    60|    60|      |      |',
-            '|backup-3            |   117|      |      |      |   117|      |',
-            '|backup-4            |   170|      |   170|   170|      |      |',
-            '|repo-full-name      |   380|   243|   137|   137|      |      |',
-            '|repo-incoming-name  |   304|      |      |      |   304|   214|',
-            '|repo-partial-name   |    76|    76|      |      |      |      |'], res.splitlines())
+ '|Num Files           |total  |availab|get    |copy   |cleanup|reserve|',
+ '|backup-1            |      2|      1|       |       |      1|       |',
+ '|backup-2            |      2|      1|      1|      1|       |       |',
+ '|backup-3            |      1|       |       |       |      1|       |',
+ '|backup-4            |      3|       |      3|      3|       |       |',
+ '|repo-full-name      |      6|      4|      2|      2|       |       |',
+ '|repo-incoming-name  |      4|       |       |       |      4|      3|',
+ '|repo-partial-name   |      2|      2|       |       |       |       |',
+ '',
+ '|Size                |total  |availab|get    |copy   |cleanup|reserve|',
+ '|backup-1            |    150|     60|       |       |     90|       |',
+ '|backup-2            |    120|     60|     60|     60|       |       |',
+ '|backup-3            |    117|       |       |       |    117|       |',
+ '|backup-4            |    170|       |    170|    170|       |       |',
+ '|repo-full-name      |    380|    243|    137|    137|       |       |',
+ '|repo-incoming-name  |    304|       |       |       |    304|    214|',
+ '|repo-partial-name   |     76|     76|       |       |       |       |'], res.splitlines())
 
         res = await hoard_cmd.backups.health()
         self.assertEqual([

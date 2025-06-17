@@ -556,7 +556,7 @@ class HoardCommandContents:
                     out.write(f"{'max':>8}|")
 
                 for col in all_stats:
-                    out.write(f"{col[:6]:<6}|")
+                    out.write(f"{col[:7]:<7}|")
                 out.write("\n")
 
                 for name, uuid, updated_maybe, uuid_stats in statuses_sorted:
@@ -569,7 +569,7 @@ class HoardCommandContents:
 
                     for stat in all_stats:
                         nfiles = format_count(uuid_stats[stat]["nfiles"]) if stat in uuid_stats else ""
-                        out.write(f"{nfiles:>6}|")
+                        out.write(f"{nfiles:>7}|")
                     out.write("\n")
 
                 out.write("\n")
@@ -581,7 +581,7 @@ class HoardCommandContents:
                     out.write(f"{'max':>8}|")
 
                 for col in all_stats:
-                    out.write(f"{col[:6]:<6}|")
+                    out.write(f"{col[:7]:<7}|")
                 out.write("\n")
                 for name, uuid, updated_maybe, uuid_stats in statuses_sorted:
                     out.write(f"|{name:<20}|")
@@ -592,7 +592,7 @@ class HoardCommandContents:
                         out.write(f"{format_size(hoard.config.max_size(uuid)):>8}|")
                     for stat in all_stats:
                         size = format_size(uuid_stats[stat]["size"]) if stat in uuid_stats else ""
-                        out.write(f"{size:>6}|")
+                        out.write(f"{size:>7}|")
                     out.write("\n")
 
                 return out.getvalue()

@@ -49,13 +49,13 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual((
             'Root: 1ad9e0f92a8411689b1aee57f9ccf36c1f09a1ad\n'
-            '|Num Files           |total |availa|get   |copy  |\n'
-            '|repo-backup-name    |     4|      |     4|     4|\n'
-            '|repo-full-name      |     4|     4|      |      |\n'
+            '|Num Files           |total  |availab|get    |copy   |\n'
+            '|repo-backup-name    |      4|       |      4|      4|\n'
+            '|repo-full-name      |      4|      4|       |       |\n'
             '\n'
-            '|Size                |total |availa|get   |copy  |\n'
-            '|repo-backup-name    |    35|      |    35|    35|\n'
-            '|repo-full-name      |    35|    35|      |      |\n'),
+            '|Size                |total  |availab|get    |copy   |\n'
+            '|repo-backup-name    |     35|       |     35|     35|\n'
+            '|repo-full-name      |     35|     35|       |       |\n'),
             res)
 
         res = await hoard_cmd.contents.pull(partial_cave_cmd.current_uuid())
@@ -72,15 +72,15 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual((
             'Root: 1ad9e0f92a8411689b1aee57f9ccf36c1f09a1ad\n'
-            '|Num Files           |total |availa|get   |copy  |\n'
-            '|repo-backup-name    |     4|      |     4|     4|\n'
-            '|repo-full-name      |     4|     4|      |      |\n'
-            '|repo-partial-name   |     2|     2|      |      |\n'
+            '|Num Files           |total  |availab|get    |copy   |\n'
+            '|repo-backup-name    |      4|       |      4|      4|\n'
+            '|repo-full-name      |      4|      4|       |       |\n'
+            '|repo-partial-name   |      2|      2|       |       |\n'
             '\n'
-            '|Size                |total |availa|get   |copy  |\n'
-            '|repo-backup-name    |    35|      |    35|    35|\n'
-            '|repo-full-name      |    35|    35|      |      |\n'
-            '|repo-partial-name   |    14|    14|      |      |\n'),
+            '|Size                |total  |availab|get    |copy   |\n'
+            '|repo-backup-name    |     35|       |     35|     35|\n'
+            '|repo-full-name      |     35|     35|       |       |\n'
+            '|repo-partial-name   |     14|     14|       |       |\n'),
             res)
 
         res = await hoard_cmd.contents.ls(show_remotes=True)
@@ -137,15 +137,15 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual((
             'Root: 1ad9e0f92a8411689b1aee57f9ccf36c1f09a1ad\n'
-            '|Num Files           |total |availa|get   |copy  |\n'
-            '|repo-backup-name    |     4|      |     4|     4|\n'
-            '|repo-full-name      |     4|     4|      |      |\n'
-            '|repo-partial-name   |     2|     2|      |      |\n'
+            '|Num Files           |total  |availab|get    |copy   |\n'
+            '|repo-backup-name    |      4|       |      4|      4|\n'
+            '|repo-full-name      |      4|      4|       |       |\n'
+            '|repo-partial-name   |      2|      2|       |       |\n'
             '\n'
-            '|Size                |total |availa|get   |copy  |\n'
-            '|repo-backup-name    |    35|      |    35|    35|\n'
-            '|repo-full-name      |    35|    35|      |      |\n'
-            '|repo-partial-name   |    14|    14|      |      |\n'),
+            '|Size                |total  |availab|get    |copy   |\n'
+            '|repo-backup-name    |     35|       |     35|     35|\n'
+            '|repo-full-name      |     35|     35|       |       |\n'
+            '|repo-partial-name   |     14|     14|       |       |\n'),
             res)
 
         res = await hoard_cmd.contents.ls(show_remotes=True)
@@ -193,15 +193,15 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual((
             'Root: b2effc3b7e6a77096f705c7d24e3909cd6f347e2\n'
-            '|Num Files           |total |availa|get   |copy  |\n'
-            '|repo-backup-name    |     4|      |     4|     4|\n'
-            '|repo-full-name      |     4|     4|      |      |\n'
-            '|repo-partial-name   |     2|     2|      |      |\n'
+            '|Num Files           |total  |availab|get    |copy   |\n'
+            '|repo-backup-name    |      4|       |      4|      4|\n'
+            '|repo-full-name      |      4|      4|       |       |\n'
+            '|repo-partial-name   |      2|      2|       |       |\n'
             '\n'
-            '|Size                |total |availa|get   |copy  |\n'
-            '|repo-backup-name    |    45|      |    45|    45|\n'
-            '|repo-full-name      |    45|    45|      |      |\n'
-            '|repo-partial-name   |    14|    14|      |      |\n'),
+            '|Size                |total  |availab|get    |copy   |\n'
+            '|repo-backup-name    |     45|       |     45|     45|\n'
+            '|repo-full-name      |     45|     45|       |       |\n'
+            '|repo-partial-name   |     14|     14|       |       |\n'),
             res)
 
         res = await hoard_cmd.contents.ls(show_remotes=True)
@@ -246,15 +246,15 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual((
             'Root: 7672cb5914a2bb1ae0ba43506eeb54f6fbeb5ad9\n'
-            '|Num Files           |total |availa|get   |copy  |\n'
-            '|repo-backup-name    |     5|      |     5|     5|\n'
-            '|repo-full-name      |     5|     4|     1|     1|\n'
-            '|repo-partial-name   |     3|     3|      |      |\n'
+            '|Num Files           |total  |availab|get    |copy   |\n'
+            '|repo-backup-name    |      5|       |      5|      5|\n'
+            '|repo-full-name      |      5|      4|      1|      1|\n'
+            '|repo-partial-name   |      3|      3|       |       |\n'
             '\n'
-            '|Size                |total |availa|get   |copy  |\n'
-            '|repo-backup-name    |    53|      |    53|    53|\n'
-            '|repo-full-name      |    53|    45|     8|     8|\n'
-            '|repo-partial-name   |    22|    22|      |      |\n'),
+            '|Size                |total  |availab|get    |copy   |\n'
+            '|repo-backup-name    |     53|       |     53|     53|\n'
+            '|repo-full-name      |     53|     45|      8|      8|\n'
+            '|repo-partial-name   |     22|     22|       |       |\n'),
             res)
 
         res = await hoard_cmd.contents.ls(show_remotes=True)
@@ -287,15 +287,15 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual((
             'Root: 7672cb5914a2bb1ae0ba43506eeb54f6fbeb5ad9\n'
-            '|Num Files           |total |availa|get   |copy  |\n'
-            '|repo-backup-name    |     5|      |     5|     5|\n'
-            '|repo-full-name      |     5|     4|     1|     1|\n'
-            '|repo-partial-name   |     4|     3|     1|     1|\n'
+            '|Num Files           |total  |availab|get    |copy   |\n'
+            '|repo-backup-name    |      5|       |      5|      5|\n'
+            '|repo-full-name      |      5|      4|      1|      1|\n'
+            '|repo-partial-name   |      4|      3|      1|      1|\n'
             '\n'
-            '|Size                |total |availa|get   |copy  |\n'
-            '|repo-backup-name    |    53|      |    53|    53|\n'
-            '|repo-full-name      |    53|    45|     8|     8|\n'
-            '|repo-partial-name   |    42|    22|    20|    20|\n'),
+            '|Size                |total  |availab|get    |copy   |\n'
+            '|repo-backup-name    |     53|       |     53|     53|\n'
+            '|repo-full-name      |     53|     45|      8|      8|\n'
+            '|repo-partial-name   |     42|     22|     20|     20|\n'),
             res)
 
         res = await hoard_cmd.files.push("repo-partial-name")
@@ -545,15 +545,15 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual((
             'Root: b2effc3b7e6a77096f705c7d24e3909cd6f347e2\n'
-            '|Num Files           |total |availa|get   |copy  |\n'
-            '|repo-backup-name    |     4|     3|     1|     1|\n'
-            '|repo-full-name      |     4|     4|      |      |\n'
-            '|repo-partial-name   |     2|     2|      |      |\n'
+            '|Num Files           |total  |availab|get    |copy   |\n'
+            '|repo-backup-name    |      4|      3|      1|      1|\n'
+            '|repo-full-name      |      4|      4|       |       |\n'
+            '|repo-partial-name   |      2|      2|       |       |\n'
             '\n'
-            '|Size                |total |availa|get   |copy  |\n'
-            '|repo-backup-name    |    45|    25|    20|    20|\n'
-            '|repo-full-name      |    45|    45|      |      |\n'
-            '|repo-partial-name   |    14|    14|      |      |\n'),
+            '|Size                |total  |availab|get    |copy   |\n'
+            '|repo-backup-name    |     45|     25|     20|     20|\n'
+            '|repo-full-name      |     45|     45|       |       |\n'
+            '|repo-partial-name   |     14|     14|       |       |\n'),
             res)
 
         res = await hoard_cmd.contents.ls(show_remotes=True)
@@ -622,15 +622,15 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual((
             'Root: 22e45e6a6041b705c05bedfef6c451457240ea1f\n'
-            '|Num Files           |total |availa|cleanu|\n'
-            '|repo-backup-name    |     4|     3|     1|\n'
-            '|repo-full-name      |     3|     3|      |\n'
-            '|repo-partial-name   |     2|     1|     1|\n'
+            '|Num Files           |total  |availab|cleanup|\n'
+            '|repo-backup-name    |      4|      3|      1|\n'
+            '|repo-full-name      |      3|      3|       |\n'
+            '|repo-partial-name   |      2|      1|      1|\n'
             '\n'
-            '|Size                |total |availa|cleanu|\n'
-            '|repo-backup-name    |    35|    27|     8|\n'
-            '|repo-full-name      |    27|    27|      |\n'
-            '|repo-partial-name   |    14|     6|     8|\n'), res)
+            '|Size                |total  |availab|cleanup|\n'
+            '|repo-backup-name    |     35|     27|      8|\n'
+            '|repo-full-name      |     27|     27|       |\n'
+            '|repo-partial-name   |     14|      6|      8|\n'), res)
 
         res = await hoard_cmd.contents.ls()
         self.assertEqual((
@@ -667,15 +667,15 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual((
             'Root: 22e45e6a6041b705c05bedfef6c451457240ea1f\n'
-            '|Num Files           |total |availa|cleanu|\n'
-            '|repo-backup-name    |     3|     3|      |\n'
-            '|repo-full-name      |     3|     3|      |\n'
-            '|repo-partial-name   |     2|     1|     1|\n'
+            '|Num Files           |total  |availab|cleanup|\n'
+            '|repo-backup-name    |      3|      3|       |\n'
+            '|repo-full-name      |      3|      3|       |\n'
+            '|repo-partial-name   |      2|      1|      1|\n'
             '\n'
-            '|Size                |total |availa|cleanu|\n'
-            '|repo-backup-name    |    27|    27|      |\n'
-            '|repo-full-name      |    27|    27|      |\n'
-            '|repo-partial-name   |    14|     6|     8|\n'), res)
+            '|Size                |total  |availab|cleanup|\n'
+            '|repo-backup-name    |     27|     27|       |\n'
+            '|repo-full-name      |     27|     27|       |\n'
+            '|repo-partial-name   |     14|      6|      8|\n'), res)
 
         res = await hoard_cmd.files.push("repo-full-name")
         self.assertEqual((
@@ -713,15 +713,15 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual((
             'Root: 22e45e6a6041b705c05bedfef6c451457240ea1f\n'
-            '|Num Files           |total |availa|\n'
-            '|repo-backup-name    |     3|     3|\n'
-            '|repo-full-name      |     3|     3|\n'
-            '|repo-partial-name   |     1|     1|\n'
+            '|Num Files           |total  |availab|\n'
+            '|repo-backup-name    |      3|      3|\n'
+            '|repo-full-name      |      3|      3|\n'
+            '|repo-partial-name   |      1|      1|\n'
             '\n'
-            '|Size                |total |availa|\n'
-            '|repo-backup-name    |    27|    27|\n'
-            '|repo-full-name      |    27|    27|\n'
-            '|repo-partial-name   |     6|     6|\n'), res)
+            '|Size                |total  |availab|\n'
+            '|repo-backup-name    |     27|     27|\n'
+            '|repo-full-name      |     27|     27|\n'
+            '|repo-partial-name   |      6|      6|\n'), res)
 
         res = await hoard_cmd.contents.ls()
         self.assertEqual((
@@ -759,15 +759,15 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual((
             'Root: f9bfc2be6cc201aa81b733b9d83c1030cc88bffe\n'
-            '|Num Files           |total |availa|get   |copy  |\n'
-            '|repo-backup-name    |     2|      |     2|     2|\n'
-            '|repo-full-name      |     2|      |     2|     2|\n'
-            '|repo-partial-name   |     2|     2|      |      |\n'
+            '|Num Files           |total  |availab|get    |copy   |\n'
+            '|repo-backup-name    |      2|       |      2|      2|\n'
+            '|repo-full-name      |      2|       |      2|      2|\n'
+            '|repo-partial-name   |      2|      2|       |       |\n'
             '\n'
-            '|Size                |total |availa|get   |copy  |\n'
-            '|repo-backup-name    |    14|      |    14|    14|\n'
-            '|repo-full-name      |    14|      |    14|    14|\n'
-            '|repo-partial-name   |    14|    14|      |      |\n'), res)
+            '|Size                |total  |availab|get    |copy   |\n'
+            '|repo-backup-name    |     14|       |     14|     14|\n'
+            '|repo-full-name      |     14|       |     14|     14|\n'
+            '|repo-partial-name   |     14|     14|       |       |\n'), res)
 
         # refresh new contents file
         res = await hoard_cmd.contents.pull(new_content_cmd.current_uuid())
@@ -805,17 +805,17 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual((
             'Root: d934e1c4b772efce39429b51960f79d93c60ca7d\n'
-            '|Num Files           |total |availa|get   |copy  |\n'
-            '|repo-backup-name    |     5|      |     5|     5|\n'
-            '|repo-full-name      |     5|     4|     1|     1|\n'
-            '|repo-new-contents-name|     2|     1|     1|     1|\n'
-            '|repo-partial-name   |     2|     2|      |      |\n'
+            '|Num Files           |total  |availab|get    |copy   |\n'
+            '|repo-backup-name    |      5|       |      5|      5|\n'
+            '|repo-full-name      |      5|      4|      1|      1|\n'
+            '|repo-new-contents-name|      2|      1|      1|      1|\n'
+            '|repo-partial-name   |      2|      2|       |       |\n'
             '\n'
-            '|Size                |total |availa|get   |copy  |\n'
-            '|repo-backup-name    |    46|      |    46|    46|\n'
-            '|repo-full-name      |    46|    35|    11|    11|\n'
-            '|repo-new-contents-name|    21|    11|    10|    10|\n'
-            '|repo-partial-name   |    14|    14|      |      |\n'),
+            '|Size                |total  |availab|get    |copy   |\n'
+            '|repo-backup-name    |     46|       |     46|     46|\n'
+            '|repo-full-name      |     46|     35|     11|     11|\n'
+            '|repo-new-contents-name|     21|     11|     10|     10|\n'
+            '|repo-partial-name   |     14|     14|       |       |\n'),
             res)
 
         res = await hoard_cmd.contents.get(repo="repo-new-contents-name", path="")
@@ -827,17 +827,17 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual((
             'Root: d934e1c4b772efce39429b51960f79d93c60ca7d\n'
-            '|Num Files           |total |availa|get   |copy  |\n'
-            '|repo-backup-name    |     5|      |     5|     5|\n'
-            '|repo-full-name      |     5|     4|     1|     1|\n'
-            '|repo-new-contents-name|     3|     1|     2|     2|\n'
-            '|repo-partial-name   |     2|     2|      |      |\n'
+            '|Num Files           |total  |availab|get    |copy   |\n'
+            '|repo-backup-name    |      5|       |      5|      5|\n'
+            '|repo-full-name      |      5|      4|      1|      1|\n'
+            '|repo-new-contents-name|      3|      1|      2|      2|\n'
+            '|repo-partial-name   |      2|      2|       |       |\n'
             '\n'
-            '|Size                |total |availa|get   |copy  |\n'
-            '|repo-backup-name    |    46|      |    46|    46|\n'
-            '|repo-full-name      |    46|    35|    11|    11|\n'
-            '|repo-new-contents-name|    29|    11|    18|    18|\n'
-            '|repo-partial-name   |    14|    14|      |      |\n'),
+            '|Size                |total  |availab|get    |copy   |\n'
+            '|repo-backup-name    |     46|       |     46|     46|\n'
+            '|repo-full-name      |     46|     35|     11|     11|\n'
+            '|repo-new-contents-name|     29|     11|     18|     18|\n'
+            '|repo-partial-name   |     14|     14|       |       |\n'),
             res)
 
         res = await new_content_cmd.refresh(show_details=False)
@@ -879,17 +879,17 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual((
             'Root: d934e1c4b772efce39429b51960f79d93c60ca7d\n'
-            '|Num Files           |total |availa|get   |copy  |\n'
-            '|repo-backup-name    |     5|      |     5|     5|\n'
-            '|repo-full-name      |     5|     4|     1|     1|\n'
-            '|repo-new-contents-name|     3|     3|      |      |\n'
-            '|repo-partial-name   |     2|     2|      |      |\n'
+            '|Num Files           |total  |availab|get    |copy   |\n'
+            '|repo-backup-name    |      5|       |      5|      5|\n'
+            '|repo-full-name      |      5|      4|      1|      1|\n'
+            '|repo-new-contents-name|      3|      3|       |       |\n'
+            '|repo-partial-name   |      2|      2|       |       |\n'
             '\n'
-            '|Size                |total |availa|get   |copy  |\n'
-            '|repo-backup-name    |    46|      |    46|    46|\n'
-            '|repo-full-name      |    46|    35|    11|    11|\n'
-            '|repo-new-contents-name|    29|    29|      |      |\n'
-            '|repo-partial-name   |    14|    14|      |      |\n'),
+            '|Size                |total  |availab|get    |copy   |\n'
+            '|repo-backup-name    |     46|       |     46|     46|\n'
+            '|repo-full-name      |     46|     35|     11|     11|\n'
+            '|repo-new-contents-name|     29|     29|       |       |\n'
+            '|repo-partial-name   |     14|     14|       |       |\n'),
             res)
 
         res = await hoard_cmd.files.push(repo=full_cave_cmd.current_uuid())
@@ -994,17 +994,17 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual((
             'Root: 1ad9e0f92a8411689b1aee57f9ccf36c1f09a1ad\n'
-            '|Num Files           |total |availa|get   |copy  |\n'
-            '|repo-backup-name    |     4|      |     4|     4|\n'
-            '|repo-copy-name      |     4|      |     4|     4|\n'
-            '|repo-full-name      |     4|     4|      |      |\n'
-            '|repo-partial-name   |     2|     2|      |      |\n'
+            '|Num Files           |total  |availab|get    |copy   |\n'
+            '|repo-backup-name    |      4|       |      4|      4|\n'
+            '|repo-copy-name      |      4|       |      4|      4|\n'
+            '|repo-full-name      |      4|      4|       |       |\n'
+            '|repo-partial-name   |      2|      2|       |       |\n'
             '\n'
-            '|Size                |total |availa|get   |copy  |\n'
-            '|repo-backup-name    |    35|      |    35|    35|\n'
-            '|repo-copy-name      |    35|      |    35|    35|\n'
-            '|repo-full-name      |    35|    35|      |      |\n'
-            '|repo-partial-name   |    14|    14|      |      |\n'),
+            '|Size                |total  |availab|get    |copy   |\n'
+            '|repo-backup-name    |     35|       |     35|     35|\n'
+            '|repo-copy-name      |     35|       |     35|     35|\n'
+            '|repo-full-name      |     35|     35|       |       |\n'
+            '|repo-partial-name   |     14|     14|       |       |\n'),
             res)
 
         res = await hoard_cmd.files.push(copy_cave_cmd.current_uuid())
@@ -1142,17 +1142,27 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual((
             'Root: 01152ae75c4fbc81c40b8e9eba8ce23ab770630e\n'
-            '|Num Files           |total |availa|get   |copy  |move  |cleanu|reserv|\n'
-            '|repo-backup-name    |     6|      |     6|     6|      |      |      |\n'
-            '|repo-copy-name      |     8|     1|     5|     5|     3|     2|     2|\n'
-            '|repo-full-name      |     6|     6|      |      |      |      |      |\n'
-            '|repo-partial-name   |     2|      |     1|     1|      |     1|     1|\n'
+            '|Num Files           |total  |availab|get    |copy   |move   '
+            '|cleanup|reserve|\n'
+            '|repo-backup-name    |      6|       |      6|      6|       |       |       '
+            '|\n'
+            '|repo-copy-name      |      8|      1|      5|      5|      3|      2|      '
+            '2|\n'
+            '|repo-full-name      |      6|      6|       |       |       |       |       '
+            '|\n'
+            '|repo-partial-name   |      2|       |      1|      1|       |      1|      '
+            '1|\n'
             '\n'
-            '|Size                |total |availa|get   |copy  |move  |cleanu|reserv|\n'
-            '|repo-backup-name    |    47|      |    47|    47|      |      |      |\n'
-            '|repo-copy-name      |    66|    10|    37|    37|    27|    19|    19|\n'
-            '|repo-full-name      |    47|    47|      |      |      |      |      |\n'
-            '|repo-partial-name   |    13|      |     5|     5|      |     8|     8|\n'), res)
+            '|Size                |total  |availab|get    |copy   |move   '
+            '|cleanup|reserve|\n'
+            '|repo-backup-name    |     47|       |     47|     47|       |       |       '
+            '|\n'
+            '|repo-copy-name      |     66|     10|     37|     37|     27|     19|     '
+            '19|\n'
+            '|repo-full-name      |     47|     47|       |       |       |       |       '
+            '|\n'
+            '|repo-partial-name   |     13|       |      5|      5|       |      8|      '
+            '8|\n'), res)
 
         res = await hoard_cmd.files.push(full_cave_cmd.current_uuid())
         self.assertEqual((
@@ -1212,17 +1222,17 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual((
             'Root: 01152ae75c4fbc81c40b8e9eba8ce23ab770630e\n'
-            '|Num Files           |total |availa|get   |copy  |cleanu|reserv|\n'
-            '|repo-backup-name    |     6|      |     6|     6|      |      |\n'
-            '|repo-copy-name      |     6|     6|      |      |      |      |\n'
-            '|repo-full-name      |     6|     6|      |      |      |      |\n'
-            '|repo-partial-name   |     2|      |     1|     1|     1|     1|\n'
+            '|Num Files           |total  |availab|get    |copy   |cleanup|reserve|\n'
+            '|repo-backup-name    |      6|       |      6|      6|       |       |\n'
+            '|repo-copy-name      |      6|      6|       |       |       |       |\n'
+            '|repo-full-name      |      6|      6|       |       |       |       |\n'
+            '|repo-partial-name   |      2|       |      1|      1|      1|      1|\n'
             '\n'
-            '|Size                |total |availa|get   |copy  |cleanu|reserv|\n'
-            '|repo-backup-name    |    47|      |    47|    47|      |      |\n'
-            '|repo-copy-name      |    47|    47|      |      |      |      |\n'
-            '|repo-full-name      |    47|    47|      |      |      |      |\n'
-            '|repo-partial-name   |    13|      |     5|     5|     8|     8|\n'),
+            '|Size                |total  |availab|get    |copy   |cleanup|reserve|\n'
+            '|repo-backup-name    |     47|       |     47|     47|       |       |\n'
+            '|repo-copy-name      |     47|     47|       |       |       |       |\n'
+            '|repo-full-name      |     47|     47|       |       |       |       |\n'
+            '|repo-partial-name   |     13|       |      5|      5|      8|      8|\n'),
             res)
 
         res = await hoard_cmd.contents.tree_differences("repo-backup-name")
@@ -1418,17 +1428,17 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual((
             'Root: 1ad9e0f92a8411689b1aee57f9ccf36c1f09a1ad\n'
-            '|Num Files           |total |availa|get   |copy  |\n'
-            '|repo-backup-name    |     4|     4|      |      |\n'
-            '|repo-copy-name      |     4|      |     4|     4|\n'
-            '|repo-full-name      |     4|     4|      |      |\n'
-            '|repo-partial-name   |     2|     2|      |      |\n'
+            '|Num Files           |total  |availab|get    |copy   |\n'
+            '|repo-backup-name    |      4|      4|       |       |\n'
+            '|repo-copy-name      |      4|       |      4|      4|\n'
+            '|repo-full-name      |      4|      4|       |       |\n'
+            '|repo-partial-name   |      2|      2|       |       |\n'
             '\n'
-            '|Size                |total |availa|get   |copy  |\n'
-            '|repo-backup-name    |    35|    35|      |      |\n'
-            '|repo-copy-name      |    35|      |    35|    35|\n'
-            '|repo-full-name      |    35|    35|      |      |\n'
-            '|repo-partial-name   |    14|    14|      |      |\n'),
+            '|Size                |total  |availab|get    |copy   |\n'
+            '|repo-backup-name    |     35|     35|       |       |\n'
+            '|repo-copy-name      |     35|       |     35|     35|\n'
+            '|repo-full-name      |     35|     35|       |       |\n'
+            '|repo-partial-name   |     14|     14|       |       |\n'),
             res)
 
         res = await hoard_cmd.files.push(copy_cave_cmd.current_uuid())
@@ -1567,17 +1577,27 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual((
             'Root: 01152ae75c4fbc81c40b8e9eba8ce23ab770630e\n'
-            '|Num Files           |total |availa|get   |copy  |move  |cleanu|reserv|\n'
-            '|repo-backup-name    |     8|     1|     5|     5|     3|     2|     2|\n'
-            '|repo-copy-name      |     8|     1|     5|     5|     3|     2|     2|\n'
-            '|repo-full-name      |     6|     6|      |      |      |      |      |\n'
-            '|repo-partial-name   |     2|      |     1|     1|      |     1|     1|\n'
+            '|Num Files           |total  |availab|get    |copy   |move   '
+            '|cleanup|reserve|\n'
+            '|repo-backup-name    |      8|      1|      5|      5|      3|      2|      '
+            '2|\n'
+            '|repo-copy-name      |      8|      1|      5|      5|      3|      2|      '
+            '2|\n'
+            '|repo-full-name      |      6|      6|       |       |       |       |       '
+            '|\n'
+            '|repo-partial-name   |      2|       |      1|      1|       |      1|      '
+            '1|\n'
             '\n'
-            '|Size                |total |availa|get   |copy  |move  |cleanu|reserv|\n'
-            '|repo-backup-name    |    66|    10|    37|    37|    27|    19|    19|\n'
-            '|repo-copy-name      |    66|    10|    37|    37|    27|    19|    19|\n'
-            '|repo-full-name      |    47|    47|      |      |      |      |      |\n'
-            '|repo-partial-name   |    13|      |     5|     5|      |     8|     8|\n'),
+            '|Size                |total  |availab|get    |copy   |move   '
+            '|cleanup|reserve|\n'
+            '|repo-backup-name    |     66|     10|     37|     37|     27|     19|     '
+            '19|\n'
+            '|repo-copy-name      |     66|     10|     37|     37|     27|     19|     '
+            '19|\n'
+            '|repo-full-name      |     47|     47|       |       |       |       |       '
+            '|\n'
+            '|repo-partial-name   |     13|       |      5|      5|       |      8|      '
+            '8|\n'),
             res)
 
         res = await hoard_cmd.files.push(full_cave_cmd.current_uuid())
@@ -1639,17 +1659,27 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual((
             'Root: 01152ae75c4fbc81c40b8e9eba8ce23ab770630e\n'
-            '|Num Files           |total |availa|get   |copy  |move  |cleanu|reserv|\n'
-            '|repo-backup-name    |     8|     1|     5|     5|     3|     2|     2|\n'
-            '|repo-copy-name      |     6|     6|      |      |      |      |      |\n'
-            '|repo-full-name      |     6|     6|      |      |      |      |      |\n'
-            '|repo-partial-name   |     2|      |     1|     1|      |     1|     1|\n'
+            '|Num Files           |total  |availab|get    |copy   |move   '
+            '|cleanup|reserve|\n'
+            '|repo-backup-name    |      8|      1|      5|      5|      3|      2|      '
+            '2|\n'
+            '|repo-copy-name      |      6|      6|       |       |       |       |       '
+            '|\n'
+            '|repo-full-name      |      6|      6|       |       |       |       |       '
+            '|\n'
+            '|repo-partial-name   |      2|       |      1|      1|       |      1|      '
+            '1|\n'
             '\n'
-            '|Size                |total |availa|get   |copy  |move  |cleanu|reserv|\n'
-            '|repo-backup-name    |    66|    10|    37|    37|    27|    19|    19|\n'
-            '|repo-copy-name      |    47|    47|      |      |      |      |      |\n'
-            '|repo-full-name      |    47|    47|      |      |      |      |      |\n'
-            '|repo-partial-name   |    13|      |     5|     5|      |     8|     8|\n'), res)
+            '|Size                |total  |availab|get    |copy   |move   '
+            '|cleanup|reserve|\n'
+            '|repo-backup-name    |     66|     10|     37|     37|     27|     19|     '
+            '19|\n'
+            '|repo-copy-name      |     47|     47|       |       |       |       |       '
+            '|\n'
+            '|repo-full-name      |     47|     47|       |       |       |       |       '
+            '|\n'
+            '|repo-partial-name   |     13|       |      5|      5|       |      8|      '
+            '8|\n'), res)
 
         res = await hoard_cmd.contents.tree_differences("repo-backup-name")
         self.assertEqual([
@@ -1796,17 +1826,17 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual((
             'Root: 01152ae75c4fbc81c40b8e9eba8ce23ab770630e\n'
-            '|Num Files           |total |availa|get   |copy  |cleanu|\n'
-            '|repo-backup-name    |     6|     6|      |      |      |\n'
-            '|repo-copy-name      |     6|     6|      |      |      |\n'
-            '|repo-full-name      |     6|     6|      |      |      |\n'
-            '|repo-partial-name   |     2|      |     1|     1|     1|\n'
+            '|Num Files           |total  |availab|get    |copy   |cleanup|\n'
+            '|repo-backup-name    |      6|      6|       |       |       |\n'
+            '|repo-copy-name      |      6|      6|       |       |       |\n'
+            '|repo-full-name      |      6|      6|       |       |       |\n'
+            '|repo-partial-name   |      2|       |      1|      1|      1|\n'
             '\n'
-            '|Size                |total |availa|get   |copy  |cleanu|\n'
-            '|repo-backup-name    |    47|    47|      |      |      |\n'
-            '|repo-copy-name      |    47|    47|      |      |      |\n'
-            '|repo-full-name      |    47|    47|      |      |      |\n'
-            '|repo-partial-name   |    13|      |     5|     5|     8|\n'), res)
+            '|Size                |total  |availab|get    |copy   |cleanup|\n'
+            '|repo-backup-name    |     47|     47|       |       |       |\n'
+            '|repo-copy-name      |     47|     47|       |       |       |\n'
+            '|repo-full-name      |     47|     47|       |       |       |\n'
+            '|repo-partial-name   |     13|       |      5|      5|      8|\n'), res)
 
         # move file before being synch-ed
         shutil.move(
@@ -1848,17 +1878,17 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual([
             'Root: 1d6997b657a82d81f72b833b4551a0d389dd37c9',
-            '|Num Files           |total |availa|get   |copy  |cleanu|',
-            '|repo-backup-name    |     7|     5|     1|     1|     1|',
-            '|repo-copy-name      |     7|     5|     1|     1|     1|',
-            '|repo-full-name      |     7|     5|     1|     1|     1|',
-            '|repo-partial-name   |     2|     1|      |      |     1|',
+            '|Num Files           |total  |availab|get    |copy   |cleanup|',
+            '|repo-backup-name    |      7|      5|      1|      1|      1|',
+            '|repo-copy-name      |      7|      5|      1|      1|      1|',
+            '|repo-full-name      |      7|      5|      1|      1|      1|',
+            '|repo-partial-name   |      2|      1|       |       |      1|',
             '',
-            '|Size                |total |availa|get   |copy  |cleanu|',
-            '|repo-backup-name    |    53|    42|     6|     6|     5|',
-            '|repo-copy-name      |    53|    42|     6|     6|     5|',
-            '|repo-full-name      |    53|    42|     6|     6|     5|',
-            '|repo-partial-name   |    14|     6|      |      |     8|'], res.splitlines())
+            '|Size                |total  |availab|get    |copy   |cleanup|',
+            '|repo-backup-name    |     53|     42|      6|      6|      5|',
+            '|repo-copy-name      |     53|     42|      6|      6|      5|',
+            '|repo-full-name      |     53|     42|      6|      6|      5|',
+            '|repo-partial-name   |     14|      6|       |       |      8|'], res.splitlines())
 
         res = await hoard_cmd.files.push(partial_cave_cmd.current_uuid())
         self.assertEqual((
@@ -1882,17 +1912,17 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual([
             'Root: 1d6997b657a82d81f72b833b4551a0d389dd37c9',
-            '|Num Files           |total |availa|get   |copy  |cleanu|',
-            '|repo-backup-name    |     7|     5|     1|     1|     1|',
-            '|repo-copy-name      |     7|     5|     1|     1|     1|',
-            '|repo-full-name      |     7|     5|     1|     1|     1|',
-            '|repo-partial-name   |     1|     1|      |      |      |',
+            '|Num Files           |total  |availab|get    |copy   |cleanup|',
+            '|repo-backup-name    |      7|      5|      1|      1|      1|',
+            '|repo-copy-name      |      7|      5|      1|      1|      1|',
+            '|repo-full-name      |      7|      5|      1|      1|      1|',
+            '|repo-partial-name   |      1|      1|       |       |       |',
             '',
-            '|Size                |total |availa|get   |copy  |cleanu|',
-            '|repo-backup-name    |    53|    42|     6|     6|     5|',
-            '|repo-copy-name      |    53|    42|     6|     6|     5|',
-            '|repo-full-name      |    53|    42|     6|     6|     5|',
-            '|repo-partial-name   |     6|     6|      |      |      |'], res.splitlines())
+            '|Size                |total  |availab|get    |copy   |cleanup|',
+            '|repo-backup-name    |     53|     42|      6|      6|      5|',
+            '|repo-copy-name      |     53|     42|      6|      6|      5|',
+            '|repo-full-name      |     53|     42|      6|      6|      5|',
+            '|repo-partial-name   |      6|      6|       |       |       |'], res.splitlines())
 
     async def test_moving_of_files_before_first_refresh(self):
         hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = \
@@ -1914,17 +1944,17 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual((
             'Root: f9bfc2be6cc201aa81b733b9d83c1030cc88bffe\n'
-            '|Num Files           |total |availa|get   |copy  |\n'
-            '|repo-backup-name    |     2|      |     2|     2|\n'
-            '|repo-copy-name      |     2|      |     2|     2|\n'
-            '|repo-full-name      |     2|      |     2|     2|\n'
-            '|repo-partial-name   |     2|     2|      |      |\n'
+            '|Num Files           |total  |availab|get    |copy   |\n'
+            '|repo-backup-name    |      2|       |      2|      2|\n'
+            '|repo-copy-name      |      2|       |      2|      2|\n'
+            '|repo-full-name      |      2|       |      2|      2|\n'
+            '|repo-partial-name   |      2|      2|       |       |\n'
             '\n'
-            '|Size                |total |availa|get   |copy  |\n'
-            '|repo-backup-name    |    14|      |    14|    14|\n'
-            '|repo-copy-name      |    14|      |    14|    14|\n'
-            '|repo-full-name      |    14|      |    14|    14|\n'
-            '|repo-partial-name   |    14|    14|      |      |\n'), res)
+            '|Size                |total  |availab|get    |copy   |\n'
+            '|repo-backup-name    |     14|       |     14|     14|\n'
+            '|repo-copy-name      |     14|       |     14|     14|\n'
+            '|repo-full-name      |     14|       |     14|     14|\n'
+            '|repo-partial-name   |     14|     14|       |       |\n'), res)
 
         res = full_cave_cmd.status_index(show_dates=False)
         self.assertEqual(
@@ -2045,17 +2075,27 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual((
             'Root: e48d88d5cde10ff5d84be87b3e79c20e77c05ba9\n'
-            '|Num Files           |total |availa|get   |copy  |move  |cleanu|reserv|\n'
-            '|repo-backup-name    |     6|     2|     3|     3|     1|     1|     1|\n'
-            '|repo-copy-name      |     5|      |     5|     5|      |      |      |\n'
-            '|repo-full-name      |     5|     5|      |      |      |      |      |\n'
-            '|repo-partial-name   |     2|     1|     1|     1|      |      |      |\n'
+            '|Num Files           |total  |availab|get    |copy   |move   '
+            '|cleanup|reserve|\n'
+            '|repo-backup-name    |      6|      2|      3|      3|      1|      1|      '
+            '1|\n'
+            '|repo-copy-name      |      5|       |      5|      5|       |       |       '
+            '|\n'
+            '|repo-full-name      |      5|      5|       |       |       |       |       '
+            '|\n'
+            '|repo-partial-name   |      2|      1|      1|      1|       |       |       '
+            '|\n'
             '\n'
-            '|Size                |total |availa|get   |copy  |move  |cleanu|reserv|\n'
-            '|repo-backup-name    |    50|    18|    21|    21|    11|    11|    11|\n'
-            '|repo-copy-name      |    39|      |    39|    39|      |      |      |\n'
-            '|repo-full-name      |    39|    39|      |      |      |      |      |\n'
-            '|repo-partial-name   |    13|     8|     5|     5|      |      |      |\n'), res)
+            '|Size                |total  |availab|get    |copy   |move   '
+            '|cleanup|reserve|\n'
+            '|repo-backup-name    |     50|     18|     21|     21|     11|     11|     '
+            '11|\n'
+            '|repo-copy-name      |     39|       |     39|     39|       |       |       '
+            '|\n'
+            '|repo-full-name      |     39|     39|       |       |       |       |       '
+            '|\n'
+            '|repo-partial-name   |     13|      8|      5|      5|       |       |       '
+            '|\n'), res)
 
         res = await hoard_cmd.contents.pull(backup_cave_cmd.current_uuid())
         self.assertEqual((
@@ -2094,17 +2134,17 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual((
             'Root: e48d88d5cde10ff5d84be87b3e79c20e77c05ba9\n'
-            '|Num Files           |total |availa|get   |copy  |\n'
-            '|repo-backup-name    |     5|     5|      |      |\n'
-            '|repo-copy-name      |     5|      |     5|     5|\n'
-            '|repo-full-name      |     5|     5|      |      |\n'
-            '|repo-partial-name   |     2|     1|     1|     1|\n'
+            '|Num Files           |total  |availab|get    |copy   |\n'
+            '|repo-backup-name    |      5|      5|       |       |\n'
+            '|repo-copy-name      |      5|       |      5|      5|\n'
+            '|repo-full-name      |      5|      5|       |       |\n'
+            '|repo-partial-name   |      2|      1|      1|      1|\n'
             '\n'
-            '|Size                |total |availa|get   |copy  |\n'
-            '|repo-backup-name    |    39|    39|      |      |\n'
-            '|repo-copy-name      |    39|      |    39|    39|\n'
-            '|repo-full-name      |    39|    39|      |      |\n'
-            '|repo-partial-name   |    13|     8|     5|     5|\n'), res)
+            '|Size                |total  |availab|get    |copy   |\n'
+            '|repo-backup-name    |     39|     39|       |       |\n'
+            '|repo-copy-name      |     39|       |     39|     39|\n'
+            '|repo-full-name      |     39|     39|       |       |\n'
+            '|repo-partial-name   |     13|      8|      5|      5|\n'), res)
 
         res = await hoard_cmd.files.push(copy_cave_cmd.current_uuid())
         self.assertEqual((
@@ -2199,17 +2239,27 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
         res = await hoard_cmd.contents.status(hide_time=True, hide_disk_sizes=True)
         self.assertEqual((
             'Root: 01152ae75c4fbc81c40b8e9eba8ce23ab770630e\n'
-            '|Num Files           |total |availa|get   |copy  |move  |cleanu|reserv|\n'
-            '|repo-backup-name    |     7|     4|     2|     2|     2|     1|     1|\n'
-            '|repo-copy-name      |     7|     4|     2|     2|     2|     1|     1|\n'
-            '|repo-full-name      |     6|     6|      |      |      |      |      |\n'
-            '|repo-partial-name   |     2|      |     1|     1|      |     1|     1|\n'
+            '|Num Files           |total  |availab|get    |copy   |move   '
+            '|cleanup|reserve|\n'
+            '|repo-backup-name    |      7|      4|      2|      2|      2|      1|      '
+            '1|\n'
+            '|repo-copy-name      |      7|      4|      2|      2|      2|      1|      '
+            '1|\n'
+            '|repo-full-name      |      6|      6|       |       |       |       |       '
+            '|\n'
+            '|repo-partial-name   |      2|       |      1|      1|       |      1|      '
+            '1|\n'
             '\n'
-            '|Size                |total |availa|get   |copy  |move  |cleanu|reserv|\n'
-            '|repo-backup-name    |    55|    31|    16|    16|    16|     8|     8|\n'
-            '|repo-copy-name      |    55|    31|    16|    16|    16|     8|     8|\n'
-            '|repo-full-name      |    47|    47|      |      |      |      |      |\n'
-            '|repo-partial-name   |    13|      |     5|     5|      |     8|     8|\n'), res)
+            '|Size                |total  |availab|get    |copy   |move   '
+            '|cleanup|reserve|\n'
+            '|repo-backup-name    |     55|     31|     16|     16|     16|      8|      '
+            '8|\n'
+            '|repo-copy-name      |     55|     31|     16|     16|     16|      8|      '
+            '8|\n'
+            '|repo-full-name      |     47|     47|       |       |       |       |       '
+            '|\n'
+            '|repo-partial-name   |     13|       |      5|      5|       |      8|      '
+            '8|\n'), res)
 
     async def test_restoring_modified_state_from_hoard(self):
         hoard_cmd, partial_cave_cmd, full_cave_cmd, backup_cave_cmd, incoming_cave_cmd = \
