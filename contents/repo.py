@@ -50,9 +50,6 @@ class RepoFSObjects:
     def stats_existing(self):
         return RepoFSObjects.Stats(self.objects, self.roots)
 
-    def len_existing(self) -> int:
-        return self.stats_existing.num_files
-
     def all_status(self) -> Iterable[Tuple[FastPosixPath, FileDesc]]:
         yield from self.existing()
 

@@ -102,15 +102,14 @@ async def find_repo_changes(
         repo_path: str, contents: RepoContents, hoard_ignore: HoardIgnore,
         add_new_with_status: RepoFileStatus) -> AsyncGenerator[RepoChange]:
     logging.info(f"Comparing contents and filesystem...")
-    diffs_stream = compute_difference_between_contents_and_filesystem(
-        contents, repo_path, hoard_ignore)
+    diffs_stream = compute_difference_between_contents_and_filesystem(contents, repo_path, hoard_ignore)
 
     async for diff in compute_changes_from_diffs(diffs_stream, repo_path, add_new_with_status):
         yield diff
 
 
-async def compute_changes_from_diffs(diffs_stream: AsyncGenerator[RepoDiffs], repo_path: str,
-                                     add_new_with_status: RepoFileStatus):
+async def compute_changes_from_diffs(
+        diffs_stream: AsyncGenerator[RepoDiffs], repo_path: str, add_new_with_status: RepoFileStatus):
     files_to_add_or_update: Dict[pathlib.Path, Tuple[RepoFileStatus, Optional[FileDesc], FileDesc]] = {}
     files_maybe_removed: List[Tuple[FastPosixPath, FileDesc]] = []
 
@@ -253,7 +252,8 @@ class FilesystemIndex:
         self.update_hashes()
 
     def scan(self):
-        files: List[os.DirEntry] = list(self.task_logger.alive_it(self.scan_dir(self._root), title="Scanning filesystem"))
+        files: List[os.DirEntry] = list(
+            self.task_logger.alive_it(self.scan_dir(self._root), title="Scanning filesystem"))
 
         existing_filenames = set()
 
@@ -395,7 +395,7 @@ class FilesystemState:
         #     [p.as_posix() for p in allowed_paths])
 
     async def read_state_from_filesystem(
-            self, contents: RepoContents, hoard_ignore: HoardIgnore, repo_path: str, task_logger: TaskLogger, njobs: int = 32):
+            self, hoard_ignore: HoardIgnore, repo_path: str, task_logger: TaskLogger):
 
         with FilesystemIndex(Path(repo_path), hoard_ignore, task_logger) as index:
             index.update()
@@ -405,34 +405,11 @@ class FilesystemState:
             with self.contents.objects as objects:
                 self.state_root_id = objects.mktree_from_tuples(all_files_sorted, alive_it)
 
-            return
-
-        expected_cnt = contents.fsobjects.len_existing()
-        all_files = list(walk_filesystem(hoard_ignore, repo_path, expected_cnt))
-
-        with alive_bar(total=expected_cnt, title="Reading hashes...") as bar:
-            async def add_discovered_files(file_path_full: pathlib.Path):
-                file_path_local = FastPosixPath(file_path_full.relative_to(repo_path))
-                try:
-                    filesystem_prop = await read_filesystem_desc(file_path_full)
-                    self.mark_file(file_path_local, filesystem_prop)
-                except OSError as e:
-                    self.task_logger.error(e)
-                    self.mark_error(file_path_local, str(e))
-                bar()
-
-            await process_async(all_files, add_discovered_files, njobs=njobs)
-
-        all_files_sorted = [("/" + filepath.as_posix(), fileobj) for filepath, fileobj in self.all_files.items()]
-        with self.contents.objects as objects:
-            self.state_root_id = objects.mktree_from_tuples(all_files_sorted, self.task_logger.alive_it)
-
 
 async def compute_difference_between_contents_and_filesystem(
-        contents: RepoContents, repo_path: str, hoard_ignore: HoardIgnore,
-        njobs: int = 32) -> AsyncGenerator[RepoDiffs]:
+        contents: RepoContents, repo_path: str, hoard_ignore: HoardIgnore) -> AsyncGenerator[RepoDiffs]:
     state = FilesystemState(contents, PythonLoggingTaskLogger())
-    await state.read_state_from_filesystem(contents, hoard_ignore, repo_path, PythonLoggingTaskLogger(), njobs)
+    await state.read_state_from_filesystem(hoard_ignore, repo_path, PythonLoggingTaskLogger())
 
     async for diff in state.diffs():
         yield diff

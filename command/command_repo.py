@@ -68,7 +68,7 @@ class RepoCommand(object):
             task_logger.info("Start updating...")
             task_logger.info("Reading filesystem state...")
             state = FilesystemState(contents, task_logger)
-            await state.read_state_from_filesystem(contents, hoard_ignore, self.repo.path, task_logger)
+            await state.read_state_from_filesystem(hoard_ignore, self.repo.path, task_logger)
 
             with StringIO() as out:
                 if show_details:
