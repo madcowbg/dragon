@@ -1,18 +1,18 @@
-import binascii
 import logging
 import pathlib
 from io import StringIO
-from command.fast_path import FastPosixPath
 from typing import List, Optional
 
 from command.comparison_repo import FileDeleted, FileMoved, FileAdded, FileModified, FileIsSame, find_repo_changes, \
     FilesystemState, compute_changes_from_diffs
+from command.fast_path import FastPosixPath
 from command.hoard_ignore import HoardIgnore, DEFAULT_IGNORE_GLOBS
 from command.repo import ProspectiveRepo
 from contents.repo_props import RepoFileStatus
 from daemon.daemon import run_daemon
 from exceptions import MissingRepo, MissingRepoContents
 from resolve_uuid import load_config, resolve_remote_uuid, load_paths
+from task_logging import TaskLogger, PythonLoggingTaskLogger
 from util import format_size, format_percent, safe_hex
 
 
@@ -44,7 +44,7 @@ class RepoCommand(object):
 
         return f"Repo initialized at {self.repo.path}"
 
-    async def refresh(self, show_details: bool = True):
+    async def refresh(self, show_details: bool = True, task_logger: TaskLogger = PythonLoggingTaskLogger()):
         """ Refreshes the cache of the current hoard folder """
         connected_repo = self.repo.open_repo().connect(False)
         if connected_repo is None:
@@ -55,20 +55,20 @@ class RepoCommand(object):
             contents = connected_repo.open_contents(is_readonly=False)
             first_refresh = False
         except MissingRepoContents as e:
-            logging.warning("Repo contents missing, creating!")
+            task_logger.warning("Repo contents missing, creating!")
             first_refresh = True
             contents = connected_repo.create_contents(current_uuid)
 
-        logging.info(f"Refreshing uuid {current_uuid}{', is first refresh' if first_refresh else ''}")
+        task_logger.info(f"Refreshing uuid {current_uuid}{', is first refresh' if first_refresh else ''}")
         add_new_with_status = RepoFileStatus.PRESENT
 
         hoard_ignore = HoardIgnore(DEFAULT_IGNORE_GLOBS)
 
         with contents:
-            logging.info("Start updating...")
-            logging.info("Reading filesystem state...")
-            state = FilesystemState(contents)
-            await state.read_state_from_filesystem(contents, hoard_ignore, self.repo.path)
+            task_logger.info("Start updating...")
+            task_logger.info("Reading filesystem state...")
+            state = FilesystemState(contents, task_logger)
+            await state.read_state_from_filesystem(contents, hoard_ignore, self.repo.path, task_logger)
 
             with StringIO() as out:
                 if show_details:

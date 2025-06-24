@@ -1,16 +1,21 @@
 import dataclasses
+import enum
 import logging
+from datetime import datetime
 from time import time
-from typing import TypeVar, List, Iterable
+from typing import TypeVar, List, Iterable, Dict, Tuple, Any, ContextManager, Optional, Collection
 
+from rich.text import Text
+from textual import work
 from textual.app import ComposeResult
 from textual.containers import Horizontal
 from textual.css.query import NoMatches
-
 from textual.message import Message
 from textual.reactive import reactive
 from textual.widget import Widget
-from textual.widgets import Label, ProgressBar
+from textual.widgets import Label, ProgressBar, LoadingIndicator
+
+from task_logging import TaskLogger
 
 
 class StartProgressReporting(Message):
@@ -32,6 +37,7 @@ class MarkProgressReporting(Message):
 def progress_reporting_bar(widget: Widget, id: str, max_frequency: float):
     def alive_bar(total: float, title: str, unit: str):
         progress_report_title = title + (f" ({unit})" if unit else "")
+
         class Monitor:
             def __init__(self):
                 self.past_time = time()
@@ -149,3 +155,134 @@ class ProgressReporting(Widget):
             if data.id == data_id:
                 return data
         return None
+
+
+class TaskStatus(enum.Enum):
+    CREATED = "created"
+    RUNNING = "started"
+    SUCCESS = "success"
+    FAILURE = "failure"
+
+
+class TaskState[ID]:
+    def __init__(self, task_id: ID, headline: str):
+        self.task_id: ID = task_id
+
+        self.headline: str = headline
+
+        self.status: TaskStatus = TaskStatus.CREATED
+        self.started_on: datetime = datetime.now()
+        self.logs: List[str] = []
+
+
+def sort_by_status_and_time(task_state: TaskState) -> Tuple[int, datetime]:
+    if task_state.status == TaskStatus.CREATED:
+        status_order = 2
+    elif task_state.status == TaskStatus.RUNNING:
+        status_order = 1
+    else:
+        assert task_state.status == TaskStatus.SUCCESS or task_state.status == TaskStatus.FAILURE
+        status_order = 3
+
+    return status_order, task_state.started_on
+
+
+_TASK_LISTENERS: List["LongRunningTasks"] = []
+
+
+class LongRunningTasks(Widget):
+    def compose(self) -> ComposeResult:
+        if len(_TASKS) == 0:
+            yield Label("No tasks.")
+            return
+
+        for task_state in sorted(_TASKS.values(), key=sort_by_status_and_time):
+            with Horizontal():
+                if task_state.status == TaskStatus.CREATED:
+                    text_style = "normal"
+                elif task_state.status == TaskStatus.RUNNING:
+                    text_style = "bold green"
+                elif task_state.status == TaskStatus.SUCCESS:
+                    text_style = "dim"
+                elif task_state.status == TaskStatus.FAILURE:
+                    text_style = "bold red"
+
+                yield Label(Text(task_state.headline, style=text_style))
+                if task_state.status == TaskStatus.RUNNING:
+                    yield LoadingIndicator()
+                else:
+                    yield Label(" " + task_state.status.value)
+
+    def on_mount(self):
+        _TASK_LISTENERS.append(self)
+
+    def on_unmount(self):
+        _TASK_LISTENERS.remove(self)
+
+    @work
+    async def task_updated(self):
+        await self.recompose()  # todo make more targeted as to not refresh the full widget
+
+
+_TASKS: Dict[Any, TaskState] = {}
+
+
+def on_long_running_task_receives_update():
+    for listener in _TASK_LISTENERS:
+        listener.task_updated()
+
+
+class LongRunningTaskContext(ContextManager, TaskLogger):
+    def __init__(self, headline: str):
+        self.id = object()
+        self.task_state = TaskState(self.id, headline)
+        _TASKS[self.id] = self.task_state
+
+    def __enter__(self):
+        self.task_state.status = TaskStatus.RUNNING
+        on_long_running_task_receives_update()
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback, /):
+        if exc_type is None:
+            self.task_state.status = TaskStatus.SUCCESS
+        else:
+            self.task_state.status = TaskStatus.FAILURE
+
+        on_long_running_task_receives_update()
+        return None
+
+    def info(self, *args, **kwargs) -> None:
+        self.task_state.logs.append(args[0])
+        on_long_running_task_receives_update()
+
+    def debug(self, *args, **kwargs) -> None:
+        self.task_state.logs.append(args[0])
+        on_long_running_task_receives_update()
+
+    def error(self, *args, **kwargs) -> None:
+        self.task_state.logs.append(args[0])
+        on_long_running_task_receives_update()
+
+    def warning(self, *args, **kwargs) -> None:
+        self.task_state.logs.append(args[0])
+        on_long_running_task_receives_update()
+
+    def alive_it(self, it: Collection[T], total: Optional[int] = None, **options: Any) -> Iterable[T]:
+        on_long_running_task_receives_update()
+        return it  # fixme implement progress
+
+    def alive_bar(self, total: Optional[int] = None, **options: Any) -> ContextManager:
+        on_long_running_task_receives_update()
+
+        class do_nothing:  # fixme implement progress
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc_value, traceback, /):
+                return None
+
+            def __call__(self, *args, **kwargs):
+                logging.debug("alive_bar called", *args, **kwargs)
+
+        return do_nothing()

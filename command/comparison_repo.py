@@ -19,6 +19,7 @@ from hashing import fast_hash_async
 from lmdb_storage.file_object import BlobObject, FileObject
 from lmdb_storage.tree_iteration import zip_dfs
 from lmdb_storage.tree_object import TreeObject
+from task_logging import TaskLogger, PythonLoggingTaskLogger
 from util import group_to_dict, process_async, run_in_separate_loop
 
 type RepoDiffs = (FileNotInFilesystem | FileNotInRepo | RepoFileSame | RepoFileDifferent | ErrorReadingFilesystem)
@@ -228,11 +229,12 @@ class ErrorReadingFilesystem:
 class FilesystemIndex:
     CURRENT_VERSION = "v1"
 
-    def __init__(self, path: Path, hoard_ignore: HoardIgnore):
+    def __init__(self, path: Path, hoard_ignore: HoardIgnore, task_logger: TaskLogger):
         assert isinstance(path, Path)
         self._root = path
         self.index_filename = path.joinpath('.hoard').joinpath('filesystem-index.rtoml')
         self.hoard_ignore = hoard_ignore
+        self.task_logger = task_logger
 
     def __enter__(self):
         self.index_filename.touch()
@@ -251,7 +253,7 @@ class FilesystemIndex:
         self.update_hashes()
 
     def scan(self):
-        files: List[os.DirEntry] = list(alive_it(self.scan_dir(self._root), title="Scanning filesystem"))
+        files: List[os.DirEntry] = list(self.task_logger.alive_it(self.scan_dir(self._root), title="Scanning filesystem"))
 
         existing_filenames = set()
 
@@ -262,12 +264,12 @@ class FilesystemIndex:
 
         root_fpp = FastPosixPath(self._root)
         file_entries = self.current_index_doc["file_entries"]
-        for entry in alive_it(files, title="Matching files"):
+        for entry in self.task_logger.alive_it(files, title="Matching files"):
             assert entry.is_file()
             stat = entry.stat()
             rel_path_fpp = FastPosixPath(Path(entry.path)).relative_to(root_fpp)
             if self.hoard_ignore.matches(rel_path_fpp):
-                logging.debug("Skipping %s because it is in ignored paths", rel_path_fpp)
+                self.task_logger.debug("Skipping %s because it is in ignored paths", rel_path_fpp)
                 continue
 
             rel_path = rel_path_fpp.simple
@@ -289,7 +291,7 @@ class FilesystemIndex:
         for del_file in del_files:
             del file_entries[del_file]
 
-        logging.info(
+        self.task_logger.info(
             f"{len(existing_filenames)} files found, {len(mod_files)} are modified, {len(del_files)} are deleted.")
 
     def update_hashes(self):
@@ -297,15 +299,15 @@ class FilesystemIndex:
             Path(file_path) for file_path, file_obj_values in self.current_index_doc["file_entries"].items()
             if "fasthash" not in file_obj_values]
 
-        logging.info(f"Updating hashes for {len(missing_fasthashes)} files")
-        with alive_bar(len(missing_fasthashes), title="Computing hashes") as bar:
+        self.task_logger.info(f"Updating hashes for {len(missing_fasthashes)} files")
+        with self.task_logger.alive_bar(len(missing_fasthashes), title="Computing hashes") as bar:
             async def calc_fasthash(path: Path):
                 try:
                     fasthash = await fast_hash_async(self._root.joinpath(path))
                     self.current_index_doc["file_entries"][path.as_posix()]["fasthash"] = fasthash
                 except OSError as e:
-                    logging.error(f"Error while calcualting fasthash for file {path}")
-                    logging.error(e)
+                    self.task_logger.error(f"Error while calcualting fasthash for file {path}")
+                    self.task_logger.error(e)
                 bar()
 
             run_in_separate_loop(process_async(missing_fasthashes, calc_fasthash, njobs=8))
@@ -319,13 +321,13 @@ class FilesystemIndex:
                     elif entry.is_dir():
                         yield from self.scan_dir(entry.path)
         except PermissionError as e:
-            logging.error(f"Error while scanning directory {path}:")
-            logging.error(e)
+            self.task_logger.error(f"Error while scanning directory {path}:")
+            self.task_logger.error(e)
 
     def items(self) -> Iterable[Tuple[str, BlobObject]]:
         for file_path, file_data in self.current_index_doc.get("file_entries", {}).items():
             if "fasthash" not in file_data:
-                logging.error("Skipping %s because fasthash is missing", file_path)
+                self.task_logger.error("Skipping %s because fasthash is missing", file_path)
                 continue
 
             fasthash = file_data["fasthash"]
@@ -337,11 +339,12 @@ class FilesystemIndex:
 
 
 class FilesystemState:
-    def __init__(self, contents: RepoContents):
+    def __init__(self, contents: RepoContents, task_logger: TaskLogger):
         self.contents = contents
         self.state_root_id = None
 
         self.all_files = dict()
+        self.task_logger = task_logger
 
     def mark_file(self, fullpath: FastPosixPath, file_desc: FileDesc) -> None:
         assert not fullpath.is_absolute()
@@ -392,9 +395,9 @@ class FilesystemState:
         #     [p.as_posix() for p in allowed_paths])
 
     async def read_state_from_filesystem(
-            self, contents: RepoContents, hoard_ignore: HoardIgnore, repo_path: str, njobs: int = 32):
+            self, contents: RepoContents, hoard_ignore: HoardIgnore, repo_path: str, task_logger: TaskLogger, njobs: int = 32):
 
-        with FilesystemIndex(Path(repo_path), hoard_ignore) as index:
+        with FilesystemIndex(Path(repo_path), hoard_ignore, task_logger) as index:
             index.update()
 
             all_files_sorted = [(filepath, fileobj) for filepath, fileobj in index.items()]
@@ -414,7 +417,7 @@ class FilesystemState:
                     filesystem_prop = await read_filesystem_desc(file_path_full)
                     self.mark_file(file_path_local, filesystem_prop)
                 except OSError as e:
-                    logging.error(e)
+                    self.task_logger.error(e)
                     self.mark_error(file_path_local, str(e))
                 bar()
 
@@ -422,14 +425,14 @@ class FilesystemState:
 
         all_files_sorted = [("/" + filepath.as_posix(), fileobj) for filepath, fileobj in self.all_files.items()]
         with self.contents.objects as objects:
-            self.state_root_id = objects.mktree_from_tuples(all_files_sorted, alive_it)
+            self.state_root_id = objects.mktree_from_tuples(all_files_sorted, self.task_logger.alive_it)
 
 
 async def compute_difference_between_contents_and_filesystem(
         contents: RepoContents, repo_path: str, hoard_ignore: HoardIgnore,
         njobs: int = 32) -> AsyncGenerator[RepoDiffs]:
-    state = FilesystemState(contents)
-    await state.read_state_from_filesystem(contents, hoard_ignore, repo_path, njobs)
+    state = FilesystemState(contents, PythonLoggingTaskLogger())
+    await state.read_state_from_filesystem(contents, hoard_ignore, repo_path, PythonLoggingTaskLogger(), njobs)
 
     async for diff in state.diffs():
         yield diff
@@ -454,7 +457,7 @@ async def read_filesystem_desc(file_fullpath: pathlib.Path) -> FileDesc:
 async def compute_difference_filtered_by_path(
         contents: RepoContents, repo_path: str, hoard_ignore: HoardIgnore,
         allowed_paths: List[pathlib.PurePosixPath]) -> AsyncGenerator[RepoDiffs]:
-    state = FilesystemState(contents)
+    state = FilesystemState(contents, PythonLoggingTaskLogger())
 
     local_paths: List[Tuple[pathlib.Path, pathlib.Path]] = []
     for allowed_path in alive_it(allowed_paths, title="Checking updates"):

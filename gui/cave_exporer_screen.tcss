@@ -63,7 +63,18 @@ Bar > .bar--complete {
 ProgressReporting {
     min-height: 3;
     max-height: 15%;
+    width: 30%;
+    color: red;
 }
+
+LongRunningTasks {
+    width: auto;
+}
+
+LongRunningTasks Horizontal {
+    height: 1;
+}
+
 
 #logging-widget {
     height: 7;

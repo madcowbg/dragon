@@ -41,7 +41,7 @@ from gui.confirm_action_screen import ConfirmActionScreen
 from gui.folder_tree import DEPRECATED_FolderNode, DEPRECATED_FolderTree, DEPRECATED_aggregate_on_nodes
 from gui.logging import PythonLoggingWidget
 from gui.progress_reporting import StartProgressReporting, MarkProgressReporting, progress_reporting_it, \
-    ProgressReporting, progress_reporting_bar
+    ProgressReporting, progress_reporting_bar, LongRunningTasks, LongRunningTaskContext
 from lmdb_storage.cached_calcs import AppCachedCalculator
 from lmdb_storage.tree_object import TreeObject
 from util import group_to_dict, format_count, format_size, snake_case, safe_hex
@@ -497,7 +497,8 @@ class CaveInfoWidget(Widget):
     @work(thread=True)
     async def run_refresh(self):
         repo_cmd = RepoCommand(path=self.hoard.hoardpath, name=self.remote.uuid)
-        res = await repo_cmd.refresh(show_details=False)
+        with LongRunningTaskContext(f"Refreshing {self.remote.name}") as task_context:
+            res = await repo_cmd.refresh(show_details=False, task_logger=task_context)
 
         logging.info(res)
         logging.info(f"Refreshing {self.remote.name}({self.remote.uuid}) completed.")
@@ -619,7 +620,10 @@ class CaveExplorerScreen(Screen):
 
                 yield CaveInfoWidget(self.hoard, self.remote)
 
-            yield ProgressReporting()
+            with Horizontal(id="long-running-tasks"):
+                yield ProgressReporting()
+                yield LongRunningTasks()
+
             yield PythonLoggingWidget()
 
     @on(CaveInfoWidget.RemoteSettingChanged)
