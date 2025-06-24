@@ -34,6 +34,7 @@ from lmdb_storage.tree_object import ObjectType, TreeObject, ObjectID, MaybeObje
 from lmdb_storage.tree_operations import get_child, graft_in_tree
 from lmdb_storage.tree_structure import Objects, add_object
 from resolve_uuid import resolve_remote_uuid
+from task_logging import TaskLogger, PythonLoggingTaskLogger
 from util import format_size, custom_isabs, safe_hex, format_count
 
 
@@ -107,7 +108,7 @@ def augment_statuses(config, hoard, show_empty, statuses):
 
 async def execute_pull(
         hoard: Hoard, hoard_contents: HoardContents, preferences: PullPreferences, ignore_epoch: bool,
-        out: TextIO, progress_bar=alive_it):
+        out: TextIO, task_logger: TaskLogger):
     config = hoard.config()
     uuid = preferences.local_uuid
     pathing = HoardPathing(config, hoard.paths())
@@ -117,11 +118,11 @@ async def execute_pull(
         connected_repo = hoard.connect_to_repo(uuid, require_contents=True)
         current_contents = connected_repo.open_contents(is_readonly=True)
     except MissingRepo as e:
-        logging.error(e)
+        task_logger.error(e)
         out.write(f"Repo {config.remotes[uuid].name}[{uuid}] is not currently available!\n")
         return
     except MissingRepoContents as e:
-        logging.error(e)
+        task_logger.error(e)
         out.write(f"Repo {config.remotes[uuid].name}[{uuid}] has no current contents available!\n")
         return
 
@@ -135,10 +136,10 @@ async def execute_pull(
                 f"Skipping update as {config.remotes[uuid].name}.staging has not changed: {safe_hex(past_staging)[:6]}\n")
             return
 
-        logging.info(f"Saving config of remote {uuid}...")
+        task_logger.info(f"Saving config of remote {uuid}...")
         hoard_contents.config.save_remote_config(current_contents.config)
 
-        logging.info(f"Updating staging of {uuid} to {safe_hex(abs_staging_root_id)[:6]}")
+        task_logger.info(f"Updating staging of {uuid} to {safe_hex(abs_staging_root_id)[:6]}")
         commit_local_staging(hoard_contents, current_contents, abs_staging_root_id)
 
         out.write(f"Pulling {config.remotes[uuid].name}...\n")
@@ -152,14 +153,17 @@ async def execute_pull(
         hoard_root = roots["HOARD"]
         repo_root = roots[uuid]
 
+        task_logger.info("Merging staging to current...")
         merged_ids = merge_contents(
             hoard_contents.env, repo_root.name, repo_root.current, repo_root.staging,
             all_repo_roots=[hoard_root] + all_remote_roots,
             preferences=preferences, content_prefs=content_prefs)
 
+        task_logger.info("Printing differences...")
         # print what actually changed for the hoard and the repo todo consider printing other repo changes?
         print_differences(hoard_contents, hoard_root, repo_root, merged_ids, repo_root.staging, out)
 
+        task_logger.info("Committing merged...")
         commit_merged(hoard_root, repo_root, all_remote_roots, merged_ids)
 
         for root in all_remote_roots:
@@ -170,7 +174,7 @@ async def execute_pull(
 
         dump_after_op(roots, uuid, out)
 
-        logging.info(f"Marking as done {uuid}")  # fixme this is probably not needed as changes are atomic
+        task_logger.info(f"Marking as done {uuid}")  # fixme this is probably not needed as changes are atomic
         hoard_contents.config.mark_up_to_date(uuid, current_contents.config.updated)
 
     out.write(f"Sync'ed {config.remotes[uuid].name} to hoard!\n")
@@ -703,7 +707,7 @@ class HoardCommandContents:
                         continue
 
                     preferences = init_pull_preferences(remote_obj, assume_current, force_fetch_local_missing)
-                    await execute_pull(self.hoard, hoard_contents, preferences, ignore_epoch, out)
+                    await execute_pull(self.hoard, hoard_contents, preferences, ignore_epoch, out, PythonLoggingTaskLogger())
 
             out.write("DONE")
             return out.getvalue()

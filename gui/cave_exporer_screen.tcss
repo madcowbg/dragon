@@ -80,6 +80,10 @@ LongRunningTasks Label {
     padding-right: 1;
 }
 
+LongRunningTasks LoadingIndicator {
+    width: 20;
+}
+
 
 #logging-widget {
     height: 7;

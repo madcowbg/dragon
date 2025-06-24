@@ -15,7 +15,7 @@ from textual.message import Message
 from textual.reactive import reactive
 from textual.screen import Screen
 from textual.widget import Widget
-from textual.widgets import Tree, Static, Header, Footer, Select, RichLog, Button, RadioSet, RadioButton, Input
+from textual.widgets import Tree, Static, Header, Footer, Select, Button, RadioSet, RadioButton, Input
 from textual.widgets._tree import TreeNode
 
 from command.command_repo import RepoCommand
@@ -40,8 +40,7 @@ from gui.app_config import config, _write_config
 from gui.confirm_action_screen import ConfirmActionScreen
 from gui.folder_tree import DEPRECATED_FolderNode, DEPRECATED_FolderTree, DEPRECATED_aggregate_on_nodes
 from gui.logging import PythonLoggingWidget
-from gui.progress_reporting import StartProgressReporting, MarkProgressReporting, progress_reporting_it, \
-    ProgressReporting, progress_reporting_bar, LongRunningTasks, LongRunningTaskContext
+from gui.progress_reporting import LongRunningTasks, LongRunningTaskContext
 from lmdb_storage.cached_calcs import AppCachedCalculator
 from lmdb_storage.tree_object import TreeObject
 from util import group_to_dict, format_count, format_size, snake_case, safe_hex
@@ -476,12 +475,13 @@ class CaveInfoWidget(Widget):
                     f"Are you sure you want to PUSH FILES to the repo: \n"
                     f"{self.remote.name}({self.remote.uuid}\n"
                     f"?")):
-            with StringIO() as out:
-                await execute_files_push(
-                    self.hoard.config(),
-                    self.hoard, [self.remote.uuid], out,
-                    progress_reporting_bar(self, "push-to-files-operation", 10))
-                logging.info(out.getvalue())
+            with LongRunningTaskContext(f"Pushing files to {self.remote.name}") as task_logger:
+                with StringIO() as out:
+                    await execute_files_push(
+                        self.hoard.config(),
+                        self.hoard, [self.remote.uuid], out,
+                        task_logger)
+                    logging.info(out.getvalue())
 
             await self.recompose()
 
@@ -527,16 +527,21 @@ class CaveInfoWidget(Widget):
                     f"Are you sure you want to PULL the repo: \n"
                     f"{self.remote.name}({self.remote.uuid}\n"
                     f"into hoard?")):
-            with StringIO() as out:
-                preferences = init_pull_preferences(self.remote, assume_current=False, force_fetch_local_missing=False)
-                logging.info(f"Loading hoard contents TOML...")
-                with self.hoard.open_contents(create_missing=False).writeable() as hoard_contents:
-                    await execute_pull(
-                        self.hoard, hoard_contents, preferences, ignore_epoch=False, out=out,
-                        progress_bar=progress_reporting_it(self, "pull-to-hoard-operation", 10))
-                logging.info(out.getvalue())
+            self._execute_pull()
 
             await self.recompose()
+
+    @work(thread=True)
+    async def _execute_pull(self):
+        logging.info(f"Loading hoard contents TOML...")
+
+        with StringIO() as out:
+            preferences = init_pull_preferences(self.remote, assume_current=False, force_fetch_local_missing=False)
+            with self.hoard.open_contents(create_missing=False).writeable() as hoard_contents:
+                with LongRunningTaskContext(f"Pulling contents from {self.remote.name}") as task_logger:
+                    await execute_pull(
+                        self.hoard, hoard_contents, preferences, ignore_epoch=False, out=out, task_logger=task_logger)
+            logging.info(out.getvalue())
 
     @on(Button.Pressed, "#restore_from_hoard")
     @work
@@ -551,9 +556,10 @@ class CaveInfoWidget(Widget):
 
                 logging.info(f"Loading hoard contents TOML...")
                 with self.hoard.open_contents(create_missing=False).writeable() as hoard_contents:
-                    await execute_pull(
-                        self.hoard, hoard_contents, preferences, ignore_epoch=False, out=out,
-                        progress_bar=progress_reporting_it(self, "restore-from-hoard-operation", 10))
+                    with LongRunningTaskContext(f"Pulling contents from {self.remote.name}") as task_logger:
+                        await execute_pull(
+                            self.hoard, hoard_contents, preferences, ignore_epoch=False, out=out,
+                            task_logger=task_logger)
                 logging.info(out.getvalue())
 
             await self.recompose()
@@ -620,10 +626,7 @@ class CaveExplorerScreen(Screen):
 
                 yield CaveInfoWidget(self.hoard, self.remote)
 
-            with Horizontal(id="long-running-tasks"):
-                yield ProgressReporting()
-                yield LongRunningTasks()
-
+            yield LongRunningTasks()
             yield PythonLoggingWidget()
 
     @on(CaveInfoWidget.RemoteSettingChanged)
@@ -643,9 +646,3 @@ class CaveExplorerScreen(Screen):
 
     def switch_remote(self, uuid: str):
         self.remote = self.hoard.config().remotes[uuid]
-
-    async def on_start_progress_reporting(self, event: StartProgressReporting):
-        await self.query_one(ProgressReporting).on_start_progress_reporting(event)
-
-    async def on_mark_progress_reporting(self, event: MarkProgressReporting):
-        await self.query_one(ProgressReporting).on_mark_progress_reporting(event)

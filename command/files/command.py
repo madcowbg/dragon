@@ -13,6 +13,7 @@ from config import HoardConfig
 from contents.hoard import MovesAndCopies
 from lmdb_storage.deferred_operations import HoardDeferredOperations
 from resolve_uuid import resolve_remote_uuid
+from task_logging import PythonLoggingTaskLogger, TaskLogger
 
 
 class HoardCommandFiles:
@@ -78,41 +79,41 @@ class HoardCommandFiles:
         logging.info(f"Loading hoard contents...")
 
         with StringIO() as out:
-            await execute_files_push(config, self.hoard, repo_uuids, out, progress_bar=alive_bar)
+            await execute_files_push(config, self.hoard, repo_uuids, out, PythonLoggingTaskLogger())
 
             out.write("DONE")
             return out.getvalue()
 
 
-async def execute_files_push(config: HoardConfig, hoard: Hoard, repo_uuids: List[str], out: StringIO, progress_bar):
+async def execute_files_push(config: HoardConfig, hoard: Hoard, repo_uuids: List[str], out: StringIO, task_logger: TaskLogger):
     pathing = HoardPathing(config, hoard.paths())
     with hoard.open_contents(False).writeable() as hoard_contents:
         out.write(f"Before push:\n")
         dump_remotes(config, hoard_contents, out)
 
         moves_and_copies_before_fetching = MovesAndCopies(hoard_contents)
-        logging.info("try getting all requested files, per repo")
+        task_logger.info("try getting all requested files, per repo")
 
-        logging.info("Finding files that need copy, for easy lookup")
+        task_logger.info("Finding files that need copy, for easy lookup")
         for repo_uuid in repo_uuids:
-            logging.info(f"fetching for {config.remotes[repo_uuid].name}")
+            task_logger.info(f"fetching for {config.remotes[repo_uuid].name}")
             out.write(f"{config.remotes[repo_uuid].name}:\n")
 
-            await _fetch_files_in_repo(moves_and_copies_before_fetching, hoard_contents, repo_uuid, pathing, out, progress_bar)
+            await _fetch_files_in_repo(moves_and_copies_before_fetching, hoard_contents, repo_uuid, pathing, out, task_logger.alive_bar)
 
-        logging.info("Applying deferred operations after potentially getting a lot of files.")
+        task_logger.info("Applying deferred operations after potentially getting a lot of files.")
         HoardDeferredOperations(hoard_contents).apply_deferred_queue()
 
-        logging.info("Finding files that need copy - will not cleanup them!")
+        task_logger.info("Finding files that need copy - will not cleanup them!")
         moves_and_copies_for_cleanup = MovesAndCopies(hoard_contents)
-        logging.info("try cleaning unneeded files, per repo")
+        task_logger.info("try cleaning unneeded files, per repo")
         for repo_uuid in repo_uuids:
-            logging.info(f"cleaning repo {config.remotes[repo_uuid].name}")
+            task_logger.info(f"cleaning repo {config.remotes[repo_uuid].name}")
             out.write(f"{config.remotes[repo_uuid].name}:\n")
 
-            _cleanup_files_in_repo(moves_and_copies_for_cleanup, hoard_contents, repo_uuid, pathing, out, progress_bar)
+            _cleanup_files_in_repo(moves_and_copies_for_cleanup, hoard_contents, repo_uuid, pathing, out, task_logger.alive_bar)
 
-        logging.info("Applying deferred operations after cleanup.")
+        task_logger.info("Applying deferred operations after cleanup.")
         HoardDeferredOperations(hoard_contents).apply_deferred_queue()
 
         out.write(f"After:\n")
