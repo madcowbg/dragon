@@ -169,6 +169,7 @@ class TaskState[ID]:
         self.task_id: ID = task_id
 
         self.headline: str = headline
+        self.subtask: Optional[str] = None
 
         self.status: TaskStatus = TaskStatus.CREATED
         self.started_on: datetime = datetime.now()
@@ -208,10 +209,16 @@ class LongRunningTasks(Widget):
                     text_style = "bold red"
 
                 yield Label(Text(task_state.headline, style=text_style))
+
+                yield Label(Text(f"#logs={len(task_state.logs)}", style="dim"))
+
+                if task_state.subtask is not None:
+                    yield Label(Text(task_state.subtask, style="bold"))
+
                 if task_state.status == TaskStatus.RUNNING:
                     yield LoadingIndicator()
                 else:
-                    yield Label(" " + task_state.status.value)
+                    yield Label(Text(task_state.status.value))
 
     def on_mount(self):
         _TASK_LISTENERS.append(self)
@@ -231,6 +238,7 @@ def on_long_running_task_receives_update():
     for listener in _TASK_LISTENERS:
         listener.task_updated()
 
+MAX_UI_UPDATE_FREQUENCY = 5
 
 class LongRunningTaskContext(ContextManager, TaskLogger):
     def __init__(self, headline: str):
@@ -268,21 +276,76 @@ class LongRunningTaskContext(ContextManager, TaskLogger):
         self.task_state.logs.append(args[0])
         on_long_running_task_receives_update()
 
-    def alive_it(self, it: Collection[T], total: Optional[int] = None, **options: Any) -> Iterable[T]:
-        on_long_running_task_receives_update()
-        return it  # fixme implement progress
+    def alive_it(self, items: Collection[T], total: Optional[int] = None, **options: Any) -> Iterable[T]:
+        total = total if total is not None else len(items) if getattr(items, "__len__", None) is not None else None
+
+        subtask_title = options["title"] if "title" in options else ""
+
+        old_task = self.task_state.subtask
+        try:
+            self.task_state.subtask = subtask_title
+            on_long_running_task_receives_update()
+            past_time = time()
+
+            for current, val in enumerate(items):
+                yield val
+
+                if total is not None:
+                    self.task_state.subtask = f"{subtask_title} [{current}/{total}]"
+                else:
+                    self.task_state.subtask = f"{subtask_title} [{current}...]"
+
+                new_time = time()
+                if new_time > past_time + 1 / MAX_UI_UPDATE_FREQUENCY:
+                    on_long_running_task_receives_update()
+
+                    past_time = new_time
+
+        finally:
+            self.task_state.subtask = old_task
+            on_long_running_task_receives_update()
 
     def alive_bar(self, total: Optional[int] = None, **options: Any) -> ContextManager:
-        on_long_running_task_receives_update()
+        total = options["total"] if "total" in options else None
 
-        class do_nothing:  # fixme implement progress
+        class alive_bar:
+            def __init__(self, task_state: TaskState):
+                self.task_state = task_state
+                self.past_time = time()
+                self.current = 0
+                self.subtask_title = options["title"] if "title" in options else ""
+
             def __enter__(self):
+                self.old_task = self.task_state.subtask
+                self.task_state.subtask = self.subtask_title
+
+                on_long_running_task_receives_update()
+                logging.info(f"__enter__ {self.subtask_title}")
+
                 return self
 
             def __exit__(self, exc_type, exc_value, traceback, /):
+                logging.info(f"__exit__ {self.subtask_title}")
+                self.task_state.subtask = self.old_task
+                on_long_running_task_receives_update()
                 return None
 
             def __call__(self, *args, **kwargs):
-                logging.debug("alive_bar called", *args, **kwargs)
+                logging.info(f"__call__ {self.subtask_title}")
+                self.current += 1
 
-        return do_nothing()
+                if total is not None:
+                    self.task_state.subtask = f"{self.subtask_title} [{self.current}/{total}]"
+                else:
+                    self.task_state.subtask = f"{self.subtask_title} [{self.current}...]"
+
+                new_time = time()
+                if new_time > self.past_time + 1 / MAX_UI_UPDATE_FREQUENCY:
+                    on_long_running_task_receives_update()
+
+                    self.past_time = new_time
+
+
+        on_long_running_task_receives_update()
+        return alive_bar(self.task_state)
+

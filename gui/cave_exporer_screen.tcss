@@ -76,6 +76,10 @@ LongRunningTasks Horizontal {
     height: 1;
 }
 
+LongRunningTasks Label {
+    padding-right: 1;
+}
+
 
 #logging-widget {
     height: 7;
