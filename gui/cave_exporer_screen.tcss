@@ -69,6 +69,7 @@ ProgressReporting {
 
 LongRunningTasks {
     width: auto;
+    height: 10;
 }
 
 LongRunningTasks Horizontal {

@@ -20,6 +20,7 @@ from gui.app_config import config, _write_config
 from gui.hoard_tree_widget import HoardTreeWidget
 from gui.logging import PythonLoggingWidget
 from gui.node_description_widget import NodeDescription, FileAvailabilityPerRepoDataTable
+from gui.progress_reporting import LongRunningTasks
 
 
 class HoardExplorerWidget(Widget):
@@ -43,6 +44,7 @@ class HoardExplorerWidget(Widget):
         else:
             yield Label("Please select a valid hoard!")
 
+        yield LongRunningTasks()
         yield PythonLoggingWidget()
 
     async def watch_can_modify(self, new_value: bool, old_value: bool):
