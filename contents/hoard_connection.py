@@ -56,8 +56,10 @@ class HoardContentsConn:
         return self.contents
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        if HoardDeferredOperations(self.contents).have_deferred_ops():
-            raise ValueError("Have deferred operations that were not applied!!!")
+        deferred_ops = HoardDeferredOperations(self.contents)
+        if deferred_ops.have_deferred_ops():
+            logging.error("Closing while having deferred operations - will apply them just in case!")
+            deferred_ops.apply_deferred_queue()
 
         self.contents.close(True)
         return None
