@@ -20,25 +20,13 @@ class ObjectReader:
 
 
 class CompositeNodeID(HashableKey):
-    def __init__(self, hoard_obj_id: MaybeObjectID) -> None:
+    def __init__(
+            self, hoard_obj_id: MaybeObjectID,
+            current_roots: Dict[str, ObjectID], desired_roots: Dict[str, ObjectID]) -> None:
         self._hoard_obj_id = hoard_obj_id
-        self._current_roots: Dict[str, ObjectID] = {}
-        self._desired_roots: Dict[str, ObjectID] = {}
+        self._current_roots: Dict[str, ObjectID] = current_roots
+        self._desired_roots: Dict[str, ObjectID] = desired_roots
         self._hashed: bytes | None = None
-
-    def set_root_current(self, uuid: str, node_id: MaybeObjectID) -> None:
-        self._hashed = None
-        if node_id is not None:
-            self._current_roots[uuid] = node_id
-        elif uuid in self._current_roots:
-            del self._current_roots[uuid]
-
-    def set_root_desired(self, uuid: str, node_id: MaybeObjectID) -> None:
-        self._hashed = None
-        if node_id is not None:
-            self._desired_roots[uuid] = node_id
-        elif uuid in self._desired_roots:
-            del self._desired_roots[uuid]
 
     @property
     def hashed(self) -> bytes:
@@ -64,6 +52,15 @@ class CompositeNodeID(HashableKey):
         return isinstance(other, CompositeNodeID) and self.hashed == other.hashed
 
 
+def get_existing_children(rts: Dict[str, StoredObject], child_name: str) -> dict[str, bytes]:
+    current_roots: Dict[str, ObjectID] = {}
+    for uuid, child_current in rts.items():
+        current_child = get_child_if_exists(child_name, child_current)
+        if current_child is not None:
+            current_roots[uuid] = current_child
+    return current_roots
+
+
 class CompositeObject:
     @staticmethod
     def expand(node_id: CompositeNodeID, objects: ObjectReader) -> "CompositeObject":
@@ -87,19 +84,10 @@ class CompositeObject:
                 yield child_name, child_node
 
     def get_child(self, child_name: str) -> "CompositeNodeID":
-        child_node = CompositeNodeID(get_child_if_exists(child_name, self._hoard_obj))
+        current_roots: Dict[str, ObjectID] = get_existing_children(self._current_roots, child_name)
+        desired_roots: Dict[str, ObjectID] = get_existing_children(self._desired_roots, child_name)
 
-        for uuid, child_current in self._current_roots.items():
-            current_child = get_child_if_exists(child_name, child_current)
-            if current_child is not None:
-                child_node.set_root_current(uuid, current_child)
-
-        for uuid, child_desired in self._desired_roots.items():
-            desired_child = get_child_if_exists(child_name, child_desired)
-            if desired_child is not None:
-                child_node.set_root_desired(uuid, desired_child)
-
-        return child_node
+        return CompositeNodeID(get_child_if_exists(child_name, self._hoard_obj), current_roots, desired_roots)
 
     def __hash__(self) -> int:
         return hash(self.node_id.hashed)

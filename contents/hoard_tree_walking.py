@@ -7,6 +7,7 @@ from typing import Generator, Tuple, Optional, Dict
 from contents.recursive_stats_calc import CachedReader, read_hoard_file_presence
 from contents.hoard_composite_node import CompositeNodeID, CompositeObject
 from lmdb_storage.file_object import FileObject
+from lmdb_storage.tree_object import ObjectID
 from util import custom_isabs
 
 
@@ -87,12 +88,15 @@ class HoardDir:
 
 def composite_from_roots(contents: "HoardContents") -> CompositeNodeID:
     roots = contents.env.roots(write=False)
-    result = CompositeNodeID(roots["HOARD"].desired)
-
+    current_roots: Dict[str, ObjectID] = {}
+    desired_roots: Dict[str, ObjectID] = {}
     for remote in contents.hoard_config.remotes.all():
-        result.set_root_current(remote.uuid, roots[remote.uuid].current)
-        result.set_root_desired(remote.uuid, roots[remote.uuid].desired)
-    return result
+        if roots[remote.uuid].current is not None:
+            current_roots[remote.uuid] = roots[remote.uuid].current
+        if roots[remote.uuid].desired is not None:
+            desired_roots[remote.uuid] = roots[remote.uuid].desired
+
+    return CompositeNodeID(roots["HOARD"].desired, current_roots, desired_roots)
 
 
 def hoard_tree_root(self: "HoardContents") -> HoardDir:
