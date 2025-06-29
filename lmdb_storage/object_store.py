@@ -236,6 +236,7 @@ class ObjectStorage(TransactionCreator):
                 raise InconsistentObjectStorage(f"Missing root ID {root_id}: not in stored objects!")
 
     def copy_trees_from(self, other: "ObjectStorage", root_ids: Collection[ObjectID]):
+        # fixme can optimise if we assume that any object is already consistent
         assert isinstance(root_ids, Collection)
         with other.objects(write=False) as other_objects:
             other_live_ids = find_all_live(other_objects, root_ids)

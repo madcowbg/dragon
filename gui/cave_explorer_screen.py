@@ -276,7 +276,6 @@ class HoardContentsPendingToPull(Tree[Action]):
             pathing = HoardPathing(hoard_config, self.hoard.paths())
             repo = self.hoard.connect_to_repo(self.remote.uuid, True)
 
-            raise NotImplementedError("to be implemented with trees")
 
             with repo.open_contents(is_readonly=True) as current_contents:
                 async with self.hoard.open_contents(create_missing=False) as hoard_contents:
@@ -295,6 +294,8 @@ class HoardContentsPendingToPull(Tree[Action]):
                     # with StringIO() as other_out:
                     #     actions = list(calculate_actions(preferences, resolutions, pathing, hoard_config, other_out))
                     #     logging.debug(other_out.getvalue())
+
+            raise NotImplementedError("to be implemented with trees")
 
             self.DEPRECATED_op_tree = DEPRECATED_FolderTree[Action](actions, lambda
                 action: action.file_being_acted_on.as_posix())
