@@ -1,5 +1,4 @@
-import abc
-import enum
+import logging
 import logging
 import traceback
 from io import StringIO
@@ -23,7 +22,6 @@ from command.contents.command import execute_pull, init_pull_preferences, pull_p
     DifferencesCalculator, get_current_file_differences, Difference, create_single_repo_merge_roots
 from command.contents.comparisons import copy_local_staging_data_to_hoard, \
     commit_local_staging
-from command.fast_path import FastPosixPath
 from command.files.command import execute_files_push
 from command.hoard import Hoard
 from command.pathing import HoardPathing
@@ -31,9 +29,7 @@ from command.pending_file_ops import FileOp, CleanupFile, GetFile, CopyFile, Mov
 from config import HoardRemote, latency_order, ConnectionLatency, ConnectionSpeed, CaveType
 from contents.hoard import HoardContents
 from contents.hoard_connection import ReadonlyHoardContentsConn
-from contents.hoard_props import HoardFileProps
 from contents.recursive_stats_calc import NodeID, CurrentAndDesiredReader
-from contents.repo_props import FileDesc
 from exceptions import RepoOpeningFailed, WrongRepo, MissingRepoContents, MissingRepo
 from gui.app_config import config, _write_config
 from gui.confirm_action_screen import ConfirmActionScreen
@@ -42,53 +38,7 @@ from gui.progress_reporting import LongRunningTasks, LongRunningTaskContext
 from lmdb_storage.cached_calcs import AppCachedCalculator
 from lmdb_storage.pull_contents import merge_contents
 from lmdb_storage.tree_object import TreeObject
-from util import group_to_dict, format_count, format_size, snake_case, safe_hex
-
-
-# fixme reimplement with trees
-class DiffType(enum.Enum):
-    FileOnlyInLocal = enum.auto()
-    FileIsSame = enum.auto()
-    FileContentsDiffer = enum.auto()
-    FileOnlyInHoardLocalDeleted = enum.auto()
-    FileOnlyInHoardLocalUnknown = enum.auto()
-    FileOnlyInHoardLocalMoved = enum.auto()
-
-
-# fixme reimplement with trees
-class Diff:
-    def __init__(
-            self, diff_type: DiffType, local_file: FastPosixPath,
-            curr_file_hoard_path: FastPosixPath, local_props: FileDesc | None, hoard_props: HoardFileProps | None,
-            is_added: bool | None):
-        self.diff_type = diff_type
-
-        assert not local_file.is_absolute()
-        assert curr_file_hoard_path.is_absolute()
-        self.local_file = local_file
-        self.hoard_file = curr_file_hoard_path
-        self.local_props = local_props
-        self.hoard_props = hoard_props
-
-        self.is_added = is_added
-
-
-# fixme reimplement with trees
-class Action(abc.ABC):
-    @classmethod
-    def action_type(cls):
-        return snake_case(cls.__name__)
-
-    diff: Diff
-
-    def __init__(self, diff: Diff):
-        self.diff = diff
-
-    @property
-    def file_being_acted_on(self): return self.diff.hoard_file
-
-    @abc.abstractmethod
-    def execute(self, local_uuid: str, content_prefs: ContentPrefs, hoard: HoardContents, out: StringIO) -> None: pass
+from util import group_to_dict, format_count, format_size, safe_hex
 
 
 class HoardContentsPendingToSyncFile(Tree[NodeID]):
