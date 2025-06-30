@@ -250,7 +250,7 @@ def pull_op_to_str(act: Action):
     #     raise ValueError(f"Unsupported action: {act}")
 
 
-class HoardContentsPendingToPull(Tree[Action]):
+class HoardContentsPendingToPull(Tree[NodeID]):
     hoard: Hoard | None = reactive(None)
     remote: HoardRemote | None = reactive(None, recompose=True)
 

@@ -6,7 +6,6 @@ from io import StringIO
 from typing import List, Dict, Any, Optional, Callable, Awaitable, Tuple, TextIO, Iterable
 
 import humanize
-from alive_progress import alive_it
 
 from command.content_prefs import ContentPrefs, Presence
 from command.contents.comparisons import copy_local_staging_data_to_hoard, \
@@ -17,17 +16,17 @@ from command.hoard import Hoard
 from command.pathing import HoardPathing
 from config import CaveType, HoardRemote, HoardConfig
 from contents.hoard import HoardContents
-from contents.hoard_tree_walking import walk, HoardFile, HoardDir, hoard_tree_root
 from contents.hoard_props import HoardFileStatus, RESERVED, GET_BY_MOVE, GET_BY_COPY
+from contents.hoard_tree_walking import walk, HoardFile, HoardDir, hoard_tree_root
 from contents.recursive_stats_calc import NodeID, NodeObj, CurrentAndDesiredReader, CachedReader
 from contents.repo import RepoContents
 from exceptions import MissingRepoContents, MissingRepo
 from lmdb_storage.cached_calcs import CachedCalculator
 from lmdb_storage.deferred_operations import HoardDeferredOperations
 from lmdb_storage.file_object import FileObject
-from lmdb_storage.operations.three_way_merge import TransformedRoots
-from lmdb_storage.pull_contents import merge_contents, commit_merged
-from lmdb_storage.roots import Root, Roots
+from lmdb_storage.operations.fast_association import FastAssociation
+from lmdb_storage.pull_contents import merge_contents, commit_merged, ThreewayMergeRoots
+from lmdb_storage.roots import Roots
 from lmdb_storage.tree_calculation import RecursiveCalculator, StatGetter
 from lmdb_storage.tree_iteration import zip_trees_dfs
 from lmdb_storage.tree_object import ObjectType, TreeObject, ObjectID, MaybeObjectID
@@ -45,7 +44,7 @@ def _file_stats(file_obj: FileObject, fullpath: FastPosixPath, presence: Presenc
 
     a = (in_current.intersection(in_desired))
     g = (in_desired - in_current)
-    c = (exists_in_current - in_desired) # all files, even those that are not the same as the desired ones
+    c = (exists_in_current - in_desired)  # all files, even those that are not the same as the desired ones
     res: List[str] = []
     if len(a) > 0:
         res.append(f'a:{len(a)}')
@@ -154,14 +153,17 @@ async def execute_pull(
         repo_root = roots[uuid]
 
         task_logger.info("Merging staging to current...")
+        threeway_merge_roots = ThreewayMergeRoots(
+            hoard_root.desired, repo_root.name, repo_root.current, repo_root.staging,
+            all_repo_roots=[hoard_root] + all_remote_roots)
         merged_ids = merge_contents(
-            hoard_contents.env, repo_root.name, repo_root.current, repo_root.staging,
-            all_repo_roots=[hoard_root] + all_remote_roots,
+            hoard_contents.env,
+            threeway_merge_roots,
             preferences=preferences, content_prefs=content_prefs)
 
         task_logger.info("Printing differences...")
         # print what actually changed for the hoard and the repo todo consider printing other repo changes?
-        print_differences(hoard_contents, hoard_root, repo_root, merged_ids, repo_root.staging, out)
+        print_differences(hoard_contents, threeway_merge_roots, merged_ids, out)
 
         task_logger.info("Committing merged...")
         commit_merged(hoard_root, repo_root, all_remote_roots, merged_ids)
@@ -265,30 +267,21 @@ def pull_prefs_to_restore_from_hoard(remote_uuid: str, remote_type: CaveType) ->
                            force_reset_with_local_contents=False, remote_type=remote_type)
 
 
-async def print_pending_pull(
-        hoard_contents: HoardContents, content_prefs: ContentPrefs, current_contents: RepoContents,
-        preferences: PullPreferences, repo_staging_id: MaybeObjectID, out):
-    with StringIO() as other_out:
-        roots = hoard_contents.env.roots(write=False)
-        repo_root = roots[current_contents.uuid]
-        hoard_root = roots["HOARD"]
+def create_single_repo_merge_roots(
+        current_contents: RepoContents, hoard_contents: HoardContents, repo_staging_id: MaybeObjectID,
+        out: TextIO) -> ThreewayMergeRoots:
+    roots = hoard_contents.env.roots(write=False)
+    repo_root = roots[current_contents.uuid]
+    hoard_root = roots["HOARD"]
 
-        out.write(f"Hoard root: {safe_hex(hoard_contents.env.roots(False)['HOARD'].desired)}:\n")
-        out.write(
-            f"Repo current={safe_hex(repo_root.current)[:6]} staging={safe_hex(repo_staging_id)[:6]} desired={safe_hex(repo_root.desired)[:6]}\n")
-        out.write(f"Repo root: {safe_hex(current_contents.fsobjects.root_id)}:\n")
+    out.write(f"Hoard root: {safe_hex(hoard_contents.env.roots(False)['HOARD'].desired)}:\n")
+    out.write(
+        f"Repo current={safe_hex(repo_root.current)[:6]} staging={safe_hex(repo_staging_id)[:6]} desired={safe_hex(repo_root.desired)[:6]}\n")
+    out.write(f"Repo root: {safe_hex(current_contents.fsobjects.root_id)}:\n")
 
-        # assign roots
-        repo_current_id = repo_root.current
-
-        merged_ids = merge_contents(
-            hoard_contents.env, repo_root.name, repo_current_id, repo_staging_id, [repo_root, hoard_root],
-            preferences=preferences, content_prefs=content_prefs, merge_only=[repo_root.name])
-
-        # raise ValueError()
-        print_differences(hoard_contents, hoard_root, repo_root, merged_ids, repo_staging_id, out)
-
-        logging.debug(other_out.getvalue())
+    return ThreewayMergeRoots(
+        hoard_root.desired,
+        repo_root.name, repo_root.current, repo_staging_id, [repo_root, hoard_root])
 
 
 @dataclasses.dataclass()
@@ -319,7 +312,8 @@ def get_current_file_differences(node_obj: NodeObj) -> Difference:
             return Difference(considered=1, size=DifferenceOfType(), count=DifferenceOfType())
         else:
             return Difference(
-                considered=1, size=DifferenceOfType(to_obtain=node_obj.desired.size), count=DifferenceOfType(to_obtain=1))
+                considered=1, size=DifferenceOfType(to_obtain=node_obj.desired.size),
+                count=DifferenceOfType(to_obtain=1))
     if node_obj.desired is None:
         return Difference(
             considered=1, size=DifferenceOfType(to_delete=node_obj.current.size), count=DifferenceOfType(to_delete=1))
@@ -400,26 +394,26 @@ def print_differences_of_desired_vs_current(
 
 
 def print_differences(
-        hoard_contents: HoardContents, hoard_root: Root, repo_root: Root, merged_ids: TransformedRoots,
-        staging_root: MaybeObjectID, out: StringIO):
+        hoard_contents: HoardContents, threeway_merge_roots: ThreewayMergeRoots, merged_ids: FastAssociation[ObjectID],
+        out: StringIO):
     print_differences_for_id(
-        hoard_contents, hoard_root, repo_root,
+        hoard_contents,
+        threeway_merge_roots,
         merged_ids.get_if_present("HOARD"),
-        merged_ids.get_if_present(repo_root.name),
-        staging_root,
+        merged_ids.get_if_present(threeway_merge_roots.repo_name),
         out)
 
 
 def print_differences_for_id(
-        hoard_contents: HoardContents, hoard_root: Root, repo_root: Root,
-        desired_hoard_root_id: ObjectID | None, desired_repo_root_id: ObjectID | None,
-        staging_root: MaybeObjectID, out: TextIO):
+        hoard_contents: HoardContents, threeway_merge_roots: ThreewayMergeRoots,
+        desired_hoard_root_id: MaybeObjectID, desired_repo_root_id: MaybeObjectID,
+        out: TextIO):
     with hoard_contents.env.objects(write=False) as objects:
         for path, (base_hoard_id, merged_hoard_id, base_current_repo_id, merged_repo_id, staging_repo_id), _ \
                 in zip_trees_dfs(
             objects, "", [
-                hoard_root.desired, desired_hoard_root_id,
-                repo_root.current, desired_repo_root_id, staging_root],
+                threeway_merge_roots.hoard_root_id, desired_hoard_root_id,
+                threeway_merge_roots.repo_current_id, desired_repo_root_id, threeway_merge_roots.repo_staging_id],
             drilldown_same=True):
 
             if base_current_repo_id and merged_repo_id:
@@ -509,8 +503,15 @@ class HoardCommandContents:
                     abs_staging_root_id = copy_local_staging_data_to_hoard(
                         hoard_contents, current_contents, self.hoard.config())
 
-                    await print_pending_pull(
-                        hoard_contents, content_prefs, current_contents, preferences, abs_staging_root_id, out)
+                    threeway_merge_roots = create_single_repo_merge_roots(
+                        current_contents, hoard_contents, abs_staging_root_id, out)
+                    merged_ids = merge_contents(
+                        hoard_contents.env,
+                        threeway_merge_roots,
+                        preferences=preferences, content_prefs=content_prefs,
+                        merge_only=[threeway_merge_roots.repo_name])
+
+                    print_differences(hoard_contents, threeway_merge_roots, merged_ids, out)
 
                     return out.getvalue()
 
@@ -707,7 +708,8 @@ class HoardCommandContents:
                         continue
 
                     preferences = init_pull_preferences(remote_obj, assume_current, force_fetch_local_missing)
-                    await execute_pull(self.hoard, hoard_contents, preferences, ignore_epoch, out, PythonLoggingTaskLogger())
+                    await execute_pull(self.hoard, hoard_contents, preferences, ignore_epoch, out,
+                                       PythonLoggingTaskLogger())
 
             out.write("DONE")
             return out.getvalue()
@@ -746,8 +748,9 @@ class HoardCommandContents:
 
                 # print what actually changed for the hoard and the repo todo consider printing other repo changes?
                 print_differences_for_id(
-                    hoard_contents, hoard_root, repo_root, hoard_root.desired,
-                    repo_root.desired, repo_root.staging, out)
+                    hoard_contents,
+                    ThreewayMergeRoots(hoard_root.desired, repo_root.name, repo_root.current, repo_root.staging, []),
+                    hoard_root.desired, repo_root.desired, out)
 
                 dump_after_op(roots, remote_uuid, out)
 

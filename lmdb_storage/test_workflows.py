@@ -3,7 +3,7 @@ import unittest
 from tempfile import TemporaryDirectory
 
 from lmdb_storage.object_store import ObjectStorage
-from lmdb_storage.pull_contents import merge_contents, commit_merged
+from lmdb_storage.pull_contents import merge_contents, commit_merged, ThreewayMergeRoots
 
 from lmdb_storage.test_experiment_lmdb import dump_tree
 from lmdb_storage.test_merge_trees import populate_trees, NaiveMergePreferences
@@ -226,7 +226,8 @@ def pull_contents(env: ObjectStorage, repo_uuid: str, staging_id: ObjectID, merg
     repo_root_names = [r.name for r in repo_roots]
 
     merged_ids = merge_contents(
-        env, roots[repo_uuid].name, roots[repo_uuid].current, roots[repo_uuid].staging, repo_roots,
+        env,
+        ThreewayMergeRoots(None, roots[repo_uuid].name, roots[repo_uuid].current, roots[repo_uuid].staging, repo_roots),
         merge_prefs=merge_prefs)
 
     roots = env.roots(write=True)
