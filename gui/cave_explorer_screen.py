@@ -19,9 +19,9 @@ from textual.widgets import Tree, Static, Header, Footer, Select, Button, RadioS
 from textual.widgets._tree import TreeNode
 
 from command.command_repo import RepoCommand
-from command.content_prefs import ContentPrefs
+from command.content_prefs import ContentPrefs, Presence
 from command.contents.command import execute_pull, init_pull_preferences, pull_prefs_to_restore_from_hoard, \
-    DifferencesCalculator, get_current_file_differences, Difference
+    DifferencesCalculator, get_current_file_differences, Difference, create_single_repo_merge_roots
 from command.contents.comparisons import copy_local_staging_data_to_hoard, \
     commit_local_staging
 from command.fast_path import FastPosixPath
@@ -33,15 +33,15 @@ from config import HoardRemote, latency_order, ConnectionLatency, ConnectionSpee
 from contents.hoard import HoardContents
 from contents.hoard_connection import ReadonlyHoardContentsConn
 from contents.hoard_props import HoardFileProps
-from contents.recursive_stats_calc import NodeID, CurrentAndDesiredReader
+from contents.recursive_stats_calc import NodeID, CurrentAndDesiredReader, NodeObj
 from contents.repo_props import FileDesc
 from exceptions import RepoOpeningFailed, WrongRepo, MissingRepoContents, MissingRepo
 from gui.app_config import config, _write_config
 from gui.confirm_action_screen import ConfirmActionScreen
-from gui.folder_tree import DEPRECATED_FolderNode, DEPRECATED_FolderTree, DEPRECATED_aggregate_on_nodes
 from gui.logging import PythonLoggingWidget
 from gui.progress_reporting import LongRunningTasks, LongRunningTaskContext
 from lmdb_storage.cached_calcs import AppCachedCalculator
+from lmdb_storage.pull_contents import merge_contents
 from lmdb_storage.tree_object import TreeObject
 from util import group_to_dict, format_count, format_size, snake_case, safe_hex
 
@@ -189,13 +189,6 @@ class HoardContentsPendingToSyncFile(Tree[NodeID]):
         return cnts_label
 
 
-async def aggregate_counts(op_tree):
-    return DEPRECATED_aggregate_on_nodes(
-        op_tree,
-        lambda op: 1,
-        lambda old, new: new if old is None else old + new)
-
-
 def op_to_str(op: FileOp):
     if isinstance(op, GetFile):
         return "get", 1
@@ -211,43 +204,7 @@ def op_to_str(op: FileOp):
         raise ValueError(f"Unsupported op: {op}")
 
 
-T = TypeVar('T')
-
-
-def sum_dicts(old: Dict[T, any], new: Dict[T, any]) -> Dict[T, any]:
-    result = old.copy() if old is not None else dict()
-    for k, v in new.items():
-        result[k] = result.get(k, 0) + v
-    return result
-
-
 PENDING_TO_PULL = 'Hoard vs Repo contents'
-
-
-def pull_op_to_str(act: Action):
-    raise NotImplementedError()
-    # if isinstance(act, MarkIsAvailableBehavior):
-    #     return "mark_avail", 25
-    # elif isinstance(act, AddToHoardAndCleanupSameBehavior):
-    #     return "absorb", 5
-    # elif isinstance(act, AddToHoardAndCleanupNewBehavior):
-    #     return "absorb", 5
-    # elif isinstance(act, AddNewFileBehavior):
-    #     return "add", 10
-    # elif isinstance(act, MarkToGetBehavior):
-    #     return "mark_get", 40
-    # elif isinstance(act, MarkForCleanupBehavior):
-    #     return "mark_deleted", 92
-    # elif isinstance(act, ResetLocalAsCurrentBehavior):
-    #     return "reset_to_local", 20
-    # elif isinstance(act, RemoveLocalStatusBehavior):
-    #     return "unmark", 91
-    # elif isinstance(act, DeleteFileFromHoardBehavior):
-    #     return "delete", 90
-    # elif isinstance(act, MoveFileBehavior):
-    #     return "move", 30
-    # else:
-    #     raise ValueError(f"Unsupported action: {act}")
 
 
 class HoardContentsPendingToPull(Tree[NodeID]):
@@ -259,55 +216,62 @@ class HoardContentsPendingToPull(Tree[NodeID]):
 
         self.hoard = hoard
         self.remote = remote
-
-        self.op_tree = None
-        self.counts = None
-        self.ops_cnt = None
+        self.hoard_conn: ReadonlyHoardContentsConn | None = None
+        self.hoard_contents: HoardContents | None = None
 
         self.show_size = False
 
         self.expanded = set()
+
+        self.contents_diff_tree_root = None
+        self.pending_ops_calculator: AppCachedCalculator[NodeID, Difference] | None = None
 
     @work(thread=True)
     async def populate_and_expand(self):
         try:
             self.root.label = PENDING_TO_PULL + " (loading...)"
             hoard_config = self.hoard.config()
-            pathing = HoardPathing(hoard_config, self.hoard.paths())
             repo = self.hoard.connect_to_repo(self.remote.uuid, True)
 
+            self.hoard_conn = self.hoard.open_contents(create_missing=False)
+            self.hoard_contents = self.hoard_conn.__enter__()
 
             with repo.open_contents(is_readonly=True) as current_contents:
-                async with self.hoard.open_contents(create_missing=False) as hoard_contents:
-                    preferences = init_pull_preferences(
-                        self.remote, assume_current=False, force_fetch_local_missing=False)
+                preferences = init_pull_preferences(
+                    self.remote, assume_current=False, force_fetch_local_missing=False)
 
-                    config = self.hoard.config()
-                    abs_staging_root_id = copy_local_staging_data_to_hoard(hoard_contents, current_contents, config)
-                    commit_local_staging(hoard_contents, current_contents, abs_staging_root_id)
-                    uuid = current_contents.config.uuid
+                pathing = HoardPathing(hoard_config, self.hoard.paths())
+                content_prefs = ContentPrefs(
+                    hoard_config, pathing, self.hoard_contents, self.hoard.available_remotes(),
+                    Presence(self.hoard_contents))
 
-                    # resolutions = await resolution_to_match_repo_and_hoard(
-                    #     uuid, hoard_contents, pathing, preferences,
-                    #     progress_reporting_it(self, id="hoard-contents-to-pull", max_frequency=10))
-                    #
-                    # with StringIO() as other_out:
-                    #     actions = list(calculate_actions(preferences, resolutions, pathing, hoard_config, other_out))
-                    #     logging.debug(other_out.getvalue())
+                abs_staging_root_id = copy_local_staging_data_to_hoard(
+                    self.hoard_contents, current_contents, hoard_config)
 
-            raise NotImplementedError("to be implemented with trees")
+                commit_local_staging(self.hoard_contents, current_contents, abs_staging_root_id)
 
-            self.DEPRECATED_op_tree = DEPRECATED_FolderTree[Action](actions, lambda
-                action: action.file_being_acted_on.as_posix())
+                with StringIO() as out:
+                    threeway_merge_roots = create_single_repo_merge_roots(
+                        current_contents, self.hoard_contents, abs_staging_root_id, out)
+                    logging.debug(out.getvalue())
 
-            self.counts = await aggregate_counts(self.DEPRECATED_op_tree)
-            self.ops_cnt = DEPRECATED_aggregate_on_nodes(
-                self.DEPRECATED_op_tree,
-                lambda node: {pull_op_to_str(node.data): node.data.file_obj.size if self.show_size else 1},
-                sum_dicts)
+                merged_ids = merge_contents(
+                    self.hoard_contents.env,
+                    threeway_merge_roots,
+                    preferences=preferences, content_prefs=content_prefs,
+                    merge_only=[threeway_merge_roots.repo_name])
 
-            self.root.label = PENDING_TO_PULL + f" ({len(actions)})"
-            self.root.data = self.DEPRECATED_op_tree.root
+                desired_root_id = self.hoard_contents.env.roots(False)[self.remote.uuid].desired
+                new_desired_root_id = merged_ids.get_if_present(self.remote.uuid)
+
+            self.contents_diff_tree_root: NodeID = NodeID(desired_root_id, new_desired_root_id)
+            self.pending_ops_calculator = AppCachedCalculator(
+                DifferencesCalculator(self.hoard_contents, get_current_file_differences),
+                Difference)
+
+            self.root.label = PENDING_TO_PULL  # fixme maybe show agg? + f" ({len(actions)})"
+
+            self.root.data = self.contents_diff_tree_root
 
             self.post_message(Tree.NodeExpanded(self.root))
 
@@ -322,6 +286,14 @@ class HoardContentsPendingToPull(Tree[NodeID]):
             logging.error(f"OperationalError: {e}")
             self.root.label = PENDING_TO_PULL + " (INVALID CONTENTS)"
 
+    def on_unmount(self):
+        if self.hoard_contents:
+            self.hoard_contents = None
+
+        if self.hoard_conn:
+            self.hoard_conn.__exit__(None, None, None)
+            self.hoard_conn = None
+
     def on_tree_node_expanded(self, event: Tree.NodeExpanded):
         if event.node in self.expanded:
             return
@@ -330,26 +302,47 @@ class HoardContentsPendingToPull(Tree[NodeID]):
         if event.node == self.root:
             self.populate_and_expand()
         else:
-            assert self.op_tree is not None
             self._expand_subtree(event.node)
 
-    def _expand_subtree(self, node: TreeNode[DEPRECATED_FolderNode[Action]]):
-        for _, folder in node.data.folders.items():
-            folder_name = Text().append(folder.name).append(" ").append(f"({self.counts[folder]})", style="dim")
-            cnts_label = self._pretty_folder_label_descriptor(folder)
-            folder_label = folder_name.append(" ").append(cnts_label)
-            node.add(folder_label, data=folder)
-        for _, file in node.data.files.items():
-            node.add_leaf(f"{type(file.data)}: {file.data.file_being_acted_on}", data=node.data)
+    def _expand_subtree(self, node: TreeNode[NodeID]):
+        with self.hoard_contents.env.objects(write=False) as objects:
+            node_obj = node.data.load(objects)
 
-    def _pretty_folder_label_descriptor(self, folder: DEPRECATED_FolderNode[FileOp]) -> Text:
+            for child_name, child_id in node_obj.children:
+                child_obj = child_id.load(objects)
+                if child_obj.has_children:
+                    count_and_sizes = self.pending_ops_calculator[child_id]
+
+                    folder_name = Text().append(child_name).append(" ").append(
+                        f"({count_and_sizes.count.all})", style="dim")
+                    cnts_label = self._pretty_folder_label_descriptor(child_id)
+                    folder_label = folder_name.append(" ").append(cnts_label)
+                    node.add(folder_label, data=child_id)
+
+                else:
+                    node.add_leaf(f"TODO op?: {child_name}", data=node.data)
+
+    def _pretty_folder_label_descriptor(self, folder: NodeID) -> Text:
+        count_and_sizes = self.pending_ops_calculator[folder]
+
+        def format_num(it):
+            return format_size(it) if self.show_size else format_count(it)
+
         cnts_label = Text().append("{")
-        pending = self.ops_cnt[folder]
-        if pending is not None:
-            for (op_type, order), v in sorted(pending.items(), key=lambda x: x[0][1]):
-                cnts_label.append(op_type) \
-                    .append(" ").append(format_size(v) if self.show_size else format_count(v), style="dim").append(",")
-                # op_type, style="green" if op_type == "get" else "strike dim" if op_type == "cleanup" else "none") \
+        if count_and_sizes is not None:
+            stat = count_and_sizes.size if self.show_size else count_and_sizes.count
+            if count_and_sizes.count.to_obtain > 0:
+                cnts_label.append("get", style="green") \
+                    .append(" ").append(format_num(stat.to_obtain), style="dim").append(",")
+
+            if count_and_sizes.count.to_delete > 0:
+                cnts_label.append("rm", style="strike dim") \
+                    .append(" ").append(format_num(stat.to_delete), style="dim").append(",")
+
+            if count_and_sizes.count.to_change > 0:
+                cnts_label.append("modify", style="none") \
+                    .append(" ").append(format_num(stat.to_change), style="dim").append(",")
+
         cnts_label.append("}")
         return cnts_label
 

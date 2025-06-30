@@ -1,4 +1,6 @@
 import enum
+import logging
+import sys
 from functools import cached_property
 from typing import Dict, Iterable, Tuple, Union, List
 
@@ -43,4 +45,5 @@ class TreeObject(StoredObject):
         return isinstance(other, TreeObject) and self._children == other._children
 
     def __hash__(self):
-        return self.children.__hash__()
+        # fixme it is not well defined, what about self._id?
+        return sum(hash(name) + hash(child) for name, child in self.children)

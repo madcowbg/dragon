@@ -13,6 +13,7 @@ from contents.hoard_props import HoardFileStatus, compute_status
 from lmdb_storage.file_object import BlobObject, FileObject
 from lmdb_storage.tree_calculation import RecursiveReader, RecursiveCalculator, StatGetter, ValueCalculator
 from lmdb_storage.tree_object import TreeObject, ObjectType, MaybeObjectID, StoredObject, ObjectID
+from lmdb_storage.tree_structure import Objects
 
 
 class Storeable:
@@ -22,16 +23,15 @@ class Storeable:
 
 @dataclasses.dataclass(frozen=True)
 class NodeID(HashableKey):
-    current: MaybeObjectID
-    desired: MaybeObjectID
+    current: MaybeObjectID  # fixme rename to something less fixed, e.g. left or present
+    desired: MaybeObjectID  # fixme rename to something less fixed, e.g. right or expected
 
     @cached_property
     def hashed(self) -> bytes:
         return msgpack.encode((self.current, self.desired))
 
-    @property
-    def children(self) -> Iterable[Tuple[str, "NodeID"]]:
-        pass
+    def load(self, objects: Objects) -> "NodeObj":
+        return NodeObj(objects[self.current] if self.current else None, objects[self.desired] if self.desired else None)
 
 
 class RecursiveObject[RID]:
