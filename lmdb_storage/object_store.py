@@ -13,6 +13,7 @@ from lmdb import Transaction, Environment, _Database
 
 from lmdb_storage.object_serialization import read_stored_object, write_stored_object
 from lmdb_storage.roots import Roots
+from lmdb_storage.tree_iteration import dfs
 from lmdb_storage.tree_structure import Objects, ObjectID, StoredObjects, TransactionCreator
 from lmdb_storage.tree_object import ObjectType, StoredObject, TreeObject
 from util import format_size
@@ -236,15 +237,15 @@ class ObjectStorage(TransactionCreator):
                 raise InconsistentObjectStorage(f"Missing root ID {root_id}: not in stored objects!")
 
     def copy_trees_from(self, other: "ObjectStorage", root_ids: Collection[ObjectID]):
-        # fixme can optimise if we assume that any object is already consistent
         assert isinstance(root_ids, Collection)
         with other.objects(write=False) as other_objects:
-            other_live_ids = find_all_live(other_objects, root_ids)
-
             with self.objects(write=True) as self_objects:
-                for live_id in other_live_ids:
-                    if live_id not in self_objects:
-                        self_objects[live_id] = other_objects[live_id]
+                for root_id in root_ids:
+                    for _, _, live_id, _, should_skip in dfs(other_objects, "", root_id):
+                        if live_id in self_objects:
+                            should_skip()  # we already have it here, so do not drill down
+                        else:
+                            self_objects[live_id] = other_objects[live_id]
 
     def begin(self, db_name: str, write: bool) -> Transaction:
         return self._env.begin(db=self._dbs[db_name], write=write)

@@ -4,7 +4,6 @@ import logging
 import traceback
 from io import StringIO
 from sqlite3 import OperationalError
-from typing import TypeVar, Dict
 
 from rich.text import Text
 from textual import work, on
@@ -33,7 +32,7 @@ from config import HoardRemote, latency_order, ConnectionLatency, ConnectionSpee
 from contents.hoard import HoardContents
 from contents.hoard_connection import ReadonlyHoardContentsConn
 from contents.hoard_props import HoardFileProps
-from contents.recursive_stats_calc import NodeID, CurrentAndDesiredReader, NodeObj
+from contents.recursive_stats_calc import NodeID, CurrentAndDesiredReader
 from contents.repo_props import FileDesc
 from exceptions import RepoOpeningFailed, WrongRepo, MissingRepoContents, MissingRepo
 from gui.app_config import config, _write_config
@@ -274,9 +273,10 @@ class HoardContentsPendingToPull(Tree[NodeID]):
                 DifferencesCalculator(self.hoard_contents, get_current_file_differences),
                 Difference)
 
-            self.root.label = PENDING_TO_PULL  # fixme maybe show agg? + f" ({len(actions)})"
-
+            self.root.label = PENDING_TO_PULL
             self.root.data = self.contents_diff_tree_root
+
+            self.post_message(Tree.NodeExpanded(self.root))
 
             self.loading = False
 
