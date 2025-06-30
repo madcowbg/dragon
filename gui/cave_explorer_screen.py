@@ -226,6 +226,11 @@ class HoardContentsPendingToPull(Tree[NodeID]):
         self.contents_diff_tree_root = None
         self.pending_ops_calculator: AppCachedCalculator[NodeID, Difference] | None = None
 
+        self.loading = True
+
+    async def on_mount(self):
+        self.populate_and_expand()
+
     @work(thread=True)
     async def populate_and_expand(self):
         try:
@@ -273,9 +278,8 @@ class HoardContentsPendingToPull(Tree[NodeID]):
 
             self.root.data = self.contents_diff_tree_root
 
-            self.post_message(Tree.NodeExpanded(self.root))
+            self.loading = False
 
-            self._expand_subtree(self.root)
 
         except RepoOpeningFailed as e:
             traceback.print_exception(e)
@@ -299,10 +303,7 @@ class HoardContentsPendingToPull(Tree[NodeID]):
             return
         self.expanded.add(event.node)
 
-        if event.node == self.root:
-            self.populate_and_expand()
-        else:
-            self._expand_subtree(event.node)
+        self._expand_subtree(event.node)
 
     def _expand_subtree(self, node: TreeNode[NodeID]):
         with self.hoard_contents.env.objects(write=False) as objects:

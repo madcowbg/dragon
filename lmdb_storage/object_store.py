@@ -260,22 +260,20 @@ class ObjectStorage(TransactionCreator):
 def find_all_live(objects: Objects, root_ids: Collection[ObjectID]) -> Collection[ObjectID]:
     live_ids = set(root_ids)
     q = list(live_ids)
-    with alive_bar(title="iterating live objects") as bar:
-        while len(q) > 0:
-            current_id = q.pop()
+    while len(q) > 0:
+        current_id = q.pop()
 
-            bar()
-            live_obj: StoredObject = objects[current_id]
-            if live_obj.object_type == ObjectType.TREE:
-                live_obj: TreeObject
-                # add all children to queue
-                for _, child_id in live_obj.children:
-                    if child_id not in live_ids:
-                        live_ids.add(child_id)
-                        q.append(child_id)
-            else:
-                # do nothing on files, just verify that they exist
-                assert live_obj.object_type == ObjectType.BLOB
+        live_obj: StoredObject = objects[current_id]
+        if live_obj.object_type == ObjectType.TREE:
+            live_obj: TreeObject
+            # add all children to queue
+            for _, child_id in live_obj.children:
+                if child_id not in live_ids:
+                    live_ids.add(child_id)
+                    q.append(child_id)
+        else:
+            # do nothing on files, just verify that they exist
+            assert live_obj.object_type == ObjectType.BLOB
     return live_ids
 
 
