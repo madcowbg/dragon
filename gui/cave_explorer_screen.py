@@ -81,7 +81,7 @@ class HoardContentsPendingToSyncFile(Tree[NodeID]):
 
         self.root.data = self.files_diff_tree_root
         self.root.label = (
-            self.root.label.append(f"({self.pending_ops_calculator[self.files_diff_tree_root].count.all})")
+            self.root.label.append(f" ({self.pending_ops_calculator[self.files_diff_tree_root].count.all})")
             .append(self._pretty_folder_label_descriptor(self.files_diff_tree_root)))
         self.root.expand()
 
@@ -95,23 +95,31 @@ class HoardContentsPendingToSyncFile(Tree[NodeID]):
         for child_name, child_id in self.current_and_desired_reader.children(folder_node_id):
             child_obj = self.current_and_desired_reader.convert(child_id)
 
+            child_pending_ops = self.pending_ops_calculator[child_id]
             if isinstance(child_obj.current, TreeObject) or isinstance(child_obj.desired, TreeObject):
+                if child_pending_ops.count.all == 0:
+                    continue  # # hide not modified
+
                 # is a folder
                 folder_label = Text().append(child_name).append(" ") \
                     .append(f"({self.pending_ops_calculator[child_id].count.all})", style="dim")
                 cnts_label = self._pretty_folder_label_descriptor(child_id)
                 event.node.add(folder_label.append(" ").append(cnts_label), data=child_id)
             else:  # is a file
-                child_pending_ops = self.pending_ops_calculator[child_id]
-                if child_pending_ops.count.to_obtain > 0:
-                    op_type = "GET"
-                elif child_pending_ops.count.to_delete > 0:
-                    op_type = "CLEANUP"
-                elif child_pending_ops.count.to_change > 0:
-                    op_type = "CHANGE"
+
+                if child_pending_ops.count.all == 0:
+                    continue  # hide not modified
+
+                if child_pending_ops.count.to_delete:
+                    op_label = Text("CLEANUP", style="red").append(": ", style="normal")
+                elif child_pending_ops.count.to_change:
+                    op_label = Text("CHANGE", style="normal").append(": ", style="normal")
+                elif child_pending_ops.count.to_obtain:
+                    op_label = Text("GET", style="green").append(": ", style="normal")
                 else:
-                    op_type = "UNKNOWN?!"
-                event.node.add_leaf(f"{op_type}: {child_name}", data=child_id)
+                    op_label = Text("UNRECOGNIZED OP?! ", style="error")
+
+                event.node.add_leaf(op_label.append(child_name), data=child_id)
 
     def _pretty_folder_label_descriptor(self, folder: NodeID) -> Text:
         folder_diffs = self.pending_ops_calculator[folder]
@@ -183,7 +191,6 @@ class HoardContentsPendingToPull(Tree[NodeID]):
     @work(thread=True)
     async def populate_and_expand(self):
         try:
-            self.root.label = PENDING_TO_PULL + " (loading...)"
             hoard_config = self.hoard.config()
             repo = self.hoard.connect_to_repo(self.remote.uuid, True)
 
@@ -223,7 +230,10 @@ class HoardContentsPendingToPull(Tree[NodeID]):
                 DifferencesCalculator(self.hoard_contents, get_current_file_differences),
                 Difference)
 
-            self.root.label = PENDING_TO_PULL
+            self.root.label = (
+                Text(PENDING_TO_PULL)
+                .append(f" ({self.pending_ops_calculator[self.contents_diff_tree_root].count.all})")
+                .append(self._pretty_folder_label_descriptor(self.contents_diff_tree_root)))
             self.root.data = self.contents_diff_tree_root
 
             self.post_message(Tree.NodeExpanded(self.root))
@@ -260,9 +270,12 @@ class HoardContentsPendingToPull(Tree[NodeID]):
             node_obj = node.data.load(objects)
 
             for child_name, child_id in node_obj.children:
+                count_and_sizes = self.pending_ops_calculator[child_id]
                 child_obj = child_id.load(objects)
+
                 if child_obj.has_children:
-                    count_and_sizes = self.pending_ops_calculator[child_id]
+                    if count_and_sizes.count.all == 0:
+                        continue  # hide not modified
 
                     folder_name = Text().append(child_name).append(" ").append(
                         f"({count_and_sizes.count.all})", style="dim")
@@ -271,7 +284,18 @@ class HoardContentsPendingToPull(Tree[NodeID]):
                     node.add(folder_label, data=child_id)
 
                 else:
-                    node.add_leaf(f"TODO op?: {child_name}", data=node.data)
+                    if count_and_sizes.count.all == 0:
+                        continue  # hide not modified
+
+                    if count_and_sizes.count.to_delete:
+                        op_label = Text("DEL", style="red").append(": ", style="normal")
+                    elif count_and_sizes.count.to_change:
+                        op_label = Text("MOD", style="normal").append(": ", style="normal")
+                    elif count_and_sizes.count.to_obtain:
+                        op_label = Text("ADD", style="green").append(": ", style="normal")
+                    else:
+                        op_label = Text("UNRECOGNIZED OP?! ", style="error")
+                    node.add_leaf(op_label.append(child_name), data=node.data)
 
     def _pretty_folder_label_descriptor(self, folder: NodeID) -> Text:
         count_and_sizes = self.pending_ops_calculator[folder]
