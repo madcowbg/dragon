@@ -98,6 +98,8 @@ class ObjectEnvironmentCache:
         logging.debug(f"### LMDB RELEASE {path}")
         usage -= 1
         if usage == 0:
+            store_backup_rotation(env)
+
             logging.info(f"### LMDB CLOSING CONNECTION {path}")
             env.close()
             self._cache.pop(path)
@@ -228,8 +230,6 @@ class ObjectStorage(TransactionCreator):
                     ab.__exit__(None, None, None)
 
             self.validate_storage(objects, root_ids)
-
-        store_backup_rotation(self._env)
 
     def validate_storage(self, objects, root_ids):
         for root_id in root_ids:
