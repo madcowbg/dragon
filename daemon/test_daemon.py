@@ -39,14 +39,13 @@ class TestDaemon(IsolatedAsyncioTestCase):
         await asyncio.sleep(0.1)
         daemon_task.cancel()
 
-        res = cave_cmd.status_index(show_dates=False, show_epoch=False)
+        res = cave_cmd.status_index(show_dates=False, show_epoch=False, show_size=False)
         self.assertEqual([
             'wat/test.me.different: present',
             'wat/test.me.once: present',
             'wat/test.me.twice: present',
             '--- SUMMARY ---',
             'Result for local [72174f950289a454493d243bb72bdb76982e5f62]:',
-            'Max size: 3.5TB',
             f'UUID: {cave_cmd.current_uuid()}',
             '  # files = 3 of size 19'], res.splitlines())
 
@@ -57,7 +56,7 @@ class TestDaemon(IsolatedAsyncioTestCase):
         # fixme weird and random-prone to fix the life of the daemon - maybe monitor it another way?
         await asyncio.sleep(0.1)
 
-        res = cave_cmd.status_index(show_dates=False, show_epoch=False)
+        res = cave_cmd.status_index(show_dates=False, show_epoch=False, show_size=False)
         self.assertEqual([
             'wat/test.add.with.daemon: present',
             'wat/test.me.different: present',
@@ -65,7 +64,6 @@ class TestDaemon(IsolatedAsyncioTestCase):
             'wat/test.me.twice: present',
             '--- SUMMARY ---',
             'Result for local [063d269b3ac1a51fcc0dd838bf7c112f529dbece]:',
-            'Max size: 3.5TB',
             f'UUID: {cave_cmd.current_uuid()}',
             '  # files = 4 of size 34'], res.splitlines())
 
@@ -76,7 +74,7 @@ class TestDaemon(IsolatedAsyncioTestCase):
             join(self.tmpdir.name, "repo/test.me.different"))
         await asyncio.sleep(0.2)
 
-        res = cave_cmd.status_index(show_dates=False, show_epoch=False)
+        res = cave_cmd.status_index(show_dates=False, show_epoch=False, show_size=False)
         self.assertEqual([
             'wat/test.add.with.daemon: present',
             'wat/test.me.different: present',  # fixme should be deleted instead!
@@ -84,7 +82,6 @@ class TestDaemon(IsolatedAsyncioTestCase):
             'wat/test.me.twice: present',
             '--- SUMMARY ---',
             'Result for local [063d269b3ac1a51fcc0dd838bf7c112f529dbece]:',
-            'Max size: 3.5TB',
             f'UUID: {cave_cmd.current_uuid()}',
             '  # files = 4 of size 34'], res.splitlines())
 

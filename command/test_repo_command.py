@@ -88,14 +88,13 @@ class TestRepoCommand(IsolatedAsyncioTestCase):
 
         await cave_cmd.refresh()
 
-        res = cave_cmd.status_index(show_dates=False)
+        res = cave_cmd.status_index(show_dates=False, show_size=False)
         self.assertEqual([
             'wat/test.me.different: present @ -1',
             'wat/test.me.once: present @ -1',
             'wat/test.me.twice: present @ -1',
             '--- SUMMARY ---',
             'Result for local [72174f950289a454493d243bb72bdb76982e5f62]:',
-            'Max size: 3.5TB',
             f'UUID: {cave_cmd.current_uuid()}',
             '  # files = 3 of size 19',
             ''], res.split("\n"))
@@ -130,14 +129,13 @@ class TestRepoCommand(IsolatedAsyncioTestCase):
             'current: 72174f950289a454493d243bb72bdb76982e5f62',
             'Refresh done!'], res.splitlines())
 
-        res = cave_cmd.status_index(show_dates=False)
+        res = cave_cmd.status_index(show_dates=False, show_size=False)
         self.assertEqual([
             'wat/test.me.different: present @ -1',
             'wat/test.me.once: present @ -1',
             'wat/test.me.twice: present @ -1',
             '--- SUMMARY ---',
             'Result for local [72174f950289a454493d243bb72bdb76982e5f62]:',
-            'Max size: 3.5TB',
             f'UUID: {cave_cmd.current_uuid()}',
             '  # files = 3 of size 19',
             ''], res.split("\n"))
@@ -156,14 +154,13 @@ class TestRepoCommand(IsolatedAsyncioTestCase):
             'current: 2f4fced348f1d2ef3a9ab45d3beb06a29c634bb4',
             'Refresh done!'], res.splitlines())
 
-        res = cave_cmd.status_index(show_dates=False)
+        res = cave_cmd.status_index(show_dates=False, show_size=False)
         self.assertEqual([
             'wat/test.me.anew: present @ -1',
             'wat/test.me.different: present @ -1',
             'wat/test.me.once: present @ -1',
             '--- SUMMARY ---',
             'Result for local [2f4fced348f1d2ef3a9ab45d3beb06a29c634bb4]:',
-            'Max size: 3.5TB',
             f'UUID: {cave_cmd.current_uuid()}',
             '  # files = 3 of size 27',
             ''], res.split("\n"))
@@ -201,7 +198,7 @@ class TestRepoCommand(IsolatedAsyncioTestCase):
             'current: bb53a6b65807a929d01672df634348493f34bb48',
             'Refresh done!'], res.splitlines())
 
-        res = cave_cmd.status_index(show_dates=False)
+        res = cave_cmd.status_index(show_dates=False, show_size=False)
         self.assertEqual([
             'test.me.anew2: present @ -1',
             'wat/test.me.anew: present @ -1',
@@ -209,7 +206,6 @@ class TestRepoCommand(IsolatedAsyncioTestCase):
             'wat/test.me.once: present @ -1',
             '--- SUMMARY ---',
             'Result for local [bb53a6b65807a929d01672df634348493f34bb48]:',
-            'Max size: 3.5TB',
             f'UUID: {cave_cmd.current_uuid()}',
             '  # files = 4 of size 32',
             ''], res.split("\n"))

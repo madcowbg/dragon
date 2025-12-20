@@ -99,7 +99,7 @@ class RepoCommand(object):
                 out.write(f"Refresh done!")
                 return out.getvalue()
 
-    def status_index(self, show_files: bool = True, show_dates: bool = True, show_epoch = True):  # fixme remove show_epoch
+    def status_index(self, show_files: bool = True, show_dates: bool = True, show_epoch = True, show_size=True):  # fixme remove show_epoch
         remote_uuid = self.current_uuid()
 
         logging.info(f"Reading repo {self.repo.path}...")
@@ -115,7 +115,7 @@ class RepoCommand(object):
                 stats = contents.fsobjects.stats_existing
                 out.writelines([
                     f"Result for local [{safe_hex(contents.fsobjects.root_id)}]:\n",
-                    f"Max size: {format_size(contents.config.max_size)}\n"
+                    f"Max size: {format_size(contents.config.max_size)}\n" if show_size else "",
                     f"UUID: {remote_uuid}\n",
                     f"Last updated on {contents.config.updated}\n" if show_dates else "",
                     f"  # files = {stats.num_files} of size {format_size(stats.total_size)}\n"])

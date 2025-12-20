@@ -423,13 +423,12 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'current: 4ca9394ae5678164976a1691dadc8c278a3df2c6\n'
             'Refresh done!'), res)
 
-        res = partial_cave_cmd.status_index(show_files=True, show_dates=False)
+        res = partial_cave_cmd.status_index(show_files=True, show_dates=False, show_size=False)
         self.assertEqual((
             'test.me.1: present @ -1\n'
             'test.me.5: present @ -1\n'
             '--- SUMMARY ---\n'
             'Result for local [4ca9394ae5678164976a1691dadc8c278a3df2c6]:\n'
-            'Max size: 3.5TB\n'
             f'UUID: {partial_cave_cmd.current_uuid()}\n'
             '  # files = 2 of size 14\n')
             , res)
@@ -1495,7 +1494,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'current: 01152ae75c4fbc81c40b8e9eba8ce23ab770630e\n'
             'Refresh done!'), res)
 
-        res = full_cave_cmd.status_index(show_dates=False)
+        res = full_cave_cmd.status_index(show_dates=False, show_size=False)
         self.assertEqual(
             'lets_get_it_started/test.me.2-butnew: present @ -1\n'
             'lets_get_it_started/test.me.2-butsecond: present @ -1\n'
@@ -1505,7 +1504,6 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'wat/test.me.3: present @ -1\n'
             "--- SUMMARY ---\n"
             "Result for local [01152ae75c4fbc81c40b8e9eba8ce23ab770630e]:\n"
-            "Max size: 3.5TB\n"
             f"UUID: {full_cave_cmd.current_uuid()}\n"
             "  # files = 6 of size 47\n", res)
 
@@ -1956,7 +1954,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             '|repo-full-name      |     14|       |     14|     14|\n'
             '|repo-partial-name   |     14|     14|       |       |\n'), res)
 
-        res = full_cave_cmd.status_index(show_dates=False)
+        res = full_cave_cmd.status_index(show_dates=False, show_size=False)
         self.assertEqual(
             "test.me.1: present @ -1\n"
             "test.me.4: present @ -1\n"
@@ -1964,7 +1962,6 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             "wat/test.me.3: present @ -1\n"
             "--- SUMMARY ---\n"
             'Result for local [1ad9e0f92a8411689b1aee57f9ccf36c1f09a1ad]:\n'
-            "Max size: 3.5TB\n"
             f"UUID: {full_cave_cmd.current_uuid()}\n"
             "  # files = 4 of size 35\n", res)
 
@@ -2038,7 +2035,7 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             'current: e48d88d5cde10ff5d84be87b3e79c20e77c05ba9\n'
             'Refresh done!'), res)
 
-        res = full_cave_cmd.status_index(show_dates=False)
+        res = full_cave_cmd.status_index(show_dates=False, show_size=False)
         self.assertEqual(
             "lets_get_it_started/test.me.4-renamed: present @ -1\n"
             "test.me.1: present @ -1\n"
@@ -2048,7 +2045,6 @@ class TestFileChangingFlows(IsolatedAsyncioTestCase):
             "wat/test.me.3: present @ -1\n"
             "--- SUMMARY ---\n"
             'Result for local [e48d88d5cde10ff5d84be87b3e79c20e77c05ba9]:\n'
-            "Max size: 3.5TB\n"
             f"UUID: {full_cave_cmd.current_uuid()}\n"
             "  # files = 5 of size 39\n", res)
 

@@ -139,7 +139,7 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
             'current: ba46648582193b0f2ab9a4894708a6106f7479ab',
             'Refresh done!'], res.splitlines())
 
-        res = full_cave_cmd.status_index(show_files=True, show_dates=False)
+        res = full_cave_cmd.status_index(show_files=True, show_dates=False, show_size=False)
         self.assertEqual((
             'test.me.1: present @ -1\n'
             'test.me.4: present @ -1\n'
@@ -147,7 +147,6 @@ class TestIncomingRepos(IsolatedAsyncioTestCase):
             'wat2/test.me.3: present @ -1\n'
             '--- SUMMARY ---\n'
             'Result for local [ba46648582193b0f2ab9a4894708a6106f7479ab]:\n'
-            'Max size: 3.5TB\n'
             f'UUID: {full_cave_cmd.current_uuid()}\n'
             '  # files = 4 of size 35\n'), res)
 
