@@ -153,7 +153,7 @@ class BackupSet:
 
         past_backups = self.currently_scheduled_backups(hoard_file, file_obj) if file_obj is not None else []
 
-        logging.info(f"Got {len(past_backups)} currently requested backups for {hoard_file}.")
+        logging.debug(f"Got {len(past_backups)} currently requested backups for {hoard_file}.")
         if len(past_backups) >= self.num_backup_copies_desired:
             logging.info(
                 f"Skipping {hoard_file}, requested backups {len(past_backups)} >= {self.num_backup_copies_desired}")
@@ -167,7 +167,7 @@ class BackupSet:
 
         past_backups = self.currently_scheduled_backups(hoard_file, file_obj) if file_obj is not None else []
 
-        logging.info(f"Got {len(past_backups)} currently requested backups for {hoard_file}.")
+        logging.debug(f"Got {len(past_backups)} currently requested backups for {hoard_file}.")
 
         if len(past_backups) <= self.num_backup_copies_desired:
             logging.info(
@@ -218,10 +218,10 @@ class BackupSet:
         num_backups_to_request = self.num_backup_copies_desired - len(past_backups)
 
         if len(new_possible_backups) < num_backups_to_request:
-            logging.error(
+            logging.debug(
                 f"Need at least {num_backups_to_request} backup media to satisfy, has only {len(new_possible_backups)} remaining.")
 
-        logging.info(
+        logging.debug(
             f"Returning {min(num_backups_to_request, len(new_possible_backups))} new backups "
             f"from requested {num_backups_to_request}.")
 
