@@ -3,12 +3,14 @@ aioshutil==1.5
 alive-progress==3.2.0
 fire==0.7.0
 humanize==4.12.2
-pyinstaller==6.12.0
-rtoml==0.12.0
+pyinstaller>=6.12.0
+rtoml>=0.12.0
 textual==3.0.0
 rich~=14.0.0
 watchdog~=6.0.0
 asyncio~=3.4.3
 propcache~=0.3.1
 msgpack~=1.1.0
-lmdb~=1.6.2
+lmdb>=1.6.2
+wcmatch
+msgspec
