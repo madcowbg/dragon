@@ -2,14 +2,14 @@ import dataclasses
 import logging
 import os
 import shutil
-import sys
+import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Collection, Tuple, Dict
 
 import lmdb
 from alive_progress import alive_bar
-from lmdb import Transaction, Environment, _Database
+from lmdb import Transaction, Environment, _Database, Error
 
 from lmdb_storage.object_serialization import read_stored_object, write_stored_object
 from lmdb_storage.roots import Roots
@@ -50,61 +50,64 @@ def maybe_migrate_storage(path):
 class ObjectEnvironmentCache:
     def __init__(self) -> None:
         self._cache: Dict[str, Tuple[EnvParams, Environment, Dict[str, _Database], int]] = dict()
+        self.obtain_release_lock = threading.Lock()
 
     def obtain(self, path: str, map_size: int | None, max_dbs: int) -> Tuple[Environment, Dict[str, _Database]]:
-        logging.debug(f"### LMDB OBTAIN {path}")
+        with self.obtain_release_lock:
+            logging.debug(f"### LMDB OBTAIN {path}")
 
-        env_params = EnvParams(path, max_dbs=max_dbs, map_size=map_size)
+            env_params = EnvParams(path, max_dbs=max_dbs, map_size=map_size)
 
-        if path not in self._cache:
-            logging.info(f"### LMDB OPENING {path}")
-            if not os.path.isfile(path):
-                maybe_migrate_storage(path)
+            if path not in self._cache:
+                logging.info(f"### LMDB OPENING {path}")
+                if not os.path.isfile(path):
+                    maybe_migrate_storage(path)
 
-            env = lmdb.open(path, max_dbs=max_dbs, map_size=map_size, readonly=False, subdir=False)
-            self._cache[path] = (
-                env_params,
-                env,
-                {
-                    "objects": env.open_db("objects".encode()),
-                    "repos": env.open_db("repos".encode()),
-                    "deferred_ops": env.open_db("deferred_ops".encode()),
-                },
-                0)
+                env = lmdb.open(path, max_dbs=max_dbs, map_size=map_size, readonly=False, subdir=False)
+                self._cache[path] = (
+                    env_params,
+                    env,
+                    {
+                        "objects": env.open_db("objects".encode()),
+                        "repos": env.open_db("repos".encode()),
+                        "deferred_ops": env.open_db("deferred_ops".encode()),
+                    },
+                    0)
 
-        cached_params, env, dbs, usage = self._cache[path]
+            cached_params, env, dbs, usage = self._cache[path]
 
-        assert cached_params.path == path
-        if env_params.map_size is not None and env_params.map_size != env.info()["map_size"]:
-            raise ValueError(
-                f"Trying to access a database with different size to be set: {env_params.map_size} but stored is with {env.info()["map_size"]}!")
+            assert cached_params.path == path
+            if env_params.map_size is not None and env_params.map_size != env.info()["map_size"]:
+                raise ValueError(
+                    f"Trying to access a database with different size to be set: {env_params.map_size} but stored is with {env.info()["map_size"]}!")
 
-        if env_params.max_dbs != cached_params.max_dbs:
-            raise ValueError(
-                f"Trying to access a database with different # of named dbs: {env_params.max_dbs} but stored is with {cached_params.max_dbs}")
+            if env_params.max_dbs != cached_params.max_dbs:
+                raise ValueError(
+                    f"Trying to access a database with different # of named dbs: {env_params.max_dbs} but stored is with {cached_params.max_dbs}")
 
-        self._cache[path] = (cached_params, env, dbs, usage + 1)
+            self._cache[path] = (cached_params, env, dbs, usage + 1)
 
-        return env, dbs
+            return env, dbs
 
     def release(self, path):
-        if path not in self._cache:
-            raise ValueError("Cannot release an uninitialized object!")
+        with self.obtain_release_lock:
+            if path not in self._cache:
+                raise ValueError("Cannot release an uninitialized object!")
 
-        cached_params, env, dbs, usage = self._cache[path]
-        if usage == 0:
-            raise ValueError("Cannot release an unused object!")
+            cached_params, env, dbs, usage = self._cache[path]
+            if usage == 0:
+                raise ValueError("Cannot release an unused object!")
 
-        logging.debug(f"### LMDB RELEASE {path}")
-        usage -= 1
-        if usage == 0:
-            store_backup_rotation(env)
+            logging.debug(f"### LMDB RELEASE {path}")
+            usage -= 1
+            if usage == 0:
+                store_backup_rotation(env)
 
-            logging.info(f"### LMDB CLOSING CONNECTION {path}")
-            env.close()
-            self._cache.pop(path)
-        else:
-            self._cache[path] = (cached_params, env, dbs, usage)
+                logging.info(f"### LMDB CLOSING CONNECTION {path}")
+                env.close()
+                self._cache.pop(path)
+            else:
+                self._cache[path] = (cached_params, env, dbs, usage)
 
 
 OBJECT_ENVIRONMENT_CACHE = ObjectEnvironmentCache()
@@ -165,11 +168,12 @@ def store_backup_rotation(env: Environment):
 
     try:
         backup_file.unlink(missing_ok=True)
-    except OSError as e:
-        logging.error(e)
-        raise e
+        env.copy(backup_file.as_posix(), compact=True)
 
-    env.copy(backup_file.as_posix(), compact=True)
+    except OSError as e:
+        logging.warning(e)  # is not fatal to the app - just last rotation won't work
+    except Error as e:
+        logging.warning(e)  # is not fatal to the app - just last rotation won't work
 
 
 class ObjectStorage(TransactionCreator):
@@ -285,5 +289,3 @@ def find_all_live(objects: Objects, root_ids: Collection[ObjectID]) -> Collectio
             # do nothing on files, just verify that they exist
             assert live_obj.object_type == ObjectType.BLOB
     return live_ids
-
-
