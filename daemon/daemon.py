@@ -2,6 +2,7 @@ import asyncio
 import logging
 import threading
 from io import StringIO
+from logging.handlers import RotatingFileHandler
 from pathlib import Path, PurePosixPath
 
 import fire
@@ -112,6 +113,7 @@ async def updater(
 async def run_daemon(path: str, assume_current: bool = False, sleep_interval: float = 10,
                      between_runs_interval: float = 1):
     logging.basicConfig(
+        handlers=[logging.StreamHandler(), RotatingFileHandler("daemon.log", maxBytes=2000000, backupCount=2)],
         level=logging.INFO,
         format='%(asctime)s - %(funcName)20s() - %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S',

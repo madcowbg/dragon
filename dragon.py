@@ -1,4 +1,5 @@
 import logging
+from logging.handlers import RotatingFileHandler
 from typing import Optional
 
 import fire
@@ -12,6 +13,7 @@ NONE_TOML = "MISSING"
 class TotalCommand(object):
     def __init__(self, verbose: bool = False, path: str = ".", name: Optional[str] = None):
         logging.basicConfig(
+            handlers=[logging.StreamHandler(), RotatingFileHandler("dragon.log", maxBytes=2000000, backupCount=2)],
             level=logging.INFO if verbose else logging.WARNING,
             format='%(asctime)s - %(funcName)20s() - %(message)s',
             datefmt='%Y-%m-%d %H:%M:%S')

@@ -2,6 +2,7 @@ import logging
 import os
 import pathlib
 import subprocess
+from logging.handlers import RotatingFileHandler
 
 from textual import on, work
 from textual.app import App, ComposeResult
@@ -88,6 +89,15 @@ def start_hoard_explorer_gui(path: str | None = None):
     logger = logging.getLogger()
     logger.handlers.clear()
     logger.addHandler(PRINT_HANDLER)
+
+    file_handler = RotatingFileHandler("gui.log", maxBytes=2000000, backupCount=2)
+
+    formatter = logging.Formatter(
+        fmt='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S')
+    file_handler.setFormatter(formatter)
+
+    logger.addHandler(file_handler)
     logger.setLevel(logging.INFO)
 
     app = HoardExplorerApp()
