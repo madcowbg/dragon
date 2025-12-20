@@ -149,7 +149,11 @@ def store_backup_rotation(env: Environment):
     backups = list(sorted(backup_dir.glob("backup_*.lmdb")))
     if len(backups) >= MAX_BACKUPS:
         for backup in backups[:-MAX_BACKUPS + 1]:
-            backup.unlink(missing_ok=True)
+            try:
+                backup.unlink(missing_ok=True)
+            except OSError as e:
+                logging.error(e)
+                raise e
 
     curr_bup_len = len(list(backup_dir.glob("backup_*.lmdb")))
     if curr_bup_len >= MAX_BACKUPS:
@@ -158,7 +162,12 @@ def store_backup_rotation(env: Environment):
     timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
     backup_file = backup_dir.joinpath(f"backup_{timestamp_str}.lmdb")
     logging.info(f"Storing backup as {backup_file}")
-    backup_file.unlink(missing_ok=True)
+
+    try:
+        backup_file.unlink(missing_ok=True)
+    except OSError as e:
+        logging.error(e)
+        raise e
 
     env.copy(backup_file.as_posix(), compact=True)
 
