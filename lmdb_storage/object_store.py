@@ -47,12 +47,16 @@ def maybe_migrate_storage(path):
             raise ValueError(f"Could not migrate folder {path} to file. Fix it manually!")
 
 
+type _StoredEnvironmentCacheEntry = Tuple[EnvParams, Environment, Dict[str, _Database], int, bool]
+
+
 class ObjectEnvironmentCache:
     def __init__(self) -> None:
-        self._cache: Dict[str, Tuple[EnvParams, Environment, Dict[str, _Database], int]] = dict()
+        self._cache: Dict[str, _StoredEnvironmentCacheEntry] = dict()
         self.obtain_release_lock = threading.Lock()
 
-    def obtain(self, path: str, map_size: int | None, max_dbs: int) -> Tuple[Environment, Dict[str, _Database]]:
+    def obtain(self, path: str, map_size: int | None, max_dbs: int, writable: bool) -> Tuple[
+        Environment, Dict[str, _Database]]:
         with self.obtain_release_lock:
             logging.debug(f"### LMDB OBTAIN {path}")
 
@@ -72,9 +76,9 @@ class ObjectEnvironmentCache:
                         "repos": env.open_db("repos".encode()),
                         "deferred_ops": env.open_db("deferred_ops".encode()),
                     },
-                    0)
+                    0, writable)
 
-            cached_params, env, dbs, usage = self._cache[path]
+            cached_params, env, dbs, usage, has_been_writable = self._cache[path]
 
             assert cached_params.path == path
             if env_params.map_size is not None and env_params.map_size != env.info()["map_size"]:
@@ -85,7 +89,7 @@ class ObjectEnvironmentCache:
                 raise ValueError(
                     f"Trying to access a database with different # of named dbs: {env_params.max_dbs} but stored is with {cached_params.max_dbs}")
 
-            self._cache[path] = (cached_params, env, dbs, usage + 1)
+            self._cache[path] = (cached_params, env, dbs, usage + 1, has_been_writable | writable)
 
             return env, dbs
 
@@ -94,27 +98,32 @@ class ObjectEnvironmentCache:
             if path not in self._cache:
                 raise ValueError("Cannot release an uninitialized object!")
 
-            cached_params, env, dbs, usage = self._cache[path]
+            cached_params, env, dbs, usage, has_been_writable = self._cache[path]
             if usage == 0:
                 raise ValueError("Cannot release an unused object!")
 
             logging.debug(f"### LMDB RELEASE {path}")
             usage -= 1
             if usage == 0:
-                store_backup_rotation(env)
+                if has_been_writable:
+                    logging.debug(f"### LMDB STORE BACKUP ROTATION {path}")
+                    try:
+                        store_backup_rotation(env)
+                    except (OSError, Error) as e:
+                        logging.warning(e)  # is not fatal to the app - just last rotation won't work
 
                 logging.info(f"### LMDB CLOSING CONNECTION {path}")
                 env.close()
                 self._cache.pop(path)
             else:
-                self._cache[path] = (cached_params, env, dbs, usage)
+                self._cache[path] = (cached_params, env, dbs, usage, has_been_writable)
 
 
 OBJECT_ENVIRONMENT_CACHE = ObjectEnvironmentCache()
 MAX_MAP_SIZE = 1 << 30
 
 
-def used_size(env):
+def used_size(env: Environment):
     # +--------------------+---------------------------------------+
     # | ``psize``          | Size of a database page in bytes.     |
     # +--------------------+---------------------------------------+
@@ -155,8 +164,7 @@ def store_backup_rotation(env: Environment):
             try:
                 backup.unlink(missing_ok=True)
             except OSError as e:
-                logging.error(e)
-                raise e
+                logging.error(e)  # ignore failures - should not matter
 
     curr_bup_len = len(list(backup_dir.glob("backup_*.lmdb")))
     if curr_bup_len >= MAX_BACKUPS:
@@ -166,24 +174,20 @@ def store_backup_rotation(env: Environment):
     backup_file = backup_dir.joinpath(f"backup_{timestamp_str}.lmdb")
     logging.info(f"Storing backup as {backup_file}")
 
-    try:
-        backup_file.unlink(missing_ok=True)
-        env.copy(backup_file.as_posix(), compact=True)
-
-    except OSError as e:
-        logging.warning(e)  # is not fatal to the app - just last rotation won't work
-    except Error as e:
-        logging.warning(e)  # is not fatal to the app - just last rotation won't work
+    backup_file.unlink(missing_ok=True)
+    env.copy(backup_file.as_posix(), compact=True)
 
 
 class ObjectStorage(TransactionCreator):
-    def __init__(self, path: str, *, map_size: int | None = None, max_dbs=5):
+    def __init__(self, path: str, *, map_size: int | None = None, max_dbs=5, writable: bool):
         self._env_params = EnvParams(
             path, map_size=None if map_size is None else min(MAX_MAP_SIZE, map_size), max_dbs=max_dbs)
+        self.writable = writable
 
     def __enter__(self):
         self._env, self._dbs = OBJECT_ENVIRONMENT_CACHE.obtain(
-            self._env_params.path, max_dbs=self._env_params.max_dbs, map_size=self._env_params.map_size)
+            self._env_params.path, max_dbs=self._env_params.max_dbs, map_size=self._env_params.map_size,
+            writable=self.writable)
         if self.used_ratio > 0.6:
             logging.warn(f"Start cleaning with used ratio of {self.used_ratio}.")
             self._env.set_mapsize(self._env_params.map_size * 2)
@@ -216,6 +220,7 @@ class ObjectStorage(TransactionCreator):
                 logging.error("Even after GC usage is more than 40%. Can fill up.")
 
     def gc(self, silent: bool = False):
+        assert self.writable
         logging.warn(f"Used space = {format_size(self.used_size)}")
         logging.warn(f"Used pct = {100 * self.used_ratio}")
 
@@ -261,13 +266,16 @@ class ObjectStorage(TransactionCreator):
                             self_objects[live_id] = other_objects[live_id]
 
     def begin(self, db_name: str, write: bool) -> Transaction:
+        assert not write or self.writable  # require writable object storage for writable transactions
         return self._env.begin(db=self._dbs[db_name], write=write)
 
     def objects(self, write: bool) -> StoredObjects:
+        assert not write or self.writable  # require writable object storage for writable transactions
         return StoredObjects(
             self, db_name="objects", write=write, object_reader=read_stored_object, object_writer=write_stored_object)
 
     def roots(self, write: bool) -> Roots:
+        assert not write or self.writable  # require writable object storage for writable transactions
         return Roots(self, write)
 
 

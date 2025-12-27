@@ -15,7 +15,7 @@ from lmdb_storage.tree_calculation import RecursiveSumCalculator, TreeReader
 from lmdb_storage.cached_calcs import CachedCalculator
 from lmdb_storage.tree_iteration import dfs
 from lmdb_storage.tree_object import ObjectType, StoredObject
-from lmdb_storage.tree_structure import Objects, ObjectID, add_file_object, remove_file_object, StoredObjects
+from lmdb_storage.tree_structure import Objects, ObjectID, add_file_object, remove_file_object
 
 
 class RepoFSObjects:
@@ -140,7 +140,7 @@ class RepoContents:
                 "max_size": shutil.disk_usage(folder).total
             }, f)
 
-        with ObjectStorage(f"{contents_filepath}.lmdb", map_size=1 << 30):  # 1GB
+        with ObjectStorage(f"{contents_filepath}.lmdb", map_size=1 << 30, writable=False):  # 1GB
             pass
 
         return RepoContents.load_existing(folder, uuid, is_readonly=False)
@@ -171,19 +171,20 @@ class RepoContents:
     def __enter__(self) -> "RepoContents":
         self.config = RepoContentsConfig(self.config_filepath)
 
-        self.env = ObjectStorage(f"{self.filepath}.lmdb", map_size=1 << 30)  # 1GB
+        self.env = ObjectStorage(f"{self.filepath}.lmdb", map_size=1 << 30, writable=not self.is_readonly)  # 1GB
         self.env.__enter__()
 
-        self.objects = self.env.objects(write=True)
+        self.objects = self.env.objects(write=not self.is_readonly)
 
-        self.fsobjects = RepoFSObjects(self.objects, self.env.roots(write=True), self.config)
+        self.fsobjects = RepoFSObjects(self.objects, self.env.roots(write=not self.is_readonly), self.config)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
         assert self.objects is not None
         self.objects = None
 
-        self.env.gc()
+        if not self.is_readonly:
+            self.env.gc()
         self.env.__exit__(exc_type, exc_val, exc_tb)
         self.env = None
 

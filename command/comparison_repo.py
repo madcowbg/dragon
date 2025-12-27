@@ -17,8 +17,10 @@ from contents.repo import RepoContents
 from contents.repo_props import RepoFileStatus, FileDesc
 from hashing import fast_hash_async
 from lmdb_storage.file_object import BlobObject, FileObject
+from lmdb_storage.in_memory_objects import InMemoryObjectsExtension
 from lmdb_storage.tree_iteration import zip_dfs
-from lmdb_storage.tree_object import TreeObject
+from lmdb_storage.tree_object import TreeObject, ObjectID
+from lmdb_storage.tree_structure import StoredObjects, Objects
 from task_logging import TaskLogger, PythonLoggingTaskLogger
 from util import group_to_dict, process_async, run_in_separate_loop
 
@@ -339,10 +341,7 @@ class FilesystemIndex:
 
 
 class FilesystemState:
-    def __init__(self, contents: RepoContents, task_logger: TaskLogger):
-        self.contents = contents
-        self.state_root_id = None
-
+    def __init__(self, task_logger: TaskLogger):
         self.all_files = dict()
         self.task_logger = task_logger
 
@@ -356,35 +355,6 @@ class FilesystemState:
 
         assert not fullpath.is_absolute()
 
-    async def diffs(self) -> AsyncGenerator[RepoDiffs]:  # fixme no need for async
-        root_id = self.contents.fsobjects.root_id
-        with self.contents.objects as objects:
-            for fullpath, diff_type, fo_id, ff_id, skip_children in \
-                    zip_dfs(objects, "", root_id, self.state_root_id, True):
-                ff_obj = objects[ff_id] if ff_id is not None else None
-                fo_obj = objects[fo_id] if fo_id is not None else None
-
-                if isinstance(fo_obj, TreeObject) or isinstance(ff_obj, TreeObject):
-                    # fixme that is bad logic, filenames can be the same as folder names
-                    continue
-
-                fo_props = FileDesc(fo_obj.size, fo_obj.fasthash, None) if fo_obj is not None else None
-                ff_props = FileDesc(ff_obj.size, ff_obj.fasthash, None) if ff_obj is not None else None
-
-                fullpath_posix = FastPosixPath(fullpath).relative_to("/")
-                if ff_obj is None:
-                    yield FileNotInFilesystem(fullpath_posix, fo_props)
-                elif fo_obj is None:
-                    yield FileNotInRepo(fullpath_posix, ff_props)
-                else:  # both are not none
-                    if ff_obj.fasthash == "":  # is error
-                        yield ErrorReadingFilesystem(fullpath_posix, fo_props)
-
-                    if fo_props.fasthash == ff_props.fasthash:
-                        yield RepoFileSame(fullpath_posix, fo_props, ff_props)
-                    else:
-                        yield RepoFileDifferent(fullpath_posix, fo_props, ff_props)
-
     def diffs_at(self, allowed_paths: List[FastPosixPath]) -> Iterable[RepoDiffs]:
         raise NotImplementedError()
         # curr = self.contents.conn.cursor()
@@ -394,24 +364,53 @@ class FilesystemState:
         #     f"SELECT * FROM filesystem_repo_matched WHERE fullpath in ({','.join('?' * len(allowed_paths))})",
         #     [p.as_posix() for p in allowed_paths])
 
-    async def read_state_from_filesystem(
-            self, hoard_ignore: HoardIgnore, repo_path: str, task_logger: TaskLogger):
+async def diffs_filesystem(root_id: ObjectID, state_root_id: ObjectID, objects: Objects) -> AsyncGenerator[RepoDiffs]:  # fixme no need for async
+    with objects:
+        for fullpath, diff_type, fo_id, ff_id, skip_children in \
+                zip_dfs(objects, "", root_id, state_root_id, True):
+            ff_obj = objects[ff_id] if ff_id is not None else None
+            fo_obj = objects[fo_id] if fo_id is not None else None
 
-        with FilesystemIndex(Path(repo_path), hoard_ignore, task_logger) as index:
-            index.update()
+            if isinstance(fo_obj, TreeObject) or isinstance(ff_obj, TreeObject):
+                # fixme that is bad logic, filenames can be the same as folder names
+                continue
 
-            all_files_sorted = [(filepath, fileobj) for filepath, fileobj in index.items()]
+            fo_props = FileDesc(fo_obj.size, fo_obj.fasthash, None) if fo_obj is not None else None
+            ff_props = FileDesc(ff_obj.size, ff_obj.fasthash, None) if ff_obj is not None else None
 
-            with self.contents.objects as objects:
-                self.state_root_id = objects.mktree_from_tuples(all_files_sorted, alive_it)
+            fullpath_posix = FastPosixPath(fullpath).relative_to("/")
+            if ff_obj is None:
+                yield FileNotInFilesystem(fullpath_posix, fo_props)
+            elif fo_obj is None:
+                yield FileNotInRepo(fullpath_posix, ff_props)
+            else:  # both are not none
+                if ff_obj.fasthash == "":  # is error
+                    yield ErrorReadingFilesystem(fullpath_posix, fo_props)
+
+                if fo_props.fasthash == ff_props.fasthash:
+                    yield RepoFileSame(fullpath_posix, fo_props, ff_props)
+                else:
+                    yield RepoFileDifferent(fullpath_posix, fo_props, ff_props)
+
+async def read_state_from_filesystem(
+        objects: Objects, hoard_ignore: HoardIgnore, repo_path: str, task_logger: TaskLogger) -> ObjectID:
+    with FilesystemIndex(Path(repo_path), hoard_ignore, task_logger) as index:
+        index.update()
+
+        all_files_sorted = [(filepath, fileobj) for filepath, fileobj in index.items()]
+
+        with objects:
+            return objects.mktree_from_tuples(all_files_sorted, alive_it)
 
 
 async def compute_difference_between_contents_and_filesystem(
         contents: RepoContents, repo_path: str, hoard_ignore: HoardIgnore) -> AsyncGenerator[RepoDiffs]:
-    state = FilesystemState(contents, PythonLoggingTaskLogger())
-    await state.read_state_from_filesystem(hoard_ignore, repo_path, PythonLoggingTaskLogger())
+    in_memory_objects = InMemoryObjectsExtension(contents.env)
+    state_root_id = await read_state_from_filesystem(
+        in_memory_objects, hoard_ignore, repo_path, PythonLoggingTaskLogger())
 
-    async for diff in state.diffs():
+    async for diff in diffs_filesystem(
+        root_id=contents.fsobjects.root_id, state_root_id=state_root_id, objects=in_memory_objects):
         yield diff
 
 
@@ -434,7 +433,7 @@ async def read_filesystem_desc(file_fullpath: pathlib.Path) -> FileDesc:
 async def compute_difference_filtered_by_path(
         contents: RepoContents, repo_path: str, hoard_ignore: HoardIgnore,
         allowed_paths: List[pathlib.PurePosixPath]) -> AsyncGenerator[RepoDiffs]:
-    state = FilesystemState(contents, PythonLoggingTaskLogger())
+    state = FilesystemState(PythonLoggingTaskLogger())
 
     local_paths: List[Tuple[pathlib.Path, pathlib.Path]] = []
     for allowed_path in alive_it(allowed_paths, title="Checking updates"):

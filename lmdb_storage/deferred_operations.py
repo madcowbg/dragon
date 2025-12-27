@@ -40,13 +40,14 @@ class HoardDeferredOperations:
     """ Logic for executing deferred tree operations, which are most useful for files pushing."""
     _txn: Transaction | None
 
-    def __init__(self, parent: HoardContents):
+    def __init__(self, parent: HoardContents, write: bool):
         self._parent = parent
         self._txn = None
+        self._write = write
 
     def __enter__(self):
         assert self._txn is None, "Cannot start a second transaction!"
-        self._txn = self._parent.env.begin(db_name="deferred_ops", write=True)
+        self._txn = self._parent.env.begin(db_name="deferred_ops", write=self._write)
         self._txn.__enter__()
         return self
 
@@ -148,23 +149,23 @@ def mklist_from_tree(objects: Objects, repo_root_id: MaybeObjectID) -> dict[str,
 
 def add_to_current_tree_file_obj(
         hoard: HoardContents, repo_uuid: str, hoard_file: str, file_obj: FileObject):
-    with HoardDeferredOperations(hoard) as deferred_ops:
+    with HoardDeferredOperations(hoard, True) as deferred_ops:
         deferred_ops.set_queue_item(repo_uuid, BRANCH_CURRENT, hoard_file, file_obj, DeferredOp.ADD)
 
 
 def add_to_desired_tree(
         hoard: HoardContents, repo_uuid: str, hoard_file: str, file_obj: FileObject):
-    with HoardDeferredOperations(hoard) as deferred_ops:
+    with HoardDeferredOperations(hoard, True) as deferred_ops:
         deferred_ops.set_queue_item(repo_uuid, BRANCH_DESIRED, hoard_file, file_obj, DeferredOp.ADD)
 
 
 def remove_from_current_tree(
         hoard: HoardContents, repo_uuid: str, hoard_file: str, file_obj: FileObject):
-    with HoardDeferredOperations(hoard) as deferred_ops:
+    with HoardDeferredOperations(hoard, True) as deferred_ops:
         deferred_ops.set_queue_item(repo_uuid, BRANCH_CURRENT, hoard_file, file_obj, DeferredOp.DEL)
 
 
 def remove_from_desired_tree(
         hoard: HoardContents, repo_uuid: str, hoard_file: str, file_obj: FileObject):
-    with HoardDeferredOperations(hoard) as deferred_ops:
+    with HoardDeferredOperations(hoard, True) as deferred_ops:
         deferred_ops.set_queue_item(repo_uuid, BRANCH_DESIRED, hoard_file, file_obj, DeferredOp.DEL)

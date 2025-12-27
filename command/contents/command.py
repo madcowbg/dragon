@@ -489,7 +489,7 @@ class HoardCommandContents:
         connected_repo = self.hoard.connect_to_repo(remote_uuid, require_contents=True)
         with connected_repo.open_contents(is_readonly=True) as current_contents:
             logging.info(f"Loading hoard TOML...")
-            with self.hoard.open_contents(create_missing=False) as hoard_contents:
+            with self.hoard.open_contents(create_missing=False).writeable() as hoard_contents:
                 logging.info(f"Loaded hoard TOML!")
                 logging.info(f"Computing status ...")
 
@@ -522,7 +522,7 @@ class HoardCommandContents:
         connected_repo = self.hoard.connect_to_repo(remote_uuid, require_contents=True)
         with connected_repo.open_contents(is_readonly=True) as current_contents:
             logging.info(f"Loading hoard TOML...")
-            with self.hoard.open_contents(create_missing=False) as hoard:
+            with self.hoard.open_contents(create_missing=False).writeable() as hoard:
                 logging.info(f"Loaded hoard TOML!")
                 logging.info(f"Computing status ...")
 
@@ -849,7 +849,7 @@ async def execute_drop(
 
     hoard.env.roots(write=True)[repo_uuid].desired = new_desired_id
 
-    assert not HoardDeferredOperations(hoard).have_deferred_ops()
+    assert not HoardDeferredOperations(hoard, False).have_deferred_ops()
 
     new_desired_id = hoard.env.roots(write=False)[repo_uuid].desired
 

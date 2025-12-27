@@ -4,7 +4,7 @@ from io import StringIO
 from typing import List, Optional
 
 from command.comparison_repo import FileDeleted, FileMoved, FileAdded, FileModified, FileIsSame, find_repo_changes, \
-    FilesystemState, compute_changes_from_diffs
+    FilesystemState, compute_changes_from_diffs, read_state_from_filesystem, diffs_filesystem
 from command.fast_path import FastPosixPath
 from command.hoard_ignore import HoardIgnore, DEFAULT_IGNORE_GLOBS
 from command.repo import ProspectiveRepo
@@ -67,12 +67,14 @@ class RepoCommand(object):
         with contents:
             task_logger.info("Start updating...")
             task_logger.info("Reading filesystem state...")
-            state = FilesystemState(contents, task_logger)
-            await state.read_state_from_filesystem(hoard_ignore, self.repo.path, task_logger)
+            state_root_id = await read_state_from_filesystem(contents.objects, hoard_ignore, self.repo.path, task_logger)
 
             with StringIO() as out:
                 if show_details:
-                    async for change in compute_changes_from_diffs(state.diffs(), self.repo.path, add_new_with_status):
+                    diffs = diffs_filesystem(
+                        root_id=contents.fsobjects.root_id, state_root_id=state_root_id,
+                        objects=contents.objects)
+                    async for change in compute_changes_from_diffs(diffs, self.repo.path, add_new_with_status):
                         if isinstance(change, FileIsSame):
                             pass
                         elif isinstance(change, FileDeleted):
@@ -91,7 +93,7 @@ class RepoCommand(object):
 
                 out.write(f"old: {safe_hex(contents.fsobjects.root_id)}\n")
                 # save modified as root
-                contents.fsobjects.roots["REPO"].current = state.state_root_id
+                contents.fsobjects.roots["REPO"].current = state_root_id
                 out.write(f"current: {safe_hex(contents.fsobjects.root_id)}\n")
 
                 contents.config.end_updating()

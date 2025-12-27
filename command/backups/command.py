@@ -76,7 +76,7 @@ def reuse_already_existing_files(backup_set: BackupSet, hoard: HoardContents, ou
                 if len(desired_tree_objs) > 0 else None
 
         hoard.env.roots(write=True)[repo.uuid].desired = new_desired_root
-    assert not HoardDeferredOperations(hoard).have_deferred_ops()
+    assert not HoardDeferredOperations(hoard, False).have_deferred_ops()
 
 
 def assign_non_assigned_files(
@@ -225,7 +225,7 @@ class HoardCommandBackups:
                         out.write(f" {repo.name} LOST {cnt} files ({format_size(removed_size[repo])})\n")
 
                     logging.info("Running deferred operations...")
-                    HoardDeferredOperations(hoard).apply_deferred_queue()
+                    HoardDeferredOperations(hoard, True).apply_deferred_queue()
 
                 out.write("DONE")
                 return out.getvalue()
@@ -276,9 +276,9 @@ class HoardCommandBackups:
                     assign_non_assigned_files(hoard, backup_set, available_only, added_cnt, added_size, out)
 
                     logging.info("Running deferred operations...")
-                    HoardDeferredOperations(hoard).apply_deferred_queue()
+                    HoardDeferredOperations(hoard, True).apply_deferred_queue()
 
-                    assert not HoardDeferredOperations(hoard).have_deferred_ops()
+                    assert not HoardDeferredOperations(hoard, False).have_deferred_ops()
 
                     for repo, cnt in sorted(added_cnt.items(), key=lambda rc: rc[0].name):
                         out.write(f" {repo.name} <- {cnt} files ({format_size(added_size[repo])})\n")

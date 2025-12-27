@@ -102,7 +102,7 @@ async def execute_files_push(config: HoardConfig, hoard: Hoard, repo_uuids: List
             await _fetch_files_in_repo(moves_and_copies_before_fetching, hoard_contents, repo_uuid, pathing, out, task_logger.alive_bar)
 
         task_logger.info("Applying deferred operations after potentially getting a lot of files.")
-        HoardDeferredOperations(hoard_contents).apply_deferred_queue()
+        HoardDeferredOperations(hoard_contents, True).apply_deferred_queue()
 
         task_logger.info("Finding files that need copy - will not cleanup them!")
         moves_and_copies_for_cleanup = MovesAndCopies(hoard_contents)
@@ -114,7 +114,7 @@ async def execute_files_push(config: HoardConfig, hoard: Hoard, repo_uuids: List
             _cleanup_files_in_repo(moves_and_copies_for_cleanup, hoard_contents, repo_uuid, pathing, out, task_logger.alive_bar)
 
         task_logger.info("Applying deferred operations after cleanup.")
-        HoardDeferredOperations(hoard_contents).apply_deferred_queue()
+        HoardDeferredOperations(hoard_contents, True).apply_deferred_queue()
 
         out.write(f"After:\n")
         dump_remotes(config, hoard_contents, out)

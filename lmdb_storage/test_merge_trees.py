@@ -2,14 +2,13 @@ import binascii
 import hashlib
 import pathlib
 from tempfile import TemporaryDirectory
-from typing import Iterable, Tuple, Union, Dict, Collection, List
+from typing import Collection, List
 from unittest import IsolatedAsyncioTestCase
-
-from lmdb import Transaction
 
 from command.test_command_file_changing_flows import populate
 from command.test_hoard_command import populate_repotypes, init_complex_hoard
-from lmdb_storage.file_object import BlobObject, FileObject
+from lmdb_storage.file_object import FileObject
+from lmdb_storage.in_memory_objects import InMemoryObjectsExtension
 from lmdb_storage.object_store import ObjectStorage
 from lmdb_storage.operations.fast_association import FastAssociation
 from lmdb_storage.operations.naive_ops import TakeOneFile
@@ -17,46 +16,8 @@ from lmdb_storage.operations.three_way_merge import ThreewayMerge, MergePreferen
 from lmdb_storage.operations.util import ObjectsByRoot, ByRoot
 from lmdb_storage.test_experiment_lmdb import dump_tree, dump_diffs
 from lmdb_storage.tree_iteration import zip_dfs
-from lmdb_storage.tree_object import StoredObject, TreeObject
-from lmdb_storage.tree_structure import ObjectID, Objects, do_nothing
-
-
-class InMemoryObjectsExtension(Objects):
-    def __init__(self, env: ObjectStorage) -> None:
-        self.stored_objects = env.objects(write=False)
-        self.in_mem: Dict[ObjectID, BlobObject | TreeObject] = dict()
-
-    def __enter__(self) -> Objects:
-        self.stored_objects.__enter__()
-        return self
-
-    @property
-    def txn(self) -> Transaction:
-        return self.stored_objects.txn
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.stored_objects.__exit__(exc_type, exc_val, exc_tb)
-        return None
-
-    def __contains__(self, obj_id: bytes) -> bool:
-        return obj_id in self.in_mem or obj_id in self.stored_objects
-
-    def __getitem__(self, obj_id: bytes) -> Union[BlobObject, TreeObject, None]:
-        in_mem = self.in_mem.get(obj_id, None)
-        return in_mem if in_mem else self.stored_objects[obj_id]
-
-    def __setitem__(self, obj_id: bytes, obj: Union[BlobObject, TreeObject]):
-        stored = self.stored_objects[obj_id]
-        if stored is None:
-            self.in_mem[obj_id] = obj
-        elif obj != stored:
-            raise ValueError("Cannot change a stored object!")
-
-    def __delitem__(self, obj_id: bytes) -> None:
-        raise ValueError("Cannot delete InMemory objects")
-
-    def mktree_from_tuples(self, all_data: Iterable[Tuple[str, BlobObject]], alive_it=do_nothing) -> bytes:
-        pass
+from lmdb_storage.tree_object import StoredObject
+from lmdb_storage.tree_structure import ObjectID, Objects
 
 
 class TestingMergingOfTrees(IsolatedAsyncioTestCase):
@@ -76,7 +37,7 @@ class TestingMergingOfTrees(IsolatedAsyncioTestCase):
             await init_complex_hoard(self.tmpdir)
         await hoard_cmd.contents.pull(all=True)
 
-        with ObjectStorage(self.obj_storage_path) as env:
+        with ObjectStorage(self.obj_storage_path, writable=True) as env:
             root_ids = sorted(env.roots(write=False).all_live)
             self.assertEqual([
                 b'1ad9e0f92a8411689b1aee57f9ccf36c1f09a1ad',
@@ -437,7 +398,7 @@ def make_file(data: str) -> FileObject:
 
 
 def populate_trees(filepath: str) -> (ObjectStorage, ObjectID, ObjectID, ObjectID, ObjectID):
-    with ObjectStorage(filepath) as env:
+    with ObjectStorage(filepath, writable=True) as env:
         with env.objects(write=True) as objects:
             partial_id = objects.mktree_from_tuples([
                 ('/test.me.1', make_file("gsadfs")),

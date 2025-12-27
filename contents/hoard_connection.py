@@ -17,14 +17,13 @@ class ReadonlyHoardContentsConn:
 
     def __enter__(self) -> "HoardContents":
         self.contents = HoardContents(self.folder, True, self.config)
-        deferred_ops = HoardDeferredOperations(self.contents)
-        if deferred_ops.have_deferred_ops():
-            logging.error("Have deferred operations, will apply them just in case even with readonly ops!")
-            deferred_ops.apply_deferred_queue()
+        if HoardDeferredOperations(self.contents, False).have_deferred_ops():
+            logging.warning("Have deferred operations, will apply them just in case even with readonly ops!")
+            HoardDeferredOperations(self.contents, True).apply_deferred_queue()
         return self.contents
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        if HoardDeferredOperations(self.contents).have_deferred_ops():
+        if HoardDeferredOperations(self.contents, False).have_deferred_ops():
             raise ValueError("Have deferred operations that cannot even be applied!!!")
 
         self.contents.close(False)
@@ -49,17 +48,15 @@ class HoardContentsConn:
 
     def __enter__(self) -> "HoardContents":
         self.contents = HoardContents(self.folder, False, self.config)
-        deferred_ops = HoardDeferredOperations(self.contents)
-        if deferred_ops.have_deferred_ops():
+        if HoardDeferredOperations(self.contents, False).have_deferred_ops():
             logging.error("Have deferred operations, will apply them just in case!")
-            deferred_ops.apply_deferred_queue()
+            HoardDeferredOperations(self.contents, True).apply_deferred_queue()
         return self.contents
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        deferred_ops = HoardDeferredOperations(self.contents)
-        if deferred_ops.have_deferred_ops():
+        if HoardDeferredOperations(self.contents, False).have_deferred_ops():
             logging.error("Closing while having deferred operations - will apply them just in case!")
-            deferred_ops.apply_deferred_queue()
+            HoardDeferredOperations(self.contents, True).apply_deferred_queue()
 
         self.contents.close(True)
         return None

@@ -54,10 +54,10 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
             await init_complex_hoard(self.tmpdir)
         await hoard_cmd.contents.pull(all=True)
 
-        with ObjectStorage(self.obj_storage_path) as env:  # , map_size=(1 << 30) // 4)
+        with ObjectStorage(self.obj_storage_path, writable=False) as env:  # , map_size=(1 << 30) // 4)
 
             with env.objects(write=False) as objects:
-                root_id = env.roots(write=True)["HOARD"].desired
+                root_id = env.roots(write=False)["HOARD"].desired
 
                 root = objects[root_id]
 
@@ -74,7 +74,7 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
                 logging.warning(f"# all_files: {len(all_files)}")
 
     def test_dump_lmdb(self):
-        with ObjectStorage(self.obj_storage_path) as env:  # , map_size=(1 << 30) // 4)
+        with ObjectStorage(self.obj_storage_path, writable=False) as env:  # , map_size=(1 << 30) // 4)
             with env.begin(db_name="objects", write=False) as txn:
                 with txn.cursor() as curr:
                     with open(self.tmpdir + "/dbdump.msgpack", "wb") as f:
@@ -86,7 +86,7 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
             await init_complex_hoard(self.tmpdir)
         await hoard_cmd.contents.pull(all=True)
 
-        with ObjectStorage(self.obj_storage_path) as env:  # , map_size=(1 << 30) // 4)
+        with ObjectStorage(self.obj_storage_path, writable=False) as env:  # , map_size=(1 << 30) // 4)
             uuid = full_cave_cmd.current_uuid()
 
             with env.objects(write=False) as objects:
@@ -124,7 +124,7 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
             await init_complex_hoard(self.tmpdir)
         await hoard_cmd.contents.pull(all=True)
 
-        with ObjectStorage(self.obj_storage_path) as env:
+        with ObjectStorage(self.obj_storage_path, writable=True) as env:
             left_uuid = full_cave_cmd.current_uuid()
             right_uuid = partial_cave_cmd.current_uuid()
 
@@ -229,7 +229,7 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
             await init_complex_hoard(self.tmpdir)
         await hoard_cmd.contents.pull(all=True)
 
-        with ObjectStorage(self.obj_storage_path) as env:
+        with ObjectStorage(self.obj_storage_path, writable=False) as env:
 
             with env.objects(write=False) as objects:
                 all_nodes = dump_tree(objects, env.roots(write=False)["HOARD"].desired)
@@ -257,11 +257,11 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
                     ('$ROOT/wat', 1)], nodes)
 
     def test_gc(self):
-        with ObjectStorage(self.obj_storage_path) as env:
+        with ObjectStorage(self.obj_storage_path, writable=True) as env:
             env.gc()
 
     def test_create_manual_tree(self):
-        with ObjectStorage(self.obj_storage_path) as objs:
+        with ObjectStorage(self.obj_storage_path, writable=True) as objs:
             with objs.objects(write=True) as objects:
                 tree_id = add_file_object(
                     objects, None, "wat/da/faque.isit".split("/"), FileObject.create("dasda", 100))
@@ -330,7 +330,7 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
             await init_complex_hoard(self.tmpdir)
         await hoard_cmd.contents.pull(all=True)
 
-        with ObjectStorage(self.obj_storage_path) as env:
+        with ObjectStorage(self.obj_storage_path, writable=False) as env:
 
             root_ids = env.roots(write=False).all_live
             self.assertEqual([
@@ -359,7 +359,7 @@ class VariousLMDBFunctions(IsolatedAsyncioTestCase):
             shutil.rmtree(another_storage_path, ignore_errors=True)
             pathlib.Path(another_storage_path).parent.mkdir(parents=True, exist_ok=True)
 
-            with ObjectStorage(another_storage_path) as other_env:
+            with ObjectStorage(another_storage_path, writable=True) as other_env:
                 roots_to_copy = [binascii.unhexlify(hex_id) for hex_id in (
                     b'1ad9e0f92a8411689b1aee57f9ccf36c1f09a1ad',
                     b'3a0889e00c0c4ace24843be76d59b3baefb16d77',

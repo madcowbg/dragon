@@ -447,10 +447,12 @@ class HoardContents:
         self.config = HoardContentsConfig(folder.joinpath(HOARD_CONTENTS_TOML), is_readonly)
         self.fsobjects = ReadonlyHoardFSObjects(self)
 
-        self.env = ObjectStorage(os.path.join(folder, HOARD_CONTENTS_LMDB_DIR), map_size=1 << 30)  # 1GB
+        self.env = ObjectStorage(
+            os.path.join(folder, HOARD_CONTENTS_LMDB_DIR), map_size=1 << 30,  # 1GB
+            writable=not is_readonly)
         self.env.__enter__()
 
-    def close(self, writeable: bool):
+    def close(self, writeable: bool): # fixme migrate parameter to a field instead
         if writeable:
             self.env.gc()
             self.validate_desired()
