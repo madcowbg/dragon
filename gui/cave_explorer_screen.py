@@ -194,7 +194,7 @@ class HoardContentsPendingToPull(Tree[NodeID]):
             hoard_config = self.hoard.config()
             repo = self.hoard.connect_to_repo(self.remote.uuid, True)
 
-            self.hoard_conn = self.hoard.open_contents(create_missing=False)
+            self.hoard_conn = self.hoard.open_contents(create_missing=False).writeable()
             self.hoard_contents = self.hoard_conn.__enter__()
 
             with repo.open_contents(is_readonly=True) as current_contents:
